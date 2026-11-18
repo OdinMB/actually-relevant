@@ -392,14 +392,22 @@ export const config = {
       laterPassUsd: 0.25,
       /** Gap searches (for the cards' slots) one pass makes at most, the two `response` searches first. */
       maxGapSearches: 3,
-      /** Selected stories one run of the job takes, and how many at once. */
-      perRun: 20,
-      concurrency: 4,
+      /** Selected stories one run of the job takes, and how many at once (an editor's bulk pass too). */
+      perRun: parseWholeNumber(process.env.RESEARCH_PASS_PER_RUN, 20, 'RESEARCH_PASS_PER_RUN'),
+      concurrency: parseWholeNumber(process.env.RESEARCH_PASS_CONCURRENCY, 4, 'RESEARCH_PASS_CONCURRENCY'),
       /**
        * The step records the failed-stories notice when more than `jobs.failureShare.share` of the
        * stories a run took failed technically, from this many stories on (`jobs/researchPass.ts`).
        */
       failedStoriesMin: 5,
+      /**
+       * A `running` pass older than this was cut off by a restart, and is marked failed; in the
+       * scheduling process, so is one started before the process did (`lib/runCutOff.ts`). A pass makes
+       * research's calls and then context's, each worst case within its own stale limit
+       * (`research.staleRunMinutes`, `storyContext.staleRunMinutes`), and may try a second time under
+       * the same row: twice both.
+       */
+      staleRunMinutes: parseWholeNumber(process.env.RESEARCH_PASS_STALE_RUN_MINUTES, 480, 'RESEARCH_PASS_STALE_RUN_MINUTES'),
     },
   },
   /**

@@ -27,13 +27,12 @@ import { RESEARCHABLE_STATUSES, researchStoriesByIds } from './researchInput.js'
 import { passItemTally, runResearchPass, type PassDeps, type PassOutcome } from './researchPass.js'
 import { applyPass, type PassApplied } from './researchPassApply.js'
 import { loadPassInput, passEligibility } from './researchPassInput.js'
-import { PASS_JOB_DISABLED, passStepState, passSwitchRefusal, RESEARCH_PASS_JOB } from './researchPassQueue.js'
+import { PASS_JOB_DISABLED, passStaleBefore, passStepState, passSwitchRefusal, RESEARCH_PASS_JOB } from './researchPassQueue.js'
 import { sanitizedError } from './researchRuns.js'
 import { monthToDateUsd, RESEARCH_RESERVATION_LOCK } from './researchSpend.js'
 import { checkSpendWarnings } from './spending.js'
 import { transientFailure } from './storyContextRuns.js'
 import { contextSearch } from './storyContextSearch.js'
-import { staleBefore } from './storyContextStale.js'
 import type { Actor } from './storyLifecycle.js'
 
 const log = createLogger('research_pass')
@@ -51,10 +50,10 @@ const capRefusal = (spentUsd: number, ceilingUsd: number) =>
 /** What a pass of each kind reserves when it starts: its ceiling (`config.research.pass`). */
 export const passCeilingUsd = (kind: 'first' | 'later') => (kind === 'first' ? config.research.pass.firstPassUsd : config.research.pass.laterPassUsd)
 
-/** A `running` pass a restart cut off (`staleBefore`): failed, `technical`, keeping its cost (its reservation). Each settles its story. */
+/** A `running` pass a restart cut off (`passStaleBefore`): failed, `technical`, keeping its cost (its reservation). Each settles its story. */
 export async function markInterruptedPasses(db: Db = prisma, now: Date = new Date()): Promise<number> {
   const { count } = await db.researchPass.updateMany({
-    where: { status: 'running', startedAt: { lt: staleBefore(now) } },
+    where: { status: 'running', startedAt: { lt: passStaleBefore(now) } },
     data: { status: 'failed', outcome: 'technical', error: PASS_INTERRUPTED, finishedAt: now },
   })
   return count

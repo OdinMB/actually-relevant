@@ -1,6 +1,7 @@
 import { it, expect, afterEach } from 'vitest'
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
+import { _setProcessStartedAt } from '../lib/runCutOff.js'
 import { citingContextDeps as citingDeps, fakeContextDeps as deps } from '../test/contextDeps.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createResearchRun } from '../test/db/storyContext.js'
@@ -13,7 +14,6 @@ import {
   runStoryContext,
   storeContextResult,
 } from './storyContextRuns.js'
-import { _setProcessStartedAt } from './storyContextStale.js'
 
 describeDb('story context runs', () => {
   useTestDatabase()

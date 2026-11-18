@@ -17,14 +17,14 @@ vi.mock('./researchPassGate.js', () => ({
 }))
 
 const { awaitingPass, nextForPass, owedPassStory, passStepState } = await import('./researchPassQueue.js')
-const { _setProcessStartedAt } = await import('./storyContextStale.js')
+const { _setProcessStartedAt } = await import('../lib/runCutOff.js')
 const { PASS_EVAL_GATE: realGate } = await vi.importActual<typeof import('./researchPassGate.js')>('./researchPassGate.js')
 
 const MINUTE_MS = 60_000
 const NOW = new Date()
 const ago = (minutes: number) => new Date(NOW.getTime() - minutes * MINUTE_MS)
 const WAIT = config.research.pipeline.maxWaitMinutes
-const STALE = config.storyContext.staleRunMinutes
+const STALE = config.research.pass.staleRunMinutes
 
 let feedId = ''
 
@@ -100,10 +100,13 @@ describeDb('research pass step state, queue and publish gate (PostgreSQL)', () =
     const none = await selected()
     const running = await selected()
     await passOf(running.id, { status: 'running', startedAt: ago(STALE - 5) })
+    // The pass's own limit, not a context run's
+    const slow = await selected()
+    await passOf(slow.id, { status: 'running', startedAt: ago(config.storyContext.staleRunMinutes + 5) })
     const byEditor = await selected()
     await passOf(byEditor.id, { trigger: 'editor', status: 'completed' })
 
-    expect(await awaitingPass([none.id, running.id, byEditor.id], NOW)).toEqual(new Set([none.id, running.id, byEditor.id]))
+    expect(await awaitingPass([none.id, running.id, slow.id, byEditor.id], NOW)).toEqual(new Set([none.id, running.id, slow.id, byEditor.id]))
   })
 
   it('lets through a story whose pipeline pass completed, was skipped, failed or was cut off by a restart, one with research applied, and another status', async () => {

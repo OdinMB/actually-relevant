@@ -3,7 +3,7 @@
  * one definition read from the pass rows (`.context/research-passes.md`, "The job and the gate"). A
  * story is owed a pass while it is `selected`, carries no applied research, and has no pipeline pass;
  * a pipeline pass settles it once it is completed, skipped or failed, or still `running` past the
- * stale rule (`storyContextStale.ts`: a restart cut it off). Editors' passes settle nothing.
+ * pass's stale rule (`passStaleBefore`: a restart cut it off). Editors' passes settle nothing.
  *
  * The step works only while its eval gate is open (`researchPassGate.ts`, closed until the owner
  * switches the step on, plan phase 6), the Tavily key is set and its job is enabled; the gate holds a story only
@@ -12,9 +12,9 @@
 import { Prisma } from '@prisma/client'
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
+import { cutOffBefore } from '../lib/runCutOff.js'
 import { PASS_EVAL_GATE } from './researchPassGate.js'
 import { switchRefusal } from './researchRuns.js'
-import { staleBefore } from './storyContextStale.js'
 
 /** The step's job; its row's `enabled` flag runs it in the daily edition and lets the publish gate hold. */
 export const RESEARCH_PASS_JOB = 'research_pass'
@@ -47,6 +47,11 @@ export async function passStepState(): Promise<PassStepState> {
   return { works, enabled: job?.enabled === true }
 }
 
+/** Passes still `running` that started before this are cut off (`cutOffBefore`, `research.pass.staleRunMinutes`): marked failed, and they settle their story. */
+export function passStaleBefore(now: Date): Date {
+  return cutOffBefore(now, config.research.pass.staleRunMinutes)
+}
+
 /** Selected, with no research applied. */
 const UNRESEARCHED: Prisma.StoryWhereInput = { status: 'selected', preResearch: { equals: Prisma.AnyNull } }
 
@@ -56,7 +61,7 @@ const QUEUED: Prisma.StoryWhereInput = { ...UNRESEARCHED, researchPasses: { none
 /** A pipeline pass that settles its story: finished any way, or running past the stale rule. */
 const settledPass = (now: Date): Prisma.ResearchPassWhereInput => ({
   trigger: 'pipeline',
-  OR: [{ status: { in: ['completed', 'skipped', 'failed'] } }, { status: 'running', startedAt: { lt: staleBefore(now) } }],
+  OR: [{ status: { in: ['completed', 'skipped', 'failed'] } }, { status: 'running', startedAt: { lt: passStaleBefore(now) } }],
 })
 
 /** The next selected stories the step gives a pass, oldest crawled first. */

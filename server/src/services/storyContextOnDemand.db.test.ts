@@ -1,6 +1,7 @@
 import { it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
 import prisma from '../lib/prisma.js'
+import { _setProcessStartedAt } from '../lib/runCutOff.js'
 import { recordOtherCost } from '../lib/runUsage.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
 import { citingContextDeps, fakeContextDeps } from '../test/contextDeps.js'
@@ -8,7 +9,6 @@ import { createFeed, createIssue, createStory, describeDb, useTestDatabase } fro
 import { createContextRun, createResearchRun } from '../test/db/storyContext.js'
 import type { ContextDeps } from './storyContextPipeline.js'
 import { gatherState, startContextGathering } from './storyContextOnDemand.js'
-import { _setProcessStartedAt } from './storyContextStale.js'
 
 const UNKNOWN = '00000000-0000-0000-0000-000000000000'
 

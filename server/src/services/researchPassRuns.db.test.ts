@@ -46,7 +46,7 @@ const { monthToDateUsd } = await import('./researchSpend.js')
 const { passUsage, storyPasses } = await import('./researchPassViews.js')
 const { getPublishedStoryBySlug } = await import('./publicStories.js')
 const { recordOtherCost } = await import('../lib/runUsage.js')
-const { _setProcessStartedAt } = await import('./storyContextStale.js')
+const { _setProcessStartedAt } = await import('../lib/runCutOff.js')
 const { PASS_EVAL_GATE: realGate } = await vi.importActual<typeof import('./researchPassGate.js')>('./researchPassGate.js')
 
 const FIRST = config.research.pass.firstPassUsd
@@ -266,7 +266,7 @@ describeDb('research passes (PostgreSQL)', () => {
     })
   })
 
-  it('marks a pass a restart cut off failed, keeping its reservation, and leaves a live one running', async () => {
+  it("marks a pass a restart cut off failed, keeping its reservation, and leaves a live one running, a slow one past context's limit included", async () => {
     const story = await researchable()
     const cutOff = await prisma.researchPass.create({
       data: {
@@ -276,11 +276,23 @@ describeDb('research passes (PostgreSQL)', () => {
         kind: 'first',
         status: 'running',
         costUsd: FIRST,
-        startedAt: ago(config.storyContext.staleRunMinutes + 5),
+        startedAt: ago(config.research.pass.staleRunMinutes + 5),
       },
     })
     const live = await prisma.researchPass.create({
       data: { storyId: story.id, number: 2, trigger: 'editor', kind: 'first', status: 'running', costUsd: FIRST, startedAt: ago(1) },
+    })
+    // A pass is research's and context's calls in turn, with a second attempt: it outlives a context run's limit
+    const slow = await prisma.researchPass.create({
+      data: {
+        storyId: (await researchable()).id,
+        number: 1,
+        trigger: 'pipeline',
+        kind: 'first',
+        status: 'running',
+        costUsd: FIRST,
+        startedAt: ago(config.storyContext.staleRunMinutes + 5),
+      },
     })
 
     expect(await markInterruptedPasses()).toBe(1)
@@ -288,6 +300,7 @@ describeDb('research passes (PostgreSQL)', () => {
     expect(await passOf(cutOff.id)).toMatchObject({ status: 'failed', outcome: 'technical', error: PASS_INTERRUPTED, costUsd: FIRST })
     expect((await passOf(cutOff.id)).finishedAt).not.toBeNull()
     expect(await passOf(live.id)).toMatchObject({ status: 'running' })
+    expect(await passOf(slow.id)).toMatchObject({ status: 'running' })
   })
 
   it('records a skipped pass at $0 with its reason, numbered after the story’s others', async () => {

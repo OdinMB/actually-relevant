@@ -5,11 +5,11 @@
 import { it, expect, vi, beforeEach, afterEach } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
+import { _setProcessStartedAt } from '../lib/runCutOff.js'
 import { createRunScope, runInScope } from '../lib/runUsage.js'
 import { createCluster, createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createContextRun, createResearchRun } from '../test/db/storyContext.js'
 import { awaitingContext, nextForContext } from './storyContextQueue.js'
-import { _setProcessStartedAt } from './storyContextStale.js'
 
 const NOW = new Date('2026-11-16T01:00:00Z')
 const MINUTE = 60_000

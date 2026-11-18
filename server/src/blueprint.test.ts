@@ -125,6 +125,11 @@ const RUNS_ON_ITS_CODE_DEFAULT: Record<string, string> = {
   ...tunables('local file paths and log rotation (config.log)', ['LOG_DIR', 'LOG_RETENTION_DAYS']),
   ...tunables('research spend cap (.context/story-research.md)', ['RESEARCH_MONTHLY_CAP_USD']),
   ...tunables('research step tuning (.context/story-research.md)', ['RESEARCH_PIPELINE_PER_RUN']),
+  ...tunables('research pass step tuning (.context/research-passes.md)', [
+    'RESEARCH_PASS_PER_RUN',
+    'RESEARCH_PASS_CONCURRENCY',
+    'RESEARCH_PASS_STALE_RUN_MINUTES',
+  ]),
 }
 
 /**
