@@ -29,7 +29,15 @@ vi.mock('./relatedStories.js', async importOriginal => ({
   forgetRelatedStories: mockForget,
 }))
 
-const { applyResearchRun, applyVerdict, revertResearch } = await import('./researchApply.js')
+// The research pass's eval gate, closed as in production unless a test opens it
+const gate = vi.hoisted(() => ({ closed: 'the eval gate is closed' as string | null }))
+vi.mock('./researchPassGate.js', () => ({
+  get PASS_EVAL_GATE() {
+    return gate.closed
+  },
+}))
+
+const { applyResearchRun, applyRefusal, applyVerdict, revertResearch } = await import('./researchApply.js')
 const { getPublishedStoryBySlug, updateStoryStatus } = await import('./story.js')
 
 const SINGLE_SOURCE = {
@@ -151,10 +159,34 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
   beforeEach(async () => {
     // Research switched on, its only switch: an apply refuses while it is off
     vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
+    gate.closed = 'the eval gate is closed'
     mockGenerate.mockReset().mockResolvedValue({ embedding: axisVector(7), hash: 'researched' })
     mockFavicons.mockReset().mockResolvedValue(undefined)
     mockForget.mockReset()
     feedId = (await createFeed((await createIssue()).id)).id
+  })
+
+  it("refuses to apply a run while research passes are switched on, an editor's and the research step's alike, and writes nothing", async () => {
+    const s = await story()
+    const editorRun = await run(s.id)
+    const selected = await story('selected')
+    const stepRun = result(selected.id, 2)
+    await prisma.jobRun.create({ data: { jobName: 'research_pass', cronExpression: '30 1 * * *', enabled: true } })
+
+    // The job enabled and the gate closed: the step is off, and an apply goes through as today
+    expect(await applyRefusal()).toBeNull()
+
+    gate.closed = null
+    const refusal = await applyRefusal()
+    expect(refusal).toMatch(/Research passes are switched on/)
+    await expect(applyResearchRun(s.id, editorRun)).rejects.toMatchObject({ status: 409, message: refusal })
+    expect(await applyVerdict(selected.id, 'run-2', await readBeforeRun(selected.id), stepRun)).toBe('skipped')
+    expect(await stored(s.id)).toMatchObject({ ...SINGLE_SOURCE, research: null, preResearch: null })
+    expect(await stored(selected.id)).toMatchObject({ ...SINGLE_SOURCE, research: null, preResearch: null })
+
+    // With its job disabled the step is off again
+    await prisma.jobRun.update({ where: { jobName: 'research_pass' }, data: { enabled: false } })
+    expect(await applyRefusal()).toBeNull()
   })
 
   it('writes the researched texts and emotion tag, the cited version and the snapshot; the relevance summary is null after it and kept in the snapshot; the rating stays the story’s', async () => {

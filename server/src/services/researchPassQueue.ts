@@ -47,6 +47,24 @@ export async function passStepState(): Promise<PassStepState> {
   return { works, enabled: job?.enabled === true }
 }
 
+/**
+ * The step is switched on: its eval gate open and its job enabled, research's switch aside (the
+ * admin's `on`). The gate is read first, so nothing is queried while it is closed.
+ */
+export async function passStepOn(): Promise<boolean> {
+  if (PASS_EVAL_GATE !== null) return false
+  const job = await prisma.jobRun.findUnique({ where: { jobName: RESEARCH_PASS_JOB }, select: { enabled: true } })
+  return job?.enabled === true
+}
+
+/**
+ * Why an editor's tool the step replaces, whose write would bypass the article's versions, is
+ * refused while the step is on (`passStepOn`), or null: `what` says what is refused.
+ */
+export async function replacedByPasses(what: string): Promise<string | null> {
+  return (await passStepOn()) ? `Research passes are switched on: ${what}; use "Research again", which keeps the article's versions and its cards` : null
+}
+
 /** Passes still `running` that started before this are cut off (`cutOffBefore`, `research.pass.staleRunMinutes`): marked failed, and they settle their story. */
 export function passStaleBefore(now: Date): Date {
   return cutOffBefore(now, config.research.pass.staleRunMinutes)

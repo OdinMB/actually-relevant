@@ -6,8 +6,8 @@
  * `research`. A revert writes the snapshot back and clears both. Each write goes through
  * `recordAnalysis('research', …)` with a fresh embedding, fenced on the status and on `updatedAt` as
  * read before the embedding call, so a status is never moved by a write here, and an editor's move or
- * edit made meanwhile wins. Applying is refused only while research is switched off
- * (`applyRefusal`); reverting never is. An editor applies a completed run (`applyResearchRun`); the
+ * edit made meanwhile wins. Applying is refused only while research is switched off or research
+ * passes are switched on (`applyRefusal`); reverting never is. An editor applies a completed run (`applyResearchRun`); the
  * research step applies its run's verdict once the run's result is stored and before the run is
  * finished (`applyVerdict`), fenced on the story as read before the run started, rejecting through
  * `transition`. An editor's refusals are ServiceErrors; the research step's are outcomes. A revert
@@ -22,6 +22,7 @@ import { ConflictError, NotFoundError } from '../utils/errors.js'
 import { generateEmbeddingForContent } from './embedding.js'
 import type { GateKind } from './researchChecks.js'
 import { buildResearchedStory, researchedStorySchema, type ResearchedStory, type ResearchRunForReaders } from './researchedStory.js'
+import { replacedByPasses } from './researchPassQueue.js'
 import type { ResearchSource, StoryResearch } from './researchPipeline.js'
 import type { StoredResearch } from './researchRuns.js'
 import {
@@ -45,13 +46,17 @@ const STORY_CHANGED = 'The story changed while this was written; reload it and t
 
 /**
  * Why no run can be applied now, whatever the story, or null: research switched off (no
- * `TAVILY_API_KEY`). Applying has no gate of its own (owner decision 2026-11-14). A revert is never
- * refused for it.
+ * `TAVILY_API_KEY`), or research passes switched on, whose versions an apply would bypass
+ * (`replacedByPasses`). Applying has no gate of its own (owner decision 2026-11-14). A revert is never
+ * refused for either.
  */
-export function applyRefusal(): string | null {
+export async function applyRefusal(): Promise<string | null> {
   if (!config.research.tavilyApiKey) return 'Research is switched off: TAVILY_API_KEY is not set, so no run can be applied (reverting still works)'
-  return null
+  return replacedByPasses(REPLACED)
 }
+
+/** While research passes are on, a pass researches the story again into a new version. */
+const REPLACED = 'a research run is no longer applied (reverting still works)'
 
 /** The story's columns a research write reads and keeps; also the research pass's apply's (`researchPassApply.ts`). */
 export const storyColumns = (storyId: string) =>
@@ -141,9 +146,12 @@ const asJson = (value: unknown) => value as Prisma.InputJsonValue
  * The write both applies share: the cited version built from `run`, the single-source snapshot
  * (taken once), the researched texts, against `status` and the `updatedAt` in `story`. Then the
  * outlets' favicons are fetched in the background; the page shows each outlet's initial until its
- * icon is stored. Why not, when this story cannot take the version or changed before the write.
+ * icon is stored. Why not, when this story cannot take the version or changed before the write, or
+ * research passes were switched on (a research step's run in flight then is not applied either).
  */
 async function putResearch(storyId: string, actor: Actor, story: StoryColumns, status: StoryStatus, run: ApplicableRun): Promise<{ refused: string } | null> {
+  const replaced = await replacedByPasses(REPLACED)
+  if (replaced) return { refused: replaced }
   const refusal = statusRefusal(status, 'take a researched version')
   if (refusal) return { refused: refusal }
   const research = buildResearchedStory(run)
@@ -167,7 +175,7 @@ async function putResearch(storyId: string, actor: Actor, story: StoryColumns, s
  * analyzed, selected, published and rejected, and when the story changed before the write.
  */
 export async function applyResearchRun(storyId: string, runId: string): Promise<'applied'> {
-  const closed = applyRefusal()
+  const closed = await applyRefusal()
   if (closed) throw new ConflictError(closed)
   const story = await loadStory(storyId)
   const run = await completedRun(storyId, runId)

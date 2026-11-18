@@ -86,7 +86,7 @@ async function applyNewest(storyId: string): Promise<BulkApplyOutcome> {
  * skipped, as every bulk action skips one; a story chosen twice is taken once.
  */
 export async function applyNewestRuns(storyIds: string[]): Promise<{ outcomes: BulkApplyOutcome[] }> {
-  const closed = applyRefusal()
+  const closed = await applyRefusal()
   if (closed) throw new ConflictError(closed)
   const processing = new Set(taskRegistry.getProcessingStoryIds())
   const outcomes: BulkApplyOutcome[] = []

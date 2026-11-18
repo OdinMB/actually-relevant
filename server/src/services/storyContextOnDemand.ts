@@ -1,8 +1,8 @@
 /**
  * An editor's context run of one story, the admin's "Gather context" (`.context/story-context.md`,
  * "On demand"): on any published story a completed research run of which holds facts, whatever the
- * step's lookback, however many runs the story has had, and with the step switched on or off; only
- * web search must be on. The run is claimed as the step's are (`claimContextRun`: never while
+ * step's lookback, however many runs the story has had, and with the step switched on or off; web
+ * search must be on, and research passes off (a pass writes the cards with the article). The run is claimed as the step's are (`claimContextRun`: never while
  * another run of the story is running), builds on the story's earlier completed runs, and a failure
  * that may pass is tried once more on its own row, as the step does. It runs as a one-story task the
  * admin polls, in a run scope of the step's job, so its spend is added to `build_story_context`'s
@@ -15,6 +15,7 @@ import prisma from '../lib/prisma.js'
 import { createRunScope, runInScope, settleRun, type RunScope } from '../lib/runUsage.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
 import { ConflictError, NotFoundError } from '../utils/errors.js'
+import { replacedByPasses } from './researchPassQueue.js'
 import { sanitizedError } from './researchRuns.js'
 import { checkSpendWarnings } from './spending.js'
 import { contextEligibility } from './storyContextInput.js'
@@ -26,6 +27,8 @@ const log = createLogger('story_context')
 
 const OFF = 'Web search is off (TAVILY_API_KEY is not set), so context cannot be gathered'
 const BUSY = 'Context is already being gathered for this story'
+/** While research passes are on, a pass writes the cards with the article (`replacedByPasses`). */
+const REPLACED = 'context is no longer gathered on its own'
 
 type Eligibility = NonNullable<Awaited<ReturnType<typeof contextEligibility>>>
 
@@ -42,13 +45,17 @@ function ineligibility(story: Eligibility): string | null {
 /**
  * For the admin's Context section: whether the story can have context gathered at all (`eligible`,
  * so a story with no run yet shows the action), and why the action is closed now, or null: web
- * search off, the story not eligible, or a run of it running. 404 for an unknown story.
+ * search off, research passes on, the story not eligible, or a run of it running. 404 for an unknown story.
  */
 export async function gatherState(storyId: string): Promise<{ eligible: boolean; refusal: string | null }> {
-  const [story, running] = await Promise.all([contextEligibility(prisma, storyId), prisma.storyContextRun.count({ where: { storyId, status: 'running' } })])
+  const [story, running, replaced] = await Promise.all([
+    contextEligibility(prisma, storyId),
+    prisma.storyContextRun.count({ where: { storyId, status: 'running' } }),
+    replacedByPasses(REPLACED),
+  ])
   if (!story) throw new NotFoundError('Story not found')
   const why = ineligibility(story)
-  return { eligible: why === null, refusal: !config.research.tavilyApiKey ? OFF : (why ?? (running > 0 ? BUSY : null)) }
+  return { eligible: why === null, refusal: !config.research.tavilyApiKey ? OFF : (replaced ?? why ?? (running > 0 ? BUSY : null)) }
 }
 
 /** Why the task failed, in the editor's words, or null when the run completed (cards kept or none). */
@@ -96,11 +103,13 @@ async function gatherInTask(taskId: string, storyId: string, runId: string, deps
 
 /**
  * Start an editor's context run of the story in the background, as a one-story task. 409 while web
- * search is off (for any story), 404 for an unknown story, 409 for one not published or without a
+ * search is off or research passes are switched on (for any story), 404 for an unknown story, 409 for one not published or without a
  * research run that holds facts, and 409 while a run of the story is running (nothing written).
  */
 export async function startContextGathering(storyId: string, deps: ContextDeps = productionDeps()): Promise<{ taskId: string; runId: string }> {
   if (!config.research.tavilyApiKey) throw new ConflictError(OFF)
+  const replaced = await replacedByPasses(REPLACED)
+  if (replaced) throw new ConflictError(replaced)
   const story = await contextEligibility(prisma, storyId)
   if (!story) throw new NotFoundError('Story not found')
   const why = ineligibility(story)

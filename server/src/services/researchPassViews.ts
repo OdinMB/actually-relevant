@@ -9,8 +9,7 @@ import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { NotFoundError } from '../utils/errors.js'
 import { loadPool, storyVersions, type StoredVersion } from './passRecords.js'
-import { PASS_EVAL_GATE } from './researchPassGate.js'
-import { passStepState } from './researchPassQueue.js'
+import { passStepOn } from './researchPassQueue.js'
 import { editorRefusal, markInterruptedPasses, passCeilingUsd } from './researchPassRuns.js'
 import type { Pool } from './researchPool.js'
 import { listResearchRuns, type ResearchRunView } from './researchRuns.js'
@@ -35,14 +34,14 @@ export interface PassUsageView {
 
 export async function passUsage(now: Date = new Date()): Promise<PassUsageView> {
   await markInterruptedPasses(prisma, now)
-  const [spentUsd, refusal, step] = await Promise.all([monthToDateUsd(prisma, now), editorRefusal(), passStepState()])
+  const [spentUsd, refusal, on] = await Promise.all([monthToDateUsd(prisma, now), editorRefusal(), passStepOn()])
   return {
     spentUsd,
     capUsd: config.research.monthlyCapUsd,
     firstPassUsd: passCeilingUsd('first'),
     laterPassUsd: passCeilingUsd('later'),
     refusal,
-    on: PASS_EVAL_GATE === null && step.enabled,
+    on,
   }
 }
 

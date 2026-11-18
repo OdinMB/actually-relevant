@@ -452,13 +452,13 @@ describe('revertResearch', () => {
 })
 
 describe('applyRefusal', () => {
-  it('is null while research is switched on: applying has no gate of its own', () => {
-    expect(applyRefusal()).toBeNull()
+  it('is null while research is switched on: applying has no gate of its own', async () => {
+    expect(await applyRefusal()).toBeNull()
   })
 
-  it('refuses while research is switched off, naming the key', () => {
+  it('refuses while research is switched off, naming the key', async () => {
     vi.stubEnv('TAVILY_API_KEY', '')
-    expect(applyRefusal()).toMatch(/TAVILY_API_KEY/)
+    expect(await applyRefusal()).toMatch(/TAVILY_API_KEY/)
   })
 
   it('takes no setting but the key: the retired gate and mode variables, at their old closed values, hold back neither apply', async () => {
@@ -468,7 +468,7 @@ describe('applyRefusal', () => {
     vi.resetModules()
     const fresh = await import('./researchApply.js')
 
-    expect(fresh.applyRefusal()).toBeNull()
+    expect(await fresh.applyRefusal()).toBeNull()
     await expect(fresh.applyResearchRun(STORY, RUN)).resolves.toBe('applied')
     mockPrisma.story.findUnique.mockResolvedValue(storyRow({ status: 'selected' }))
     await expect(fresh.applyVerdict(STORY, RUN, { status: 'selected', updatedAt: READ_AT }, result())).resolves.toBe('applied')

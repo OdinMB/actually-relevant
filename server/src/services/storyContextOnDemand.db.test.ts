@@ -8,7 +8,16 @@ import { citingContextDeps, fakeContextDeps } from '../test/contextDeps.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createContextRun, createResearchRun } from '../test/db/storyContext.js'
 import type { ContextDeps } from './storyContextPipeline.js'
-import { gatherState, startContextGathering } from './storyContextOnDemand.js'
+
+// The research pass's eval gate, closed as in production unless a test opens it
+const gate = vi.hoisted(() => ({ closed: 'the eval gate is closed' as string | null }))
+vi.mock('./researchPassGate.js', () => ({
+  get PASS_EVAL_GATE() {
+    return gate.closed
+  },
+}))
+
+const { gatherState, startContextGathering } = await import('./storyContextOnDemand.js')
 
 const UNKNOWN = '00000000-0000-0000-0000-000000000000'
 
@@ -49,7 +58,10 @@ const finished = (taskId: string) =>
 describeDb('story context on demand', () => {
   useTestDatabase()
 
-  beforeEach(() => vi.stubEnv('TAVILY_API_KEY', 'tvly-test'))
+  beforeEach(() => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
+    gate.closed = 'the eval gate is closed'
+  })
   afterEach(() => {
     vi.unstubAllEnvs()
     taskRegistry.clear()
@@ -95,6 +107,20 @@ describeDb('story context on demand', () => {
       message: expect.stringMatching(/already being gathered/i),
     })
     expect(await prisma.storyContextRun.count()).toBe(1)
+  })
+
+  it('refuses while research passes are switched on, which write the cards with the article: the state says so, and nothing is claimed', async () => {
+    const s = await researched()
+    await prisma.jobRun.create({ data: { jobName: 'research_pass', cronExpression: '30 1 * * *', enabled: true } })
+    // The job enabled and the gate closed: the step is off, and gathering is open as today
+    expect(await gatherState(s.id)).toEqual({ eligible: true, refusal: null })
+
+    gate.closed = null
+    const { refusal } = await gatherState(s.id)
+    expect(refusal).toMatch(/Research passes are switched on/)
+    expect(await gatherState(s.id)).toEqual({ eligible: true, refusal })
+    await expect(startContextGathering(s.id, fakeContextDeps())).rejects.toMatchObject({ status: 409, message: refusal })
+    expect(await prisma.storyContextRun.count()).toBe(0)
   })
 
   it('starts at once on a story whose run a restart cut off, marking that run interrupted, as the admin’s view does', async () => {
