@@ -113,7 +113,7 @@ A development's stories may be months apart and report anything about it: a new 
 - A story that mentions the development only as background to another subject is no.
 - An overview belongs only when its charter's IN covers the story; its newest stories show what it has taken so far, never widen it.
 - unsure is for a story the texts genuinely leave open; it is never a polite no.
-- Each quote is the shortest run of words, copied exactly, that states the shared cause, place or end on that side: from the story's title, label or summary; from an overview's TITLE or CHARTER; from a candidate story's title, label or summary. Never from the facts, never paraphrased. When a side states none, the quote is empty and the answer cannot be yes.
+- Each quote is the shortest run of words, copied exactly, that states the shared cause, place or end on that side: from the story's title, label or summary; from an overview's TITLE, its charter's IN or its END_EVENT; from a candidate story's title, label or summary. Never from the facts, never from an OUT entry (OUT names what does not belong), never paraphrased. When a side states none, the quote is empty and the answer cannot be yes.
 - reportsEndEvent is true only when the story reports that the overview's END_EVENT has happened, not that it may, is expected or was called for.
 - The story's role is its role in the development it belongs to; when it belongs to none, its role as a story on its own.
 </RULES>

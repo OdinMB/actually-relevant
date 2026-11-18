@@ -2,8 +2,11 @@ import { expect, it } from 'vitest'
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
+import type { LinkCandidateAnswer } from '../schemas/overviews.js'
+import { membershipsOf } from './overviewCandidates.js'
+import { candidateOverviews, linkStories } from './overviewInput.js'
 import { applyLink } from './overviewLifecycle.js'
-import type { LinkResult } from './overviewLink.js'
+import { linkInOrder, type LinkDeps, type LinkResult } from './overviewLink.js'
 import { owedStories } from './overviewQueue.js'
 import type { LinkStory, Shared } from './overviewTypes.js'
 
@@ -220,6 +223,59 @@ describeDb('the overview lifecycle', () => {
     const got = await owedStories(NOW)
     expect(got).toEqual({ backlog: [held.id, backlogA.id, backlogB.id], night: [night.id], backlogTotal: 3 })
     expect(got.backlog).not.toContain(old.id)
-    expect((await owedStories(NOW, { ...config.overviews, backfillPerRun: 1 })).backlog).toEqual([held.id])
+    // While older stories remain owed beyond the slice, the night's stories wait in the backlog
+    expect(await owedStories(NOW, { ...config.overviews, backfillPerRun: 1 })).toEqual({ backlog: [held.id], night: [], backlogTotal: 3 })
+  })
+
+  it('a development spread over the backfill and the night founds one overview, linked strictly oldest first', async () => {
+    const feed = await createFeed((await createIssue()).id)
+    const text = { title: 'Ebola cases rise in Ituri', summary: 'The outbreak in Ituri province grew; it ends when the ministry declares it over.' }
+    const at = (days: number) => createStory({ feedId: feed.id, status: 'published', datePublished: daysFrom(days), ...text })
+    const a1 = await at(-25)
+    const a2 = await at(-21)
+    const o = await at(-6)
+    const n = await at(-1 / 12) // the night's
+    const draft = {
+      title: 'Ebola outbreak in Ituri',
+      charter: { in: 'The Ebola outbreak in Ituri province.', out: [], endEvent: 'the ministry declares it over' },
+    }
+    const quoted = (id: string): LinkCandidateAnswer => ({
+      id,
+      belongs: 'yes',
+      cause: { story: 'Ebola', other: 'Ebola' },
+      place: { story: 'Ituri', other: 'Ituri' },
+      end: { story: 'declares it over', other: 'declares it over' },
+      reportsEndEvent: false,
+      confidence: 0.9,
+    })
+    // Each story's neighbours: every other story of the development (the candidate code keeps only earlier ones); o and n nearest each other
+    const all = [a1, a2, o, n]
+    const distance = (x: string, y: string) => ([x, y].sort().join() === [o.id, n.id].sort().join() ? 0.1 : 0.3)
+    const deps: LinkDeps = {
+      neighbours: async s =>
+        all.filter(x => x.id !== s.id).map(x => ({ id: x.id, datePublished: x.datePublished!, distance: distance(s.id, x.id), via: 'near' as const })),
+      memberships: (ids, asOf) => membershipsOf(prisma, ids, asOf),
+      overviews: (ids, asOf) => candidateOverviews(prisma, ids, asOf),
+      stories: ids => linkStories(prisma, ids),
+      // A yes to the overview when one is shown, else to every partner
+      link: async input => ({
+        parsed: { candidates: input.overviews.length > 0 ? [quoted('O1')] : input.partners.map(p => quoted(p.ref)), role: 'routine', roleKind: null },
+        costUsd: 0,
+        model: 'small-model',
+      }),
+      found: async () => ({ parsed: { ...draft, roles: { a: routine, b: routine } }, costUsd: 0, model: 'large-model' }),
+      foundCheck: async () => ({ parsed: { a: fits, b: fits, endEventConcrete: 'yes' }, costUsd: 0, model: 'large-model' }),
+    }
+    const options = { ...config.overviews, backfillPerRun: 1 }
+    for (let run = 0; run < 4; run++) {
+      const slices = await owedStories(NOW, options)
+      await linkInOrder(await linkStories(prisma, [...slices.backlog, ...slices.night]), deps, applyLink, { concurrency: 1 })
+    }
+    expect(await prisma.overview.count()).toBe(1)
+    const entries = await prisma.overviewEntry.findMany({ where: { status: 'active' }, select: { storyId: true } })
+    expect(entries.map(e => e.storyId).sort()).toEqual(all.map(s => s.id).sort())
   })
 })
+
+const routine = { role: 'routine' as const, roleKind: null }
+const fits = { fits: 'yes' as const, reason: 'r' }

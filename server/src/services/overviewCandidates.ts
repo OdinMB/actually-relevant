@@ -134,16 +134,30 @@ interface MembershipRow {
   last_entry_at: Date | null
 }
 
-/** The stories' active overviews, and the overviews an editor detached each from (`locked`). */
-export async function membershipsOf(db: OverviewDb, storyIds: readonly string[]): Promise<Memberships> {
+/**
+ * The stories' active overviews, and the overviews an editor detached each from (`locked`). With
+ * `asOf` (the story being linked's date), an overview's last entry is its newest active entry
+ * published on or before it, as linking a story sees the development on its own day; without, the
+ * overview's `last_entry_at`.
+ */
+export async function membershipsOf(db: OverviewDb, storyIds: readonly string[], asOf?: Date): Promise<Memberships> {
   const ids = [...new Set(storyIds)]
   if (ids.length === 0) return { active: new Map(), lockedOut: new Map() }
-  const rows = await db.$queryRaw<MembershipRow[]>`
-    SELECT e.story_id, o.id AS overview_id, o.scope::text AS scope, o.status::text AS status, o.closed_reason, o.frozen, o.last_entry_at
-    FROM overview_entries e
-    JOIN overviews o ON o.id = e.overview_id
-    WHERE e.status = 'active' AND e.story_id = ANY(${ids}::text[])
-  `
+  const rows = asOf
+    ? await db.$queryRaw<MembershipRow[]>`
+        SELECT e.story_id, o.id AS overview_id, o.scope::text AS scope, o.status::text AS status, o.closed_reason, o.frozen,
+               (SELECT max(s.date_published) FROM overview_entries m JOIN stories s ON s.id = m.story_id
+                WHERE m.overview_id = o.id AND m.status = 'active' AND s.date_published <= ${asOf}) AS last_entry_at
+        FROM overview_entries e
+        JOIN overviews o ON o.id = e.overview_id
+        WHERE e.status = 'active' AND e.story_id = ANY(${ids}::text[])
+      `
+    : await db.$queryRaw<MembershipRow[]>`
+        SELECT e.story_id, o.id AS overview_id, o.scope::text AS scope, o.status::text AS status, o.closed_reason, o.frozen, o.last_entry_at
+        FROM overview_entries e
+        JOIN overviews o ON o.id = e.overview_id
+        WHERE e.status = 'active' AND e.story_id = ANY(${ids}::text[])
+      `
   const locked = await db.$queryRaw<{ story_id: string; overview_id: string }[]>`
     SELECT DISTINCT story_id, overview_id FROM overview_entries
     WHERE status = 'detached' AND locked AND story_id = ANY(${ids}::text[])
@@ -173,7 +187,12 @@ export interface Candidates {
   partners: Neighbour[]
 }
 
-/** Whether an overview may take a story dated `asOf`: not closed (a faded one reopens), and with an entry within the lookback before it. */
+/**
+ * Whether an overview may take a story dated `asOf`: not closed (a faded one reopens), and with an
+ * entry within the lookback before it. `lastEntryAt` is the last entry as of the story's own day
+ * (`membershipsOf` with `asOf`, the sandbox's alike), so an entry published after the story never
+ * keeps an overview alive for it.
+ */
 const takesStories = (m: Membership, asOf: Date, lookbackDays: number): boolean =>
   !(m.status === 'closed' && m.closedReason !== 'faded') && m.lastEntryAt !== null && m.lastEntryAt.getTime() >= asOf.getTime() - lookbackDays * DAY_MS
 

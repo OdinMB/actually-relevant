@@ -5,7 +5,8 @@
  * `research_pass` is (the order of switches: overviews after research passes). A story is owed while
  * it is published, within the backfill window, has no active entry and no live settling `link`
  * decision (joined, founded, none, rejected; one not undone): held, conflicting and failed stories are
- * retried. SELECT only.
+ * retried. The night's stories wait while older owed stories remain beyond a run's backlog slice.
+ * SELECT only.
  */
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
@@ -58,21 +59,26 @@ const owedWhere = (from: Date, before: Date | null) => ({
 export interface OwedSlices {
   /** Older owed stories, oldest first, at most `backfillPerRun`. */
   backlog: string[]
-  /** The night's owed stories, oldest first, at most `perRun`. */
+  /** The night's owed stories, oldest first, at most `perRun`; none while older owed stories remain beyond the backlog's slice. */
   night: string[]
   /** Every older owed story, for the summary's "backfill N of M". */
   backlogTotal: number
 }
 
-/** The stories one run links: the backlog's slice first, then the night's, each oldest first. */
+/**
+ * The stories one run links, strictly oldest first: the backlog's slice, then the night's stories
+ * only when that slice takes every older owed story. While the backlog drains (about 6 nights after
+ * the switch), the night's stories wait in it, so no story is ever linked before an older one it may
+ * belong with, whose founding it would otherwise pre-empt.
+ */
 export async function owedStories(now: Date = new Date(), options = config.overviews): Promise<OwedSlices> {
   const { since, nightStart } = owedWindow(now, options)
   const ids = (where: ReturnType<typeof owedWhere>, take: number) =>
     prisma.story.findMany({ where, orderBy: [{ datePublished: 'asc' }, { id: 'asc' }], take, select: { id: true } }).then(rows => rows.map(r => r.id))
-  const [backlog, night, backlogTotal] = await Promise.all([
+  const [backlog, backlogTotal] = await Promise.all([
     ids(owedWhere(since, nightStart), options.backfillPerRun),
-    ids(owedWhere(nightStart, null), options.perRun),
     prisma.story.count({ where: owedWhere(since, nightStart) }),
   ])
+  const night = backlogTotal > backlog.length ? [] : await ids(owedWhere(nightStart, null), options.perRun)
   return { backlog, night, backlogTotal }
 }

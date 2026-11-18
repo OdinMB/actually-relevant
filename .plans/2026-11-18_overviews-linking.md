@@ -97,9 +97,9 @@ The job takes **published stories that have no live `link` decision** (one not u
 - the night's, and those an editor published or republished since;
 - at the first switch-on, the backfill window (For Odin 1).
 
-**Every window counts from the story's own date (`asOf` = the story's `datePublished`), in production as in the replay.** The candidate query sees only stories published on or before it, and overviews as they stand at that point of the run. The founding window is the 30 days before the story and the member lookback the 180 days before it. Processing oldest first, with the windows anchored there, makes a backfilled development form in date order, as it would have formed live. Ebola's May stories found its overview, and its later stories join it.
+**Every window counts from the story's own date (`asOf` = the story's `datePublished`), in production as in the replay.** The candidate query sees only stories published on or before it, and overviews as they stood on that day: their entries and last entry published on or before it. The founding window is the 30 days before the story and the member lookback the 180 days before it. Processing oldest first, with the windows anchored there, makes a backfilled development form in date order, as it would have formed live. Ebola's May stories found its overview, and its later stories join it.
 
-**The backfill takes several nights.** At `perRun` 60, about 1,600 stories need about 27 nights. The plan therefore gives the backfill its own allowance: `overviews.backfillPerRun` (300) on top of the night's own stories, so 6 months complete in about 6 nights, each adding about 15–25 minutes after publishing. Each run links its backlog slice first and then the night's stories, all oldest first, so no story is linked before older stories it may belong with. The night's stories are always linked in the same run. An overview reaches the public only once its review at 3 has passed, so a half-finished backfill shows nothing wrong, only less.
+**The backfill takes several nights.** At `perRun` 60, about 1,600 stories need about 27 nights. The plan therefore gives the backfill its own allowance: `overviews.backfillPerRun` (300) on top of the night's own stories, so 6 months complete in about 6 nights, each adding about 15–25 minutes after publishing. Each run links its backlog slice first, oldest first, and the night's stories only once that slice takes every older owed story. **While the backlog drains, new stories wait:** for about 6 nights after the switch-on, the night's stories join the backlog and are linked after the older ones, so linking is strictly oldest first and no story is linked before older stories it may belong with (otherwise a night's story could found a development with an October partner before that development's August stories had their turn, and the August stories would found it a second time). An overview reaches the public only once its review at 3 has passed, so a half-finished backfill shows nothing wrong, only less.
 
 Linking runs after publishing, so it never holds the edition. A story's link appears minutes after it goes live.
 
@@ -120,7 +120,7 @@ Linking runs after publishing, so it never holds the edition. A story's link app
    - **Code accepts a join only when all of these hold:**
      - the answer is `yes`;
      - all three shared fields are filled;
-     - each quote is found in its side's text (title, summary or charter), with the same normalization the eval's `keyCheck` uses. That function, `normalizeQuote`, moves from the eval scripts into `server/src/lib/quoteMatch.ts`, and both import it from there, since production code never imports from `scripts/`.
+     - each quote is found in its side's text (the story's title, label or summary; the overview's title, IN or END_EVENT, never its OUT list), with the same normalization the eval's `keyCheck` uses. That function, `normalizeQuote`, moves from the eval scripts into `server/src/lib/quoteMatch.ts`, and both import it from there, since production code never imports from `scripts/`.
    - If several overviews pass, the nearest wins, because a story joins one overview at most (For Odin 4). `unsure` counts as `none` (D2: cosine proposes, a model confirms).
 3. **Founding** (only when no overview was joined and a founding candidate got `yes`). These are two independent large-tier calls that must agree (D6, D3 of the design):
    - `overview-found` drafts the development's charter (in, out, end event, which must be named) and title from the two stories.
@@ -224,7 +224,7 @@ It is kept off by the same four layers as the research pass:
 - public reads that return nothing unless the step is on and the overview is public.
 
 A run does five things in order:
-1. it links the owed stories, oldest first (`perRun` 60 plus `backfillPerRun` 300 while a backfill is owed; link calls at concurrency 3, writes one at a time);
+1. it links the owed stories, strictly oldest first (`backfillPerRun` 300 of the backlog, and the night's `perRun` 60 only once the backlog's slice takes every older owed story, so new stories wait while a backfill drains; link calls at concurrency 3, writes one at a time);
 2. it runs foundings and the closing checks;
 3. it applies the status machine, the unpublished-member rule included;
 4. it runs due reviews;

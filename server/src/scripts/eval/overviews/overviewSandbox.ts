@@ -35,8 +35,8 @@ export interface Sandbox {
   overviews: Map<string, SandboxOverview>
   /** Each story's stored outcome and role. */
   results: Map<string, { outcome: LinkOutcome; role: Role | null }>
-  memberships(storyIds: string[]): Promise<Memberships>
-  candidateOverviews(ids: string[]): Promise<CandidateOverview[]>
+  memberships(storyIds: string[], asOf?: Date): Promise<Memberships>
+  candidateOverviews(ids: string[], asOf: Date): Promise<CandidateOverview[]>
   apply: ApplyLink
 }
 
@@ -46,23 +46,26 @@ export function createSandbox(): Sandbox {
   const overviews = new Map<string, SandboxOverview>()
   const activeOf = new Map<string, string>()
   const results = new Map<string, { outcome: LinkOutcome; role: Role | null }>()
-  const membership = (o: SandboxOverview): Membership => ({
+  /** Its entries published on or before `asOf`, newest first: the development as it stood on that day. */
+  const entriesAsOf = (o: SandboxOverview, asOf?: Date) =>
+    o.entries.filter(e => !asOf || e.datePublished.getTime() <= asOf.getTime()).sort((a, b) => b.datePublished.getTime() - a.datePublished.getTime())
+  const membership = (o: SandboxOverview, asOf?: Date): Membership => ({
     overviewId: o.id,
     scope: 'forming',
     status: o.status,
     closedReason: o.closedReason,
     frozen: o.frozen,
-    lastEntryAt: o.lastEntryAt,
+    lastEntryAt: asOf ? (entriesAsOf(o, asOf)[0]?.datePublished ?? null) : o.lastEntryAt,
   })
-  const memberships = async (storyIds: string[]): Promise<Memberships> => ({
-    active: new Map(storyIds.flatMap(id => (activeOf.has(id) ? [[id, membership(overviews.get(activeOf.get(id)!)!)] as const] : []))),
+  const memberships = async (storyIds: string[], asOf?: Date): Promise<Memberships> => ({
+    active: new Map(storyIds.flatMap(id => (activeOf.has(id) ? [[id, membership(overviews.get(activeOf.get(id)!)!, asOf)] as const] : []))),
     lockedOut: new Map(),
   })
-  const candidateOverviews = async (ids: string[]): Promise<CandidateOverview[]> =>
+  const candidateOverviews = async (ids: string[], asOf: Date): Promise<CandidateOverview[]> =>
     ids.flatMap(id => {
       const o = overviews.get(id)
       if (!o) return []
-      const newest = [...o.entries].sort((a, b) => b.datePublished.getTime() - a.datePublished.getTime()).slice(0, 5)
+      const newest = entriesAsOf(o, asOf).slice(0, 5)
       return [{ id, title: o.title, charter: o.charter, entries: newest.map(e => ({ title: e.title, date: e.date })) }]
     })
   const record = (result: LinkResult, outcome: LinkOutcome) => {

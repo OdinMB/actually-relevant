@@ -16,7 +16,7 @@ const quotePair = (what: string) =>
       other: z
         .string()
         .describe(
-          `The words of the candidate that state ${what}, copied exactly: from an overview's TITLE or CHARTER, or from a story's title, label or summary. Empty when it states none.`,
+          `The words of the candidate that state ${what}, copied exactly: from an overview's TITLE, IN or END_EVENT (never its OUT entries), or from a story's title, label or summary. Empty when it states none.`,
         ),
     })
     .describe(`Where both sides state ${what}.`)

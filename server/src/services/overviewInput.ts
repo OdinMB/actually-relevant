@@ -71,8 +71,12 @@ const charterSchema = z.object({ in: z.string(), out: z.array(z.string()), endEv
 /** A stored charter, or null when the column does not hold one. */
 export const parseCharter = (value: unknown): Charter | null => charterSchema.safeParse(value).data ?? null
 
-/** The overviews as the link prompt shows them, in the order asked: title, charter and newest published entries. An overview whose charter does not parse is left out. */
-export async function candidateOverviews(db: OverviewDb, ids: readonly string[]): Promise<CandidateOverview[]> {
+/**
+ * The overviews as the link prompt shows them, in the order asked: title, charter and newest
+ * published entries, those published on or before `asOf` (the story being linked's date), so a story
+ * sees the development as it stood on its own day. An overview whose charter does not parse is left out.
+ */
+export async function candidateOverviews(db: OverviewDb, ids: readonly string[], asOf: Date): Promise<CandidateOverview[]> {
   const wanted = [...new Set(ids)]
   if (wanted.length === 0) return []
   const rows = await db.$queryRaw<{ id: string; title: string; charter: unknown }[]>`
@@ -84,7 +88,8 @@ export async function candidateOverviews(db: OverviewDb, ids: readonly string[])
              row_number() OVER (PARTITION BY e.overview_id ORDER BY s.date_published DESC, s.id) AS n
       FROM overview_entries e
       JOIN stories s ON s.id = e.story_id
-      WHERE e.status = 'active' AND s.status = 'published' AND s.date_published IS NOT NULL AND e.overview_id = ANY(${wanted}::text[])
+      WHERE e.status = 'active' AND s.status = 'published' AND s.date_published IS NOT NULL AND s.date_published <= ${asOf}
+        AND e.overview_id = ANY(${wanted}::text[])
     ) newest
     WHERE n <= ${CANDIDATE_ENTRIES}
     ORDER BY overview_id, n

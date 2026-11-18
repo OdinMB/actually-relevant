@@ -38,9 +38,13 @@ where linking runs and how it stays off; phases 1 and 2 (records, keys, linking)
   in `GOES_ON_PAST_FAILURE` (D-OV8): a failed linking night leaves its own Error and notice, the
   chain run succeeds, and story context's after-publish part still runs.
 - **Ordered writes (D-OV8):** link calls run three at once, but writes go one story at a time,
-  oldest first, every window counted from the story's own date; a result made stale by a write of
-  the same run (its founding partner joined since) is asked again once, then logged as a conflict.
-  A backfilled development therefore forms in date order, as it would have live.
+  strictly oldest first, every window counted from the story's own date (the candidate overviews'
+  entries and last entry too, as they stood on that day); a result made stale by a write of the
+  same run (its founding partner joined since) is asked again once, then logged as a conflict. While
+  the backfill's backlog is larger than a run's slice, the night's new stories wait in it rather
+  than being linked the same night, so a new story never founds a development before the older
+  stories of the same development have had their turn. A backfilled development therefore forms in
+  date order, as it would have live.
 - **A story is settled by its `link` decision:** joined, founded, none or rejected settle it; held
   (a frozen overview), conflict and failed leave it owed for the next run. The job is resumable.
 - **Off until two gates open (D-OV7):** `OVERVIEW_EVAL_GATE` (`services/overviewGate.ts`), a code
@@ -60,7 +64,9 @@ where linking runs and how it stays off; phases 1 and 2 (records, keys, linking)
   founding is a decision row an editor (phase 4) can undo.
 - The tables are additive; dropping them later loses only overview data. The two partial indexes
   are guarded like `article_versions_one_current`.
-- Linking a 6-month backfill takes about 6 nights at `backfillPerRun` 300, after publishing.
+- Linking a 6-month backfill takes about 6 nights at `backfillPerRun` 300, after publishing, and new
+  stories wait while the backlog drains: for about 6 nights after the switch-on, a night's stories
+  get their links a night or more late.
 
 ## Alternatives
 

@@ -85,7 +85,7 @@ describe('runLinkOverviewsJob', () => {
     gates.overview = null
     gates.pass = null
     const [b1, b2, n1, partner] = [story('b1', 1), story('b2', 2), story('n1', 9), story('p', 1)]
-    mocks.owedStories.mockResolvedValue({ backlog: ['b1', 'b2'], night: ['n1'], backlogTotal: 40 })
+    mocks.owedStories.mockResolvedValue({ backlog: ['b1', 'b2'], night: ['n1'], backlogTotal: 2 })
     mocks.linkStories.mockImplementation(async (_db: unknown, ids: string[]) => [b1, b2, n1, partner].filter(s => ids.includes(s.id)))
     // b2 has a partner; the model's yes for it quotes nothing the partner says, so code refuses it
     mocks.nearestPublished.mockImplementation(async (_db: unknown, id: string) =>
@@ -106,7 +106,7 @@ describe('runLinkOverviewsJob', () => {
     expect(mocks.linkStories).toHaveBeenCalledWith(expect.anything(), ['b1', 'b2', 'n1'])
     expect(mocks.applyLink.mock.calls.map(([r]) => (r as { story: LinkStory }).story.id)).toEqual(['b1', 'b2', 'n1'])
     expect(mocks.recordItems).toHaveBeenCalledWith(1, 1)
-    expect(mocks.reportRunResult).toHaveBeenCalledWith('Linked 3 stories: 0 joined, 0 founded, 3 alone; backfill 2 of 40')
+    expect(mocks.reportRunResult).toHaveBeenCalledWith('Linked 3 stories: 0 joined, 0 founded, 3 alone; backfill 2 of 2')
   })
 
   it('says so when nothing is owed', async () => {

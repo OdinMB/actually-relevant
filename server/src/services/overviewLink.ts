@@ -1,6 +1,6 @@
 /**
  * One story's linking over injected I/O (`.context/overviews.md`, "How a story is linked"), the same
- * in production (`overviewRuns.ts`) and in the eval's sandbox: its candidates (`groupCandidates`), the
+ * in production (`jobs/linkOverviews.ts`) and in the eval's sandbox: its candidates (`groupCandidates`), the
  * link confirmation, the acceptance rules (`acceptLink`: cosine proposes, a model confirms, code
  * checks the quotes), and a founding (two large calls that must agree, `acceptFounding`). Then the
  * ordered run (`linkInOrder`): calls in flight at once, writes one story at a time in date order, a
@@ -24,10 +24,10 @@ export interface ModelCall<T> {
 export interface LinkDeps {
   /** The story's neighbours as of its date (`nearestPublished`). */
   neighbours(story: LinkStory): Promise<Neighbour[]>
-  /** The stories' memberships, as they stand now (`membershipsOf`). */
-  memberships(storyIds: string[]): Promise<Memberships>
-  /** The overviews as the prompt shows them (`candidateOverviews`). */
-  overviews(ids: string[]): Promise<CandidateOverview[]>
+  /** The stories' memberships as they stand now, each overview's last entry as of `asOf`, the story's date (`membershipsOf`). */
+  memberships(storyIds: string[], asOf: Date): Promise<Memberships>
+  /** The overviews as the prompt shows them, their entries those published on or before `asOf` (`candidateOverviews`). */
+  overviews(ids: string[], asOf: Date): Promise<CandidateOverview[]>
   /** Stories as linking reads them (`linkStories`). */
   stories(ids: string[]): Promise<LinkStory[]>
   link(input: LinkInput): Promise<ModelCall<LinkAnswer>>
@@ -79,7 +79,8 @@ const sharedOf = (a: LinkCandidateAnswer): Shared => ({
 })
 
 const storyTexts = (s: LinkStory) => [s.title, s.label, s.summary]
-const overviewTexts = (o: CandidateOverview) => [o.title, o.charter.in, o.charter.endEvent, ...o.charter.out]
+/** An overview's side of a quote: its title, its charter's IN and its END_EVENT. Never its OUT list, which names what does not belong. */
+const overviewTexts = (o: CandidateOverview) => [o.title, o.charter.in, o.charter.endEvent]
 
 /** Why a yes is refused: a shared field left empty, or a quote not found on its side; null when it passes. */
 function refusalOf(answer: LinkCandidateAnswer, story: readonly string[], other: readonly string[]): string | null {
@@ -95,8 +96,8 @@ function refusalOf(answer: LinkCandidateAnswer, story: readonly string[], other:
 /**
  * Which candidate the story joins or may found with (`.context/overviews.md`, "How a story is linked",
  * step 2): a yes passes only with all three shared fields filled on both sides and each quote found in
- * its side's text (the story's title, label or summary; the overview's title or charter; the partner's
- * title, label or summary). `unsure` is no. The nearest passing overview wins (a story joins one at
+ * its side's text (the story's title, label or summary; the overview's title, IN or END_EVENT; the
+ * partner's title, label or summary). `unsure` is no. The nearest passing overview wins (a story joins one at
  * most); a founding partner is considered only when no overview passed, the nearest passing first.
  */
 export function acceptLink(story: LinkStory, overviews: readonly ShownOverview[], partners: readonly ShownPartner[], answer: LinkAnswer): Acceptance {
@@ -233,9 +234,16 @@ async function found(story: LinkStory, partner: Accepted<ShownPartner>, deps: Li
  */
 export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkResult> {
   const neighbours = await deps.neighbours(story)
-  const memberships = await deps.memberships([story.id, ...neighbours.map(n => n.id)])
+  const memberships = await deps.memberships([story.id, ...neighbours.map(n => n.id)], story.datePublished)
   const grouped = groupCandidates(story, neighbours, memberships, deps.options)
-  const overviewDetails = new Map((await deps.overviews(grouped.overviews.map(o => o.overviewId))).map(o => [o.id, o]))
+  const overviewDetails = new Map(
+    (
+      await deps.overviews(
+        grouped.overviews.map(o => o.overviewId),
+        story.datePublished,
+      )
+    ).map(o => [o.id, o]),
+  )
   const partnerDetails = new Map((await deps.stories(grouped.partners.map(p => p.id))).map(s => [s.id, s]))
   const overviews: ShownOverview[] = grouped.overviews
     .flatMap((o: RankedOverview) => {
@@ -291,14 +299,17 @@ export type ApplyLink = (result: LinkResult, lastTry: boolean) => Promise<ApplyO
 export interface OrderedRun {
   /** Each story's stored outcome (none for a story skipped as linked meanwhile). */
   outcomes: Map<string, LinkOutcome>
+  /** Each story's final result, once: a stale answer asked again counts by its second answer only. */
   results: LinkResult[]
 }
 
 /**
  * Links the stories in the order given (oldest first): link calls `concurrency` at a time, writes one
  * story at a time in that order. A stale result is asked again after the others, once; stale again,
- * it is stored as a conflict and retried at the next run. `keepGoing` is asked before each write (the
- * switch, a budget); when it says no, the run stops and the rest stay owed.
+ * it is stored as a conflict and retried at the next run. `keepGoing` is asked before each write and
+ * before any call starts after the first ones (the switch, a budget); once it says no, no call starts
+ * and nothing more is written: the calls already in flight finish, their answers unwritten, and the
+ * rest stay owed.
  */
 export async function linkInOrder(
   stories: readonly LinkStory[],
@@ -311,6 +322,11 @@ export async function linkInOrder(
   const pending: Promise<LinkResult>[] = new Array(stories.length)
   let next = 0
   let written = 0
+  let stopped = false
+  const going = async (): Promise<boolean> => {
+    if (!stopped && !(await keepGoing())) stopped = true
+    return !stopped
+  }
   const start = () => {
     while (next < stories.length && next - written < concurrency) {
       pending[next] = safeLinkStory(stories[next]!, deps)
@@ -319,23 +335,29 @@ export async function linkInOrder(
   }
   const again: LinkStory[] = []
   const write = async (result: LinkResult, lastTry: boolean): Promise<void> => {
-    results.push(result)
     const done = await apply(result, lastTry)
+    if (done.kind === 'stale') {
+      again.push(result.story)
+      return
+    }
+    results.push(result)
     if (done.kind === 'written') outcomes.set(result.story.id, done.outcome)
-    else if (done.kind === 'stale') again.push(result.story)
   }
   start()
   for (let i = 0; i < stories.length; i++) {
     const result = await pending[i]!
     written++
-    if (!(await keepGoing())) return { outcomes, results }
+    if (!(await going())) break
     await write(result, false)
+    if (!(await going())) break
     start()
   }
   for (const story of again) {
-    if (!(await keepGoing())) break
+    if (!(await going())) break
     await write(await safeLinkStory(story, deps), true)
   }
+  // Calls already in flight finish inside the run, so their cost is the run's
+  await Promise.all(pending.slice(written, next))
   return { outcomes, results }
 }
 

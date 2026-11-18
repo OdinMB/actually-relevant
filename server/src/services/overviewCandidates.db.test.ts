@@ -125,8 +125,25 @@ describeDb('overview candidates', () => {
     expect(fromTables.partners.map(p => p.id)).toEqual([unlinked.id])
 
     // The link prompt's view of them: the overview with its newest published entries, the stories with their usable facts
-    expect(await candidateOverviews(prisma, [a.id])).toEqual([{ id: a.id, title: 'A', charter, entries: [{ title: member.title, date: '2026-05-29' }] }])
+    expect(await candidateOverviews(prisma, [a.id], AS_OF)).toEqual([{ id: a.id, title: 'A', charter, entries: [{ title: member.title, date: '2026-05-29' }] }])
     const [linked] = await linkStories(prisma, [unlinked.id])
     expect(linked).toMatchObject({ id: unlinked.id, title: unlinked.title, label: '', summary: 'Summary.', date: '2026-05-27', facts: [] })
+  })
+
+  it("bounds an overview's entries and last entry by the story's date, as the development stood that day", async () => {
+    const feed = await createFeed((await createIssue()).id)
+    const before = await published(feed.id, -5, 0.1)
+    const after = await published(feed.id, 3, 0.1)
+    const charter = { in: 'In.', out: [], endEvent: 'End.' }
+    const a = await prisma.overview.create({
+      data: { title: 'A', charter, charterModel: 'm', charterPromptVersion: 'v', foundedAt: daysFrom(-5), lastEntryAt: daysFrom(3) },
+    })
+    for (const s of [before, after]) await prisma.overviewEntry.create({ data: { overviewId: a.id, storyId: s.id, role: 'routine', joinedBy: 'pipeline' } })
+
+    expect((await candidateOverviews(prisma, [a.id], AS_OF))[0]!.entries).toEqual([{ title: before.title, date: '2026-05-27' }])
+    expect((await candidateOverviews(prisma, [a.id], daysFrom(4)))[0]!.entries.map(e => e.title)).toEqual([after.title, before.title])
+    expect((await membershipsOf(prisma, [before.id], AS_OF)).active.get(before.id)!.lastEntryAt).toEqual(daysFrom(-5))
+    // Without a date, the overview's own last entry
+    expect((await membershipsOf(prisma, [before.id])).active.get(before.id)!.lastEntryAt).toEqual(daysFrom(3))
   })
 })

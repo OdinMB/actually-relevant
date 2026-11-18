@@ -102,6 +102,13 @@ describe('acceptLink', () => {
     const got = acceptLink(s, [shownOverview('A', 'O1', 0.1)], [], answer([yes('O1', { cause: { story: '  EBOLA ', other: 'ebola' } })]))
     expect(got.join).not.toBeNull()
   })
+
+  it("refuses a yes whose overview quote is found only in the charter's OUT list", () => {
+    // "Ebola in Uganda" is what the charter keeps out: it can never be what the two share
+    const got = acceptLink(s, [shownOverview('A', 'O1', 0.1)], [], answer([yes('O1', { place: { story: 'Ituri', other: 'Uganda' } })]))
+    expect(got.join).toBeNull()
+    expect(got.refusals).toEqual([{ id: 'O1', reason: "place: the candidate's quote is not in its text" }])
+  })
 })
 
 describe('acceptFounding', () => {
@@ -338,6 +345,8 @@ describe('linkInOrder', () => {
     expect(writes).toEqual(['s1:founded', 's2:joined'])
     expect(run.outcomes.get('s2')).toBe('joined')
     expect(w.calls.found).toHaveBeenCalledTimes(2) // s2's first founding attempt went stale
+    // The stale answer is not counted: each story's final result once, for the item tally
+    expect(run.results.map(r => `${r.story.id}:${r.outcome}`)).toEqual(['s1:founded', 's2:joined'])
   })
 
   it('stores a result stale twice as a conflict, left for the next run', async () => {
@@ -361,6 +370,27 @@ describe('linkInOrder', () => {
     const run = await linkInOrder(stories, w.deps, memoryWriter(w.members, writes), { concurrency: 1, keepGoing: async () => calls++ < 1 })
     expect(writes).toEqual(['a:none'])
     expect(run.outcomes.size).toBe(1)
+  })
+
+  it('starts no call once the switch is off, and lets the calls in flight finish before it returns', async () => {
+    const stories = [story('a', 1), story('b', 2), story('c', 3), story('d', 4)]
+    const w = world({ stories })
+    const read = vi.fn()
+    let finished = 0
+    const slow: LinkDeps = {
+      ...w.deps,
+      neighbours: async s => {
+        read(s.id)
+        await new Promise(r => setTimeout(r, 5))
+        finished++
+        return []
+      },
+    }
+    let asked = 0
+    // On after a's write is asked, off from then on: b was in flight already, c and d never start
+    await linkInOrder(stories, slow, memoryWriter(w.members, []), { concurrency: 2, keepGoing: async () => asked++ < 1 })
+    expect(read.mock.calls.map(([id]) => id)).toEqual(['a', 'b'])
+    expect(finished).toBe(2)
   })
 
   it('stores a story whose read threw as failed and goes on', async () => {

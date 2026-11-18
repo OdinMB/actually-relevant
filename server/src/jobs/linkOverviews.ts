@@ -39,8 +39,8 @@ export const productionLinkDeps = (): LinkDeps => {
   const { tiers } = config.overviews
   return {
     neighbours: story => nearestPublished(prisma, story.id, story.datePublished),
-    memberships: ids => membershipsOf(prisma, ids),
-    overviews: ids => candidateOverviews(prisma, ids),
+    memberships: (ids, asOf) => membershipsOf(prisma, ids, asOf),
+    overviews: (ids, asOf) => candidateOverviews(prisma, ids, asOf),
     stories: ids => linkStories(prisma, ids),
     link: input => structuredCall(tiers.link, linkSchema, buildLinkPromptParts(input)),
     found: input => structuredCall(tiers.found, foundSchema, buildFoundPrompt(input)),
