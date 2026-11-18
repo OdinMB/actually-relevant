@@ -119,6 +119,20 @@ describeDb('importLegacyPool', () => {
     expect((await loadPool(prisma, t.id)).facts.map(f => f.ref)).toEqual(['S0F1', 'S0F2'])
   })
 
+  it('reads the story again under the lock when it was edited after the read, so version 1 is what readers see', async () => {
+    const s = await story()
+    await prisma.story.update({ where: { id: s.id }, data: { research: research as unknown as Prisma.InputJsonObject } })
+    await createResearchRun(s.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }])
+    const read = await readLegacyImport(prisma, s.id)
+    expect(read.version).toMatchObject({ title: 'Researched title' })
+
+    // An editor changed the headline between the read and the lock
+    await prisma.story.update({ where: { id: s.id }, data: { title: 'Edited title' } })
+    expect(await prisma.$transaction(tx => importLegacyPool(tx, s.id, read))).toBe('imported')
+    expect(await currentVersion(prisma, s.id)).toMatchObject({ kind: 'legacy', title: 'Edited title' })
+    expect((await loadPool(prisma, s.id)).facts.map(f => f.ref)).toEqual(['S0F1'])
+  })
+
   it('makes version 1 alone for a researched story whose runs hold no facts', async () => {
     const s = await story()
     await prisma.story.update({ where: { id: s.id }, data: { research: research as unknown as Prisma.InputJsonObject } })

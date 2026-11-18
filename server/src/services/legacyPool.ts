@@ -313,9 +313,13 @@ interface SelectOnly {
 
 /**
  * The pool and version 1 the import makes of the story's legacy runs and columns, read with SELECTs
- * only and written nowhere: the import's reads, and the `update` eval's later-pass fixtures.
+ * only and written nowhere: the import's reads, and the `update` eval's later-pass fixtures. With
+ * them, the story's `updatedAt` as read, so the import can tell an edit made since.
  */
-export async function readLegacyImport(db: SelectOnly, storyId: string): Promise<{ pool: Pool; version: ArticleVersionData | null }> {
+export async function readLegacyImport(
+  db: SelectOnly,
+  storyId: string,
+): Promise<{ pool: Pool; version: ArticleVersionData | null; storyUpdatedAt: Date | null }> {
   const [runRow] = await db.$queryRaw<{ result: unknown }[]>`
     SELECT r.result FROM story_research_runs r
     WHERE r.story_id = ${storyId} AND ${RUN_WITH_FACTS_SQL}
@@ -328,9 +332,9 @@ export async function readLegacyImport(db: SelectOnly, storyId: string): Promise
     db.$queryRaw<
       { result: unknown }[]
     >`SELECT r.result FROM story_context_runs r WHERE r.story_id = ${storyId} AND r.status = 'completed' ORDER BY r.started_at, r.id`,
-    db.$queryRaw<StoryColumns[]>`
+    db.$queryRaw<(StoryColumns & { updated_at: Date })[]>`
       SELECT s.title, s.title_label, s.summary, s.marketing_blurb, s.quote, s.quote_attribution, s.relevance_reasons, s.antifactors,
-             s.emotion_tag::text AS emotion_tag, s.research
+             s.emotion_tag::text AS emotion_tag, s.research, s.updated_at
       FROM stories s WHERE s.id = ${storyId}`,
   ])
   const pool = legacyPoolOf(
@@ -338,11 +342,17 @@ export async function readLegacyImport(db: SelectOnly, storyId: string): Promise
     contextFacts,
     contextRuns.map(r => r.result),
   )
-  return { pool, version: story ? legacyVersionOf(story) : null }
+  return { pool, version: story ? legacyVersionOf(story) : null, storyUpdatedAt: story?.updated_at ?? null }
 }
 
-/** What `readLegacyImport` read: the pool and version 1 the import would write. */
+/** What `readLegacyImport` read: the pool and version 1 the import would write, and the story's `updatedAt` then. */
 export type LegacyImport = Awaited<ReturnType<typeof readLegacyImport>>
+
+/** Whether the story is as `read` found it: not edited since, nor gone. */
+async function storyUnchanged(db: SelectOnly, storyId: string, read: LegacyImport): Promise<boolean> {
+  const [row] = await db.$queryRaw<{ updated_at: Date }[]>`SELECT s.updated_at FROM stories s WHERE s.id = ${storyId}`
+  return row !== undefined && read.storyUpdatedAt !== null && row.updated_at.getTime() === read.storyUpdatedAt.getTime()
+}
 
 /** Whether the story has pool rows or versions already: the import then has nothing to do. */
 export async function legacyPoolPresent(db: SelectOnly, storyId: string): Promise<boolean> {
@@ -356,13 +366,14 @@ export async function legacyPoolPresent(db: SelectOnly, storyId: string): Promis
  * Import the story's legacy runs into its pool, in the caller's transaction (the pass's claim):
  * `present` when the story already has pool rows or versions, `none` when it has nothing to import.
  * `read` is what the caller read before taking its lock (`readLegacyImport`), so the lock is not held
- * through the import's reads; presence is checked again here, under it, and without `read` the
- * import reads in the transaction.
+ * through the import's reads; presence is checked again here, under it, and so is the story's
+ * `updatedAt`. A story edited since the read, and an import without `read`, read in the
+ * transaction, so version 1 is the text readers see.
  */
 export async function importLegacyPool(tx: Prisma.TransactionClient, storyId: string, read?: LegacyImport): Promise<'imported' | 'present' | 'none'> {
   if (await legacyPoolPresent(tx, storyId)) return 'present'
 
-  const { pool, version } = read ?? (await readLegacyImport(tx, storyId))
+  const { pool, version } = read && (await storyUnchanged(tx, storyId, read)) ? read : await readLegacyImport(tx, storyId)
   if (pool.sources.length === 0 && pool.searches.length === 0 && !version) return 'none'
 
   await insertPoolRows(tx, storyId, pool)

@@ -63,7 +63,8 @@ async function nextNumber(tx: Prisma.TransactionClient, storyId: string): Promis
 /**
  * Claim a pass of the story, under research's reservation lock, so concurrent starts (the step's, an
  * editor's, a research run's) never pass the cap or run one story twice: cut-off passes marked first,
- * the legacy runs imported into the pool once (read before the lock, written under it), then the pass
+ * the legacy runs imported into the pool once (read before the lock, read again under it when the
+ * story was edited meanwhile, written under it), then the pass
  * row written `running` at its ceiling. Its kind is `passKindOf`'s once the import ran, so a story
  * researched before passes gets a later pass against version 1.
  */
