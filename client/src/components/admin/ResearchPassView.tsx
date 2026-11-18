@@ -347,7 +347,7 @@ function Cards({ pass }: { pass: ResearchPass }) {
 const causeOf = (p: ResearchProblem) => (p.kind && p.by ? ` (${p.kind}, ${p.by === 'judge' ? 'AI check' : 'code check'})` : '')
 
 function Checks({ pass }: { pass: ResearchPass }) {
-  const problems = pass.record?.update?.problems ?? pass.record?.research?.problems ?? []
+  const { problems } = pass
   return (
     <Section title={`Checks (${problems.length} ${problems.length === 1 ? 'problem' : 'problems'})`}>
       {problems.length === 0 ? (
@@ -366,17 +366,10 @@ function Checks({ pass }: { pass: ResearchPass }) {
   )
 }
 
-interface CallLine {
-  step: string
-  costUsd: number
-  model: string
-}
-
+/** The cost per step, from the calls as the server names them (`pass.calls`): research's and the cards' steps of one name stay apart. */
 function Cost({ pass }: { pass: ResearchPass }) {
-  const record = pass.record
-  const calls: CallLine[] = [...(record?.research?.calls ?? []), ...(record?.update?.calls ?? []), ...(record?.context?.calls ?? [])]
   const steps = new Map<string, { calls: number; usd: number; models: Set<string> }>()
-  for (const c of calls) {
+  for (const c of pass.calls) {
     const line = steps.get(c.step) ?? { calls: 0, usd: 0, models: new Set<string>() }
     line.calls += 1
     line.usd += c.costUsd

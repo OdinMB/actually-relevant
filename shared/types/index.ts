@@ -1398,6 +1398,10 @@ export interface ResearchPass {
   versionId: string | null
   /** As stored: null while running, partial on a pass that ended early. */
   record: Partial<PassRecord> | null
+  /** Every call it made, each under its pass step's name (server: `passCalls`), so research's and the cards' steps of one name stay apart. */
+  calls: { step: string; model: string; costUsd: number }[]
+  /** The problems its final drafts kept (server: `passProblems`). */
+  problems: ResearchProblem[]
 }
 
 /** One section a version changed against the one before: `from` is where it was, `section` where it is now. */

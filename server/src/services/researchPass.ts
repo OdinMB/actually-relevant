@@ -736,14 +736,26 @@ export function cardsLayout(input: Pick<PassInput, 'story' | 'current'>, version
  */
 export function passItemTally(record: PassRecord): { checked: number; failed: number } {
   const { research, update } = record
-  const failed = new Set([...research.problems, ...(update?.problems ?? [])].map(p => p.label))
+  const failed = new Set(passProblems(record).map(p => p.label))
   const drafted = research.checks.length > 0 && research.draft ? draftItems(research.draft).filter(i => i.cited) : []
   const checked = new Set([...drafted.map(i => i.label), ...(update?.checks ?? []).flatMap(c => c.rechecked ?? []), ...failed])
   return { checked: record.context.tally.checked + checked.size, failed: record.context.tally.failed + failed.size }
 }
 
+/** The problems the pass's final drafts kept: research's article's, then a later pass's update's. What the tally counts failed and the admin lists. */
+export function passProblems<P>(record: { research: { problems: P[] }; update: { problems: P[] } | null }): P[] {
+  return [...record.research.problems, ...(record.update?.problems ?? [])]
+}
+
+/** The parts of a record `passCalls` reads: each sub-record's calls. */
+export interface PassCallsRecord {
+  research: Pick<StoryResearch, 'calls'>
+  update: Pick<UpdateRecord, 'calls'> | null
+  context: Pick<ContextRunRecord, 'calls'>
+}
+
 /** Every call the pass made, research's steps first, each under its pass step's name. */
-export function passCalls(record: PassRecord): (Omit<StoryResearch['calls'][number], 'step'> & { step: PassStep })[] {
+export function passCalls(record: PassCallsRecord): (Omit<StoryResearch['calls'][number], 'step'> & { step: PassStep })[] {
   return [...record.research.calls, ...(record.update?.calls ?? []), ...record.context.calls.map(c => ({ ...c, step: CARD_STEP_OF[c.step] }))]
 }
 

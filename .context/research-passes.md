@@ -124,7 +124,7 @@ So no pass row, version or Update exists: `updates` is empty on every story, and
 | Route | What it does |
 |-------|--------------|
 | `GET /usage` | The month's spend under the one cap, both ceilings, whether the step is on (`on`: the eval gate open and the job enabled, the one thing the admin's buttons key on) and why no editor's pass can start now (`refusal`, null while one can) |
-| `GET /stories/:storyId` | The story's passes, newest first (each row with its record), its versions, newest first (reverted ones too), its pool (sources, facts, searches, the pages left out) and its legacy research runs; 404 for an unknown story |
+| `GET /stories/:storyId` | The story's passes, newest first (each row with its record, and by the pass's own rules its calls under the pass's step names, `passCalls`, and the problems its final drafts kept, `passProblems`, which the cost table and the checks show: `passRecordView`), its versions, newest first (reverted ones too), its pool (sources, facts, searches, the pages left out) and its legacy research runs; 404 for an unknown story |
 | `POST /stories/:storyId/passes` | An editor's "Research again": 202 `{ taskId, passId }`; 409 while switched off, for a status other than analyzed, selected or published, a story without the analysis research needs, a pass running, or at the cap; 404 |
 | `POST /passes` | The bulk "Research again" over `{ storyIds }`: 202 `{ taskId }`; 409 while switched off or when another task processes every one of them |
 | `POST /stories/:storyId/undo` | "Undo this update": 204; 409 with nothing to undo, for a status that takes no research write, or when the story changed |

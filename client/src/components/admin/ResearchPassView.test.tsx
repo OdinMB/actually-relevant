@@ -21,6 +21,8 @@ const pass = (over: Partial<ResearchPass> = {}): ResearchPass => ({
   finishedAt: '2026-11-16T09:03:00Z',
   versionId: null,
   record: null,
+  calls: [],
+  problems: [],
   ...over,
 })
 
@@ -318,23 +320,22 @@ describe('ResearchPassView', () => {
     expect(screen.getByText('Dropped Next: expired')).toBeInTheDocument()
   })
 
-  it('lists the checks’ problems with their causes, and the cost per step', () => {
+  it('lists the checks’ problems the server gives with their causes, and the cost per step of the calls as the server names them', () => {
     renderPass(
       pass({
-        record: {
-          update: update({
-            calls: [
-              { step: 'judge', outcome: 'ok', costUsd: 0.01, model: 'model-a' },
-              { step: 'judge', outcome: 'ok', costUsd: 0.02, model: 'model-b' },
-            ],
-            problems: [
-              { label: 'Story paragraph 2', text: 't', problem: 'not in its facts', kind: 'fact', by: 'judge' },
-              { label: 'Caveat 1', text: 't', problem: 'too close to the source', kind: 'copying', by: 'code' },
-              { label: 'Title', text: 't', problem: 'an old problem' },
-            ],
-          }),
-          context: { calls: [{ step: 'card write', outcome: 'ok', costUsd: 0.005, model: 'model-a' }] },
-        },
+        // Stored calls by their pipelines' own names: the view never reads them
+        record: { update: update({ calls: [{ step: 'write', outcome: 'ok', costUsd: 1, model: 'stale' }], problems: [] }) },
+        calls: [
+          { step: 'judge', costUsd: 0.01, model: 'model-a' },
+          { step: 'judge', costUsd: 0.02, model: 'model-b' },
+          { step: 'write', costUsd: 0.03, model: 'model-c' },
+          { step: 'cards-write', costUsd: 0.005, model: 'model-a' },
+        ],
+        problems: [
+          { label: 'Story paragraph 2', text: 't', problem: 'not in its facts', kind: 'fact', by: 'judge' },
+          { label: 'Caveat 1', text: 't', problem: 'too close to the source', kind: 'copying', by: 'code' },
+          { label: 'Title', text: 't', problem: 'an old problem' },
+        ],
       }),
     )
     expect(screen.getByText('Checks (3 problems)')).toBeInTheDocument()
@@ -344,12 +345,14 @@ describe('ResearchPassView', () => {
     const table = screen.getByRole('table', { name: 'Cost per step' })
     const judge = within(table).getByRole('rowheader', { name: 'judge' }).closest('tr')!
     expect(judge).toHaveTextContent('2model-a, model-b$0.030')
-    expect(within(table).getByRole('rowheader', { name: 'card write' })).toBeInTheDocument()
+    // Research's article write and the cards' write are two rows
+    expect(within(table).getByRole('rowheader', { name: 'write' }).closest('tr')).toHaveTextContent('1model-c$0.030')
+    expect(within(table).getByRole('rowheader', { name: 'cards-write' }).closest('tr')).toHaveTextContent('1model-a$0.005')
+    expect(within(table).queryByText('stale')).not.toBeInTheDocument()
   })
 
   it('counts one problem in the singular', () => {
-    const research = { problems: [{ label: 'Title', text: 't', problem: 'p' }] } as unknown as ResearchResult
-    renderPass(pass({ kind: 'first', outcome: 'fallback', record: { research } }))
+    renderPass(pass({ kind: 'first', outcome: 'fallback', problems: [{ label: 'Title', text: 't', problem: 'p' }] }))
     expect(screen.getByText('Checks (1 problem)')).toBeInTheDocument()
     expect(screen.getByText("today's format.")).toBeInTheDocument()
   })

@@ -5,10 +5,12 @@
  * Each read marks cut-off passes first, as research's list does; nothing else is written.
  */
 import type { PassKind, PassStatus, ResearchRunTrigger } from '@prisma/client'
+import { z } from 'zod'
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { NotFoundError } from '../utils/errors.js'
 import { loadPool, storyVersions, type StoredVersion } from './passRecords.js'
+import { passCalls, passProblems, type PassCallsRecord } from './researchPass.js'
 import { passStepOn } from './researchPassQueue.js'
 import { editorRefusal, markInterruptedPasses, passCeilingUsd } from './researchPassRuns.js'
 import type { Pool } from './researchPool.js'
@@ -63,6 +65,39 @@ export interface PassView {
   /** The article version it produced, or null. */
   versionId: string | null
   record: unknown
+  /** Every call it made, under its pass step's name (`passCalls`): what the cost table groups by step. */
+  calls: PassCallLine[]
+  /** The problems its final drafts kept (`passProblems`): what the checks list shows. */
+  problems: Record<string, unknown>[]
+}
+
+export interface PassCallLine {
+  step: string
+  model: string
+  costUsd: number
+}
+
+const storedCalls = z.array(z.object({ step: z.string(), model: z.string().catch(''), costUsd: z.number().catch(0) })).catch([])
+const storedProblems = z.array(z.object({ label: z.string() }).passthrough()).catch([])
+
+/** What the view reads of a stored record: a pass that ended early stored part of one, and a running pass none. */
+const storedRecordSchema = z.object({
+  research: z.object({ calls: storedCalls, problems: storedProblems }).catch({ calls: [], problems: [] }),
+  update: z.object({ calls: storedCalls, problems: storedProblems }).nullable().catch(null),
+  context: z.object({ calls: storedCalls }).catch({ calls: [] }),
+})
+
+/**
+ * A stored record's calls under the pass's step names and the problems its final drafts kept, by the
+ * pass's own rules (`passCalls`, `passProblems`), so the admin re-derives neither; whatever the
+ * record holds.
+ */
+export function passRecordView(stored: unknown): Pick<PassView, 'calls' | 'problems'> {
+  const parsed = storedRecordSchema.safeParse(stored)
+  if (!parsed.success) return { calls: [], problems: [] }
+  // The steps are those the pipelines recorded: research's, the later pass's and context's
+  const calls = passCalls(parsed.data as unknown as PassCallsRecord).map(({ step, model, costUsd }) => ({ step, model, costUsd }))
+  return { calls, problems: passProblems(parsed.data) }
 }
 
 export interface StoryPassesView {
@@ -102,6 +137,7 @@ export async function storyPasses(storyId: string, now: Date = new Date()): Prom
     finishedAt: p.finishedAt?.toISOString() ?? null,
     versionId: p.versionId,
     record: p.record,
+    ...passRecordView(p.record),
   }))
   return { passes, versions, pool, legacyRuns }
 }

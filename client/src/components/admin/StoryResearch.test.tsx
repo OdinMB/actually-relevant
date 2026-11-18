@@ -323,6 +323,8 @@ describe('StoryResearch with research passes', () => {
     finishedAt: '2026-11-14T02:03:00Z',
     versionId: 'v1',
     record: null,
+    calls: [],
+    problems: [],
     ...over,
   })
   const later = pass({
