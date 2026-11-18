@@ -196,7 +196,7 @@ export interface ResearchedStory {
   sources: ResearchedSource[]
 }
 
-/** One section an Update changed, as readers see it (server: `publicUpdateSchema` in services/articleVersions.ts). */
+/** One section an Update changed, as readers see it (server: `publicUpdateSchema` in services/publicUpdates.ts). */
 export interface PublicStoryUpdateChange {
   /** Where the section was on the page before the update: `Title`, `Story paragraph 2`, `Key quote`, `Why This Matters 1`, `Caveat 2`. */
   section: string

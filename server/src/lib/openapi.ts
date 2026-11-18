@@ -12,7 +12,7 @@ import {
 import { config } from '../config.js'
 import { OPENAPI_AI_FIELD_PREFIX, OPENAPI_REPUBLISHER_NOTE } from './aiLabelCopy.js'
 import { minRelevanceParam, publishedBeforeParam, publishedSinceParam } from '../schemas/story.js'
-import { publicUpdateSchema } from '../services/articleVersions.js'
+import { publicUpdateSchema } from '../services/publicUpdates.js'
 import { researchedStorySchema } from '../services/researchedStory.js'
 
 /** Description of a field in AI_GENERATED_STORY_FIELDS: the "AI-generated." label, then the details. */

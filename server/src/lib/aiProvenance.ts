@@ -53,7 +53,7 @@ export function withAiGeneratedMarker<T extends AiStoryText>(story: T): T & { ai
 /**
  * Fields of the single story (`GET /api/stories/:slug`) with AI-generated content: the text fields,
  * plus `research`, the researched version with its cited text (services/researchedStory.ts), and
- * `updates`, the Updates research passes recorded with the earlier text (services/articleVersions.ts),
+ * `updates`, the Updates research passes recorded with the earlier text (services/publicUpdates.ts),
  * which only the single story serves. openapi.test.ts checks the detail marker lists exactly these.
  */
 export const AI_GENERATED_STORY_DETAIL_FIELDS = [...AI_GENERATED_STORY_FIELDS, 'research', 'updates'] as const
