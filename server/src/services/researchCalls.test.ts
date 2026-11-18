@@ -80,6 +80,16 @@ describe('createRunMeter: model calls', () => {
     mocks.invoke.mockRejectedValueOnce(new Error('400 bad request'))
     const res = await meter().call('queries', schema, 'prompt')
     expect(res).toMatchObject({ parsed: null, outcome: 'error', costUsd: 0 })
+    expect(res).not.toHaveProperty('transient')
+  })
+
+  it("judges a failed call's error for a second attempt when the pass gives it the rule", async () => {
+    const timeout = Object.assign(new Error('timed out'), { name: 'TimeoutError' })
+    mocks.invoke.mockRejectedValueOnce(timeout).mockRejectedValueOnce(new Error('400 bad request'))
+    const m = createRunMeter({ ceilingUsd: 0.4, monthRoomUsd: async () => 30, transient: err => err === timeout })
+    expect(await m.call('judge', schema, 'prompt')).toMatchObject({ outcome: 'error', transient: true })
+    expect(await m.call('judge', schema, 'prompt')).toMatchObject({ outcome: 'error', transient: false })
+    expect(await m.call('judge', schema, 'prompt')).not.toHaveProperty('transient')
   })
 
   it('skips every call once the run reaches its ceiling, without reaching the model', async () => {

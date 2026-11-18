@@ -53,10 +53,11 @@ export function applyRefusal(): string | null {
   return null
 }
 
-const storyColumns = (storyId: string) =>
+/** The story's columns a research write reads and keeps; also the research pass's apply's (`researchPassApply.ts`). */
+export const storyColumns = (storyId: string) =>
   prisma.story.findUnique({ where: { id: storyId }, select: { status: true, updatedAt: true, preResearch: true, ...SWAPPED_SELECT } })
 
-type StoryColumns = NonNullable<Awaited<ReturnType<typeof storyColumns>>>
+export type StoryColumns = NonNullable<Awaited<ReturnType<typeof storyColumns>>>
 
 async function loadStory(storyId: string): Promise<StoryColumns> {
   const story = await storyColumns(storyId)
@@ -111,8 +112,10 @@ function iconHints(research: ResearchedStory, sources: ResearchSource[]): Source
  * The swapped columns and both versions in one lifecycle write, with the embedding of the text
  * written; false when the story changed since `read`: another status, or any write since (an
  * editor's save during the embedding call, which the snapshot and values here would overwrite).
+ * `also` runs in the same transaction once the row is written (a research pass's rows); a throw
+ * there rolls the write back. The research pass's apply writes through it too.
  */
-async function write(
+export async function write(
   storyId: string,
   actor: Actor,
   read: ReadState,
@@ -179,12 +182,12 @@ export async function applyResearchRun(storyId: string, runId: string): Promise<
  * `research-rating` rejects nothing (owner decision 2026-11-12): its reason `research_rating` stays
  * in the database enum, unused by the pipeline.
  */
-const REJECTED_FOR = {
+export const REJECTED_FOR = {
   stale: 'stale',
   contradicted: 'contradicted',
 } as const satisfies Partial<Record<GateKind, RejectionReason>>
 
-const rejects = (kind: GateKind): kind is keyof typeof REJECTED_FOR => kind in REJECTED_FOR
+export const rejects = (kind: GateKind): kind is keyof typeof REJECTED_FOR => kind in REJECTED_FOR
 
 /**
  * What the research step did with a verdict: `applied` (the researched version is on the story),
@@ -238,7 +241,7 @@ export async function applyVerdict(storyId: string, runId: string, read: ReadSta
 }
 
 /** Why the story is no longer as `read` before the run (deleted, moved, or written: an editor's edit or apply), or null. */
-function whyChanged(story: StoryColumns | null, read: ReadState): string | null {
+export function whyChanged(story: StoryColumns | null, read: ReadState): string | null {
   if (!story) return 'the story was deleted during the run'
   if (story.status !== read.status) return `the story moved to ${story.status} during the run`
   if (story.updatedAt.getTime() !== read.updatedAt.getTime()) return 'the story was edited or given research during the run'

@@ -11,10 +11,12 @@ vi.mock('express-rate-limit', () => ({
 const tx = vi.hoisted(() => ({
   $executeRaw: vi.fn(),
   storyResearchRun: { updateMany: vi.fn(), count: vi.fn(), aggregate: vi.fn(), create: vi.fn() },
+  researchPass: { aggregate: vi.fn() },
 }))
 const mockPrisma = vi.hoisted(() => ({
   story: { findUnique: vi.fn() },
   storyResearchRun: { updateMany: vi.fn(), aggregate: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
+  researchPass: { aggregate: vi.fn() },
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
   $disconnect: vi.fn(),
@@ -96,6 +98,9 @@ beforeEach(() => {
   tx.storyResearchRun.aggregate.mockResolvedValue({ _sum: { costUsd: 1 } })
   tx.storyResearchRun.create.mockResolvedValue({ id: 'run-1' })
   mockPrisma.storyResearchRun.aggregate.mockResolvedValue({ _sum: { costUsd: 1.5 } })
+  // The one cap counts research passes too (researchSpend.ts); none ran in these tests
+  tx.researchPass.aggregate.mockResolvedValue({ _sum: { costUsd: null } })
+  mockPrisma.researchPass.aggregate.mockResolvedValue({ _sum: { costUsd: null } })
   mockPrisma.$queryRaw.mockResolvedValue([])
   mockApply.applyResearchRun.mockResolvedValue('applied')
   mockApply.revertResearch.mockResolvedValue(undefined)

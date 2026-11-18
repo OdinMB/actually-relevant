@@ -63,6 +63,8 @@ export interface RunMeterOptions {
   monthRoomUsd: () => Promise<number>
   /** A pass's gap search (story context's, with its cache and opt-out check); a research run makes none. */
   gapSearch?: (request: ContextSearchRequest) => Promise<ContextSearchAnswer>
+  /** A pass's judgment of a failed call's error: whether it may pass on a second attempt (`transientFailure`). */
+  transient?: (err: unknown) => boolean
 }
 
 export interface RunMeter {
@@ -84,11 +86,11 @@ export function createRunMeter(options: RunMeterOptions): RunMeter {
     return spent + estimateUsd <= room
   }
 
-  const call: PassCall = async <T>(step: PassStep, schema: z.ZodType<T>, prompt: string): Promise<StepResult<T>> => {
+  const call: PassCall = async <T>(step: PassStep, schema: z.ZodType<T>, prompt: string) => {
     if (!(await fits(estimateUsd({ step, prompt })))) return { parsed: null, outcome: 'skipped', usage: ZERO_USAGE, costUsd: 0, model: modelOf(step) }
-    const { error: _error, ...result } = await structuredCall(PASS_STEP_TIERS[step], schema, prompt)
+    const { error, ...result }: { error?: unknown } & StepResult<T> = await structuredCall(PASS_STEP_TIERS[step], schema, prompt)
     spent += result.costUsd
-    return result
+    return result.outcome === 'error' && options.transient ? { ...result, transient: options.transient(error) } : result
   }
 
   return {

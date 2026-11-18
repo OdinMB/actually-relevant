@@ -23,12 +23,10 @@ import { FALLBACK_CATEGORIES, type FallbackCategory, type GateVerdict } from './
 import { hasPrice, summarizeRunCost, type RunCostSummary } from './researchCost.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds, type ResearchStory } from './researchInput.js'
 import { researchStory, STEP_TIERS, STEPS, type StepName, type StoryResearch } from './researchPipeline.js'
+import { monthToDateUsd, RESEARCH_RESERVATION_LOCK } from './researchSpend.js'
 import { checkSpendWarnings, EDITOR_RESEARCH } from './spending.js'
 
 const log = createLogger('research')
-
-/** Arbitrary constant key of the transaction-level advisory lock that serialises reservations (not the TTS one). */
-const RESEARCH_RESERVATION_LOCK = 7_303_201
 
 const INTERRUPTED = 'interrupted: the server restarted during the run'
 
@@ -120,14 +118,8 @@ const capRefusal = (spentUsd: number) =>
 
 const isResearchable = (status: string) => (RESEARCHABLE_STATUSES as readonly string[]).includes(status)
 
-/** USD of every run started this UTC month, deleted stories' runs and running reservations included. */
-async function monthSpendUsd(db: Db, now: Date, exceptRunId?: string): Promise<number> {
-  const { _sum } = await db.storyResearchRun.aggregate({
-    _sum: { costUsd: true },
-    where: { startedAt: { gte: utcMonthStart(now) }, ...(exceptRunId ? { id: { not: exceptRunId } } : {}) },
-  })
-  return _sum.costUsd ?? 0
-}
+/** USD of every run and research pass started this UTC month, deleted stories' and running reservations included: the one cap's (`researchSpend.ts`). */
+const monthSpendUsd = (db: Db, now: Date, exceptRunId?: string): Promise<number> => monthToDateUsd(db, now, exceptRunId ? { runId: exceptRunId } : {})
 
 /** Before this, a `running` run is past the stale limit: a restart cut it off. */
 export function staleBefore(now: Date): Date {
