@@ -23,7 +23,8 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 const mockInput = vi.hoisted(() => ({ researchStoriesByIds: vi.fn() }))
 const mockPipeline = vi.hoisted(() => ({ researchStory: vi.fn() }))
-const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), revertResearch: vi.fn(), applyRefusal: vi.fn(), applyVerdict: vi.fn() }))
+const mockApply = vi.hoisted(() => ({ applyResearchRun: vi.fn(), applyRefusal: vi.fn(), applyVerdict: vi.fn() }))
+const mockWrites = vi.hoisted(() => ({ revertResearch: vi.fn() }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('../../services/crawler.js', () => ({ crawlFeed: vi.fn(), crawlAllDueFeeds: vi.fn(), crawlUrl: vi.fn() }))
@@ -36,6 +37,10 @@ vi.mock('../../services/researchPipeline.js', async importOriginal => ({
   ...mockPipeline,
 }))
 vi.mock('../../services/researchApply.js', () => mockApply)
+vi.mock('../../services/researchWrites.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../services/researchWrites.js')>()),
+  ...mockWrites,
+}))
 
 const { default: app } = await import('../../app.js')
 const { ConflictError } = await import('../../utils/errors.js')
@@ -103,7 +108,7 @@ beforeEach(() => {
   mockPrisma.researchPass.aggregate.mockResolvedValue({ _sum: { costUsd: null } })
   mockPrisma.$queryRaw.mockResolvedValue([])
   mockApply.applyResearchRun.mockResolvedValue('applied')
-  mockApply.revertResearch.mockResolvedValue(undefined)
+  mockWrites.revertResearch.mockResolvedValue(undefined)
   mockApply.applyRefusal.mockReturnValue(null)
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -305,7 +310,7 @@ describe('GET /api/admin/research/stories/:storyId/runs', () => {
   })
 })
 
-// What applying and reverting write is researchApply's tests'; here, what each request answers
+// What applying and reverting write is researchApply's and researchWrites' tests'; here, what each request answers
 describe('POST /api/admin/research/stories/:storyId/runs/:runId/apply and /revert', () => {
   const apply = () => request(app).post(`/api/admin/research/stories/${STORY}/runs/run-1/apply`).set(authHeader())
   const revert = () => request(app).post(`/api/admin/research/stories/${STORY}/revert`).set(authHeader())
@@ -319,12 +324,12 @@ describe('POST /api/admin/research/stories/:storyId/runs/:runId/apply and /rever
   it('reverts the story to single-source, answering 204', async () => {
     const res = await revert()
     expect(res.status).toBe(204)
-    expect(mockApply.revertResearch).toHaveBeenCalledWith(STORY)
+    expect(mockWrites.revertResearch).toHaveBeenCalledWith(STORY)
   })
 
   it.each([
     ['apply', apply, mockApply.applyResearchRun],
-    ['revert', revert, mockApply.revertResearch],
+    ['revert', revert, mockWrites.revertResearch],
   ])('answers a refusal of %s with its status and reason', async (_name, send, service) => {
     service.mockRejectedValue(new ConflictError('A trashed story cannot be reverted: restore it first'))
     const res = await send()
@@ -341,7 +346,7 @@ describe('POST /api/admin/research/stories/:storyId/runs/:runId/apply and /rever
 
   it('needs a signed-in editor or admin', async () => {
     expect((await request(app).post(`/api/admin/research/stories/${STORY}/revert`)).status).toBe(401)
-    expect(mockApply.revertResearch).not.toHaveBeenCalled()
+    expect(mockWrites.revertResearch).not.toHaveBeenCalled()
   })
 })
 

@@ -1,7 +1,8 @@
 /**
- * Applying a research run to its story and reverting it, on PostgreSQL: the swapped columns, both
- * versions, the snapshot rules, the status fence and what the public story serves afterwards. The
- * embedding call and the favicon fetch are mocked; every refusal's order is researchApply.test.ts's.
+ * Applying a research run to its story, on PostgreSQL: the swapped columns, both versions, the
+ * snapshot rules, the status fence and what the public story serves afterwards, a revert of what was
+ * applied included (the revert on its own is researchWrites.db.test.ts's). The embedding call and the
+ * favicon fetch are mocked; every refusal's order is researchApply.test.ts's.
  */
 import { randomUUID } from 'node:crypto'
 import { it, expect, vi, beforeEach } from 'vitest'
@@ -37,7 +38,8 @@ vi.mock('./researchPassGate.js', () => ({
   },
 }))
 
-const { applyResearchRun, applyRefusal, applyVerdict, revertResearch } = await import('./researchApply.js')
+const { applyResearchRun, applyRefusal, applyVerdict } = await import('./researchApply.js')
+const { revertResearch } = await import('./researchWrites.js')
 const { getPublishedStoryBySlug, updateStoryStatus } = await import('./story.js')
 
 const SINGLE_SOURCE = {
@@ -222,22 +224,6 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
     expect(after.preResearch).toEqual(SINGLE_SOURCE)
   })
 
-  it('a revert restores every snapshot field, clears both versions, regenerates the embedding and forgets the related stories; an edited rating stays', async () => {
-    const s = await story()
-    await applyResearchRun(s.id, await run(s.id))
-    // The rating is no swapped field: an editor may change it on a researched story
-    await prisma.story.update({ where: { id: s.id }, data: { relevance: 7 } })
-    mockGenerate.mockResolvedValue({ embedding: axisVector(3), hash: 'restored' })
-    mockForget.mockClear()
-
-    await revertResearch(s.id)
-
-    const after = await stored(s.id)
-    expect(after).toMatchObject({ ...SINGLE_SOURCE, relevance: 7, status: 'published', research: null, preResearch: null })
-    expect(await embeddingHash(s.id)).toBe('restored')
-    expect(mockForget).toHaveBeenCalledWith([s.id])
-  })
-
   it('the public story serves the researched version and the flag after an apply, and neither after a revert', async () => {
     const s = await story()
     await applyResearchRun(s.id, await run(s.id))
@@ -269,22 +255,6 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
       preResearch: null,
     })
     expect(mockFavicons).not.toHaveBeenCalled()
-  })
-
-  it('an edit saved while the revert makes its embedding is kept: the story stays researched and the revert answers 409', async () => {
-    const s = await story()
-    await applyResearchRun(s.id, await run(s.id))
-    await prisma.story.update({ where: { id: s.id }, data: { updatedAt: new Date('2026-01-01T00:00:00Z') } })
-    mockGenerate.mockImplementationOnce(async () => {
-      await prisma.story.update({ where: { id: s.id }, data: { emotionTag: 'calm' } })
-      return { embedding: axisVector(3), hash: 'restored' }
-    })
-
-    await expect(revertResearch(s.id)).rejects.toThrow(/changed while this was written/)
-
-    const after = await stored(s.id)
-    expect(after).toMatchObject({ title: 'Researched headline 1', emotionTag: 'calm' })
-    expect(after.preResearch).toEqual(SINGLE_SOURCE)
   })
 
   it("an editor's apply is written against the status now: a run made while the story was selected applies after it was published", async () => {
@@ -443,10 +413,5 @@ describeDb('applying and reverting research (PostgreSQL)', () => {
 
     await expect(applyResearchRun(s.id, runId)).rejects.toMatchObject({ status: 409, message: expect.stringMatching(message) })
     expect(await stored(s.id)).toMatchObject({ ...SINGLE_SOURCE, research: null, preResearch: null })
-  })
-
-  it('refuses a revert of a story without a researched version', async () => {
-    const s = await story()
-    await expect(revertResearch(s.id)).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/no researched version/) })
   })
 })

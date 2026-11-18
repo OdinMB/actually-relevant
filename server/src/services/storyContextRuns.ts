@@ -17,9 +17,8 @@ import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import type { Prompt } from '../lib/promptCache.js'
 import prisma from '../lib/prisma.js'
-import { isRetryableError } from '../lib/retry.js'
+import { sanitizedError, transientFailure } from '../lib/runErrors.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
-import { sanitizedError } from './researchRuns.js'
 import { loadContextInput, loadEarlierWork } from './storyContextInput.js'
 import {
   buildStoryContext,
@@ -37,18 +36,6 @@ import { structuredCall } from './structuredCall.js'
 const log = createLogger('story_context')
 
 const INTERRUPTED = 'interrupted: the server restarted during the run'
-
-/**
- * A failure that may pass on a later attempt, once the SDK's and `withRetry`'s own retries are spent
- * (`.context/story-context.md`, "Failures"): a rate limit, a server error, a timeout or a lost
- * connection. A refused request, a missing key, an answer of the wrong shape and an error of ours do not.
- */
-export function transientFailure(err: unknown): boolean {
-  if (isRetryableError(err)) return true
-  if (!(err instanceof Error)) return false
-  // LangChain rethrows the SDK's timeout under this name; the SDK's connection errors carry no status
-  return err.name === 'TimeoutError' || ['APIConnectionError', 'APIConnectionTimeoutError'].includes(err.constructor.name)
-}
 
 /** Production's step caller: the step's tier (`structuredCall`), a thrown error judged for a second attempt. */
 const productionCall: ContextCall = async <T>(step: keyof typeof CONTEXT_STEP_TIERS, schema: z.ZodType<T>, prompt: Prompt) => {

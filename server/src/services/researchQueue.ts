@@ -13,7 +13,8 @@
 import { Prisma } from '@prisma/client'
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
-import { staleBefore, switchRefusal } from './researchRuns.js'
+import { staleBefore } from './researchRuns.js'
+import { switchRefusal } from './researchSwitch.js'
 
 /** The research step's job; its row's `enabled` flag runs it on its schedule and lets the publish gate hold. */
 export const RESEARCH_JOB = 'research_stories'

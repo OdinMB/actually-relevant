@@ -15,11 +15,12 @@
 import { createLogger } from '../lib/logger.js'
 import prisma from '../lib/prisma.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
+import { sanitizedError } from '../lib/runErrors.js'
 import { ConflictError, ServiceError } from '../utils/errors.js'
 import type { GateKind } from './researchChecks.js'
 import { applyRefusal, applyResearchRun } from './researchApply.js'
 import { PROCESSING } from './researchBatch.js'
-import { newestResearchRun, sanitizedError, type ResearchRunView } from './researchRuns.js'
+import { newestResearchRun, type ResearchRunView } from './researchRuns.js'
 import { appliedDraftSchema, researchedValues, SWAPPED_SELECT, swappedEdits, type SwappedValues } from './researchSwap.js'
 
 const log = createLogger('research-apply')

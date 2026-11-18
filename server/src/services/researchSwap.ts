@@ -1,6 +1,6 @@
 /**
  * Which story columns a researched version replaces, and the values an apply writes there and a
- * revert restores (`.context/story-research.md`, "Applying a run"). Pure: `researchApply.ts` writes,
+ * revert restores (`.context/story-research.md`, "Applying a run"). Pure: `researchWrites.ts` writes,
  * and the admin edit's lock (`storyWrites.ts`) reads the same list.
  *
  * The rating and its calculation are not among them: a story keeps its own rating whatever the

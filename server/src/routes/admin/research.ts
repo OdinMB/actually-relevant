@@ -12,10 +12,11 @@ import { validateBody } from '../../middleware/validate.js'
 import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import { bulkApplyResearchIdsSchema, bulkResearchIdsSchema } from '../../schemas/story.js'
-import { applyRefusal, applyResearchRun, revertResearch } from '../../services/researchApply.js'
+import { applyRefusal, applyResearchRun } from '../../services/researchApply.js'
 import { applyNewestRuns } from '../../services/researchApplyBatch.js'
 import { startResearchBatch } from '../../services/researchBatch.js'
 import { listResearchRuns, researchUsage, startResearchRun } from '../../services/researchRuns.js'
+import { revertResearch } from '../../services/researchWrites.js'
 
 const router = Router()
 

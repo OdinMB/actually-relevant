@@ -14,7 +14,7 @@ import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { cutOffBefore } from '../lib/runCutOff.js'
 import { PASS_EVAL_GATE } from './researchPassGate.js'
-import { switchRefusal } from './researchRuns.js'
+import { switchRefusal } from './researchSwitch.js'
 
 /** The step's job; its row's `enabled` flag runs it in the daily edition and lets the publish gate hold. */
 export const RESEARCH_PASS_JOB = 'research_pass'

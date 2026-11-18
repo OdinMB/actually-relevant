@@ -20,10 +20,12 @@ import { utcMonthStart } from './podcastGuards.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
 import { createRunMeter } from './researchCalls.js'
 import { FALLBACK_CATEGORIES, type FallbackCategory, type GateVerdict } from './researchChecks.js'
-import { hasPrice, summarizeRunCost, type RunCostSummary } from './researchCost.js'
+import { sanitizedError } from '../lib/runErrors.js'
+import { summarizeRunCost, type RunCostSummary } from './researchCost.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds, type ResearchStory } from './researchInput.js'
-import { researchStory, STEP_TIERS, STEPS, type StepName, type StoryResearch } from './researchPipeline.js'
+import { researchStory, type StepName, type StoryResearch } from './researchPipeline.js'
 import { monthToDateUsd, RESEARCH_RESERVATION_LOCK } from './researchSpend.js'
+import { stepModels, switchRefusal } from './researchSwitch.js'
 import { checkSpendWarnings, EDITOR_RESEARCH } from './spending.js'
 
 const log = createLogger('research')
@@ -81,34 +83,12 @@ export interface ResearchUsageView {
 
 type Db = Prisma.TransactionClient | typeof prisma
 
-function stepModels(): Record<StepName, string> {
-  return Object.fromEntries(STEPS.map(step => [step, config.llm.models[STEP_TIERS[step]].name])) as Record<StepName, string>
-}
-
 function currentPrices(models: string[]): ResearchPrices {
   return {
     models: Object.fromEntries(models.flatMap(m => (config.research.modelPrices[m] ? [[m, config.research.modelPrices[m]]] : []))),
     cacheWriteFactor: config.research.cacheWriteFactor,
     tavilyUsdPerCredit: config.research.tavilyUsdPerCredit,
   }
-}
-
-/** Why research is off: no key, or step models without a price. */
-export type ResearchSwitchOff = { cause: 'no-key' } | { cause: 'unpriced'; models: string[] }
-
-/** Why no run can start now, whatever the story; null while research is on. `switchRefusal` words it for editors. */
-export function researchSwitchOff(): ResearchSwitchOff | null {
-  if (!config.research.tavilyApiKey) return { cause: 'no-key' }
-  const unpriced = [...new Set(Object.values(stepModels()))].filter(m => !hasPrice(m))
-  return unpriced.length > 0 ? { cause: 'unpriced', models: unpriced } : null
-}
-
-/** `researchSwitchOff` in the words editors see on a refused run, or null while research is on. */
-export function switchRefusal(): string | null {
-  const off = researchSwitchOff()
-  if (!off) return null
-  if (off.cause === 'no-key') return 'Research is switched off: TAVILY_API_KEY is not set'
-  return `Research is refused: ${off.models.join(', ')} has no price in config.research.modelPrices, so its cost could not be counted`
 }
 
 const usd = (v: number) => `$${v.toFixed(2)}`
@@ -153,13 +133,6 @@ async function reserveRun(storyId: string, now: Date, trigger: ResearchRunTrigge
     })
     return { runId: run.id }
   })
-}
-
-/** An unexpected error by name and code only: a message may quote fetched text or a query's arguments. */
-export function sanitizedError(err: unknown): string {
-  if (!(err instanceof Error)) return 'unexpected error'
-  const code = (err as { code?: unknown }).code
-  return `unexpected error (${err.name}${typeof code === 'string' ? ` ${code}` : ''})`
 }
 
 /**

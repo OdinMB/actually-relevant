@@ -9,10 +9,12 @@
  */
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
+import { sanitizedError } from '../lib/runErrors.js'
 import { Semaphore } from '../lib/semaphore.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
 import { ConflictError, ServiceError } from '../utils/errors.js'
-import { reserveEditorRun, runInTask, sanitizedError, switchRefusal } from './researchRuns.js'
+import { reserveEditorRun, runInTask } from './researchRuns.js'
+import { switchRefusal } from './researchSwitch.js'
 
 const log = createLogger('research')
 

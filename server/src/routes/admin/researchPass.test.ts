@@ -21,8 +21,8 @@ vi.mock('../../services/researchPassRuns.js', async importOriginal => ({
   ...mockRuns,
 }))
 const mockApply = vi.hoisted(() => ({ undoUpdate: vi.fn() }))
-vi.mock('../../services/researchApply.js', async importOriginal => ({
-  ...(await importOriginal<typeof import('../../services/researchApply.js')>()),
+vi.mock('../../services/researchWrites.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../services/researchWrites.js')>()),
   ...mockApply,
 }))
 

@@ -8,7 +8,7 @@
 import { config } from '../config.js'
 import type { RunUsage } from '../lib/runUsage.js'
 import { PASS_EVAL_GATE } from '../services/researchPassGate.js'
-import { researchSwitchOff } from '../services/researchRuns.js'
+import { researchSwitchOff } from '../services/researchSwitch.js'
 import { failureShareExceeded, failureShareLine } from './failureShare.js'
 
 export interface JobNotes {

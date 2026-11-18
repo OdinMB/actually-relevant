@@ -14,10 +14,11 @@
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { createLogger } from '../lib/logger.js'
+import { sanitizedError } from '../lib/runErrors.js'
 import { countOf, reportRunResult } from '../lib/runUsage.js'
 import { applyVerdict, type VerdictOutcome } from '../services/researchApply.js'
 import { nextToResearch, owedStory, researchStepState, type ResearchStepState } from '../services/researchQueue.js'
-import { markInterruptedRuns, recordSkippedRun, runPipelineResearch, sanitizedError } from '../services/researchRuns.js'
+import { markInterruptedRuns, recordSkippedRun, runPipelineResearch } from '../services/researchRuns.js'
 
 const log = createLogger('research_stories')
 

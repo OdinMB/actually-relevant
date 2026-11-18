@@ -1,12 +1,13 @@
 /**
- * Article versions on PostgreSQL: undoing the current update puts the version before it back on the
- * story and takes its Update off the list; reverting to the single-source analysis reverts every
- * version; refusals leave everything as it was. The embedding call and the favicon fetch are mocked.
+ * The story's research writes on PostgreSQL that research passes keep: undoing the current update
+ * puts the version before it back on the story and takes its Update off the list; reverting to the
+ * single-source analysis restores the snapshot and reverts every version; an edit made meanwhile and
+ * every refusal leave everything as it was. The embedding call and the favicon fetch are mocked.
  */
 import { randomUUID } from 'node:crypto'
 import { it, expect, vi, beforeEach } from 'vitest'
 import prisma from '../lib/prisma.js'
-import { axisVector, createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
+import { axisVector, createFeed, createIssue, createStory, describeDb, embeddingHash, useTestDatabase } from '../test/db/harness.js'
 import { publicUpdates, versionArticle } from './articleVersions.js'
 import { currentVersion, insertPoolRows, insertVersion, loadPool, publicVersions } from './passRecords.js'
 import { rewriteTargets } from './researchPassUpdate.js'
@@ -24,8 +25,13 @@ vi.mock('./sourceFavicons.js', async importOriginal => ({
   ...(await importOriginal<typeof import('./sourceFavicons.js')>()),
   fetchSourceFaviconsInBackground: vi.fn(),
 }))
+const mockForget = vi.hoisted(() => vi.fn())
+vi.mock('./relatedStories.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('./relatedStories.js')>()),
+  forgetRelatedStories: mockForget,
+}))
 
-const { revertResearch, undoUpdate } = await import('./researchApply.js')
+const { revertResearch, undoUpdate } = await import('./researchWrites.js')
 
 const SINGLE_SOURCE = {
   title: 'Single-source headline',
@@ -163,11 +169,12 @@ async function researched(versions: ArticleVersionData[]) {
 const statuses = async (storyId: string) =>
   (await prisma.articleVersion.findMany({ where: { storyId }, orderBy: { number: 'asc' }, select: { status: true } })).map(v => v.status)
 
-describeDb('article versions (PostgreSQL)', () => {
+describeDb("the story's research writes (PostgreSQL)", () => {
   useTestDatabase()
 
   beforeEach(async () => {
     mockGenerate.mockReset().mockResolvedValue({ embedding: axisVector(3), hash: 'restored' })
+    mockForget.mockReset()
     feedId = (await createFeed((await createIssue()).id)).id
   })
 
@@ -232,11 +239,46 @@ describeDb('article versions (PostgreSQL)', () => {
     expect(mockGenerate).not.toHaveBeenCalled()
   })
 
-  it('reverts every version when the story goes back to its single-source analysis', async () => {
+  it('a revert restores every snapshot field, clears both versions, reverts every version, regenerates the embedding and forgets the related stories; an edited rating stays', async () => {
     const s = await researched([version(1, 'superseded'), version(2, 'current')])
+    // The rating is no swapped field: an editor may change it on a researched story
+    await prisma.story.update({ where: { id: s.id }, data: { relevance: 7 } })
+
     await revertResearch(s.id)
-    expect(await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({ title: SINGLE_SOURCE.title, research: null, preResearch: null })
+
+    expect(await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({
+      ...SINGLE_SOURCE,
+      relevance: 7,
+      status: 'published',
+      research: null,
+      preResearch: null,
+    })
     expect(await statuses(s.id)).toEqual(['reverted', 'reverted'])
     expect(publicUpdates(await publicVersions(prisma, s.id))).toEqual([])
+    expect(await embeddingHash(s.id)).toBe('restored')
+    expect(mockForget).toHaveBeenCalledWith([s.id])
+  })
+
+  it('an edit saved while the revert makes its embedding is kept: the story stays researched, its versions as they were, and the revert answers 409', async () => {
+    const s = await researched([version(1, 'current')])
+    // As read before the edit, so the edit moves updatedAt on even within one millisecond
+    await prisma.story.update({ where: { id: s.id }, data: { updatedAt: new Date('2026-01-01T00:00:00Z') } })
+    mockGenerate.mockImplementationOnce(async () => {
+      await prisma.story.update({ where: { id: s.id }, data: { emotionTag: 'calm' } })
+      return { embedding: axisVector(3), hash: 'restored' }
+    })
+
+    await expect(revertResearch(s.id)).rejects.toThrow(/changed while this was written/)
+
+    const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
+    expect(after).toMatchObject({ title: 'Headline v1', emotionTag: 'calm' })
+    expect(after.preResearch).toEqual(SINGLE_SOURCE)
+    expect(await statuses(s.id)).toEqual(['current'])
+  })
+
+  it('refuses a revert of a story without a researched version', async () => {
+    const s = await createStory({ feedId, status: 'published', slug: `story-${randomUUID()}`, datePublished: new Date() })
+    await expect(revertResearch(s.id)).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/no researched version/) })
+    expect(mockGenerate).not.toHaveBeenCalled()
   })
 })

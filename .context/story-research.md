@@ -286,7 +286,10 @@ The stories list's bulk bar researches a selection ("Bulk research") and puts ea
 | `server/src/prompts/research.ts`, `server/src/schemas/research.ts` | Prompts and structured outputs |
 | `server/src/lib/tavily.ts`, `server/src/lib/llmUsage.ts` | Tavily HTTP client; usage and outcome helpers shared with the eval |
 | `server/src/routes/admin/research.ts` | The seven admin endpoints |
-| `server/src/services/researchApply.ts` | Apply a run to its story and revert it: refusals, snapshot, the lifecycle write, favicon fetch; the research step's verdicts (`applyVerdict`) |
+| `server/src/services/researchApply.ts` | Apply a run to its story: refusals, snapshot; the research step's verdicts (`applyVerdict`). Legacy: research passes replace it |
+| `server/src/services/researchWrites.ts` | The story's research writes, shared with research passes: the fenced lifecycle write, a verdict's rejection, the favicon fetch, the revert, the undo |
+| `server/src/services/researchSwitch.ts` | Research's switch (`switchRefusal`, `researchSwitchOff`): the key, and a price for every step's model |
+| `server/src/lib/runErrors.ts` | A run's error as stored (`sanitizedError`) and a failure that may pass (`transientFailure`), shared by research runs, context runs and passes |
 | `server/src/services/researchSwap.ts` | The swapped columns: the values an apply writes, the snapshot (completed with the tag when stored before 2026-11-14), its read-back, the edit lock's comparison, where a single-source analysis's emotion tag goes and the fence on the snapshot read (pure) |
 | `server/src/services/researchedStory.ts` | The reader's projection: schema, build from a run, read-time trim, plain text |
 | `server/src/services/sourceFavicons.ts`, `server/src/routes/public/sourceFavicon.ts` | Source favicons by host: store, background fetch, public route |

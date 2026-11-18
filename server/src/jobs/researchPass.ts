@@ -17,6 +17,7 @@
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
+import { sanitizedError } from '../lib/runErrors.js'
 import { countOf, recordItems, reportRunResult } from '../lib/runUsage.js'
 import {
   nextForPass,
@@ -28,7 +29,6 @@ import {
   type PassStepState,
 } from '../services/researchPassQueue.js'
 import { markInterruptedPasses, recordSkippedPass, runPipelinePass, type PassEnd } from '../services/researchPassRuns.js'
-import { sanitizedError } from '../services/researchRuns.js'
 import { jobDisplayName } from './jobDisplayName.js'
 
 export { RESEARCH_PASS_JOB }

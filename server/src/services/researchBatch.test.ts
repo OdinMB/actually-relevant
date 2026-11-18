@@ -11,6 +11,10 @@ vi.mock('./researchRuns.js', async importOriginal => ({
   ...mockRuns,
 }))
 vi.mock('./researchApply.js', () => mockApply)
+vi.mock('./researchSwitch.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('./researchSwitch.js')>()),
+  switchRefusal: mockRuns.switchRefusal,
+}))
 
 const { startResearchBatch } = await import('./researchBatch.js')
 const { taskRegistry } = await import('../lib/taskRegistry.js')

@@ -147,7 +147,7 @@ export interface AnalysisRow {
   embedding?: { embedding: number[]; hash: string } | null
   /**
    * Writes that belong with this row's, in its transaction, once the row was written: a research
-   * write's article versions (`articleVersionWrites.ts`). Never a story's status or columns. A throw
+   * write's article versions (`researchWrites.ts`). Never a story's status or columns. A throw
    * rolls the whole write back.
    */
   also?: (tx: Prisma.TransactionClient) => Promise<void>

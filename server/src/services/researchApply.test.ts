@@ -1,10 +1,9 @@
 /**
- * Applying a research run and reverting it, with the database and the lifecycle write mocked: what
- * is written, against which status, and every refusal before anything is. The write itself, the
- * status fence and the snapshot rules on PostgreSQL are researchApply.db.test.ts's.
+ * Applying a research run, with the database and the lifecycle write mocked: what is written,
+ * against which status, and every refusal before anything is. The write itself, the status fence and
+ * the snapshot rules on PostgreSQL are researchApply.db.test.ts's; the revert is researchWrites'.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { Prisma } from '@prisma/client'
 import { ConflictError, NotFoundError } from '../utils/errors.js'
 import type { StoredResearch } from './researchRuns.js'
 import type { ResearchSource } from './researchPipeline.js'
@@ -24,7 +23,7 @@ const mockFavicons = vi.hoisted(() => vi.fn())
 vi.mock('./sourceFavicons.js', () => ({ fetchSourceFaviconsInBackground: mockFavicons }))
 
 // The real config: the key is its only research switch (owner decision 2026-11-14)
-const { applyResearchRun, applyRefusal, applyVerdict, revertResearch } = await import('./researchApply.js')
+const { applyResearchRun, applyRefusal, applyVerdict } = await import('./researchApply.js')
 const { buildResearchedStory } = await import('./researchedStory.js')
 
 const STORY = 'story-1'
@@ -122,7 +121,7 @@ function result(over: Partial<StoredResearch> = {}): StoredResearch {
   }
 }
 
-/** When the story was last written, as the apply or revert read it; the write is fenced on it. */
+/** When the story was last written, as the apply read it; the write is fenced on it. */
 const READ_AT = new Date('2026-11-12T09:00:00Z')
 const storyRow = (over: Record<string, unknown> = {}) => ({ status: 'published', preResearch: null, updatedAt: READ_AT, ...singleSource, ...rating, ...over })
 const runRow = (over: Record<string, unknown> = {}) => ({ storyId: STORY, status: 'completed', result: result(), ...over })
@@ -379,75 +378,6 @@ describe('applyVerdict', () => {
     arrange()
     await expect(applyVerdict(STORY, RUN, READ, run)).resolves.toBe('skipped')
     expect(mockFavicons).not.toHaveBeenCalled()
-  })
-})
-
-describe('revertResearch', () => {
-  const researched = () => storyRow({ title: 'Researched headline', relevanceSummary: null, emotionTag: 'uplifting', preResearch: singleSource, research: {} })
-
-  it('writes the snapshot back, the single-source emotion tag included, and clears both versions, with an embedding of the restored text, against the status and the last write read now', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue(researched())
-
-    await revertResearch(STORY)
-
-    const { stage, actor, row, expected } = lastWrite()
-    expect([stage, actor, expected]).toEqual(['research', 'editor', [[STORY, 'published']]])
-    // The rating is not research's to restore: it stays as it is
-    expect(row).toEqual({
-      id: STORY,
-      data: { ...singleSource, research: Prisma.DbNull, preResearch: Prisma.DbNull },
-      where: { updatedAt: READ_AT },
-      embedding: EMBEDDING,
-      also: expect.any(Function),
-    })
-    // In the same transaction, every article version is reverted
-    const updateMany = vi.fn().mockResolvedValue({ count: 2 })
-    await row.also!({ articleVersion: { updateMany } } as never)
-    expect(updateMany).toHaveBeenCalledWith({ where: { storyId: STORY, status: { not: 'reverted' } }, data: { status: 'reverted' } })
-    expect(mockEmbed).toHaveBeenCalledWith({
-      title: singleSource.title,
-      titleLabel: singleSource.titleLabel,
-      summary: singleSource.summary,
-      embeddingContentHash: null,
-    })
-  })
-
-  it('leaves the emotion tag alone on a story whose snapshot was stored before the tag was swapped', async () => {
-    mockPrisma.story.findUnique.mockResolvedValue({ ...researched(), preResearch: untaggedSnapshot })
-    await revertResearch(STORY)
-    expect(lastWrite().row.data).toEqual({ ...untaggedSnapshot, research: Prisma.DbNull, preResearch: Prisma.DbNull })
-  })
-
-  it.each([
-    ['an unknown story', () => mockPrisma.story.findUnique.mockResolvedValue(null), NotFoundError, /Story not found/],
-    ['a story without a researched version', () => mockPrisma.story.findUnique.mockResolvedValue(storyRow()), ConflictError, /no researched version/],
-    ['a trashed story', () => mockPrisma.story.findUnique.mockResolvedValue({ ...researched(), status: 'trashed' }), ConflictError, /restore it first/],
-    [
-      'a snapshot that cannot be read',
-      () => mockPrisma.story.findUnique.mockResolvedValue({ ...researched(), preResearch: { title: 'only a title' } }),
-      ConflictError,
-      /re-assess/,
-    ],
-  ])('refuses %s before any embedding or write', async (_name, arrange, kind, message) => {
-    arrange()
-    const attempt = revertResearch(STORY)
-    await expect(attempt).rejects.toBeInstanceOf(kind)
-    await expect(attempt).rejects.toThrow(message)
-    expect(mockEmbed).not.toHaveBeenCalled()
-    expect(mockRecord).not.toHaveBeenCalled()
-  })
-
-  it("answers 409 when an editor's move or edit lands before the write", async () => {
-    mockPrisma.story.findUnique.mockResolvedValue(researched())
-    mockRecord.mockResolvedValue(new Map([[STORY, 'skipped']]))
-    await expect(revertResearch(STORY)).rejects.toThrow(/changed while this was written/)
-  })
-
-  it('still reverts while research is switched off, so a story can always be taken back', async () => {
-    vi.stubEnv('TAVILY_API_KEY', '')
-    mockPrisma.story.findUnique.mockResolvedValue(researched())
-    await expect(revertResearch(STORY)).resolves.toBeUndefined()
-    expect(mockRecord).toHaveBeenCalledTimes(1)
   })
 })
 

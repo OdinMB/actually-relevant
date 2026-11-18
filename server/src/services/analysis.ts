@@ -17,7 +17,7 @@ import { detectAndCluster } from './dedup.js'
 import { generateEmbeddingForContent } from './embedding.js'
 import { assessPromptInput, selectCount, selectPromptStory } from './promptInputs.js'
 import { classifiedTag, sameSnapshot, snapshotEmotionTag } from './researchSwap.js'
-import { revertAllVersions } from './articleVersionWrites.js'
+import { revertAllVersions } from './researchWrites.js'
 import { NotFoundError } from '../utils/errors.js'
 import { analysisFrom, partition, recordAnalysis, transition, type Actor, type AnalysisOutcome, type AnalysisRow, type MoveResult } from './storyLifecycle.js'
 

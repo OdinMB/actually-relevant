@@ -1,9 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
-
-vi.mock('../lib/prisma.js', () => ({ default: {} }))
-
-const { transientFailure } = await import('./storyContextRuns.js')
-const { TavilyError } = await import('../lib/tavily.js')
+import { describe, it, expect } from 'vitest'
+import { sanitizedError, transientFailure } from './runErrors.js'
+import { TavilyError } from './tavily.js'
 
 /** An error as the OpenAI SDK throws it: its class names it. */
 const sdkError = (name: string, message: string, status?: number) => {
@@ -32,5 +29,15 @@ describe('transientFailure', () => {
     ['something not an error', 'boom'],
   ])('does not hold for %s', (_what, err) => {
     expect(transientFailure(err)).toBe(false)
+  })
+})
+
+describe('sanitizedError', () => {
+  it('keeps the name and a string code, never the message', () => {
+    expect(sanitizedError(Object.assign(new Error('SELECT secret FROM x'), { name: 'PrismaClientKnownRequestError', code: 'P2002' }))).toBe(
+      'unexpected error (PrismaClientKnownRequestError P2002)',
+    )
+    expect(sanitizedError(new TypeError('fetched text'))).toBe('unexpected error (TypeError)')
+    expect(sanitizedError('boom')).toBe('unexpected error')
   })
 })

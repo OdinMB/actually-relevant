@@ -12,9 +12,9 @@ import { expensiveOpLimiter } from '../../middleware/rateLimit.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import { validateBody } from '../../middleware/validate.js'
 import { bulkResearchIdsSchema } from '../../schemas/story.js'
-import { undoUpdate } from '../../services/researchApply.js'
 import { startEditorPass, startEditorPassBatch } from '../../services/researchPassRuns.js'
 import { passUsage, storyPasses } from '../../services/researchPassViews.js'
+import { undoUpdate } from '../../services/researchWrites.js'
 
 const router = Router()
 

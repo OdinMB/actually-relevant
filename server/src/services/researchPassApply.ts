@@ -3,10 +3,10 @@
  * pass"): the pass applies itself, the nightly pass and an editor's alike (plan, For Odin 3). One
  * transaction writes the pass's rows (`storePassResult`: the pass row, its searches, sources, facts,
  * judgments, version and cards) and, when the pass made a version, the story's columns and projection
- * through research's fenced write (`researchApply.ts`'s `write`), so neither lands without the other.
- * Every story write is fenced on the story as read before the pass: an editor's move or edit during
- * the pass wins, and the pass's rows are then stored without its version. A pipeline pass's first
- * `stale` or `contradicted` verdict rejects the story through `transition`, which takes only a
+ * through research's fenced write (`researchWrites.ts`'s `fencedWrite`), so neither lands without the
+ * other. Every story write is fenced on the story as read before the pass: an editor's move or edit
+ * during the pass wins, and the pass's rows are then stored without its version. A pipeline pass's
+ * first `stale` or `contradicted` verdict rejects the story (`rejectForVerdict`), which takes only a
  * selected story; an editor's never rejects: the verdict stays on the pass, for the editor to act on;
  * a first pass on a published story is recorded as an Update (For Odin 5, `firstPassUpdate`), and a
  * later pass's rewrite before publication is none (`versionForReaders`). A later
@@ -22,12 +22,10 @@ import { notify } from '../lib/notify.js'
 import prisma from '../lib/prisma.js'
 import { firstPassUpdate, versionForReaders, versionValues } from './articleVersions.js'
 import { storePassResult, type PassRowResult, type PassWrite } from './passRecords.js'
-import { REJECTED_FOR, rejects, storyColumns, whyChanged, write, type ReadState } from './researchApply.js'
 import type { PassResult } from './researchPass.js'
-import type { ArticleVersionData, Pool } from './researchPool.js'
 import { snapshotForApply } from './researchSwap.js'
-import { fetchSourceFaviconsInBackground } from './sourceFavicons.js'
-import { transition, type Actor } from './storyLifecycle.js'
+import { fencedWrite, fetchCitedFavicons, REJECTED_FOR, rejectForVerdict, rejects, storyColumns, whyChanged, type ReadState } from './researchWrites.js'
+import type { Actor } from './storyLifecycle.js'
 
 const log = createLogger('research_pass')
 
@@ -87,12 +85,6 @@ async function store(w: PassWrite): Promise<boolean> {
   return prisma.$transaction(tx => storePassResult(tx, w), { timeout: config.database.transactionTimeoutMs })
 }
 
-/** Each cited outside source's host, with the icon address the pool holds for it. */
-function iconHints(version: ArticleVersionData, pool: Pool) {
-  const favicons = new Map(pool.sources.map(s => [s.ref, s.favicon]))
-  return version.research.sources.flatMap(s => (s.host ? [{ host: s.host, favicon: favicons.get(s.id) ?? null }] : []))
-}
-
 export async function applyPass(input: PassApplyInput): Promise<PassApply> {
   const { storyId, passId, read, result } = input
   const now = input.now ?? new Date()
@@ -119,12 +111,9 @@ export async function applyPass(input: PassApplyInput): Promise<PassApply> {
   // story to the editor; the step's rejects it, only while it is still selected and unwritten
   if (result.kind === 'first' && rejects(result.verdict.kind)) {
     if (input.actor !== 'pipeline') return stored('stored')
-    const reason = REJECTED_FOR[result.verdict.kind]
-    const changed = whyChanged(await storyColumns(storyId), read)
-    const moved =
-      !changed && (await transition([storyId], { to: 'rejected', reason }, 'pipeline', { where: { updatedAt: read.updatedAt } })).moved.includes(storyId)
-    log.info({ storyId, passId, reason, moved }, 'research pass verdict rejects the story')
-    return moved ? stored('rejected') : stored('skipped', changed ?? 'the story changed during the pass')
+    const { moved, why } = await rejectForVerdict(storyId, result.verdict.kind, read)
+    log.info({ storyId, passId, reason: REJECTED_FOR[result.verdict.kind], moved }, 'research pass verdict rejects the story')
+    return moved ? stored('rejected') : stored('skipped', why ?? 'the story changed during the pass')
   }
 
   if (!result.version) {
@@ -143,7 +132,7 @@ export async function applyPass(input: PassApplyInput): Promise<PassApply> {
   const columns = { research: asJson(version.research), preResearch: asJson(snapshotForApply(story.preResearch, story)) }
   let written: boolean
   try {
-    written = await write(storyId, input.actor, read, versionValues(version), columns, async tx => {
+    written = await fencedWrite(storyId, input.actor, read, versionValues(version), columns, async tx => {
       if (!(await storePassResult(tx, { ...w, version }))) throw new PassCutOff()
     })
   } catch (err) {
@@ -151,7 +140,7 @@ export async function applyPass(input: PassApplyInput): Promise<PassApply> {
     throw err
   }
   if (!written) return stored('skipped', 'the story changed during the pass')
-  void fetchSourceFaviconsInBackground(iconHints(version, result.pool))
+  fetchCitedFavicons(version.research, new Map(result.pool.sources.map(s => [s.ref, s.favicon])))
   log.info({ storyId, passId, kind: result.kind, actor: input.actor }, 'research pass applied')
   return { applied: 'applied', why: null }
 }

@@ -5,7 +5,7 @@
  * the next version a later pass makes, whose projection keeps every section it did not rewrite as
  * readers saw it; which version an undo restores and the columns it writes back; and the Updates
  * readers get from a story's versions, with the sources they cite. Pure: the undo and the reverts are
- * written by `researchApply.ts` and `articleVersionWrites.ts`.
+ * written by `researchWrites.ts`.
  */
 import { z } from 'zod'
 import { utcDay } from '../lib/days.js'
