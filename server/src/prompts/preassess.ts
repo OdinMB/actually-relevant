@@ -1,3 +1,4 @@
+import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
 import { EMOTION_TAGS_PROMPT_BLOCK, formatIssuesBlock, formatArticlesBlock } from './shared.js'
 import type { StoryForPrompt, IssueForPrompt } from './shared.js'
 
@@ -5,16 +6,13 @@ import type { StoryForPrompt, IssueForPrompt } from './shared.js'
 export type StoryForPreassess = StoryForPrompt
 export type IssueForPreassess = IssueForPrompt
 
-export function buildPreassessPrompt(stories: StoryForPreassess[], issues: IssueForPreassess[]): string {
-  return `<ROLE>
+const PREASSESS_RULES = `<ROLE>
 You are a relevance screener evaluating news articles for their importance to humanity.
 </ROLE>
 
 <GOAL>
 For each article: classify it into the single most relevant issue, rate its relevance on a 1-10 scale, and assign an emotion tag.
 </GOAL>
-
-${formatIssuesBlock(issues)}
 
 <RATING GUIDELINES>
 1-2: Very low impact; limited effect on up to 10 million people.
@@ -28,7 +26,20 @@ Rate the development, risk or trend the article reports on, not the article's fo
 The rating does not decide the issue: choose the issue by the article's subject, independently of the rating and of who is affected.
 </RATING GUIDELINES>
 
-${EMOTION_TAGS_PROMPT_BLOCK}
+${EMOTION_TAGS_PROMPT_BLOCK}`
 
-${formatArticlesBlock(stories)}`
+/**
+ * One batch's screen: issue, rating and emotion tag for each article.
+ *
+ * Cache: on. The rules and the run's issues come to about 1,100 tokens with the output schema, and a
+ * pre-assessment run sends a batch of up to `config.preassess.batchSize` articles at a time, several
+ * batches within the cache's 30 minutes. The issues are fixed for the run, so they close the cached
+ * part; the articles are the call's data.
+ */
+export function buildPreassessPromptParts(stories: StoryForPreassess[], issues: IssueForPreassess[]): PromptParts {
+  return promptParts(`${PREASSESS_RULES}\n\n${formatIssuesBlock(issues)}`, formatArticlesBlock(stories))
+}
+
+export function buildPreassessPrompt(stories: StoryForPreassess[], issues: IssueForPreassess[]): string {
+  return promptText(buildPreassessPromptParts(stories, issues))
 }

@@ -3,13 +3,17 @@
  * prompt)` (null makes it a parse failure), recorded, and costs `costUsd`; the ledger part says
  * which planned calls the cache answers and what the folder has spent.
  */
+import { promptText, type Prompt } from '../lib/promptCache.js'
 import type { BudgetedContext } from '../scripts/eval/overviews/factCheck.js'
 import type { Arm, CallRecord, PlannedCall } from '../scripts/eval/types.js'
 
 export interface FakeCall {
   arm: Arm
   schemaName: string
+  /** The whole prompt text (a cached prompt's stable part and data joined). */
   prompt: string
+  /** The prompt as sent: a cached prompt keeps its split. */
+  sent: Prompt
 }
 
 export interface FakeLedger {
@@ -24,8 +28,9 @@ export function fakeEvalContext(answer: (schemaName: string, prompt: string) => 
     calls,
     isCached: ledger.cached ?? (() => false),
     spentUsd: () => ledger.spentUsd ?? 0,
-    async call<T>(a: Arm, schemaName: string, _schema: unknown, prompt: string): Promise<CallRecord<T>> {
-      calls.push({ arm: a, schemaName, prompt })
+    async call<T>(a: Arm, schemaName: string, _schema: unknown, sent: Prompt): Promise<CallRecord<T>> {
+      const prompt = promptText(sent)
+      calls.push({ arm: a, schemaName, prompt, sent })
       const parsed = answer(schemaName, prompt)
       return {
         key: String(calls.length),

@@ -5,6 +5,9 @@ import type { StoryForNewsletterSelect } from './newsletter-select.js'
  * The Actually Uplifting issue's pick, asked only when the week has more uplifting stories than the
  * issue carries (`services/upliftingIssue.ts`): exactly `count` of `stories`, which come most relevant
  * first. Every story is tagged uplifting, so the prompt names no tone.
+ *
+ * Cache: off. One call an issue, so a cache write would never be read.
+ * House order (`.context/prompting.md`): the rules first, the stories next, the call's counts last in `<REQUEST>`.
  */
 export function buildUpliftingSelectPrompt(stories: StoryForNewsletterSelect[], count: number): string {
   let query = `<ROLE>
@@ -12,7 +15,7 @@ You are a senior editorial curator selecting stories for Actually Uplifting, a w
 </ROLE>
 
 <GOAL>
-Select exactly ${count} of the following ${stories.length} stories for this week's issue.
+Select exactly as many of the following stories as <REQUEST> asks for, for this week's issue.
 
 Return only the IDs of the selected stories.
 </GOAL>
@@ -39,7 +42,12 @@ Return only the IDs of the selected stories.
       `</ARTICLE>\n`
   }
 
-  query += `</ARTICLES>`
+  query += `</ARTICLES>
+
+<REQUEST>
+Select: ${count} stories
+Stories: ${stories.length}
+</REQUEST>`
 
   return query
 }

@@ -5,7 +5,8 @@
  * also their proxy.
  */
 import { config } from '../../../config.js'
-import { buildPreassessPrompt } from '../../../prompts/preassess.js'
+import type { PromptParts } from '../../../lib/promptCache.js'
+import { buildPreassessPromptParts } from '../../../prompts/preassess.js'
 import { preAssessResultSchema, type PreAssessResult } from '../../../schemas/llm.js'
 import type { IssueForPrompt } from '../../../prompts/shared.js'
 import type { Fixtures, PreassessItem } from '../fixtures.js'
@@ -33,8 +34,9 @@ export function batchStories(stories: PreassessItem[]): PreassessItem[][] {
 
 const batches = (fx: Fixtures, limit?: number) => limited(batchStories(fx.preassess), limit)
 
-export function preassessPrompt(batch: PreassessItem[], issues: IssueForPrompt[]): string {
-  return buildPreassessPrompt(
+/** Production's prompt and split, so the eval sends what production sends. */
+export function preassessPrompt(batch: PreassessItem[], issues: IssueForPrompt[]): PromptParts {
+  return buildPreassessPromptParts(
     batch.map(s => ({ id: s.id, title: s.title, content: s.content })),
     issues,
   )

@@ -9,6 +9,7 @@
 import type { z } from 'zod'
 import { config } from '../config.js'
 import type { LlmCallOutcome, LlmTokenUsage } from '../lib/llmUsage.js'
+import type { Prompt } from '../lib/promptCache.js'
 import type { TavilyResult, TavilySearch } from '../lib/tavily.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
 import { buildDedupPrompt } from '../prompts/dedup.js'
@@ -119,7 +120,7 @@ export interface StepResult<T> {
 }
 
 /** One metered structured-output call for a step. A `skipped` outcome means the budget is used up. */
-export type ResearchCall = <T>(step: StepName, schema: z.ZodType<T>, prompt: string) => Promise<StepResult<T>>
+export type ResearchCall = <T>(step: StepName, schema: z.ZodType<T>, prompt: Prompt) => Promise<StepResult<T>>
 
 export interface ResearchSearchAnswer {
   results: TavilyResult[]
@@ -131,7 +132,7 @@ export interface ResearchSearchAnswer {
 /** A call a batch is about to make, for the budget check before the batch starts. */
 export interface PlannedStep {
   step: StepName
-  prompt: string
+  prompt: Prompt
 }
 
 /** Thrown by a search the budget refuses; the run ends as `fallback: budget`. */
@@ -258,7 +259,7 @@ interface StepAnswer<T> {
   outcome: StepOutcome
 }
 
-type Call = <T>(step: StepName, schema: z.ZodType<T>, prompt: string) => Promise<StepAnswer<T>>
+type Call = <T>(step: StepName, schema: z.ZodType<T>, prompt: Prompt) => Promise<StepAnswer<T>>
 
 /** A budget skip ends the story; any other failure of a step the story cannot do without does too. */
 function required<T>(res: StepAnswer<T>, step: StepName): T {

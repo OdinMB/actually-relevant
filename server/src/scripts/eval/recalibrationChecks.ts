@@ -10,6 +10,7 @@
  */
 import type { z } from 'zod'
 import { config, type ReasoningEffort } from '../../config.js'
+import type { Prompt } from '../../lib/promptCache.js'
 import { assessResultSchema, dedupConfirmationSchema, preAssessResultSchema, type PreAssessResult } from '../../schemas/llm.js'
 import { num, pct, summarizeCalls } from './checks.js'
 import type { Fixtures, PreassessItem } from './fixtures.js'
@@ -90,7 +91,7 @@ export async function runOne<I, T>(
   items: I[],
   schemaName: string,
   schema: z.ZodType<T>,
-  prompt: (i: I) => string,
+  prompt: (i: I) => Prompt,
 ): Promise<CallRecord<T>[]> {
   return (await runArms(ctx, [a], items, schemaName, schema, prompt)).get(armKey(a)) ?? []
 }

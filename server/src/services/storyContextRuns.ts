@@ -15,6 +15,7 @@ import type { Prisma } from '@prisma/client'
 import type { z } from 'zod'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
+import type { Prompt } from '../lib/promptCache.js'
 import prisma from '../lib/prisma.js'
 import { isRetryableError } from '../lib/retry.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
@@ -50,7 +51,7 @@ export function transientFailure(err: unknown): boolean {
 }
 
 /** Production's step caller: the step's tier (`structuredCall`), a thrown error judged for a second attempt. */
-const productionCall: ContextCall = async <T>(step: keyof typeof CONTEXT_STEP_TIERS, schema: z.ZodType<T>, prompt: string) => {
+const productionCall: ContextCall = async <T>(step: keyof typeof CONTEXT_STEP_TIERS, schema: z.ZodType<T>, prompt: Prompt) => {
   const { error, ...result } = await structuredCall(CONTEXT_STEP_TIERS[step], schema, prompt)
   return result.outcome === 'error' ? { ...result, transient: transientFailure(error) } : result
 }

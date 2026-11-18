@@ -11,6 +11,7 @@
  */
 import type { z } from 'zod'
 import { config } from '../config.js'
+import type { Prompt } from '../lib/promptCache.js'
 import { TAVILY_DEPTH } from '../lib/tavily.js'
 import type { StoryText } from '../prompts/storyContext.js'
 import { decideGate, draftItems, publishedDay, type GateVerdict } from './researchChecks.js'
@@ -108,7 +109,7 @@ export const PASS_STEP_TIERS: Record<PassStep, 'small' | 'medium'> = {
 // ---------------------------------------------------------------------------
 
 /** One metered structured-output call for a step; a `skipped` outcome means the budget is used up. */
-export type PassCall = <T>(step: PassStep, schema: z.ZodType<T>, prompt: string) => Promise<StepResult<T> & { transient?: boolean }>
+export type PassCall = <T>(step: PassStep, schema: z.ZodType<T>, prompt: Prompt) => Promise<StepResult<T> & { transient?: boolean }>
 
 export interface PassDeps {
   call: PassCall

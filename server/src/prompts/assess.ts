@@ -1,4 +1,5 @@
 import { config } from '../config.js'
+import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
 import { Guidelines, buildGuidelinesXml } from './shared.js'
 
 /**
@@ -13,28 +14,14 @@ An earlier step tagged this story uplifting: its main development is clear progr
 </TONE>
 `
 
-export function buildAssessPrompt(title: string, content: string, publisher: string, url: string, guidelines: Guidelines, emotionTag?: string | null): string {
-  const guidelinesXml = buildGuidelinesXml(guidelines)
-  const truncatedContent = content.substring(0, config.assess.contentMaxLength)
-  const toneBlock = emotionTag === 'uplifting' ? UPLIFTING_TONE_BLOCK : ''
-
-  return `<ROLE>
+/** The rules every assessment shares: the cached prefix (`buildAssessPromptParts`). */
+const ASSESS_RULES = `<ROLE>
 You are a relevance analyst evaluating a news article for its importance to humanity and its long-term future. You produce structured assessments that are clear, evidence-based, and written for a general audience.
 </ROLE>
 
 <GOAL>
 Analyze the article below and produce a complete relevance assessment: key quote, summary, relevance factors, limiting factors, relevance calculation, final rating, relevance summary, title, and marketing blurb. Avoid jargon.
 </GOAL>
-
-<ARTICLE>
-Title: ${title}
-Publisher: ${publisher}
-URL: ${url}
-
-${truncatedContent}
-</ARTICLE>
-${toneBlock}
-${guidelinesXml}
 
 <GENERIC_LIMITING_FACTORS>
 These common reasons reduce an article's relevance for humanity. Apply one only where it clearly fits, with a reduction that matches how much it actually limits the impact:
@@ -179,6 +166,41 @@ Some variation of "[Publisher] reports [key point]. [Relevance summary]."
   Bad: 'The article gives no evidence about effects on future attacks.' Good: 'Its effect on future attacks is unclear.'
   Attributing a claim to a named source or the publisher ("according to Reuters") is fine.
 - Always respond in English, no matter the language of the article, with American spelling in every field you write ('tire', 'program', 'analyze', not 'tyre', 'programme', 'analyse'); the key quote stays exact.
-</GUIDELINES>
-`
+</GUIDELINES>`
+
+/**
+ * One story's full assessment.
+ *
+ * Cache: on. The rules come to about 3,500 tokens with the output schema, and an analysis run
+ * assesses many stories within the cache's 30 minutes. The issue's guidelines, the article and the
+ * tone block are the call's data, after the breakpoint.
+ */
+export function buildAssessPromptParts(
+  title: string,
+  content: string,
+  publisher: string,
+  url: string,
+  guidelines: Guidelines,
+  emotionTag?: string | null,
+): PromptParts {
+  const truncatedContent = content.substring(0, config.assess.contentMaxLength)
+  const toneBlock = emotionTag === 'uplifting' ? UPLIFTING_TONE_BLOCK : ''
+  return promptParts(
+    ASSESS_RULES,
+    `${buildGuidelinesXml(guidelines)}
+
+<ARTICLE>
+Title: ${title}
+Publisher: ${publisher}
+URL: ${url}
+
+${truncatedContent}
+</ARTICLE>
+${toneBlock}`,
+  )
+}
+
+/** The whole assessment prompt as one text: what tests and the evals read. */
+export function buildAssessPrompt(title: string, content: string, publisher: string, url: string, guidelines: Guidelines, emotionTag?: string | null): string {
+  return promptText(buildAssessPromptParts(title, content, publisher, url, guidelines, emotionTag))
 }

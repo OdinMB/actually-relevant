@@ -194,9 +194,10 @@ describe('buildSelectPrompt', () => {
     expect(prompt).toContain('<Summary>Summary of AI article</Summary>')
   })
 
-  it('includes selection count in goal', () => {
+  it('gives the selection count, the candidates and today in the closing request, after every rule', () => {
     const prompt = buildSelectPrompt(stories, 1, today)
-    expect(prompt).toContain('1 articles from the 2 candidates')
+    expect(prompt.endsWith('<REQUEST>\nSelect: 1 articles\nCandidates: 2\nToday: 2026-02-08\n</REQUEST>\n')).toBe(true)
+    expect(prompt.indexOf('2026-02-08')).toBe(prompt.indexOf('Today: 2026-02-08') + 'Today: '.length)
   })
 
   it("shows today and each candidate's publication day, or unknown when there is none", () => {

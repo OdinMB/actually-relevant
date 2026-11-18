@@ -27,8 +27,12 @@ vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./llm.js', () => {
   const llm = () => ({
     withStructuredOutput: () => ({
-      invoke: async (messages: { content: unknown }[]) => {
-        sent.prompts.push(String(messages[0]!.content))
+      invoke: async (messages: { content: string | { text: string; prompt_cache_breakpoint?: unknown }[] }[]) => {
+        // A cached prompt is two text blocks: shown joined, with a mark where its breakpoint is
+        const content = messages[0]!.content
+        sent.prompts.push(
+          typeof content === 'string' ? content : content.map(b => b.text + (b.prompt_cache_breakpoint ? '<<prompt-cache-breakpoint>>' : '')).join(''),
+        )
         if (sent.answers.length > 0) return sent.answers.shift()
         throw new Error(STOP)
       },

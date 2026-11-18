@@ -10,6 +10,7 @@
  */
 import type { z } from 'zod'
 import { config } from '../config.js'
+import type { Prompt } from '../lib/promptCache.js'
 import { buildFactCheckPrompt } from '../prompts/research.js'
 import { buildJudgePrompt, buildNotePrompt, buildUpdateRewritePrompt, type NoteInput, type PassFactBrief } from '../prompts/researchPass.js'
 import { factCheckSchema, repairSchema } from '../schemas/research.js'
@@ -51,7 +52,7 @@ export type LaterStep = (typeof LATER_STEPS)[number]
 /** The tier each later step starts on; the `update` eval decides whether one moves (D6). */
 export const LATER_STEP_TIERS: Record<LaterStep, 'small' | 'medium'> = { judge: 'medium', update: 'medium', note: 'medium' }
 
-export type LaterCall = <T>(step: LaterStep, schema: z.ZodType<T>, prompt: string) => Promise<StepResult<T>>
+export type LaterCall = <T>(step: LaterStep, schema: z.ZodType<T>, prompt: Prompt) => Promise<StepResult<T>>
 
 export interface UpdateDeps {
   /** The metered call for the judge, the rewrite and the note, each recorded in the update's record. */

@@ -420,8 +420,10 @@ describe('assessStory', () => {
       invoke.mockResolvedValue(answer)
       mockGetMediumLLM.mockReturnValue({ withStructuredOutput: () => ({ invoke }) })
       await assessStory('story-1', 'editor')
-      const [[message]] = invoke.mock.calls.at(-1) as [[{ content: string }]]
-      return { data: recordedRows()[0]!.data, prompt: message.content }
+      // The assess prompt is cached: its message carries the stable part and the data as two text blocks
+      const [[message]] = invoke.mock.calls.at(-1) as [[{ content: string | { text: string }[] }]]
+      const prompt = typeof message.content === 'string' ? message.content : message.content.map(b => b.text).join('')
+      return { data: recordedRows()[0]!.data, prompt }
     }
 
     it('gives the fresh single-source analysis the tag its snapshot keeps, in the prompt and in the write', async () => {

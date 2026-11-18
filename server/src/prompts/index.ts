@@ -1,6 +1,6 @@
-export { buildPreassessPrompt } from './preassess.js'
+export { buildPreassessPrompt, buildPreassessPromptParts } from './preassess.js'
 export { buildReclassifyPrompt } from './reclassify.js'
-export { buildAssessPrompt } from './assess.js'
+export { buildAssessPrompt, buildAssessPromptParts } from './assess.js'
 export { buildSelectPrompt } from './select.js'
 export { buildPodcastPrompt } from './podcast.js'
 export { buildPodcastSelectPrompt } from './podcast-select.js'

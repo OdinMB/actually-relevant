@@ -15,7 +15,13 @@ export interface StoryForSelect {
 /** `YYYY-MM-DD` of an ISO timestamp, or "unknown". */
 const dayOf = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : 'unknown')
 
-/** `today` (ISO) lets the model tell a months-old candidate from this week's news. */
+/**
+ * `today` (ISO) lets the model tell a months-old candidate from this week's news.
+ *
+ * Cache: off. One call a run, so a cache write would never be read.
+ * House order (`.context/prompting.md`): the rules first, the candidates next, the call's counts and
+ * date last in `<REQUEST>`.
+ */
 export function buildSelectPrompt(stories: StoryForSelect[], toSelect: number, today: string): string {
   let query = `<ROLE>
 You are a senior editorial curator for a website that publishes stories most relevant to humanity across four areas, weighted equally:
@@ -26,7 +32,7 @@ You are a senior editorial curator for a website that publishes stories most rel
 </ROLE>
 
 <GOAL>
-Select exactly ${toSelect} articles from the ${stories.length} candidates below. Return only their IDs.
+Select exactly as many articles as <REQUEST> asks for from the candidates below. Return only their IDs.
 
 All candidates are worthy of publication. Your job is to choose among them — pick the ones that, all things considered, matter most to humanity. Comparing across categories is inherently difficult; use your best judgment.
 </GOAL>
@@ -36,7 +42,7 @@ All candidates are worthy of publication. Your job is to choose among them — p
 - Concrete over speculative: Prefer stories with demonstrated real-world impact over announcements, proposals, or early-stage research that hasn't yet materialized. (Promising early research that excites an entire field can of course be relevant, too.)
 - Scale and reach: Prefer stories where the number of people significantly affected is larger (including future generations), or the consequences are more lasting.
 - Uplifting stories: When choosing between stories of similar relevance, give a slight preference to uplifting stories (tagged "uplifting" in the Emotion field). The final selection should include uplifting stories where possible, without sacrificing overall relevance.
-- Recent developments over stale news: Today is ${dayOf(today)}, and each article's Published field is the day its source appeared. Prefer recent developments. A candidate published months or years before today, or one that presents an old event, study or report as news, is stale: choose it only when it clearly matters more than the recent candidates. When the date is unknown, judge from the content. Recency never changes how many articles you select.
+- Recent developments over stale news: <REQUEST> gives today's date, and each article's Published field is the day its source appeared. Prefer recent developments. A candidate published months or years before today, or one that presents an old event, study or report as news, is stale: choose it only when it clearly matters more than the recent candidates. When the date is unknown, judge from the content. Recency never changes how many articles you select.
 </SELECTION_CRITERIA>
 
 `
@@ -54,6 +60,8 @@ All candidates are worthy of publication. Your job is to choose among them — p
       `<Calculation>${escapeXml(story.relevanceCalculation || '')}</Calculation>\n` +
       '</ARTICLE>\n'
   }
+
+  query += `\n<REQUEST>\nSelect: ${toSelect} articles\nCandidates: ${stories.length}\nToday: ${dayOf(today)}\n</REQUEST>\n`
 
   return query
 }

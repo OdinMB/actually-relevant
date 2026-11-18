@@ -18,9 +18,10 @@ describe('buildBlueskyPostPrompt', () => {
     expect(prompt).toContain('perovskite solar cell reaching 33% efficiency')
   })
 
-  it('interpolates maxChars into prompt', () => {
+  it('gives maxChars in the closing request, never in a rule', () => {
     const prompt = buildBlueskyPostPrompt(baseStory)
-    expect(prompt).toContain('150')
+    expect(prompt.endsWith('<REQUEST>\nMax characters: 150\n</REQUEST>')).toBe(true)
+    expect(prompt.indexOf('150')).toBe(prompt.lastIndexOf('150'))
   })
 
   it('includes relevance summary when present', () => {

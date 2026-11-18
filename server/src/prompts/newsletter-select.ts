@@ -8,18 +8,22 @@ export interface StoryForNewsletterSelect {
   emotionTag: string | null
 }
 
+/**
+ * Cache: off. One call an issue, so a cache write would never be read.
+ * House order (`.context/prompting.md`): the rules first, the stories next, the call's counts and
+ * categories last in `<REQUEST>`.
+ */
 export function buildNewsletterSelectPrompt(stories: StoryForNewsletterSelect[], storiesPerIssue: number, issueNames: string[]): string {
   let query = `<ROLE>
 You are a senior editorial curator selecting stories for a weekly newsletter about the most relevant developments for humanity.
 </ROLE>
 
 <GOAL>
-Select exactly ${storiesPerIssue} stories from each of the following ${issueNames.length} issue categories (${storiesPerIssue * issueNames.length} stories total):
-${issueNames.map((n, i) => `${i + 1}. ${n}`).join('\n')}
+Select exactly the number of stories per category that <REQUEST> gives from each of the issue categories it lists (the total it gives).
 
 Return only the IDs of the selected stories.
 
-If a category has fewer than ${storiesPerIssue} stories available, select all of them.
+If a category has fewer stories available than that number, select all of them.
 </GOAL>
 
 <SELECTION_CRITERIA>
@@ -45,7 +49,13 @@ If a category has fewer than ${storiesPerIssue} stories available, select all of
       `</ARTICLE>\n`
   }
 
-  query += `</ARTICLES>`
+  query += `</ARTICLES>
+
+<REQUEST>
+Stories per category: ${storiesPerIssue} (${storiesPerIssue * issueNames.length} stories total)
+Issue categories (${issueNames.length}):
+${issueNames.map((n, i) => `${i + 1}. ${n}`).join('\n')}
+</REQUEST>`
 
   return query
 }

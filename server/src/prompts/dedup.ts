@@ -11,6 +11,10 @@ export interface CandidateForDedup {
   summary: string
 }
 
+/**
+ * Cache: off. Called once a story, and the rules stay under the 1,024-token minimum.
+ * House order (`.context/prompting.md`): already the rules first, then the source and candidates; no per-call value in a rule.
+ */
 export function buildDedupPrompt(source: StoryForDedup, candidates: CandidateForDedup[]): string {
   let prompt = `<ROLE>
 You are a strict news editor determining whether articles report on the exact same specific event.

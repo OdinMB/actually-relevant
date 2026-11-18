@@ -7,6 +7,10 @@ import type { StoryForPreassess, IssueForPreassess } from './preassess.js'
  * but only asks the LLM to assign emotion tags (no issue classification or rating).
  * The issueSlug field is still required in the response schema, so we include
  * a minimal issue reference to satisfy it.
+ *
+ * Cache: off. The rules stay under the 1,024-token minimum, and the prompt runs only as an editor's
+ * bulk action. House order: already the rules first and the articles last; the fallback slug is
+ * fixed for the run.
  */
 export function buildEmotionTagPrompt(stories: StoryForPreassess[], issues: IssueForPreassess[]): string {
   // We include a single dummy issue so the LLM can satisfy the required issueSlug field.

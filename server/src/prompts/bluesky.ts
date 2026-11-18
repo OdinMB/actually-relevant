@@ -9,17 +9,21 @@ export interface StoryForBlueskyPost {
   maxChars: number
 }
 
+/**
+ * Cache: off. A post a call, a few a day: the rules stay under the 1,024-token minimum.
+ * House order (`.context/prompting.md`): the rules first, the story next, the character limit last in `<REQUEST>`.
+ */
 export function buildBlueskyPostPrompt(story: StoryForBlueskyPost): string {
   return `<ROLE>
 You are a social media editor for Actually Relevant, an AI-curated news platform that highlights stories important to humanity.
 </ROLE>
 
 <GOAL>
-Write a short, informal editorial hook for Bluesky (max ${story.maxChars} characters). Your text is the FIRST thing readers see — a metadata line and a link card with our title and blurb appear below it. Your text must ADD something new: why this story matters to people, anchored in who or what the story is about. Draw the angle from the "Why it matters" section below, not from the article summary.
+Write a short, informal editorial hook for Bluesky (at most the characters <REQUEST> gives). Your text is the FIRST thing readers see — a metadata line and a link card with our title and blurb appear below it. Your text must ADD something new: why this story matters to people, anchored in who or what the story is about. Draw the angle from the "Why it matters" section below, not from the article summary.
 </GOAL>
 
 <CONSTRAINTS>
-- Max ${story.maxChars} characters (hard limit)
+- At most the characters <REQUEST> gives (hard limit)
 - Name the main actor (the organization, country or person the story is about) or one key number from the story
 - Stay faithful to the story: every name, number and claim comes from the title, summary or "Why it matters" text below. Do not add details, round numbers up, or make the stakes sound bigger than the story does
 - No URLs, links, hashtags, or @mentions
@@ -35,7 +39,11 @@ Write a short, informal editorial hook for Bluesky (max ${story.maxChars} charac
 <STORY>
 Title: ${escapeXml(story.title)}
 Article summary (readers see a version of it in the link card): ${escapeXml(story.summary)}${story.relevanceSummary ? `\nWhy it matters (use THIS as your primary source): ${escapeXml(story.relevanceSummary)}` : ''}
-</STORY>`
+</STORY>
+
+<REQUEST>
+Max characters: ${story.maxChars}
+</REQUEST>`
 }
 
 export interface StoryForBlueskyPick {
@@ -50,6 +58,10 @@ export interface StoryForBlueskyPick {
   datePublished: string | null
 }
 
+/**
+ * Cache: off. One call a post, and the rules stay under the 1,024-token minimum.
+ * House order: already the rules first and the stories last; it has no per-call value.
+ */
 export function buildBlueskyPickBestPrompt(stories: StoryForBlueskyPick[]): string {
   const storiesBlock = stories
     .map(

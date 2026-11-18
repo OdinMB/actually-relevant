@@ -9,7 +9,8 @@ import { splitIntoGroups } from '../lib/utils.js'
 import { createLogger } from '../lib/logger.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
 import { getSmallLLM, getMediumLLM, getLLMByTier, rateLimitDelay } from './llm.js'
-import { buildPreassessPrompt, buildReclassifyPrompt, buildEmotionTagPrompt, buildAssessPrompt, buildSelectPrompt } from '../prompts/index.js'
+import { promptMessage, type Prompt } from '../lib/promptCache.js'
+import { buildPreassessPromptParts, buildReclassifyPrompt, buildEmotionTagPrompt, buildAssessPromptParts, buildSelectPrompt } from '../prompts/index.js'
 import type { StoryForPreassess, IssueForPreassess } from '../prompts/index.js'
 import { preAssessResultSchema, reclassifyResultSchema, assessResultSchema, selectResultSchema } from '../schemas/llm.js'
 import { detectAndCluster } from './dedup.js'
@@ -33,7 +34,8 @@ interface BatchClassificationOptions<T extends { articleId: string; issueSlug: s
   storyIds: string[]
   llm: ChatOpenAI
   schema: z.ZodType<{ articles: T[] }>
-  buildPrompt: (stories: StoryForPreassess[], issues: IssueForPreassess[]) => string
+  /** A cached prompt's builder returns its split (`lib/promptCache.ts`). */
+  buildPrompt: (stories: StoryForPreassess[], issues: IssueForPreassess[]) => Prompt
   /** The fields one result writes beside its emotion tag, which the helper places itself (`classifiedTag`). */
   buildUpdate: (item: T, issueId: string | null) => Prisma.StoryUncheckedUpdateManyInput
   /**
@@ -118,7 +120,7 @@ async function runBatchClassification<T extends { articleId: string; issueSlug: 
         )
 
         await rateLimitDelay()
-        const response = await structuredLlm.invoke([new HumanMessage(prompt)])
+        const response = await structuredLlm.invoke([promptMessage(prompt, llm.model)])
         batchesDone++
         log.info({ progress: `${batchesDone}/${totalBatches}`, resultCount: response.articles.length, batch: batchLabel }, 'batch complete')
 
@@ -215,7 +217,7 @@ export async function preAssessStories(
     storyIds: eligible,
     llm: getMediumLLM(),
     schema: preAssessResultSchema,
-    buildPrompt: buildPreassessPrompt,
+    buildPrompt: buildPreassessPromptParts,
     buildUpdate: (item, issueId) => ({
       issueId,
       relevancePre: item.rating,
@@ -303,12 +305,12 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
   // back the tag its snapshot keeps, in its prompt's tone and in its write
   const singleSourceTag = snapshotEmotionTag(story.preResearch)
   const input = assessPromptInput(singleSourceTag === undefined ? story : { ...story, emotionTag: singleSourceTag })
-  const prompt = buildAssessPrompt(input.title, input.content, input.publisher, input.url, input.guidelines, input.emotionTag)
+  const prompt = buildAssessPromptParts(input.title, input.content, input.publisher, input.url, input.guidelines, input.emotionTag)
 
   await rateLimitDelay()
   const llm = getLLMByTier(config.assess.modelTier)
   const structuredLlm = llm.withStructuredOutput(assessResultSchema)
-  const parsed = await structuredLlm.invoke([new HumanMessage(prompt)])
+  const parsed = await structuredLlm.invoke([promptMessage(prompt, config.llm.models[config.assess.modelTier].name)])
 
   log.info({ storyId, rating: parsed.conservativeRating, title: parsed.relevanceTitle?.slice(0, 60) }, 'assessment complete')
 

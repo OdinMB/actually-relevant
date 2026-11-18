@@ -18,9 +18,10 @@ describe('buildMastodonPostPrompt', () => {
     expect(prompt).toContain('perovskite solar cell reaching 33% efficiency')
   })
 
-  it('interpolates maxChars into prompt', () => {
+  it('gives maxChars in the closing request, never in a rule', () => {
     const prompt = buildMastodonPostPrompt(baseStory)
-    expect(prompt).toContain('350')
+    expect(prompt.endsWith('<REQUEST>\nMax characters: 350\n</REQUEST>')).toBe(true)
+    expect(prompt.indexOf('350')).toBe(prompt.lastIndexOf('350'))
   })
 
   it('includes relevance summary when present', () => {

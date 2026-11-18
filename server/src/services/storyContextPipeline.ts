@@ -10,6 +10,7 @@
 import type { z } from 'zod'
 import { config } from '../config.js'
 import type { LlmCallOutcome, LlmTokenUsage } from '../lib/llmUsage.js'
+import type { Prompt } from '../lib/promptCache.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
 import { promptVersionOf as versionOf } from '../prompts/promptVersion.js'
 import { buildFactCheckPrompt } from '../prompts/research.js'
@@ -73,7 +74,7 @@ export interface ContextCallResult<T> {
   transient?: boolean
 }
 
-export type ContextCall = <T>(step: ContextStep, schema: z.ZodType<T>, prompt: string) => Promise<ContextCallResult<T>>
+export type ContextCall = <T>(step: ContextStep, schema: z.ZodType<T>, prompt: Prompt) => Promise<ContextCallResult<T>>
 
 export interface ContextDeps {
   call: ContextCall
@@ -416,7 +417,7 @@ const chunks = <T>(list: T[], size: number): T[][] => Array.from({ length: Math.
 export type ContextStepCall = <T>(
   step: ContextStep,
   schema: z.ZodType<T>,
-  prompt: string,
+  prompt: Prompt,
 ) => Promise<{ parsed: T | null; outcome: LlmCallOutcome; model: string; transient?: boolean }>
 
 /** The stages' caller: each call recorded in `calls`, its answer unescaped (the prompts escape every fetched text, and the model copies the escapes). */

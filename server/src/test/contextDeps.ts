@@ -3,6 +3,7 @@
  * every step answered without a model or a web search.
  */
 import { ZERO_USAGE } from '../lib/llmUsage.js'
+import { promptText } from '../lib/promptCache.js'
 import type { ContextDeps } from '../services/storyContextPipeline.js'
 
 const fields = {
@@ -39,7 +40,8 @@ const figureBox = (factId: string) => ({
  */
 export function fakeContextDeps(options: { failWrite?: boolean; writeError?: 'transient' | 'lasting' } = {}): ContextDeps {
   return {
-    async call(step, _schema, prompt) {
+    async call(step, _schema, sent) {
+      const prompt = promptText(sent)
       let parsed: unknown
       if (step === 'structure')
         parsed = {
@@ -99,10 +101,10 @@ export function citingContextDeps(steps: string[] = []): ContextDeps {
   const base = fakeContextDeps()
   return {
     ...base,
-    async call(step, schema, prompt) {
+    async call(step, schema, sent) {
       steps.push(step)
-      if (step !== 'write') return base.call(step, schema, prompt)
-      const facts = [...prompt.matchAll(/<FACT id="([^"]+)"[^>]*>([^<]*)<\/FACT>/g)].map(m => ({ id: m[1]!, text: m[2]! }))
+      if (step !== 'write') return base.call(step, schema, sent)
+      const facts = [...promptText(sent).matchAll(/<FACT id="([^"]+)"[^>]*>([^<]*)<\/FACT>/g)].map(m => ({ id: m[1]!, text: m[2]! }))
       const figure = facts.find(f => f.text.includes('hectares'))!.id
       const other = facts.find(f => f.id !== figure)!.id
       const parsed = {

@@ -3,6 +3,7 @@
  * per-arm metrics into report rows.
  */
 import type { z } from 'zod'
+import type { Prompt } from '../../../lib/promptCache.js'
 import { armKey } from '../models.js'
 import { summarizeCalls } from '../checks.js'
 import type { Arm, ArmStats, CallRecord, MetricRow, SuiteContext } from '../types.js'
@@ -22,7 +23,7 @@ export async function runArms<I, T>(
   items: I[],
   schemaName: string,
   schema: z.ZodType<T>,
-  prompt: (item: I) => string,
+  prompt: (item: I) => Prompt,
 ): Promise<Map<string, CallRecord<T>[]>> {
   const entries = await Promise.all(
     arms.map(async a => [armKey(a), await Promise.all(items.map(item => ctx.call(a, schemaName, schema, prompt(item))))] as const),
@@ -37,7 +38,7 @@ export async function runArmsSequentially<I, T>(
   items: I[],
   schemaName: string,
   schema: z.ZodType<T>,
-  prompt: (item: I) => string,
+  prompt: (item: I) => Prompt,
 ): Promise<Map<string, CallRecord<T>[]>> {
   const out = new Map<string, CallRecord<T>[]>(arms.map(a => [armKey(a), []]))
   for (const item of items) {

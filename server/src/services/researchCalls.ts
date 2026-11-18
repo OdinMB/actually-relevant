@@ -11,6 +11,7 @@
 import type { z } from 'zod'
 import { config } from '../config.js'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
+import { promptText, takesCacheControls, type Prompt } from '../lib/promptCache.js'
 import { CREDITS_PER_SEARCH, searchTavily, TAVILY_DEPTH, type TavilySearch } from '../lib/tavily.js'
 import { callCostUsd } from './researchCost.js'
 import { PASS_STEP_TIERS, type PassCall, type PassStep } from './researchPass.js'
@@ -52,8 +53,11 @@ function inputTokens(text: string): number {
 
 const modelOf = (step: PassStep) => config.llm.models[PASS_STEP_TIERS[step]].name
 
-function estimateUsd(p: { step: PassStep; prompt: string }): number {
-  return callCostUsd(modelOf(p.step), { input: inputTokens(p.prompt), cached: 0, output: STEP_OUTPUT_TOKENS[p.step], reasoning: 0 })
+/** A call's cost before it is made: a cached prompt's stable part counted as a cache write, the dearer outcome. */
+function estimateUsd(p: { step: PassStep; prompt: Prompt }): number {
+  const model = modelOf(p.step)
+  const cacheWrite = typeof p.prompt !== 'string' && takesCacheControls(model) ? inputTokens(p.prompt.stable) : 0
+  return callCostUsd(model, { input: inputTokens(promptText(p.prompt)), cached: 0, cacheWrite, output: STEP_OUTPUT_TOKENS[p.step], reasoning: 0 })
 }
 
 export interface RunMeterOptions {
@@ -86,7 +90,7 @@ export function createRunMeter(options: RunMeterOptions): RunMeter {
     return spent + estimateUsd <= room
   }
 
-  const call: PassCall = async <T>(step: PassStep, schema: z.ZodType<T>, prompt: string) => {
+  const call: PassCall = async <T>(step: PassStep, schema: z.ZodType<T>, prompt: Prompt) => {
     if (!(await fits(estimateUsd({ step, prompt })))) return { parsed: null, outcome: 'skipped', usage: ZERO_USAGE, costUsd: 0, model: modelOf(step) }
     const { error, ...result }: { error?: unknown } & StepResult<T> = await structuredCall(PASS_STEP_TIERS[step], schema, prompt)
     spent += result.costUsd

@@ -4,7 +4,7 @@
  * owner then rates gpt-5-mini against the lowest passing Luna effort.
  */
 import { config } from '../../../config.js'
-import { buildAssessPrompt } from '../../../prompts/assess.js'
+import { buildAssessPromptParts } from '../../../prompts/assess.js'
 import { assessResultSchema, type AssessResult } from '../../../schemas/llm.js'
 import type { AssessItem, Fixtures } from '../fixtures.js'
 import { LEGACY_ASSESS_SIZE } from '../freshSample.js'
@@ -25,7 +25,8 @@ export const ASSESS_OUTPUT_TOKENS = 3500
 const SPLIT = config.selection.relevanceMin
 
 const items = (fx: Fixtures, limit?: number) => limited(fx.assess, limit)
-export const assessPrompt = (s: AssessItem) => buildAssessPrompt(s.title, s.content, s.publisher, s.url, s.guidelines)
+/** Production's prompt and split (`buildAssessPromptParts`), so the eval sends what production sends. */
+export const assessPrompt = (s: AssessItem) => buildAssessPromptParts(s.title, s.content, s.publisher, s.url, s.guidelines)
 
 interface RatingComparison {
   mad: number | null
