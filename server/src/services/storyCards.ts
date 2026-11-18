@@ -7,10 +7,10 @@
  */
 import type { ContextBox, PrismaClient } from '@prisma/client'
 import { isContextSlot, type ContextSlot } from '../schemas/storyContext.js'
-import { loadPool, newestPassBoxes } from './passRecords.js'
+import { loadCitedFacts, newestPassBoxes } from './passRecords.js'
 import type { ResearchDb } from './researchInput.js'
 import { cardFacts } from './researchPool.js'
-import { contextRecords, type RecordsDb, type StoredContextFact } from './storyContextRecords.js'
+import { boxContent, boxRefs, contextRecords, type RecordsDb, type StoredContextFact } from './storyContextRecords.js'
 
 /** A card as the page and the admin read it: a context box's columns, which a pass box shares. */
 export type CardBox = Pick<
@@ -45,13 +45,18 @@ export type CardsDb = RecordsDb & ResearchDb & Pick<PrismaClient, 'passBox' | 'r
 
 const isSlotCard = <B extends Omit<CardBox, 'type'> & { type: string }>(box: B): box is B & { type: ContextSlot } => isContextSlot(box.type)
 
-/** The story's served cards and the facts they cite: the newest pass's, else the newest context run's. */
+/**
+ * The story's served cards and the facts they cite: the newest pass's, else the newest context run's.
+ * A pass's cards read only the pool facts some card of theirs cites (`loadCitedFacts`), hidden cards'
+ * included, never the whole pool: every reader looks a fact up by a ref a card cites.
+ */
 export async function cardRecords(db: CardsDb, storyId: string): Promise<CardRecords> {
   const boxes = (await newestPassBoxes(db, storyId)).filter(isSlotCard)
   const newest = boxes[0]
   if (!newest) return { ...(await contextRecords(db, storyId)), pass: null }
+  const cited = [...new Set(boxes.flatMap(b => boxRefs(boxContent(b))))]
   const [pool, pass] = await Promise.all([
-    loadPool(db, storyId),
+    loadCitedFacts(db, storyId, cited),
     db.researchPass.findUnique({ where: { id: newest.passId }, select: { id: true, number: true } }),
   ])
   const byRef = new Map(pool.facts.map(f => [f.ref, f]))

@@ -195,39 +195,62 @@ const searchFromRow = (r: SearchRow): PoolSearch => ({
   passId: r.passId,
 })
 
+/** The story's sources (`s`), in the order they were written; `only` narrows them (an `AND …` fragment). */
+const poolSources = (db: ResearchDb, storyId: string, only: Prisma.Sql = Prisma.empty) =>
+  db.$queryRaw<SourceRow[]>`
+    SELECT s.id, s.ref, s.origin, s.earlier_story_id AS "earlierStoryId", s.url, s.outlet, s.title,
+           s.published_date AS "publishedDate", s.kind, s.country, s.relation, s.favicon,
+           s.used_raw_content AS "usedRawContent", s.voices, s.opt_out_checked AS "optOutChecked",
+           s.first_pass_id AS "firstPassId", s.drop_reason AS "dropReason", s.drop_pass_id AS "dropPassId"
+    FROM evidence_sources s WHERE s.story_id = ${storyId} ${only}
+    ORDER BY s.created_at, s.ref NULLS LAST, s.id`
+
+/** The story's facts (`f`, their source `s`), in the order they were written; `only` narrows them (an `AND …` fragment). */
+const poolFacts = (db: ResearchDb, storyId: string, only: Prisma.Sql = Prisma.empty) =>
+  db.$queryRaw<FactRow[]>`
+    SELECT f.id, f.ref, s.ref AS "sourceRef", f.reused_from_id AS "reusedFromId", f.supporting_sentence AS "supportingSentence",
+           f.passage, f.support_found AS "supportFound", f.statement, f.measures, f.value, f.value_high AS "valueHigh",
+           f.unit, f.approx, f.provisional, f.counted, f.place, f.as_of AS "asOf", f.as_of_precision AS "asOfPrecision",
+           f.credited, f.credited_kind AS "creditedKind", f.validity::text AS validity, f.slot,
+           f.extract_model AS "extractModel", f.extract_prompt_version AS "extractPromptVersion",
+           f.structure_model AS "structureModel", f.structure_prompt_version AS "structurePromptVersion",
+           f.first_pass_id AS "firstPassId", f.verdict::text AS verdict, f.verdict_problem AS "verdictProblem",
+           f.check_model AS "checkModel", f.check_prompt_version AS "checkPromptVersion", f.checked_pass_id AS "checkedPassId",
+           f.status::text AS status, f.dropped_pass_id AS "droppedPassId", f.drop_reason::text AS "dropReason",
+           f.contradicted_by AS "contradictedBy"
+    FROM pool_facts f JOIN evidence_sources s ON s.id = f.source_id
+    WHERE f.story_id = ${storyId} ${only}
+    ORDER BY f.created_at, f.ref, f.id`
+
+/** The sources in use: a source left out has no ref, or a reason. */
+const usedSources = (sources: SourceRow[]) => sources.filter((s): s is SourceRow & { ref: string } => s.ref !== null && s.dropReason === null)
+
 /** The story's pool, in the order its rows were written: within one pass, sources and facts by ref, coverage searches before gap searches. */
 export async function loadPool(db: ResearchDb, storyId: string): Promise<Pool> {
   const [sources, facts, searches] = await Promise.all([
-    db.$queryRaw<SourceRow[]>`
-      SELECT s.id, s.ref, s.origin, s.earlier_story_id AS "earlierStoryId", s.url, s.outlet, s.title,
-             s.published_date AS "publishedDate", s.kind, s.country, s.relation, s.favicon,
-             s.used_raw_content AS "usedRawContent", s.voices, s.opt_out_checked AS "optOutChecked",
-             s.first_pass_id AS "firstPassId", s.drop_reason AS "dropReason", s.drop_pass_id AS "dropPassId"
-      FROM evidence_sources s WHERE s.story_id = ${storyId}
-      ORDER BY s.created_at, s.ref NULLS LAST, s.id`,
-    db.$queryRaw<FactRow[]>`
-      SELECT f.id, f.ref, s.ref AS "sourceRef", f.reused_from_id AS "reusedFromId", f.supporting_sentence AS "supportingSentence",
-             f.passage, f.support_found AS "supportFound", f.statement, f.measures, f.value, f.value_high AS "valueHigh",
-             f.unit, f.approx, f.provisional, f.counted, f.place, f.as_of AS "asOf", f.as_of_precision AS "asOfPrecision",
-             f.credited, f.credited_kind AS "creditedKind", f.validity::text AS validity, f.slot,
-             f.extract_model AS "extractModel", f.extract_prompt_version AS "extractPromptVersion",
-             f.structure_model AS "structureModel", f.structure_prompt_version AS "structurePromptVersion",
-             f.first_pass_id AS "firstPassId", f.verdict::text AS verdict, f.verdict_problem AS "verdictProblem",
-             f.check_model AS "checkModel", f.check_prompt_version AS "checkPromptVersion", f.checked_pass_id AS "checkedPassId",
-             f.status::text AS status, f.dropped_pass_id AS "droppedPassId", f.drop_reason::text AS "dropReason",
-             f.contradicted_by AS "contradictedBy"
-      FROM pool_facts f JOIN evidence_sources s ON s.id = f.source_id
-      WHERE f.story_id = ${storyId}
-      ORDER BY f.created_at, f.ref, f.id`,
+    poolSources(db, storyId),
+    poolFacts(db, storyId),
     db.$queryRaw<SearchRow[]>`
       SELECT e.kind, e.slot, e.angle, e.query, e.normalized_query AS "normalizedQuery", e.window_start AS "windowStart",
              e.window_end AS "windowEnd", e.depth, e.credits, e.results, e.cached, e.pass_id AS "passId"
       FROM evidence_searches e WHERE e.story_id = ${storyId}
       ORDER BY e.created_at, e.kind, e.slot NULLS FIRST, e.angle NULLS FIRST, e.normalized_query, e.id`,
   ])
-  const used = sources.filter((s): s is SourceRow & { ref: string } => s.ref !== null && s.dropReason === null)
   const dropped: DroppedSource[] = sources.flatMap(s => (s.dropReason !== null ? [{ url: s.url, reason: s.dropReason, passId: s.dropPassId }] : []))
-  return { sources: used.map(sourceFromRow), facts: facts.map(factFromRow), searches: searches.map(searchFromRow), dropped }
+  return { sources: usedSources(sources).map(sourceFromRow), facts: facts.map(factFromRow), searches: searches.map(searchFromRow), dropped }
+}
+
+/**
+ * The pool's facts under these refs and the sources in use that hold them, read as `loadPool` reads
+ * them and in its order: what a story's cards cite (`cardRecords`), without the rest of the pool.
+ */
+export async function loadCitedFacts(db: ResearchDb, storyId: string, refs: string[]): Promise<Pick<Pool, 'sources' | 'facts'>> {
+  if (refs.length === 0) return { sources: [], facts: [] }
+  const [sources, facts] = await Promise.all([
+    poolSources(db, storyId, Prisma.sql`AND EXISTS (SELECT 1 FROM pool_facts c WHERE c.source_id = s.id AND c.ref = ANY(${refs}))`),
+    poolFacts(db, storyId, Prisma.sql`AND f.ref = ANY(${refs})`),
+  ])
+  return { sources: usedSources(sources).map(sourceFromRow), facts: facts.map(factFromRow) }
 }
 
 // A change stored before changes carried `from` was at its own place: no section had moved yet
@@ -271,6 +294,9 @@ interface VersionRow {
   createdAt: Date
 }
 
+const VERSION_KINDS = ['first', 'update', 'legacy'] as const
+const VERSION_STATUSES = ['current', 'superseded', 'reverted'] as const
+
 /** A stored version read back; null for one whose projection no longer reads. Its article is null when none was stored or it no longer reads. */
 function versionFromRow(row: VersionRow): StoredVersion | null {
   const research = researchedStorySchema.safeParse(row.research)
@@ -280,8 +306,8 @@ function versionFromRow(row: VersionRow): StoredVersion | null {
   return {
     id: row.id,
     number: row.number,
-    kind: oneOf(row.kind, ['first', 'update', 'legacy'], 'legacy'),
-    status: oneOf(row.status, ['current', 'superseded', 'reverted'], 'superseded'),
+    kind: oneOf(row.kind, VERSION_KINDS, 'legacy'),
+    status: oneOf(row.status, VERSION_STATUSES, 'superseded'),
     passId: row.passId,
     title: row.title,
     titleLabel: row.titleLabel,
@@ -315,6 +341,36 @@ export async function storyVersions(db: ResearchDb, storyId: string): Promise<St
   const rows = await db.$queryRaw<VersionRow[]>`
     SELECT ${VERSION_COLUMNS} FROM article_versions v WHERE v.story_id = ${storyId} ORDER BY v.number DESC`
   return rows.flatMap(row => versionFromRow(row) ?? [])
+}
+
+/** A version as readers' Updates read it (`publicUpdates`): no draft, no story columns. */
+export type PublicVersion = Pick<StoredVersion, 'number' | 'kind' | 'status' | 'research' | 'changes' | 'note' | 'createdAt'>
+
+/**
+ * The story's versions readers' Updates are made from, newest first: those not reverted that still
+ * read, with only the columns `publicUpdates` reads, so a story page never reads drafts. The same
+ * versions `storyVersions` gives once its reverted ones are left out.
+ */
+export async function publicVersions(db: ResearchDb, storyId: string): Promise<PublicVersion[]> {
+  const rows = await db.$queryRaw<Pick<VersionRow, 'number' | 'kind' | 'status' | 'research' | 'changes' | 'note' | 'createdAt'>[]>`
+    SELECT v.number, v.kind::text AS kind, v.status::text AS status, v.research, v.changes, v.note, v.created_at AS "createdAt"
+    FROM article_versions v WHERE v.story_id = ${storyId} AND v.status <> 'reverted' ORDER BY v.number DESC`
+  return rows.flatMap(row => {
+    const research = researchedStorySchema.safeParse(row.research)
+    if (!research.success) return []
+    const note = row.note === null ? null : citedTextSchema.safeParse(row.note)
+    return [
+      {
+        number: row.number,
+        kind: oneOf(row.kind, VERSION_KINDS, 'legacy'),
+        status: oneOf(row.status, VERSION_STATUSES, 'superseded'),
+        research: research.data,
+        changes: changesSchema.parse(row.changes) as VersionChange[],
+        note: note?.success ? note.data : null,
+        createdAt: row.createdAt,
+      },
+    ]
+  })
 }
 
 /** The cards of the story's newest pass that wrote any, in order: the ones served once passes run. */

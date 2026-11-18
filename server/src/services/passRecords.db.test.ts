@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-import { currentVersion, loadPool, newestPassBoxes, storePassResult, storyVersions, type PassWrite } from './passRecords.js'
+import { publicUpdates } from './articleVersions.js'
+import { currentVersion, loadPool, newestPassBoxes, publicVersions, storePassResult, storyVersions, type PassWrite } from './passRecords.js'
 import type { ArticleVersionData, Pool, PoolFact, PoolSource } from './researchPool.js'
 import type { DraftBox } from './storyContextChecks.js'
 
@@ -294,6 +295,28 @@ describeDb('passRecords', () => {
       changes: version(2, null).changes,
       createdAt: expect.any(Date),
     })
+  })
+
+  it("reads readers' versions apart: only those not reverted, newest first, with what Updates need, and the same Updates as from every version", async () => {
+    const s = await story()
+    const passes = [await createPass(s.id, 1), await createPass(s.id, 2), await createPass(s.id, 3)]
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, passes[0]!.id, emptyWith(source('S0')), { version: version(1, passes[0]!.id) })))
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, passes[1]!.id, emptyWith(), { version: version(2, passes[1]!.id) })))
+    await prisma.articleVersion.updateMany({ where: { storyId: s.id, number: 2 }, data: { status: 'reverted' } })
+    await prisma.articleVersion.updateMany({ where: { storyId: s.id, number: 1 }, data: { status: 'current' } })
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, passes[2]!.id, emptyWith(), { version: version(2, passes[2]!.id) })))
+    // A version whose projection no longer reads is left out, as `storyVersions` leaves it
+    await prisma.articleVersion.create({ data: { storyId: s.id, number: 4, kind: 'update', status: 'superseded', research: { broken: true } } })
+
+    const versions = await publicVersions(prisma, s.id)
+    expect(versions.map(v => [v.number, v.kind, v.status])).toEqual([
+      [3, 'update', 'current'],
+      [1, 'first', 'superseded'],
+    ])
+    expect(Object.keys(versions[0]!).sort()).toEqual(['changes', 'createdAt', 'kind', 'note', 'number', 'research', 'status'])
+    expect(versions[0]).toMatchObject({ note: version(2, null).note, changes: version(2, null).changes, research: version(2, null).research })
+    expect(publicUpdates(versions)).toEqual(publicUpdates(await storyVersions(prisma, s.id)))
+    expect(publicUpdates(versions)).toHaveLength(1)
   })
 
   it('reads a change stored before changes carried where the section was as at its own place', async () => {

@@ -8,7 +8,7 @@ import { paginate } from '../lib/paginate.js'
 import { storyInIssueWhere } from '../lib/issueFilter.js'
 import { createLogger } from '../lib/logger.js'
 import { publicUpdates, updatesEarlierStoryIds, updatesForReaders, type PublicUpdate } from './articleVersions.js'
-import { storyVersions } from './passRecords.js'
+import { publicVersions } from './passRecords.js'
 import { earlierStoryIds, forReaders, researchedStorySchema, type ResearchedStory } from './researchedStory.js'
 import { PUBLIC_STORY_SELECT } from './storySelect.js'
 import { hybridSearch } from './storySearch.js'
@@ -108,7 +108,7 @@ async function researchForReaders(storyId: string, stored: Prisma.JsonValue | nu
     log.warn({ storyId, issues: parsed.error.issues.length }, 'stored researched version does not match its schema; served without it')
   }
   const research = parsed?.success ? parsed.data : null
-  const updates = publicUpdates(await storyVersions(prisma, storyId))
+  const updates = publicUpdates(await publicVersions(prisma, storyId))
   const earlierIds = [...new Set([...(research ? earlierStoryIds(research) : []), ...updatesEarlierStoryIds(updates)])]
   const published =
     earlierIds.length === 0

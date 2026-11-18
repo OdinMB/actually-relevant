@@ -8,7 +8,7 @@ import { it, expect, vi, beforeEach } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { axisVector, createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { publicUpdates, versionArticle } from './articleVersions.js'
-import { currentVersion, insertPoolRows, insertVersion, loadPool, storyVersions } from './passRecords.js'
+import { currentVersion, insertPoolRows, insertVersion, loadPool, publicVersions } from './passRecords.js'
 import { rewriteTargets } from './researchPassUpdate.js'
 import type { Article, ArticleVersionData, PoolFact, PoolSource } from './researchPool.js'
 import type { ResearchedStory } from './researchedStory.js'
@@ -173,7 +173,7 @@ describeDb('article versions (PostgreSQL)', () => {
 
   it('undoes the current update: the version before it goes back on the story, the update is reverted, and its Update leaves the list', async () => {
     const s = await researched([version(1, 'superseded'), version(2, 'superseded'), version(3, 'current')])
-    expect(publicUpdates(await storyVersions(prisma, s.id)).map(u => u.note.text)).toEqual(['Update 3.', 'Update 2.'])
+    expect(publicUpdates(await publicVersions(prisma, s.id)).map(u => u.note.text)).toEqual(['Update 3.', 'Update 2.'])
 
     await undoUpdate(s.id)
 
@@ -187,13 +187,13 @@ describeDb('article versions (PostgreSQL)', () => {
       preResearch: SINGLE_SOURCE,
     })
     expect(await statuses(s.id)).toEqual(['superseded', 'current', 'reverted'])
-    expect(publicUpdates(await storyVersions(prisma, s.id)).map(u => u.note.text)).toEqual(['Update 2.'])
+    expect(publicUpdates(await publicVersions(prisma, s.id)).map(u => u.note.text)).toEqual(['Update 2.'])
     expect(mockGenerate).toHaveBeenCalledWith(expect.objectContaining({ title: 'Headline v2', summary: 'Summary v2.' }))
 
     // Undone again, the first version is current, and nothing is left to undo
     await undoUpdate(s.id)
     expect(await statuses(s.id)).toEqual(['current', 'reverted', 'reverted'])
-    expect(publicUpdates(await storyVersions(prisma, s.id))).toEqual([])
+    expect(publicUpdates(await publicVersions(prisma, s.id))).toEqual([])
     await expect(undoUpdate(s.id)).rejects.toMatchObject({ status: 409 })
   })
 
@@ -237,6 +237,6 @@ describeDb('article versions (PostgreSQL)', () => {
     await revertResearch(s.id)
     expect(await prisma.story.findUniqueOrThrow({ where: { id: s.id } })).toMatchObject({ title: SINGLE_SOURCE.title, research: null, preResearch: null })
     expect(await statuses(s.id)).toEqual(['reverted', 'reverted'])
-    expect(publicUpdates(await storyVersions(prisma, s.id))).toEqual([])
+    expect(publicUpdates(await publicVersions(prisma, s.id))).toEqual([])
   })
 })

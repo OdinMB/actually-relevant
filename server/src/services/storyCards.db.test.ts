@@ -3,6 +3,8 @@ import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createPass, createPassBox, createPoolFact, createPoolSource } from '../test/db/passes.js'
 import { createContextBox, createContextFact, createContextRun } from '../test/db/storyContext.js'
+import { loadPool } from './passRecords.js'
+import { cardFacts } from './researchPool.js'
 import { cardRecords } from './storyCards.js'
 import { getContextAdmin, setContextHidden, updateContextBox } from './storyContextAdmin.js'
 import { getStoryContext } from './storyContextView.js'
@@ -37,6 +39,9 @@ describeDb('story cards: the newest pass’s, else the legacy run’s', () => {
     // Demoted by the second pass: what cites it is shown no more
     await createPoolFact(s1, { ref: 'S1F2', firstPassId: first.id, status: 'demoted', dropReason: 'contradicted', droppedPassId: second.id })
     await createPoolFact(s1, { ref: 'S1F3', firstPassId: first.id, verdict: 'rejected' })
+    // No card cites these
+    await createPoolFact(s1, { ref: 'S1F4', firstPassId: first.id })
+    await createPoolFact(await createPoolSource(story.id, 'S3', { firstPassId: first.id }), { ref: 'S3F1', firstPassId: first.id })
     const older = await createPassBox(story.id, first.id, {
       position: 0,
       heading: 'First pass card',
@@ -65,7 +70,7 @@ describeDb('story cards: the newest pass’s, else the legacy run’s', () => {
     return { story, legacy, second, older, compared, whyNow, writtenAt }
   }
 
-  it('reads the newest pass’s cards with the pool’s facts, a demoted fact marked', async () => {
+  it('reads the newest pass’s cards with the pool’s facts they cite, a demoted fact marked', async () => {
     const { story, second, compared, whyNow, writtenAt } = await setup()
     const records = await cardRecords(prisma, story.id)
     expect(records.pass).toEqual({ id: second.id, number: 2, writtenAt })
@@ -73,6 +78,9 @@ describeDb('story cards: the newest pass’s, else the legacy run’s', () => {
     expect([...records.facts.keys()]).toEqual(['S1F1', 'S1F2', 'S1F3'])
     expect(records.facts.get('S1F1')).toMatchObject({ verdict: 'supported', demoted: false, source: { id: 'S1', outlet: 'One' }, value: 212 })
     expect(records.facts.get('S1F2')).toMatchObject({ demoted: true })
+    // Each as the whole pool gives it
+    const whole = new Map(cardFacts(await loadPool(prisma, story.id)).map(f => [f.ref, f]))
+    for (const [ref, f] of records.facts) expect(f).toEqual({ ...whole.get(ref), id: expect.any(String), demoted: ref === 'S1F2' })
   })
 
   it('serves readers the newest pass’s cards, leaving out what cites a demoted or rejected fact', async () => {
