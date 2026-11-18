@@ -179,9 +179,23 @@ describe('publicUpdates', () => {
   it('lists the notes of versions not reverted, newest first, each dated by its day with the page sections it changed', () => {
     const updates = publicUpdates([
       { number: 1, kind: 'legacy', status: 'superseded', changes: [], note: null, createdAt: at('2026-11-14') },
-      { number: 2, kind: 'update', status: 'superseded', changes: [change('Story paragraph 2'), change('Summary')], note: cited('First.', 'S5'), createdAt: at('2026-11-18') },
+      {
+        number: 2,
+        kind: 'update',
+        status: 'superseded',
+        changes: [change('Story paragraph 2'), change('Summary')],
+        note: cited('First.', 'S5'),
+        createdAt: at('2026-11-18'),
+      },
       { number: 3, kind: 'update', status: 'reverted', changes: [change('Title')], note: cited('Undone.', 'S6'), createdAt: at('2026-11-19') },
-      { number: 4, kind: 'update', status: 'current', changes: [change('Blurb'), change('Caveat 1')], note: cited('Second.', 'S7'), createdAt: at('2026-11-20') },
+      {
+        number: 4,
+        kind: 'update',
+        status: 'current',
+        changes: [change('Blurb'), change('Caveat 1')],
+        note: cited('Second.', 'S7'),
+        createdAt: at('2026-11-20'),
+      },
     ])
     expect(updates).toEqual([
       { date: '2026-11-20', note: cited('Second.', 'S7'), changes: [{ section: 'Caveat 1', before: cited('old Caveat 1', 'S1') }] },

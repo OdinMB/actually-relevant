@@ -107,7 +107,16 @@ describeDb('loadPassInput', () => {
     const at = (day: string) => new Date(`${day}T22:30:00Z`)
     const pass = (number: number, status: 'completed' | 'failed' | 'running', day: string) =>
       prisma.researchPass.create({
-        data: { storyId: story.id, number, trigger: 'editor', kind: 'later', status, outcome: status === 'running' ? null : 'unchanged', costUsd: 0, startedAt: at(day) },
+        data: {
+          storyId: story.id,
+          number,
+          trigger: 'editor',
+          kind: 'later',
+          status,
+          outcome: status === 'running' ? null : 'unchanged',
+          costUsd: 0,
+          startedAt: at(day),
+        },
       })
     await pass(1, 'completed', '2026-11-08')
     await pass(2, 'failed', '2026-11-14')

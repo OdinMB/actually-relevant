@@ -153,7 +153,8 @@ export interface PassInput {
 export type CardsOutcome = 'written' | 'none' | 'failed' | 'budget' | 'kept'
 
 /** A first pass's gate outcome; a later pass's `updated`, `unchanged` or `update_failed`; either's `budget` or `technical`. */
-export type PassOutcome = 'written' | 'stale' | 'contradicted' | 'research-rating' | 'fallback' | 'budget' | 'technical' | 'updated' | 'unchanged' | 'update_failed'
+export type PassOutcome =
+  'written' | 'stale' | 'contradicted' | 'research-rating' | 'fallback' | 'budget' | 'technical' | 'updated' | 'unchanged' | 'update_failed'
 
 /** Everything else the pass did, stored as `research_passes.record`. */
 export interface PassRecord {
@@ -540,7 +541,8 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
     const fresh = new Set(pool.facts.filter(f => f.firstPassId === input.passId).map(f => f.ref))
     const update = await updateArticle({ storyDay: input.storyDay, version: input.version, pool, fresh }, { call: laterCall, research: call })
     record.update = update.record
-    for (const d of update.demoted) pool.update(d.ref, { status: 'demoted', drop: { passId: input.passId, reason: 'contradicted', contradictedBy: d.contradictedBy } })
+    for (const d of update.demoted)
+      pool.update(d.ref, { status: 'demoted', drop: { passId: input.passId, reason: 'contradicted', contradictedBy: d.contradictedBy } })
     if (update.outcome === 'budget') return budgetStop()
     outcome = LATER_OUTCOMES[update.outcome]
     version = update.next ? nextVersion(input.version, { passId: input.passId, ...update.next }) : null

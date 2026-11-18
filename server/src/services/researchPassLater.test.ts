@@ -128,12 +128,18 @@ const checking =
       })),
     }) satisfies FactCheck
 
-const judging = (over: Partial<JudgeAnswer> = {}): Answer => () => ({ sections: [], contradicted: [], ...over }) satisfies JudgeAnswer
+const judging =
+  (over: Partial<JudgeAnswer> = {}): Answer =>
+  () =>
+    ({ sections: [], contradicted: [], ...over }) satisfies JudgeAnswer
 const repairing =
   (...repairs: Repair['items']): Answer =>
   () =>
     ({ items: repairs, quote: '', quoteAttribution: '', quoteSourceId: '' }) satisfies Repair
-const noting = (text: string, factIds: string[]): Answer => () => ({ text, factIds }) satisfies NoteAnswer
+const noting =
+  (text: string, factIds: string[]): Answer =>
+  () =>
+    ({ text, factIds }) satisfies NoteAnswer
 
 const schoolsWrong = judging({
   sections: [{ label: 'Story paragraph 2', verdict: 'wrong', factIds: ['S5F2'], reason: 'Only 12 schools closed.' }],
@@ -145,7 +151,10 @@ function fakeDeps(answers: Partial<Record<LaterStep | StepName, Answer>>) {
   const answer = (step: string, prompt: string) => {
     calls.push({ step, prompt })
     const a = answers[step as LaterStep | StepName]?.(prompt) ?? null
-    return { parsed: a === SKIP || a === null ? null : (a as never), outcome: a === SKIP ? ('skipped' as const) : a === null ? ('error' as const) : ('ok' as const) }
+    return {
+      parsed: a === SKIP || a === null ? null : (a as never),
+      outcome: a === SKIP ? ('skipped' as const) : a === null ? ('error' as const) : ('ok' as const),
+    }
   }
   const deps: UpdateDeps = {
     call: async (step, _schema, prompt) => ({ ...answer(step, prompt), usage: ZERO_USAGE, costUsd: 0.001, model: `model-${step}` }),

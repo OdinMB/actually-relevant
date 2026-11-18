@@ -64,7 +64,10 @@ describe('demotions', () => {
   it('leaves the judge its contradiction when the newer moment is not later at the precision both give, or unknown', () => {
     const vague = demotions([{ factId: 'S0F1', byFactIds: ['S5F3'], reason: 'Same month, other figure.' }], { old, fresh })
     expect(vague.demoted.map(d => d.ref)).toEqual(['S0F1'])
-    const unknown = demotions([{ factId: 'S0F1', byFactIds: ['S5F1'], reason: 'r' }], { old: new Map([['S0F1', { measures: 'hectares burned in Sumatra', asOf: null }]]), fresh })
+    const unknown = demotions([{ factId: 'S0F1', byFactIds: ['S5F1'], reason: 'r' }], {
+      old: new Map([['S0F1', { measures: 'hectares burned in Sumatra', asOf: null }]]),
+      fresh,
+    })
     expect(unknown.demoted.map(d => d.ref)).toEqual(['S0F1'])
   })
 
@@ -95,7 +98,10 @@ describe('rewriteTargets', () => {
   it('leaves a flag that names no new or demoted fact unfounded, and rewrites one that does', () => {
     const plan = rewriteTargets(
       article(),
-      [section('Story paragraph 2', 'wrong', ['S1F1'], 'own knowledge'), section('Story paragraph 3', 'substantially_different', ['S5F1', 'S5F1'], 'No rain came.')],
+      [
+        section('Story paragraph 2', 'wrong', ['S1F1'], 'own knowledge'),
+        section('Story paragraph 3', 'substantially_different', ['S5F1', 'S5F1'], 'No rain came.'),
+      ],
       { fresh: new Set(['S5F1']), demoted: new Map() },
     )
     expect(plan.targets.map(t => t.label)).toEqual(['Story paragraph 3'])
@@ -138,7 +144,11 @@ describe('versionChanges', () => {
   it('records a dropped section by where it was, with no text after, and moves the later ones up', () => {
     const before = article()
     const after = { ...before, story: [before.story[0]!, before.story[2]!] }
-    const { changes, frozen } = versionChanges({ article: before, research: projection(before) }, { article: after, research: projection(after) }, new Set(['Story paragraph 2']))
+    const { changes, frozen } = versionChanges(
+      { article: before, research: projection(before) },
+      { article: after, research: projection(after) },
+      new Set(['Story paragraph 2']),
+    )
     expect(changes).toEqual([{ section: 'Story paragraph 2', before: cited('Smoke closed 40 schools.', 'S1'), after: null }])
     expect(frozen.filter(k => k.part === 'story')).toEqual([
       { part: 'story', from: 0, to: 0 },
@@ -158,7 +168,9 @@ describe('checkNote', () => {
   const facts = { known: new Set(['S5F1', 'S1F1', 'S0F1']), fresh: new Set(['S5F1']), demoted: new Set(['S1F1']) }
 
   it('passes a short note citing a fact found since', () => {
-    expect(checkNote({ text: 'Officials put the burned area at 3.1 million hectares on November 20, according to the agency.', factIds: ['S5F1'] }, facts)).toEqual([])
+    expect(
+      checkNote({ text: 'Officials put the burned area at 3.1 million hectares on November 20, according to the agency.', factIds: ['S5F1'] }, facts),
+    ).toEqual([])
   })
 
   it('passes a note citing a demoted fact alone', () => {

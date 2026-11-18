@@ -404,7 +404,6 @@ describe('runResearchPass, a first pass', () => {
     expect(result.boxes[0]?.sentences[0]?.factIds).toEqual(['S2F1'])
     expect(result.boxFacts.get('S2F1')?.reusedFromId).toBe('fact-a')
   })
-
 })
 
 describe('runResearchPass, a later pass', () => {
@@ -476,7 +475,9 @@ describe('runResearchPass, a later pass', () => {
   const reuters = { ...original, storyId: 'member-2', url: 'https://reuters.com/solar', outlet: 'Reuters', content: `Reuters on the boom. ${words('reuters')}` }
   // A card on the new source's fact, which this pass adds as S2F2
   const laterCards = () => ({
-    boxes: [{ slot: 'compared', heading: 'Less demand', teaser: '', place: 'P1', sentences: [{ text: 'Grid demand fell.', factIds: ['S2F2'] }], visual: noVisual }],
+    boxes: [
+      { slot: 'compared', heading: 'Less demand', teaser: '', place: 'P1', sentences: [{ text: 'Grid demand fell.', factIds: ['S2F2'] }], visual: noVisual },
+    ],
   })
   const later = (over: Partial<PassInput> = {}): PassInput => ({
     ...input(pool),
@@ -518,7 +519,12 @@ describe('runResearchPass, a later pass', () => {
         sections: [{ label: 'Why This Matters 1', verdict: 'substantially_different', factIds: ['S2F2'], reason: 'The boom now cuts grid demand.' }],
         contradicted: [{ factId: 'S1F1', byFactIds: ['S2F1'], reason: 'Imports did not double.' }],
       }),
-      update: () => ({ items: [{ label: 'Why This Matters 1', text: 'Rooftop panels cut grid demand.', factIds: ['S2F2'] }], quote: '', quoteAttribution: '', quoteSourceId: '' }),
+      update: () => ({
+        items: [{ label: 'Why This Matters 1', text: 'Rooftop panels cut grid demand.', factIds: ['S2F2'] }],
+        quote: '',
+        quoteAttribution: '',
+        quoteSourceId: '',
+      }),
       note: () => ({ text: 'Grid demand fell as rooftop panels spread, Reuters reported.', factIds: ['S2F2'] }),
       'cards-write': laterCards,
     })
@@ -529,7 +535,10 @@ describe('runResearchPass, a later pass', () => {
     expect(result.version!.changes.map(c => c.section)).toEqual(['Why This Matters 1'])
     expect(result.version!.research.paragraphs[0]).toEqual(v1.research.paragraphs[0])
     expect(result.version!.note?.text).toBe('Grid demand fell as rooftop panels spread, Reuters reported.')
-    expect(result.pool.facts.find(f => f.ref === 'S1F1')).toMatchObject({ status: 'demoted', drop: { passId: 'pass-2', reason: 'contradicted', contradictedBy: ['S2F1'] } })
+    expect(result.pool.facts.find(f => f.ref === 'S1F1')).toMatchObject({
+      status: 'demoted',
+      drop: { passId: 'pass-2', reason: 'contradicted', contradictedBy: ['S2F1'] },
+    })
     expect(result.changed).toContain('S1F1')
     // The cards are written for the new version's places, from facts the demoted one is no longer among
     const cards = fake.calls.find(c => c.step === 'cards-write')!.prompt

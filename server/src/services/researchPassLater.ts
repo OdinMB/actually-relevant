@@ -104,7 +104,8 @@ export interface UpdateResult {
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 /** An earlier pass's demotion as a problem line: who it was contradicted by, or that an editor dropped it. */
-const earlierReason = (f: PoolFact) => (f.drop?.reason === 'editor' ? 'an editor dropped it' : `contradicted by ${f.drop?.contradictedBy.join(', ') || 'newer reporting'}`)
+const earlierReason = (f: PoolFact) =>
+  f.drop?.reason === 'editor' ? 'an editor dropped it' : `contradicted by ${f.drop?.contradictedBy.join(', ') || 'newer reporting'}`
 
 /** Runs the later pass's article step. Never throws: a failed call is a `technical` or `budget` outcome. */
 export async function updateArticle(input: UpdateInput, deps: UpdateDeps): Promise<UpdateResult> {
@@ -174,7 +175,11 @@ export async function updateArticle(input: UpdateInput, deps: UpdateDeps): Promi
   let repaired: Article
   try {
     const targets = repairTargets(article, plan.targets)
-    const res = await call('update', repairSchema, buildUpdateRewritePrompt({ sources: writable.sources, earlier: writable.earlier, story: storyItems(article), repairs: targets }))
+    const res = await call(
+      'update',
+      repairSchema,
+      buildUpdateRewritePrompt({ sources: writable.sources, earlier: writable.earlier, story: storyItems(article), repairs: targets }),
+    )
     if (res.outcome === 'skipped') return done('budget')
     if (res.parsed === null) {
       record.error = `update: ${res.outcome}`
@@ -205,10 +210,17 @@ export async function updateArticle(input: UpdateInput, deps: UpdateDeps): Promi
     return done('update_failed')
   }
   const failing = new Set(state.problems.map(p => p.label))
-  const dropped = new Set(draftItems(repaired).filter(i => i.cited && failing.has(i.label)).map(i => i.label))
+  const dropped = new Set(
+    draftItems(repaired)
+      .filter(i => i.cited && failing.has(i.label))
+      .map(i => i.label),
+  )
   const final = kept.draft
   // The quote is never rewritten: it keeps the source readers saw it credited to
-  const built = { ...buildResearchedStory({ draft: final, sources: writable.sources, earlier: writable.earlier }), quoteSourceId: input.version.research.quoteSourceId }
+  const built = {
+    ...buildResearchedStory({ draft: final, sources: writable.sources, earlier: writable.earlier }),
+    quoteSourceId: input.version.research.quoteSourceId,
+  }
   const { changes, frozen } = versionChanges({ article, research: input.version.research }, { article: final, research: built }, dropped)
   if (changes.length === 0) return done('unchanged')
   const projection = withFrozen(built, input.version.research, frozen)
@@ -247,7 +259,17 @@ async function writeNote(n: NoteContext, record: UpdateRecord): Promise<CitedTex
     const f = byRef.get(ref)
     const s = f && sources.get(f.sourceRef)
     if (!f || !s) return []
-    return [{ id: ref, statement: f.statement, measures: f.measures, supportingSentence: f.supportingSentence, outlet: s.outlet, date: s.date, contradicted: n.demoted.has(ref) }]
+    return [
+      {
+        id: ref,
+        statement: f.statement,
+        measures: f.measures,
+        supportingSentence: f.supportingSentence,
+        outlet: s.outlet,
+        date: s.date,
+        contradicted: n.demoted.has(ref),
+      },
+    ]
   })
   // The note may cite the demoted facts it is offered, so its checks read them beside the usable ones
   const view = researchView(n.pool, f => usable(f) || n.demoted.has(f.ref))
@@ -298,7 +320,11 @@ async function checkedNote(
   const hints = numberHints(note.text, evidence)
   const lines = sourceLines(ctx.sources)
   const copying = checkCopying([item], ctx.sources, config.research.copiedRunWords)
-  const res = await call('fact-check', factCheckSchema, buildFactCheckPrompt([{ label: NOTE_LABEL, text: note.text, facts: evidence, numbersNotFound: hints }], lines, [...facts.values()]))
+  const res = await call(
+    'fact-check',
+    factCheckSchema,
+    buildFactCheckPrompt([{ label: NOTE_LABEL, text: note.text, facts: evidence, numbersNotFound: hints }], lines, [...facts.values()]),
+  )
   if (res.outcome === 'skipped') return 'skipped'
   if (res.parsed === null) return [`fact-check: ${res.outcome}`]
   return [...copying.problems, ...judgedProblems(res.parsed, [{ item, evidence, numberHints: hints }], lines)].map(p => p.problem)

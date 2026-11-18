@@ -64,7 +64,10 @@ const laterMoment = (later: string | null, earlier: string | null) => {
  * is not demoted (the tile rule and validity already show the newest). A correction for the same
  * moment, or one whose moment is unknown, stays the judge's. One demotion per fact.
  */
-export function demotions(contradicted: JudgeAnswer['contradicted'], facts: { old: ReadonlyMap<string, RuleFact>; fresh: ReadonlyMap<string, RuleFact> }): Demotions {
+export function demotions(
+  contradicted: JudgeAnswer['contradicted'],
+  facts: { old: ReadonlyMap<string, RuleFact>; fresh: ReadonlyMap<string, RuleFact> },
+): Demotions {
   const out: Demotions = { demoted: [], superseded: [] }
   const seen = new Set<string>()
   for (const pair of contradicted) {
@@ -216,7 +219,8 @@ export function versionChanges(before: VersionText, after: VersionText, dropped:
       }
       const next = fresh[to]
       if (next && sameItem(old, next)) frozen.push({ part, from, to })
-      else if (next) changes.push({ section: LABELS[part](to), before: was.get(label) ?? uncited(old.text), after: now.get(LABELS[part](to)) ?? uncited(next.text) })
+      else if (next)
+        changes.push({ section: LABELS[part](to), before: was.get(label) ?? uncited(old.text), after: now.get(LABELS[part](to)) ?? uncited(next.text) })
       to++
     })
   }
@@ -238,7 +242,10 @@ const words = (text: string) => text.split(/\s+/).filter(Boolean).length
  * fact this pass found (`fresh`) or one demoted (`demoted`), so an Update always rests on what is
  * new. Research's fact check and both copying checks judge it besides (`researchPassLater.ts`).
  */
-export function checkNote(note: { text: string; factIds: string[] }, facts: { known: ReadonlySet<string>; fresh: ReadonlySet<string>; demoted: ReadonlySet<string> }): string[] {
+export function checkNote(
+  note: { text: string; factIds: string[] },
+  facts: { known: ReadonlySet<string>; fresh: ReadonlySet<string>; demoted: ReadonlySet<string> },
+): string[] {
   const text = note.text.trim()
   if (text === '') return ['is empty']
   const problems: string[] = []
@@ -267,7 +274,9 @@ export function fallbackNote(changes: VersionChange[], outlets: string[]): strin
   const named = shown.length > 0 ? shown : changes
   const rewritten = named.filter(c => c.after !== null).map(c => c.section)
   const removed = named.filter(c => c.after === null).map(c => c.section)
-  const what = [...(rewritten.length > 0 ? [`${listed(rewritten)} rewritten`] : []), ...(removed.length > 0 ? [`${listed(removed)} removed`] : [])].join(' and ')
+  const what = [...(rewritten.length > 0 ? [`${listed(rewritten)} rewritten`] : []), ...(removed.length > 0 ? [`${listed(removed)} removed`] : [])].join(
+    ' and ',
+  )
   const from = [...new Set(outlets.filter(Boolean))]
   return `Updated: ${what || 'the story revised'} after new reporting${from.length > 0 ? ` from ${listed(from)}` : ''}.`
 }
