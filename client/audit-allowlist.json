@@ -1,12 +1,4 @@
 {
   "$comment": "Reviewed exceptions for npm run audit:prod (scripts/audit-check.mjs, .context/ci.md). Each entry excuses one advisory in one package while every production path to it runs through `via`.",
-  "advisories": [
-    {
-      "advisory": "GHSA-fc5q-39xc-vjpf",
-      "package": "picomatch",
-      "via": "@scalar/api-reference-react",
-      "reason": "ReDoS through single-branch repeated extglobs; the advisory lists every picomatch version and no fixed release exists yet. Its only production path is the API reference page's @scalar/api-reference, through build-time tooling it declares as dependencies (tailwindcss, unplugin, vite); nothing in the shipped page matches a glob pattern a visitor supplies, and the static site runs no server code. Remove once picomatch publishes a fix.",
-      "reviewed": "2026-11-17"
-    }
-  ]
+  "advisories": []
 }
