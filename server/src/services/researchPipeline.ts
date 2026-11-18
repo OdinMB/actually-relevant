@@ -324,7 +324,7 @@ async function searchCoverage(
   if (queries.length === 0) throw new Stop('queries: none written')
 
   const found: CandidateSource[] = []
-  for (const q of pickQueries(queries)) {
+  for (const q of pickQueries(queries, window)) {
     let res: ResearchSearchAnswer
     try {
       res = await deps.tavily.search({ query: q.query, startDate: window.start, endDate: window.end })
@@ -629,8 +629,8 @@ async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFa
 export interface CoverageOptions {
   /** Pages not read again (`normalizedUrl`): those the story's pool holds or left out. */
   known?: ReadonlySet<string>
-  /** The queries to search of those written, in order (a pass skips those made before). */
-  pickQueries?: (queries: { query: string; language: string }[]) => { query: string; language: string }[]
+  /** The queries to search over `window` of those written, in order (a pass skips those made before over the same days). */
+  pickQueries?: (queries: { query: string; language: string }[], window: SearchWindow) => { query: string; language: string }[]
   /**
    * A later pass's window, from the last pass's day to now: what other outlets reported since. The
    * original article, which the pool holds, is not read again, and finding nothing new is no stop.

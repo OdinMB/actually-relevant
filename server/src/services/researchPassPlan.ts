@@ -1,8 +1,9 @@
 /**
  * Which searches a research pass makes, and which pages it reads (`.context/research-passes.md`,
- * "The steps"): research's coverage queries and context's gap searches, `response` first from its
- * two angles while open, each skipping what any earlier pass of the story searched (the pool's
- * searches: a normalized query, a `response` angle) and the pages the pool holds or left out; and a
+ * "The steps"): research's coverage queries, each skipped once an earlier pass searched it over the
+ * same days, and context's gap searches, `response` first from its two angles while open, each
+ * skipping what any earlier pass of the story searched (the pool's searches: a normalized query, a
+ * `response` angle); the pages the pool holds or left out are never read again; and a
  * later pass's window since the last pass, with only the earlier stories new since. Pure.
  */
 import { config } from '../config.js'
@@ -23,10 +24,20 @@ export function madeSearches(pool: Pick<Pool, 'searches'>): { queries: string[];
   }
 }
 
-/** Research's coverage queries a pass searches, in their order, and those an earlier pass made. */
-export function coverageSearches<Q extends { query: string }>(queries: Q[], pool: Pick<Pool, 'searches'>): { search: Q[]; skipped: Q[] } {
-  const made = new Set(madeSearches(pool).queries)
-  return { search: queries.filter(q => !made.has(normalizedQuery(q.query))), skipped: queries.filter(q => made.has(normalizedQuery(q.query))) }
+/**
+ * Research's coverage queries a pass searches over `window`, in their order, and those an earlier
+ * pass's coverage search already made over every day of it. A query made over fewer days is searched
+ * again, so a later pass finds what was reported since; a search with no window recorded (a legacy
+ * run's) covered none.
+ */
+export function coverageSearches<Q extends { query: string }>(queries: Q[], pool: Pick<Pool, 'searches'>, window: SearchWindow): { search: Q[]; skipped: Q[] } {
+  const covered = new Set(
+    pool.searches
+      .filter(s => s.kind === 'coverage' && s.windowStart !== null && s.windowEnd !== null && s.windowStart <= window.start && s.windowEnd >= window.end)
+      .map(s => normalizedQuery(s.query)),
+  )
+  const made = (q: Q) => covered.has(normalizedQuery(q.query))
+  return { search: queries.filter(q => !made(q)), skipped: queries.filter(made) }
 }
 
 /** Context's gap searches from the gap list (`planSearches`), at most `research.pass.maxGapSearches`, those made before skipped and listed. */

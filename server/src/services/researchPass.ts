@@ -452,8 +452,8 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   try {
     coverage = await extractCoverage(since ? laterStory(input.story, input.pool, since) : input.story, deps, call, r, {
       known: knownPages(input.pool),
-      pickQueries: queries => {
-        const picked = coverageSearches(queries, input.pool)
+      pickQueries: (queries, window) => {
+        const picked = coverageSearches(queries, input.pool, window)
         record.skippedQueries = picked.skipped.map(q => q.query)
         return picked.search
       },

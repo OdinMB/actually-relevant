@@ -79,13 +79,27 @@ describe('gapSearches', () => {
 })
 
 describe('coverageSearches', () => {
-  it('keeps the queries no earlier pass made, in order, and lists the rest', () => {
-    const pool: Pool = { ...EMPTY_POOL, searches: [made('kenya floods', { kind: 'coverage', slot: null })] }
+  const coverage = (query: string, start: string | null, end: string | null) =>
+    made(query, { kind: 'coverage', slot: null, windowStart: start, windowEnd: end })
+  const window = { start: '2026-11-15', end: '2026-11-20' }
+
+  it('keeps the queries no earlier pass searched over this window, in order, and lists the rest', () => {
+    const pool: Pool = { ...EMPTY_POOL, searches: [coverage('kenya floods', '2026-11-10', '2026-11-20')] }
     const queries = [
       { query: 'Kenya  Floods', language: 'en' },
       { query: 'Kenia Überschwemmungen', language: 'de' },
     ]
-    expect(coverageSearches(queries, pool)).toEqual({ search: [queries[1]], skipped: [queries[0]] })
+    expect(coverageSearches(queries, pool, window)).toEqual({ search: [queries[1]], skipped: [queries[0]] })
+  })
+
+  it('searches a query made before again over the days that search did not cover: a later pass looks for what was reported since', () => {
+    const queries = [{ query: 'Kenya floods', language: 'en' }]
+    // The first pass searched up to the 15th; this pass's window runs to the 20th
+    const before = { ...EMPTY_POOL, searches: [coverage('kenya floods', '2026-11-08', '2026-11-15')] }
+    expect(coverageSearches(queries, before, window)).toEqual({ search: queries, skipped: [] })
+    // A legacy run's search, or a gap search of the same words, has no window it covered
+    const unknown = { ...EMPTY_POOL, searches: [coverage('kenya floods', null, null), made('kenya floods')] }
+    expect(coverageSearches(queries, unknown, window)).toEqual({ search: queries, skipped: [] })
   })
 })
 

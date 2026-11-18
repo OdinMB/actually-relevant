@@ -247,7 +247,7 @@ describe('runResearchPass, a first pass', () => {
     ])
   })
 
-  it('never checks a fact again that an earlier run judged, nor searches a query made before, nor reads a page the pool holds', async () => {
+  it('never checks a fact again that an earlier run judged, nor searches a query made before over the same days, nor reads a page the pool holds', async () => {
     const dawn: PoolSource = {
       id: 'src-1',
       ref: 'S4',
@@ -296,8 +296,9 @@ describe('runResearchPass, a first pass', () => {
           angle: null,
           query: 'pakistan rooftop solar 22 gw',
           normalizedQuery: 'pakistan rooftop solar 22 gw',
-          windowStart: null,
-          windowEnd: null,
+          // Over every day this pass's window holds
+          windowStart: '2026-01-01',
+          windowEnd: '2026-12-31',
           depth: null,
           credits: 2,
           results: 1,
@@ -522,6 +523,33 @@ describe('runResearchPass, a later pass', () => {
       passCalls(result.record).reduce((sum, c) => sum + c.costUsd, 0),
       10,
     )
+  })
+
+  it('searches the query the first pass made again over the days since, the window recorded', async () => {
+    const firstSearch = {
+      kind: 'coverage' as const,
+      slot: null,
+      angle: null,
+      query: 'Pakistan rooftop solar 22 GW',
+      normalizedQuery: 'pakistan rooftop solar 22 gw',
+      windowStart: '2026-11-05',
+      windowEnd: '2026-11-15',
+      depth: 'advanced',
+      credits: 2,
+      results: 3,
+      cached: false,
+      passId: 'pass-0',
+    }
+    const requests: unknown[] = []
+    const fake = fakeDeps({ judge: () => ({ sections: [], contradicted: [] }) })
+    fake.deps.tavily = { search: async request => (requests.push(request), { results: [], credits: 2 }) }
+    const result = await runResearchPass(later({ pool: { ...pool, searches: [firstSearch] } }), fake.deps)
+
+    expect(requests).toEqual([expect.objectContaining({ query: 'Pakistan rooftop solar 22 GW', startDate: '2026-11-15', endDate: '2026-11-20' })])
+    expect(result.record.skippedQueries).toEqual([])
+    expect(result.pool.searches.filter(s => s.passId === 'pass-2')).toEqual([
+      expect.objectContaining({ kind: 'coverage', windowStart: '2026-11-15', windowEnd: '2026-11-20' }),
+    ])
   })
 
   it('makes no card write when the pool gained no supported fact and lost none', async () => {
