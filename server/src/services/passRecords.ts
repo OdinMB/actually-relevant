@@ -452,9 +452,10 @@ export async function storePassResult(tx: Prisma.TransactionClient, w: PassWrite
     facts: w.pool.facts.filter(f => f.id === null),
   })
   const changed = new Set(w.changed)
-  for (const f of w.pool.facts) {
-    if (f.id !== null && changed.has(f.ref)) await tx.poolFact.update({ where: { id: f.id }, data: factColumns(f) })
-  }
+  await updateFacts(
+    tx,
+    w.pool.facts.filter(f => f.id !== null && changed.has(f.ref)),
+  )
 
   if (w.version) {
     await tx.articleVersion.updateMany({ where: { storyId, status: 'current' }, data: { status: 'superseded' } })
@@ -474,6 +475,33 @@ export async function storePassResult(tx: Prisma.TransactionClient, w: PassWrite
     })
   }
   return true
+}
+
+/**
+ * The judgments a pass changed on stored facts, in one statement however many it checked: each row
+ * takes `factColumns`' values, the as-of as its day.
+ */
+async function updateFacts(tx: Prisma.TransactionClient, facts: PoolFact[]): Promise<void> {
+  if (facts.length === 0) return
+  const rows = facts.map(f => {
+    const { asOf, ...columns } = factColumns(f)
+    return { id: f.id, ...columns, asOf: asOf ? utcDay(asOf) : null }
+  })
+  await tx.$executeRaw`
+    UPDATE pool_facts f SET
+      "value" = v."value", value_high = v."valueHigh", unit = v.unit, approx = v.approx, provisional = v.provisional,
+      counted = v.counted, place = v.place, as_of = v."asOf", as_of_precision = v."asOfPrecision", credited = v.credited,
+      credited_kind = v."creditedKind", validity = v.validity::"ContextValidity", structure_model = v."structureModel",
+      structure_prompt_version = v."structurePromptVersion", verdict = v.verdict::"ContextVerdict", verdict_problem = v."verdictProblem",
+      check_model = v."checkModel", check_prompt_version = v."checkPromptVersion", checked_pass_id = v."checkedPassId",
+      status = v.status::"JudgmentStatus", dropped_pass_id = v."droppedPassId", drop_reason = v."dropReason"::"FactDropReason",
+      contradicted_by = v."contradictedBy"
+    FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS v(
+      id text, "value" float8, "valueHigh" float8, unit text, approx text, provisional boolean, counted text, place text,
+      "asOf" date, "asOfPrecision" text, credited text, "creditedKind" text, validity text, "structureModel" text,
+      "structurePromptVersion" text, verdict text, "verdictProblem" text, "checkModel" text, "checkPromptVersion" text,
+      "checkedPassId" text, status text, "droppedPassId" text, "dropReason" text, "contradictedBy" text[])
+    WHERE f.id = v.id`
 }
 
 /** New pool rows: what was searched, the pages left out, the sources, and the facts the pool does not hold yet by `poolFactKey`. */

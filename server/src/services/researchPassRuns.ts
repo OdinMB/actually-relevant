@@ -101,28 +101,31 @@ export async function claimPass(storyId: string, trigger: ResearchRunTrigger, no
  * at $0 with its reason, so it settles the story without counting against the cap. Returns its id.
  */
 export async function recordSkippedPass(storyId: string, reason: string, now: Date = new Date()): Promise<string> {
-  return prisma.$transaction(async tx => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RESEARCH_RESERVATION_LOCK}::bigint)`
-    const top = await tx.researchPass.aggregate({ where: { storyId }, _max: { number: true } })
-    const kind = (await tx.articleVersion.count({ where: { storyId, status: 'current' } })) > 0 ? ('later' as const) : ('first' as const)
-    const pass = await tx.researchPass.create({
-      data: {
-        storyId,
-        number: (top._max.number ?? 0) + 1,
-        trigger: 'pipeline',
-        kind,
-        status: 'skipped',
-        outcome: 'budget',
-        costUsd: 0,
-        error: `skipped: ${reason}`,
-        startedAt: now,
-        finishedAt: now,
-      },
-      select: { id: true },
-    })
-    log.info({ passId: pass.id, storyId, reason }, 'research pass step skipped a story')
-    return pass.id
-  })
+  return prisma.$transaction(
+    async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RESEARCH_RESERVATION_LOCK}::bigint)`
+      const top = await tx.researchPass.aggregate({ where: { storyId }, _max: { number: true } })
+      const kind = (await tx.articleVersion.count({ where: { storyId, status: 'current' } })) > 0 ? ('later' as const) : ('first' as const)
+      const pass = await tx.researchPass.create({
+        data: {
+          storyId,
+          number: (top._max.number ?? 0) + 1,
+          trigger: 'pipeline',
+          kind,
+          status: 'skipped',
+          outcome: 'budget',
+          costUsd: 0,
+          error: `skipped: ${reason}`,
+          startedAt: now,
+          finishedAt: now,
+        },
+        select: { id: true },
+      })
+      log.info({ passId: pass.id, storyId, reason }, 'research pass step skipped a story')
+      return pass.id
+    },
+    { timeout: config.database.transactionTimeoutMs },
+  )
 }
 
 /** Production's deps over the pass's meter: its calls and searches, the gap search with its cache and opt-out check, the opt-out policy. */

@@ -82,9 +82,9 @@ export interface PassApplyInput {
   now?: Date
 }
 
-/** Store the pass's rows with or without its version; false when the pass was marked cut off. */
+/** Store the pass's rows with or without its version; false when the pass was marked cut off. The story's write takes the same timeout (`recordAnalysis`). */
 async function store(w: PassWrite): Promise<boolean> {
-  return prisma.$transaction(tx => storePassResult(tx, w))
+  return prisma.$transaction(tx => storePassResult(tx, w), { timeout: config.database.transactionTimeoutMs })
 }
 
 /** Each cited outside source's host, with the icon address the pool holds for it. */

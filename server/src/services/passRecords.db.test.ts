@@ -224,17 +224,26 @@ describeDb('passRecords', () => {
   it('keeps a fact once by its key, and records a later pass’s verdict, structure and demotion on the stored row', async () => {
     const s = await story()
     const first = await createPass(s.id, 1)
-    const pool: Pool = { ...emptyWith(source('S0'), source('S1')), facts: [fact('S1F1'), fact('S1F2')] }
+    const pool: Pool = { ...emptyWith(source('S0'), source('S1')), facts: [fact('S1F1'), fact('S1F2'), fact('S1F4')] }
     await prisma.$transaction(tx => storePassResult(tx, write(s.id, first.id, pool)))
 
     const second = await createPass(s.id, 2)
     const loaded = await loadPool(prisma, s.id)
-    const [f1, f2] = loaded.facts
+    const [f1, f2, f4] = loaded.facts
     const after: Pool = {
       ...loaded,
       facts: [
         { ...f1!, verdict: 'supported', checkedBy: { model: 'm', promptVersion: 'v', passId: second.id }, structured },
-        { ...f2!, verdict: 'supported', status: 'demoted', drop: { passId: second.id, reason: 'contradicted', contradictedBy: ['S1F3'] } },
+        {
+          ...f2!,
+          verdict: 'supported',
+          verdictProblem: null,
+          structured: { ...structured, asOf: '2026-10', valueHigh: 300, approx: 'about', creditedKind: null, credited: '', validity: 'fast' },
+          status: 'demoted',
+          drop: { passId: second.id, reason: 'contradicted', contradictedBy: ['S1F3', 'S1F5'] },
+        },
+        // Not among the changed refs: its stored row stays as it was
+        { ...f4!, verdict: 'rejected', verdictProblem: 'Not stored.' },
         // The same fact found again under a new ref: the pool keeps the first
         fact('S1F9', { supportingSentence: f1!.supportingSentence, statement: f1!.statement }),
         fact('S1F3', { firstPassId: second.id }),
@@ -243,9 +252,11 @@ describeDb('passRecords', () => {
     await prisma.$transaction(tx => storePassResult(tx, write(s.id, second.id, after, { changed: ['S1F1', 'S1F2'] })))
 
     const facts = (await loadPool(prisma, s.id)).facts
-    expect(facts.map(f => f.ref)).toEqual(['S1F1', 'S1F2', 'S1F3'])
+    expect(facts.map(f => f.ref)).toEqual(['S1F1', 'S1F2', 'S1F4', 'S1F3'])
+    expect(facts.slice(0, 2)).toEqual(after.facts.slice(0, 2))
+    expect(facts[2]).toEqual(f4)
     expect(facts[0]).toMatchObject({ verdict: 'supported', checkedBy: { passId: second.id }, structured: { value: 212, by: structured.by } })
-    expect(facts[1]).toMatchObject({ status: 'demoted', drop: { passId: second.id, reason: 'contradicted', contradictedBy: ['S1F3'] } })
+    expect(facts[1]).toMatchObject({ status: 'demoted', drop: { passId: second.id, reason: 'contradicted', contradictedBy: ['S1F3', 'S1F5'] } })
   })
 
   it("supersedes the story's current version with a pass's new one", async () => {
