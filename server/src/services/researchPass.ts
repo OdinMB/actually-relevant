@@ -525,7 +525,7 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
 
   r.sources = pages().map(s => asResearchSource(s, pool.factsOf(s)))
   r.earlier = pool.sources.filter(s => s.origin === 'earlier').map(s => asResearchEarlier(s, pool.factsOf(s)))
-  let version: ArticleVersionData | null = null
+  let version: ArticleVersionData | null
   let outcome: PassOutcome | undefined
   if (input.version) {
     // Step 8, a later pass: the judge of each section against the facts found since, the demotions, the
