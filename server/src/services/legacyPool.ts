@@ -341,17 +341,28 @@ export async function readLegacyImport(db: SelectOnly, storyId: string): Promise
   return { pool, version: story ? legacyVersionOf(story) : null }
 }
 
+/** What `readLegacyImport` read: the pool and version 1 the import would write. */
+export type LegacyImport = Awaited<ReturnType<typeof readLegacyImport>>
+
+/** Whether the story has pool rows or versions already: the import then has nothing to do. */
+export async function legacyPoolPresent(db: SelectOnly, storyId: string): Promise<boolean> {
+  const [row] = await db.$queryRaw<{ present: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM evidence_sources WHERE story_id = ${storyId})
+        OR EXISTS (SELECT 1 FROM article_versions WHERE story_id = ${storyId}) AS present`
+  return row?.present === true
+}
+
 /**
  * Import the story's legacy runs into its pool, in the caller's transaction (the pass's claim):
  * `present` when the story already has pool rows or versions, `none` when it has nothing to import.
+ * `read` is what the caller read before taking its lock (`readLegacyImport`), so the lock is not held
+ * through the import's reads; presence is checked again here, under it, and without `read` the
+ * import reads in the transaction.
  */
-export async function importLegacyPool(tx: Prisma.TransactionClient, storyId: string): Promise<'imported' | 'present' | 'none'> {
-  const [present] = await tx.$queryRaw<{ present: boolean }[]>`
-    SELECT EXISTS (SELECT 1 FROM evidence_sources WHERE story_id = ${storyId})
-        OR EXISTS (SELECT 1 FROM article_versions WHERE story_id = ${storyId}) AS present`
-  if (present?.present) return 'present'
+export async function importLegacyPool(tx: Prisma.TransactionClient, storyId: string, read?: LegacyImport): Promise<'imported' | 'present' | 'none'> {
+  if (await legacyPoolPresent(tx, storyId)) return 'present'
 
-  const { pool, version } = await readLegacyImport(tx, storyId)
+  const { pool, version } = read ?? (await readLegacyImport(tx, storyId))
   if (pool.sources.length === 0 && pool.searches.length === 0 && !version) return 'none'
 
   await insertPoolRows(tx, storyId, pool)

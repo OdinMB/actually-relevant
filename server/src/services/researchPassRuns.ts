@@ -19,7 +19,7 @@ import { createRunScope, runInScope, settleRun, type RunScope } from '../lib/run
 import { Semaphore } from '../lib/semaphore.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
 import { ConflictError, NotFoundError, ServiceError } from '../utils/errors.js'
-import { importLegacyPool } from './legacyPool.js'
+import { importLegacyPool, legacyPoolPresent, readLegacyImport } from './legacyPool.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
 import { createRunMeter, type RunMeter } from './researchCalls.js'
 import type { ReadState } from './researchApply.js'
@@ -71,16 +71,19 @@ type Claim = PassClaim | { refused: 'in-progress' } | { refused: 'cap'; spentUsd
 /**
  * Claim a pass of the story, under research's reservation lock, so concurrent starts (the step's, an
  * editor's, a research run's) never pass the cap or run one story twice: cut-off passes marked first,
- * the legacy runs imported into the pool once, then the pass row written `running` at its ceiling. A
+ * the legacy runs imported into the pool once (read before the lock, written under it), then the pass
+ * row written `running` at its ceiling. A
  * story with a current version (the import may make one) gets a later pass, any other a first.
  */
 export async function claimPass(storyId: string, trigger: ResearchRunTrigger, now: Date = new Date()): Promise<Claim> {
+  // The import's reads before the lock every claim and research start waits on; it checks again under it
+  const legacy = (await legacyPoolPresent(prisma, storyId)) ? undefined : await readLegacyImport(prisma, storyId)
   return prisma.$transaction(
     async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RESEARCH_RESERVATION_LOCK}::bigint)`
       await markInterruptedPasses(tx, now)
       if ((await tx.researchPass.count({ where: { storyId, status: 'running' } })) > 0) return { refused: 'in-progress' as const }
-      await importLegacyPool(tx, storyId)
+      await importLegacyPool(tx, storyId, legacy)
       const kind = (await tx.articleVersion.count({ where: { storyId, status: 'current' } })) > 0 ? ('later' as const) : ('first' as const)
       const ceilingUsd = passCeilingUsd(kind)
       const spentUsd = await monthToDateUsd(tx, now)

@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createContextFact, createContextRun, createResearchRun } from '../test/db/storyContext.js'
-import { importLegacyPool } from './legacyPool.js'
+import { importLegacyPool, legacyPoolPresent, readLegacyImport } from './legacyPool.js'
 import { currentVersion, loadPool } from './passRecords.js'
 
 async function story() {
@@ -94,6 +94,29 @@ describeDb('importLegacyPool', () => {
     expect(await importIn(s.id)).toBe('none')
     expect(await prisma.evidenceSource.count()).toBe(0)
     expect(await prisma.articleVersion.count()).toBe(0)
+  })
+
+  it('imports what was read before the lock, after checking again under it that the story still has no pool', async () => {
+    const s = await story()
+    await prisma.story.update({ where: { id: s.id }, data: { research: research as unknown as Prisma.InputJsonObject } })
+    await createResearchRun(s.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }])
+    expect(await legacyPoolPresent(prisma, s.id)).toBe(false)
+    const read = await readLegacyImport(prisma, s.id)
+
+    // Another claim imported the story between the read and the lock: nothing is imported twice
+    expect(await importIn(s.id)).toBe('imported')
+    expect(await legacyPoolPresent(prisma, s.id)).toBe(true)
+    expect(await prisma.$transaction(tx => importLegacyPool(tx, s.id, read))).toBe('present')
+    expect(await prisma.poolFact.count()).toBe(1)
+    expect(await prisma.articleVersion.count()).toBe(1)
+
+    // With no pool yet, the read is what is imported, without reading again
+    const t = await story()
+    await createResearchRun(t.id, [{ id: 'S0', facts: [{ id: 'S0F1' }, { id: 'S0F2' }] }])
+    const early = await readLegacyImport(prisma, t.id)
+    await createResearchRun(t.id, [{ id: 'S0', facts: [{ id: 'S0F1' }] }], { startedAt: new Date(Date.now() + 60_000) })
+    expect(await prisma.$transaction(tx => importLegacyPool(tx, t.id, early))).toBe('imported')
+    expect((await loadPool(prisma, t.id)).facts.map(f => f.ref)).toEqual(['S0F1', 'S0F2'])
   })
 
   it('makes version 1 alone for a researched story whose runs hold no facts', async () => {

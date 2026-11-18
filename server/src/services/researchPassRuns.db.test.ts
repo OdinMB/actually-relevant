@@ -6,6 +6,7 @@
  * one), and so is its input; the embedding call and the favicon fetch are mocked. The eval gate is
  * open in these tests unless one closes it.
  */
+import type { Prisma } from '@prisma/client'
 import { it, expect, vi, beforeEach, afterEach } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
@@ -211,6 +212,21 @@ describeDb('research passes (PostgreSQL)', () => {
     expect(later).toMatchObject({ kind: 'later', ceilingUsd: LATER })
     if (!('passId' in later)) throw new Error('refused')
     expect(await passOf(later.passId)).toMatchObject({ number: 2, trigger: 'editor', kind: 'later', costUsd: LATER })
+  })
+
+  it('claims a later pass for a story research already researched: the claim imports its legacy runs as version 1, once', async () => {
+    const story = await researchable('published')
+    const v = firstVersion()
+    await prisma.story.update({ where: { id: story.id }, data: { research: v.research as unknown as Prisma.InputJsonObject } })
+    const claim = await claimPass(story.id, 'editor')
+    expect(claim).toMatchObject({ kind: 'later', ceilingUsd: LATER })
+    expect(await prisma.articleVersion.findMany({ where: { storyId: story.id }, select: { number: true, kind: true, status: true } })).toEqual([
+      { number: 1, kind: 'legacy', status: 'current' },
+    ])
+    if (!('passId' in claim)) throw new Error('refused')
+    await prisma.researchPass.update({ where: { id: claim.passId }, data: { status: 'completed' } })
+    expect(await claimPass(story.id, 'editor')).toMatchObject({ kind: 'later' })
+    expect(await prisma.articleVersion.count({ where: { storyId: story.id } })).toBe(1)
   })
 
   it('never passes the cap, however many claims start at once, research runs counted in the same month', async () => {
