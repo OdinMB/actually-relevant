@@ -39,8 +39,11 @@ export default defineConfig({
       // the update eval: measured 84.46, 80.48, 83.37, 85.03 (statements raised to 84, functions to
       // 82; branches kept at 80 and lines at 84, since 81 and 85 would leave no margin). Raised
       // 2026-11-18 with the research passes' wiring: measured 84.65, 80.62, 83.55, 85.23 (functions
-      // raised to 83; statements kept at 84, branches at 80 and lines at 84, as above)
-      thresholds: { statements: 84, branches: 80, functions: 83, lines: 84 },
+      // raised to 83; statements kept at 84, branches at 80 and lines at 84, as above). Raised
+      // 2026-11-18 with the prompt layout and the research cost changes: measured 85.05, 80.94,
+      // 83.91, 85.64 (lines raised to 85; statements kept at 84, branches at 80 and functions at 83,
+      // since 85, 81 and 84 would leave no margin)
+      thresholds: { statements: 84, branches: 80, functions: 83, lines: 85 },
     },
     projects: [
       {
