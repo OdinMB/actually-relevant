@@ -246,6 +246,7 @@ describeDb('research passes (PostgreSQL)', () => {
       firstPassUsd: FIRST,
       laterPassUsd: LATER,
       refusal: null,
+      on: true,
     })
   })
 
@@ -414,12 +415,19 @@ describeDb('research passes (PostgreSQL)', () => {
     const story = await researchable('published')
     gate.closed = realGate
     await expect(startEditorPass(story.id)).rejects.toThrow(/switched off: their evals have not yet met/)
-    expect((await passUsage()).refusal).toMatch(/switched off: their evals/)
+    // The admin shows nothing of the step while the gate is closed, though the job row is enabled
+    expect(await passUsage()).toMatchObject({ refusal: expect.stringMatching(/switched off: their evals/), on: false })
 
     gate.closed = null
     await setJob(false)
     await expect(startEditorPass(story.id)).rejects.toThrow(/research_pass job is disabled/)
+    expect(await passUsage()).toMatchObject({ refusal: expect.stringMatching(/research_pass job is disabled/), on: false })
     expect(await prisma.researchPass.count()).toBe(0)
+  })
+
+  it('stays on for the admin with the key unset, the refusal saying why no pass starts', async () => {
+    vi.stubEnv('TAVILY_API_KEY', '')
+    expect(await passUsage()).toMatchObject({ refusal: expect.any(String), on: true })
   })
 
   it('drops the result of a pass a restart marked cut off first, rolling the story write back with it', async () => {

@@ -9,6 +9,8 @@ import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { NotFoundError } from '../utils/errors.js'
 import { loadPool, storyVersions, type StoredVersion } from './passRecords.js'
+import { PASS_EVAL_GATE } from './researchPassGate.js'
+import { passStepState } from './researchPassQueue.js'
 import { editorRefusal, markInterruptedPasses, passCeilingUsd } from './researchPassRuns.js'
 import type { Pool } from './researchPool.js'
 import { listResearchRuns, type ResearchRunView } from './researchRuns.js'
@@ -23,12 +25,25 @@ export interface PassUsageView {
   laterPassUsd: number
   /** Why no editor's pass can start now, whatever the story; null while one can. */
   refusal: string | null
+  /**
+   * The step is switched on: its eval gate open and its job enabled. The admin offers "Research again"
+   * in place of Research and Gather context only then (closed with `refusal` while, say, the key is
+   * unset), so nothing of the step shows while the gate is closed.
+   */
+  on: boolean
 }
 
 export async function passUsage(now: Date = new Date()): Promise<PassUsageView> {
   await markInterruptedPasses(prisma, now)
-  const [spentUsd, refusal] = await Promise.all([monthToDateUsd(prisma, now), editorRefusal()])
-  return { spentUsd, capUsd: config.research.monthlyCapUsd, firstPassUsd: passCeilingUsd('first'), laterPassUsd: passCeilingUsd('later'), refusal }
+  const [spentUsd, refusal, step] = await Promise.all([monthToDateUsd(prisma, now), editorRefusal(), passStepState()])
+  return {
+    spentUsd,
+    capUsd: config.research.monthlyCapUsd,
+    firstPassUsd: passCeilingUsd('first'),
+    laterPassUsd: passCeilingUsd('later'),
+    refusal,
+    on: PASS_EVAL_GATE === null && step.enabled,
+  }
 }
 
 /** One pass as the admin lists it: its row, with its record (searches made, checks, judgments, cards). */
