@@ -424,14 +424,17 @@ describe('Public Stories API', () => {
   describe('GET /api/stories/:id', () => {
     // What the detail select reads for a story that was never researched
     const detailRow = { ...publicStory, research: null, preResearch: null }
+    // The story's article versions, one raw read (passRecords.ts): none here; stories.db.test.ts serves real ones
+    beforeEach(() => mockPrisma.$queryRaw.mockResolvedValue([]))
 
-    it('returns a single published story', async () => {
+    it('returns a single published story, with no Updates', async () => {
       mockPrisma.story.findFirst.mockResolvedValue(detailRow)
 
       const res = await request(app).get('/api/stories/story-1')
       expect(res.status).toBe(200)
       expect(res.body.title).toBe('Published Article')
       expect(res.body.feed).toBeDefined()
+      expect(res.body.updates).toEqual([])
     })
 
     it('marks the AI-generated fields of the story', async () => {

@@ -52,10 +52,11 @@ export function withAiGeneratedMarker<T extends AiStoryText>(story: T): T & { ai
 
 /**
  * Fields of the single story (`GET /api/stories/:slug`) with AI-generated content: the text fields,
- * plus `research`, the researched version with its cited text (services/researchedStory.ts), which
- * only the single story serves. openapi.test.ts checks the detail marker lists exactly these.
+ * plus `research`, the researched version with its cited text (services/researchedStory.ts), and
+ * `updates`, the Updates research passes recorded with the earlier text (services/articleVersions.ts),
+ * which only the single story serves. openapi.test.ts checks the detail marker lists exactly these.
  */
-export const AI_GENERATED_STORY_DETAIL_FIELDS = [...AI_GENERATED_STORY_FIELDS, 'research'] as const
+export const AI_GENERATED_STORY_DETAIL_FIELDS = [...AI_GENERATED_STORY_FIELDS, 'research', 'updates'] as const
 
 export type AiGeneratedStoryDetailField = (typeof AI_GENERATED_STORY_DETAIL_FIELDS)[number]
 
@@ -63,10 +64,17 @@ export interface AiGeneratedDetailMarker extends Omit<AiGeneratedMarker, 'fields
   fields: AiGeneratedStoryDetailField[]
 }
 
-/** The single story's marker: `research` joins the fields when the story serves a researched version. */
-export function withAiGeneratedDetailMarker<T extends AiStoryText & { research: object | null }>(story: T): T & { aiGenerated: AiGeneratedDetailMarker } {
+/** The single story's marker: `research` joins the fields when the story serves a researched version, `updates` when it serves any Update. */
+export function withAiGeneratedDetailMarker<T extends AiStoryText & { research: object | null; updates: readonly unknown[] }>(
+  story: T,
+): T & { aiGenerated: AiGeneratedDetailMarker } {
   const marker = aiGeneratedMarker(story)
-  return { ...story, aiGenerated: { ...marker, fields: [...marker.fields, ...(story.research ? (['research'] as const) : [])] } }
+  const fields: AiGeneratedStoryDetailField[] = [
+    ...marker.fields,
+    ...(story.research ? (['research'] as const) : []),
+    ...(story.updates.length > 0 ? (['updates'] as const) : []),
+  ]
+  return { ...story, aiGenerated: { ...marker, fields } }
 }
 
 /**

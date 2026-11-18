@@ -57,15 +57,21 @@ describe('withAiGeneratedDetailMarker', () => {
   const research = { paragraphs: [], whyThisMatters: [], caveats: [], quoteSourceId: null, sources: [] }
 
   it('names the researched version after the text fields when the story serves one', () => {
-    const marked = withAiGeneratedDetailMarker({ ...storyWithAllAiFields(), research, researched: true })
+    const marked = withAiGeneratedDetailMarker({ ...storyWithAllAiFields(), research, researched: true, updates: [] })
     expect(marked.aiGenerated.fields).toEqual([...AI_GENERATED_STORY_FIELDS, 'research'])
-    expect(AI_GENERATED_STORY_DETAIL_FIELDS).toEqual([...AI_GENERATED_STORY_FIELDS, 'research'])
+    expect(AI_GENERATED_STORY_DETAIL_FIELDS).toEqual([...AI_GENERATED_STORY_FIELDS, 'research', 'updates'])
   })
 
   it('leaves it out when there is none, also for a researched story whose version could not be served', () => {
     for (const researched of [false, true]) {
-      const marked = withAiGeneratedDetailMarker({ summary: 'AI summary', research: null, researched })
+      const marked = withAiGeneratedDetailMarker({ summary: 'AI summary', research: null, researched, updates: [] })
       expect(marked.aiGenerated.fields).toEqual(['summary'])
     }
+  })
+
+  it('names the Updates last, only while the story serves any', () => {
+    const update = { date: '2026-11-18', note: { text: 'A newer count.', citations: [] }, changes: [], sources: [] }
+    const marked = withAiGeneratedDetailMarker({ summary: 'AI summary', research, researched: true, updates: [update] })
+    expect(marked.aiGenerated.fields).toEqual(['summary', 'research', 'updates'])
   })
 })

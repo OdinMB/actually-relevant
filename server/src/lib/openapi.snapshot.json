@@ -351,7 +351,8 @@
                     "research",
                     "summary",
                     "title",
-                    "titleLabel"
+                    "titleLabel",
+                    "updates"
                   ],
                   "type": "string"
                 },
@@ -473,7 +474,78 @@
           "status": { "enum": ["published"], "type": "string" },
           "summary": { "type": ["null", "string"] },
           "title": { "type": ["null", "string"] },
-          "titleLabel": { "type": ["null", "string"] }
+          "titleLabel": { "type": ["null", "string"] },
+          "updates": {
+            "items": {
+              "properties": {
+                "changes": {
+                  "items": {
+                    "properties": {
+                      "before": {
+                        "properties": {
+                          "citations": {
+                            "items": {
+                              "properties": { "sentence": { "type": ["null", "string"] }, "sourceId": { "type": "string" } },
+                              "required": ["sentence", "sourceId"],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "text": { "type": "string" }
+                        },
+                        "required": ["citations", "text"],
+                        "type": ["null", "object"]
+                      },
+                      "removed": { "type": "boolean" },
+                      "section": { "type": "string" }
+                    },
+                    "required": ["before", "removed", "section"],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "date": { "type": "string" },
+                "note": {
+                  "properties": {
+                    "citations": {
+                      "items": {
+                        "properties": { "sentence": { "type": ["null", "string"] }, "sourceId": { "type": "string" } },
+                        "required": ["sentence", "sourceId"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "text": { "type": "string" }
+                  },
+                  "required": ["citations", "text"],
+                  "type": "object"
+                },
+                "sources": {
+                  "items": {
+                    "properties": {
+                      "country": { "type": ["null", "string"] },
+                      "date": { "type": ["null", "string"] },
+                      "host": { "type": ["null", "string"] },
+                      "id": { "type": "string" },
+                      "kind": { "enum": ["analysis", "news-report", "official-body", "opinion", "other", "press-release", null], "type": ["null", "string"] },
+                      "origin": { "enum": ["earlier", "original", "source"], "type": "string" },
+                      "outlet": { "type": "string" },
+                      "slug": { "type": ["null", "string"] },
+                      "storyId": { "type": ["null", "string"] },
+                      "title": { "type": "string" },
+                      "url": { "type": ["null", "string"] }
+                    },
+                    "required": ["country", "date", "host", "id", "kind", "origin", "outlet", "slug", "storyId", "title", "url"],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": ["changes", "date", "note", "sources"],
+              "type": "object"
+            },
+            "type": "array"
+          }
         },
         "required": [
           "aiGenerated",
@@ -499,7 +571,8 @@
           "status",
           "summary",
           "title",
-          "titleLabel"
+          "titleLabel",
+          "updates"
         ],
         "type": "object"
       },

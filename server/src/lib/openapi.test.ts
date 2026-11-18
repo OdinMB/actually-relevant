@@ -39,14 +39,18 @@ describe('getOpenAPIDocument', () => {
   it('serves the researched version and its flag on the single story only, labeled and listed in its marker', () => {
     const detail = schemas.PublicStoryDetail
     expect(doc.paths['/api/stories/{slug}'].get.responses['200'].content['application/json'].schema.$ref).toBe('#/components/schemas/PublicStoryDetail')
-    expect(detail.required).toEqual(expect.arrayContaining(['research', 'researched']))
+    expect(detail.required).toEqual(expect.arrayContaining(['research', 'researched', 'updates']))
     expect(detail.properties.researched.type).toBe('boolean')
+    // The Updates a research pass records keep the earlier text readable: model-written, so labeled and listed
+    expect(AI_GENERATED_STORY_DETAIL_FIELDS).toContain('updates')
+    expect(detail.properties.updates.type).toBe('array')
     expect(detail.properties.aiGenerated.properties.fields.items.enum).toEqual([...AI_GENERATED_STORY_DETAIL_FIELDS])
     for (const field of AI_GENERATED_STORY_DETAIL_FIELDS) {
       expect(detail.properties[field].description.startsWith('AI-generated. '), field).toBe(true)
     }
     expect(schemas.PublicStory.properties.research).toBeUndefined()
     expect(schemas.PublicStory.properties.researched).toBeUndefined()
+    expect(schemas.PublicStory.properties.updates).toBeUndefined()
   })
 
   it('labels every AI-generated field of a podcast episode and lists exactly those in its marker', () => {

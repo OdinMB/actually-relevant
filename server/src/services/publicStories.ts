@@ -7,6 +7,8 @@ import { Prisma, EmotionTag } from '@prisma/client'
 import { paginate } from '../lib/paginate.js'
 import { storyInIssueWhere } from '../lib/issueFilter.js'
 import { createLogger } from '../lib/logger.js'
+import { publicUpdates, updatesEarlierStoryIds, updatesForReaders, type PublicUpdate } from './articleVersions.js'
+import { storyVersions } from './passRecords.js'
 import { earlierStoryIds, forReaders, researchedStorySchema, type ResearchedStory } from './researchedStory.js'
 import { PUBLIC_STORY_SELECT } from './storySelect.js'
 import { hybridSearch } from './storySearch.js'
@@ -83,9 +85,11 @@ export async function getPublishedStories(options: {
 
 /**
  * The story page's story: the public fields, plus `researched` (the text fields carry a researched
- * version: its single-source snapshot is set) and `research`, the cited version as readers get it
- * now (`.context/story-research.md`, "Reader format"). A stored version that fails its schema is
- * served as null with a warning; the flag still holds, so the page keeps the researched label.
+ * version: its single-source snapshot is set), `research`, the cited version as readers get it now
+ * (`.context/story-research.md`, "Reader format"), and `updates`, the Updates its research passes
+ * recorded with the earlier text, newest first (`.context/research-passes.md`, "The public updates
+ * field"). A stored version that fails its schema is served as null with a warning; the flag still
+ * holds, so the page keeps the researched label. Both leave out earlier stories no longer published.
  */
 export async function getPublishedStoryBySlug(slug: string) {
   const row = await prisma.story.findFirst({
@@ -94,23 +98,24 @@ export async function getPublishedStoryBySlug(slug: string) {
   })
   if (!row) return null
   const { research, preResearch, ...story } = row
-  return { ...story, research: await researchForReaders(story.id, research), researched: preResearch !== null }
+  return { ...story, ...(await researchForReaders(story.id, research)), researched: preResearch !== null }
 }
 
-/** The stored version, checked against its schema, without earlier stories no longer published. */
-async function researchForReaders(storyId: string, stored: Prisma.JsonValue | null): Promise<ResearchedStory | null> {
-  if (stored === null) return null
-  const parsed = researchedStorySchema.safeParse(stored)
-  if (!parsed.success) {
+/** The stored version, checked against its schema, and the Updates, both without earlier stories no longer published. */
+async function researchForReaders(storyId: string, stored: Prisma.JsonValue | null): Promise<{ research: ResearchedStory | null; updates: PublicUpdate[] }> {
+  const parsed = stored === null ? null : researchedStorySchema.safeParse(stored)
+  if (parsed && !parsed.success) {
     log.warn({ storyId, issues: parsed.error.issues.length }, 'stored researched version does not match its schema; served without it')
-    return null
   }
-  const earlierIds = earlierStoryIds(parsed.data)
+  const research = parsed?.success ? parsed.data : null
+  const updates = publicUpdates(await storyVersions(prisma, storyId))
+  const earlierIds = [...new Set([...(research ? earlierStoryIds(research) : []), ...updatesEarlierStoryIds(updates)])]
   const published =
     earlierIds.length === 0
       ? []
       : await prisma.story.findMany({ where: { id: { in: earlierIds }, status: 'published', slug: { not: null } }, select: { id: true, slug: true } })
-  return forReaders(parsed.data, new Map(published.map(s => [s.id, s.slug!])))
+  const slugs = new Map(published.map(s => [s.id, s.slug!]))
+  return { research: research && forReaders(research, slugs), updates: updatesForReaders(updates, slugs) }
 }
 
 /**
