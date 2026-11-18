@@ -79,6 +79,8 @@ function linkOverviewsNote(): string {
     `It runs after Publish Stories, so it never holds the edition, and takes up to ${count(perRun, 'story', 'stories')} published in the last day, ${concurrency} at once, ` +
     `plus up to ${count(backfillPerRun, 'older story', 'older stories')} from the last ${count(backfillDays, 'day')} that were never linked, oldest first. ` +
     'A story is linked once; one it could not link because of a problem is tried again at the next run. If it fails, the rest of the daily edition is not affected. ' +
+    'Then it keeps each development up to date: it reviews them, marks them quiet or closed, and writes "Where this stands" from their stories\' checked research. ' +
+    'Every overview, and each decision it made, is on the Overviews page, where an editor can correct one and undo any decision. ' +
     `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; ` +
     `so is a notice when more than ${Math.round(share * 100)}% of at least ${failedStoriesMin} stories fail. Nothing pauses. ` +
     `Readers see nothing of it yet. "Run now" does nothing while the job is disabled. ${switchOn}`

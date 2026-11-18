@@ -967,6 +967,8 @@ enum OverviewDecisionKind {
   editor_retitle
   editor_freeze
   editor_hide
+  /// An editor's close or reopen (added with the admin views, 20261118231431_overview_editor_close)
+  editor_close
   undo
 }
 

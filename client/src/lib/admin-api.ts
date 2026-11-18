@@ -45,6 +45,15 @@ import type {
   SpendingOverview,
   StoryContextAdmin,
   ContextRunStarted,
+  OverviewsAdminState,
+  AdminOverviewListItem,
+  AdminOverviewDetail,
+  StoryOverviewBlock,
+  OverviewActionResult,
+  OverviewEntryRole,
+  OverviewRoleKind,
+  OverviewScope,
+  OverviewStatus,
 } from '@shared/types'
 import { getAccessToken, setAccessToken, refreshSession, notifySessionExpired } from './session'
 
@@ -405,6 +414,24 @@ export const adminApi = {
     /** Hide, show or move one card; 400 for a place the story lacks. */
     updateBox: (storyId: string, boxId: string, change: { hidden?: boolean; place?: string }) =>
       request<void>(`/stories/${storyId}/context/boxes/${boxId}`, { method: 'PATCH', body: JSON.stringify(change) }),
+  },
+
+  // Ongoing-story overviews (.context/overviews.md, "Admin"): every action and undo is logged as the editor's decision; 409 with the reason when it would change nothing or the rows changed since
+  overviews: {
+    state: () => request<OverviewsAdminState>('/overviews/state'),
+    list: (filters: { scope?: OverviewScope; status?: OverviewStatus; frozen?: boolean; hidden?: boolean } = {}) =>
+      request<AdminOverviewListItem[]>(`/overviews${toQueryString(filters)}`),
+    get: (id: string) => request<AdminOverviewDetail>(`/overviews/${id}`),
+    story: (storyId: string) => request<StoryOverviewBlock>(`/overviews/stories/${storyId}`),
+    attach: (id: string, storyId: string) => request<OverviewActionResult>(`/overviews/${id}/entries`, { method: 'POST', body: JSON.stringify({ storyId }) }),
+    detach: (id: string, entryId: string) => request<OverviewActionResult>(`/overviews/${id}/entries/${entryId}/detach`, { method: 'POST' }),
+    setRole: (id: string, entryId: string, role: OverviewEntryRole, roleKind: OverviewRoleKind | null) =>
+      request<OverviewActionResult>(`/overviews/${id}/entries/${entryId}/role`, { method: 'PUT', body: JSON.stringify({ role, roleKind }) }),
+    retitle: (id: string, title: string) => request<OverviewActionResult>(`/overviews/${id}/title`, { method: 'PUT', body: JSON.stringify({ title }) }),
+    setFrozen: (id: string, frozen: boolean) => request<OverviewActionResult>(`/overviews/${id}/frozen`, { method: 'PUT', body: JSON.stringify({ frozen }) }),
+    setHidden: (id: string, hidden: boolean) => request<OverviewActionResult>(`/overviews/${id}/hidden`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
+    setClosed: (id: string, closed: boolean) => request<OverviewActionResult>(`/overviews/${id}/closed`, { method: 'PUT', body: JSON.stringify({ closed }) }),
+    undo: (decisionId: string) => request<OverviewActionResult>(`/overviews/decisions/${decisionId}/undo`, { method: 'POST' }),
   },
 
   // Jobs

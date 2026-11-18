@@ -10,16 +10,22 @@
  * - the upkeep after linking: an end-event closing begun (`applyClosing`, a `close` decision), the
  *   status machine's moves and a burst's freeze (`applyStatus`, `applyBurst`, `status` decisions), a
  *   review's actions and the audit's findings (`applyReview`, `applyAudit`, `review` decisions), and a
- *   stands refresh (`applyStands`, a `stands` decision, and a new current version when one is written).
+ *   stands refresh (`applyStands`, a `stands` decision, and a new current version when one is written);
+ * - an editor's action and Undo (`editorAction`, `undoDecision`): the change set `overviewEdits.ts`
+ *   plans, logged with its changes as the editor's decision or an `undo`.
  * Each move is applied only from the state it was computed on (a conditional update), so a change made
  * meanwhile is never overwritten.
  */
+import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { OVERVIEW_PROMPT_VERSIONS } from '../prompts/overviews.js'
+import { ConflictError, NotFoundError } from '../utils/errors.js'
 import { slugify } from '../utils/slugify.js'
 import { membershipsOf } from './overviewCandidates.js'
 import type { CloseCase, CloseResult } from './overviewClose.js'
+import { planEdit, planUndo, type Change, type EditEntry, type EditOverview, type EditPlan, type EditorAction, type OverviewFields } from './overviewEdits.js'
+import { parseCharter } from './overviewInput.js'
 import { isStale, type ApplyOutcome, type LinkResult } from './overviewLink.js'
 import type { AuditResult, ReviewCase, ReviewResult } from './overviewReview.js'
 import type { StandsResult } from './overviewStands.js'
@@ -465,4 +471,181 @@ export async function applyStands(c: StandsCase, result: StandsResult, signature
       },
     })
   })
+}
+
+// ---------------------------------------------------------------------------
+// An editor's actions and Undo
+// ---------------------------------------------------------------------------
+
+const EDIT_OVERVIEW = {
+  id: true,
+  title: true,
+  scope: true,
+  status: true,
+  closedAt: true,
+  closedReason: true,
+  closingSince: true,
+  frozen: true,
+  hidden: true,
+  charter: true,
+} as const
+
+const EDIT_ENTRY = {
+  id: true,
+  storyId: true,
+  status: true,
+  detachedBy: true,
+  detachReason: true,
+  detachedAt: true,
+  locked: true,
+  role: true,
+  roleKind: true,
+  story: { select: { status: true } },
+} as const
+
+const asEditEntry = ({ story, ...e }: Prisma.OverviewEntryGetPayload<{ select: typeof EDIT_ENTRY }>): EditEntry => ({
+  ...e,
+  published: story?.status === 'published',
+})
+
+/** The overview as an edit reads it: its fields, its active entries of published stories, and while closing the story that began it. */
+async function editOverview(tx: Tx, id: string): Promise<EditOverview> {
+  const o = await tx.overview.findUnique({ where: { id }, select: EDIT_OVERVIEW })
+  if (!o) throw new NotFoundError('Overview not found')
+  const charter = parseCharter(o.charter)
+  if (!charter) throw new ConflictError('The overview has no readable charter')
+  const activeEntries = await tx.overviewEntry.count({ where: { overviewId: id, status: 'active', story: { status: 'published' } } })
+  const closing =
+    o.status === 'closing'
+      ? await tx.overviewDecision.findFirst({
+          where: { overviewId: id, kind: 'close', outcome: 'closing', undoneAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: { storyId: true },
+        })
+      : null
+  return { ...o, charter, activeEntries, closingStoryId: closing?.storyId ?? null }
+}
+
+/** What an attach reads of the story: published or not, the overview it is in now, and its newest detached row in this one. */
+async function attachStory(tx: Tx, overviewId: string, storyId: string) {
+  const story = await tx.story.findUnique({ where: { id: storyId }, select: { status: true } })
+  if (!story) throw new NotFoundError('Story not found')
+  const active = await tx.overviewEntry.findFirst({ where: { storyId, status: 'active' }, select: { overviewId: true, overview: { select: { title: true } } } })
+  const here = await tx.overviewEntry.findFirst({ where: { storyId, overviewId, status: 'detached' }, orderBy: { detachedAt: 'desc' }, select: EDIT_ENTRY })
+  return {
+    id: storyId,
+    published: story.status === 'published',
+    activeIn: active ? { overviewId: active.overviewId, title: active.overview.title } : null,
+    rowHere: here ? asEditEntry(here) : null,
+  }
+}
+
+const overviewWhere = ({ charter, ...rest }: Partial<OverviewFields>): Prisma.OverviewWhereInput => ({
+  ...rest,
+  ...(charter ? { charter: { equals: json(charter) } } : {}),
+})
+const overviewData = ({ charter, ...rest }: Partial<OverviewFields>): Prisma.OverviewUpdateManyMutationInput => ({
+  ...rest,
+  ...(charter ? { charter: json(charter) } : {}),
+})
+
+/** A plan's changes, each only while its row still holds `before`; one that no longer does rolls the whole plan back. */
+async function applyChanges(tx: Tx, changes: readonly Change[]): Promise<void> {
+  for (const c of changes) {
+    const done =
+      c.table === 'overview'
+        ? await tx.overview.updateMany({ where: { id: c.id, ...overviewWhere(c.before) }, data: overviewData(c.after) })
+        : await tx.overviewEntry.updateMany({ where: { id: c.id, ...c.before }, data: c.after })
+    if (done.count === 0) throw new ConflictError('The overview changed meanwhile: reload the page and try again')
+  }
+}
+
+/** Logs the plan as its decision, with its changes (and for an undo the decision it undid), then applies it. */
+async function applyPlan(tx: Tx, plan: EditPlan, editorId: string, target: string | null): Promise<string> {
+  const decision = await tx.overviewDecision.create({
+    data: {
+      kind: plan.kind,
+      overviewId: plan.overviewId,
+      storyId: plan.storyId,
+      outcome: plan.outcome,
+      inputs: json({ changes: plan.changes, target, reopens: plan.reopens }),
+      actor: editorId,
+    },
+    select: { id: true },
+  })
+  if (plan.create)
+    await tx.overviewEntry.create({
+      data: {
+        id: plan.create.id,
+        overviewId: plan.overviewId,
+        storyId: plan.create.storyId,
+        joinedBy: 'editor',
+        decisionId: decision.id,
+        ...plan.create.fields,
+      },
+    })
+  await applyChanges(tx, plan.changes)
+  if (plan.changes.some(c => c.table === 'entry')) await refreshLastEntry(tx, plan.overviewId)
+  return decision.id
+}
+
+/** A write the one-active-entry index refused, in the editor's words. */
+async function editorWrite<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write()
+  } catch (error) {
+    if (refusedByIndex(error)) throw new ConflictError('The story is in another overview now: reload the page')
+    throw error
+  }
+}
+
+/**
+ * An editor's action (`.context/overviews.md`, "Editor actions and undo"): planned by `planEdit` from
+ * the rows read in the same transaction, logged as its `editor_*` decision with the changes it made,
+ * and applied while the rows still hold what it was planned on. Refusals are ServiceErrors (404 for an
+ * unknown overview, entry or story; 409 otherwise).
+ */
+export async function editorAction(action: EditorAction, editorId: string, db: typeof prisma = prisma): Promise<{ decisionId: string }> {
+  return editorWrite(() =>
+    db.$transaction(async tx => {
+      const o = await editOverview(tx, action.overviewId)
+      const rows: Parameters<typeof planEdit>[2] = {}
+      if (action.kind === 'detach' || action.kind === 'role') {
+        const e = await tx.overviewEntry.findFirst({ where: { id: action.entryId, overviewId: o.id }, select: EDIT_ENTRY })
+        if (!e) throw new NotFoundError('Entry not found')
+        rows.entry = asEditEntry(e)
+      } else if (action.kind === 'attach') {
+        rows.story = await attachStory(tx, o.id, action.storyId)
+        rows.newEntryId = randomUUID()
+      }
+      const plan = planEdit(action, o, rows, { editorId, now: new Date() })
+      return { decisionId: await applyPlan(tx, plan, editorId, null) }
+    }),
+  )
+}
+
+/**
+ * Undo of one decision (`planUndo`): the decision marked undone by the editor, the undo logged as an
+ * `undo` decision with its changes (so it can itself be undone, which makes the decision it undid live
+ * again), and applied while the rows still hold what it was planned on.
+ */
+export async function undoDecision(decisionId: string, editorId: string, db: typeof prisma = prisma): Promise<{ decisionId: string }> {
+  return editorWrite(() =>
+    db.$transaction(async tx => {
+      const d = await tx.overviewDecision.findUnique({
+        where: { id: decisionId },
+        select: { id: true, kind: true, outcome: true, storyId: true, overviewId: true, inputs: true, undoneAt: true },
+      })
+      if (!d) throw new NotFoundError('Decision not found')
+      if (!d.overviewId) throw new ConflictError('The overview this decision was about is gone')
+      const o = await editOverview(tx, d.overviewId)
+      const entries = (await tx.overviewEntry.findMany({ where: { overviewId: o.id }, select: EDIT_ENTRY })).map(asEditEntry)
+      const now = new Date()
+      const plan = planUndo(d, o, entries, { editorId, now })
+      const marked = await tx.overviewDecision.updateMany({ where: { id: d.id, undoneAt: null }, data: { undoneAt: now, undoneBy: editorId } })
+      if (marked.count === 0) throw new ConflictError('This decision is already undone')
+      if (plan.relive) await tx.overviewDecision.updateMany({ where: { id: plan.relive }, data: { undoneAt: null, undoneBy: null } })
+      return { decisionId: await applyPlan(tx, plan, editorId, d.id) }
+    }),
+  )
 }

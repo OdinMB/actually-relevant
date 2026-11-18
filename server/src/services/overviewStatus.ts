@@ -55,7 +55,9 @@ function statusAfter(s: OverviewState, clock: Date, options: StatusOptions): { t
     return closingOver(s, clock, options) && s.closureReviewed ? { to: 'closed', reason: 'end_event' } : null
   }
   if (s.lastEntryAt === null) return null
-  const quiet = daysBetween(s.lastEntryAt, clock)
+  // A person's reopen counts as activity: the next run does not close it again
+  const since = s.reopenedAt && s.reopenedAt.getTime() > s.lastEntryAt.getTime() ? s.reopenedAt : s.lastEntryAt
+  const quiet = daysBetween(since, clock)
   if (s.status === 'closed') return s.closedReason === 'faded' && quiet < options.fadeAfterDays ? { to: 'open', reason: 'active' } : null
   if (quiet >= options.fadeAfterDays) return { to: 'closed', reason: 'faded' }
   if (quiet >= options.quietAfterDays) return s.status === 'quiet' ? null : { to: 'quiet', reason: 'quiet' }
@@ -65,7 +67,8 @@ function statusAfter(s: OverviewState, clock: Date, options: StatusOptions): { t
 /**
  * The moves an overview is due (`.context/overviews.md`, "Status, closing and reviews"): its active
  * entries whose story is no longer published detached, and its scope recomputed, frozen or not; then,
- * unless frozen, its status: open to quiet after `quietAfterDays` without a new entry and back on one,
+ * unless frozen, its status: open to quiet after `quietAfterDays` without a new entry (or since a
+ * person reopened it, when later) and back on one,
  * closed as faded after `fadeAfterDays` and a faded one reopened by a new entry, a closing cancelled by
  * an entry after the end-event story, or closed at its end event once `closingDays` have passed and
  * its review has run. A closing whose end-event story is no longer published is cancelled instead,

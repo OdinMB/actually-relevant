@@ -1642,3 +1642,187 @@ export interface TaskState {
   createdAt: string
   completedAt?: string
 }
+
+// --- Ongoing-story overviews, admin (a hand-written mirror of server/src/services/overviewViews.ts; .context/overviews.md, "Admin") ---
+
+export type OverviewScope = 'single' | 'forming' | 'ongoing'
+export type OverviewStatus = 'open' | 'quiet' | 'closing' | 'closed'
+export type OverviewEntryRole = 'turning_point' | 'routine'
+/** A turning point's kind (server: `ROLE_KINDS`). */
+export type OverviewRoleKind = 'setback' | 'response' | 'spread' | 'decision' | 'escalation' | 'deescalation' | 'money' | 'science' | 'people' | 'milestone'
+
+/** `GET /api/admin/overviews/state`: the admin shows its overview pages while the step is on or any overview exists. */
+export interface OverviewsAdminState {
+  on: boolean
+  count: number
+}
+
+/** One overview in the admin's list. `public`: ongoing and not hidden, so readers see it once the step is on. */
+export interface AdminOverviewListItem {
+  id: string
+  title: string
+  slug: string | null
+  scope: OverviewScope
+  status: OverviewStatus
+  /** end_event, faded or editor; null unless closed. */
+  closedReason: string | null
+  frozen: boolean
+  hidden: boolean
+  public: boolean
+  /** Active entries of published stories. */
+  entries: number
+  foundedAt: string
+  lastEntryAt: string | null
+  issue: { id: string; name: string } | null
+}
+
+export interface OverviewCharter {
+  in: string
+  out: string[]
+  endEvent: string
+}
+
+/** One entry of an overview, active or detached, with its judgment record. */
+export interface AdminOverviewEntry {
+  id: string
+  storyId: string | null
+  story: { id: string; title: string; status: StoryStatus; datePublished: string | null } | null
+  role: OverviewEntryRole
+  roleKind: OverviewRoleKind | null
+  status: 'active' | 'detached'
+  /** pipeline, review or an editor's id. */
+  joinedBy: string
+  joinedAt: string
+  detachedBy: string | null
+  /** unpublished, review, editor or undone. */
+  detachReason: string | null
+  detachedAt: string | null
+  /** An editor attached, detached or set it: automation never reverses it. */
+  locked: boolean
+  /** The shared cause, place and end, each quoting this entry's story and the other side. */
+  shared: Record<'cause' | 'place' | 'end', { story: string; other: string }> | null
+  confidence: number | null
+  model: string | null
+  promptVersion: string | null
+  decisionId: string | null
+}
+
+/** A pool fact a stands line cites, as it stands now; `gone` when it was deleted since. */
+export type AdminStandsFact =
+  | {
+      id: string
+      gone: false
+      storyId: string
+      statement: string
+      supportingSentence: string
+      verdict: 'supported' | 'rejected' | 'unjudged'
+      status: 'unreviewed' | 'reviewed' | 'demoted'
+      slot: string | null
+      outlet: string
+      url: string
+      /** Supported and not demoted: a served line citing an unusable fact is dropped. */
+      usable: boolean
+    }
+  | { id: string; gone: true }
+
+export interface AdminStandsLine {
+  text: string
+  facts: AdminStandsFact[]
+}
+
+/** One version of "Where this stands" with the lines its checks dropped. */
+export interface AdminStandsVersion {
+  id: string
+  number: number
+  status: 'current' | 'superseded'
+  asOf: string
+  writtenAt: string
+  model: string
+  promptVersion: string
+  sentences: AdminStandsLine[]
+  doing: AdminStandsLine[]
+  drops: { label: string; cause: string; problem?: string }[]
+  /** Lines written within the limits, and those any check dropped. */
+  checked: number
+  failed: number
+}
+
+/** One decision of an overview's log, newest first. */
+export interface AdminOverviewDecision {
+  id: string
+  /** link, found, stands, status, close, review, editor_attach … editor_close, undo. */
+  kind: string
+  outcome: string
+  storyId: string | null
+  storyTitle: string | null
+  /** pipeline, review or an editor's id. */
+  actor: string
+  /** The editor's name, when the actor is one. */
+  actorName: string | null
+  createdAt: string
+  undoneAt: string | null
+  undoneByName: string | null
+  costUsd: number
+  model: string | null
+  confidence: number | null
+  inputs: unknown
+  answer: unknown
+  /** Undo can reverse it (the server still refuses one whose work no longer stands, with the reason). */
+  undoable: boolean
+}
+
+/** `GET /api/admin/overviews/:id`. `members` are the entries, active first; `entries` the count of active published ones. */
+export interface AdminOverviewDetail extends AdminOverviewListItem {
+  charter: OverviewCharter
+  charterModel: string
+  closingSince: string | null
+  closedAt: string | null
+  entriesAtLastReview: number
+  reviewedAt: string | null
+  /** The step is switched on. */
+  on: boolean
+  members: AdminOverviewEntry[]
+  stands: AdminStandsVersion[]
+  decisions: AdminOverviewDecision[]
+}
+
+export interface OverviewRef {
+  id: string
+  title: string
+  scope: OverviewScope
+  status: OverviewStatus
+}
+
+/** `GET /api/admin/overviews/stories/:storyId`: the story page's Overview block. */
+export interface StoryOverviewBlock extends OverviewsAdminState {
+  published: boolean
+  membership: {
+    entryId: string
+    overview: OverviewRef
+    role: OverviewEntryRole
+    roleKind: OverviewRoleKind | null
+    joinedBy: string
+    joinedAt: string
+    locked: boolean
+    confidence: number | null
+  } | null
+  /** The overviews it left, newest first. */
+  left: { entryId: string; overview: OverviewRef; detachReason: string | null; detachedAt: string | null; locked: boolean }[]
+  /** Its newest link decision and the candidates that call was shown (`story`: a founding partner), with what the model said of each. */
+  lastLink: {
+    id: string
+    outcome: string
+    overviewId: string | null
+    createdAt: string
+    undoneAt: string | null
+    candidates: { kind: 'overview' | 'story'; ref: string; id: string; title: string | null; distance: number; belongs: string | null }[]
+    refusals: { id: string; reason: string }[]
+  } | null
+  /** Overviews it can be attached to; empty while it is in one. */
+  attachable: OverviewRef[]
+}
+
+/** What every overview action and undo answers. */
+export interface OverviewActionResult {
+  decisionId: string
+}

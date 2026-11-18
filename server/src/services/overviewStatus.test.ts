@@ -24,6 +24,7 @@ const state = (over: Partial<OverviewState> = {}): OverviewState => ({
   burstJoins: 0,
   burstAt: null,
   closureReviewed: false,
+  reopenedAt: null,
   ...over,
 })
 
@@ -53,6 +54,15 @@ describe('nextState', () => {
     expect(statusOf({ ...closing, closureReviewed: true })).toEqual([{ kind: 'status', from: 'closing', to: 'closed', reason: 'end_event' }])
     expect(statusOf({ ...closing, closingSince: daysAgo(6), closureReviewed: true })).toEqual([])
     expect(statusOf({ ...closing, lastEntryAt: daysAgo(5) })).toEqual([{ kind: 'status', from: 'closing', to: 'open', reason: 'closing_cancelled' }])
+  })
+
+  it('counts quiet and fading from a person’s reopen when it is later than the last entry', () => {
+    const reopened = state({ lastEntryAt: daysAgo(200), reopenedAt: daysAgo(1) })
+    expect(statusOf(reopened)).toEqual([])
+    expect(statusOf({ ...reopened, reopenedAt: daysAgo(21) })).toEqual([{ kind: 'status', from: 'open', to: 'quiet', reason: 'quiet' }])
+    expect(statusOf({ ...reopened, status: 'quiet', reopenedAt: daysAgo(120) })).toEqual([{ kind: 'status', from: 'quiet', to: 'closed', reason: 'faded' }])
+    // An entry newer than the reopen counts from the entry
+    expect(statusOf(state({ lastEntryAt: daysAgo(2), reopenedAt: daysAgo(30) }))).toEqual([])
   })
 
   it('counts in development time: the clock is the day linking has reached', () => {

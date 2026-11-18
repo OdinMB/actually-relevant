@@ -10,6 +10,7 @@ import { StoryContextAdmin } from './StoryContextAdmin'
 import { AssessmentFields, StoryTextFields } from './StoryEditFields'
 import { ClusterSection, SocialPostsSection, SourceSection } from './StoryEditorSections'
 import { StoryEditorTabs } from './StoryEditorTabs'
+import { StoryOverview } from './StoryOverview'
 import { StoryResearch } from './StoryResearch'
 import { buildFormState, storyFormErrors, toStoryPayload, type StoryField } from './storyForm'
 import { FIELD_TAB, firstError, tabMarks } from './storyTabs'
@@ -27,7 +28,7 @@ interface StoryEditFormProps {
 /**
  * The story's admin page body (`StoryDetailPage`): its sections as tabs (`StoryEditorTabs`, the
  * open one in the address), the text fields on Story and the assessment's on Assessment, then the
- * source and cluster, Research, Context and the social posts; under them the sticky action bar with
+ * source, cluster and overview, Research, Context and the social posts; under them the sticky action bar with
  * the story's actions, Cancel and Save (`StoryActionBar`). The form holds every tab's fields, so a
  * tab switch keeps unsaved edits; unsaved edits hold every way off the page. Save goes to the first
  * field that cannot be saved, on its tab, rather than sending the form; a save keeps the page open
@@ -107,6 +108,8 @@ export function StoryEditForm({ story, issues, onCancel, onBlueskyGenerate, onMa
               <>
                 <SourceSection story={story} />
                 <ClusterSection story={story} />
+                {/* Shown only while the overview step is on or any overview exists */}
+                <StoryOverview story={story} />
               </>
             ),
             // Admin only; a run writes to the story only when an editor uses its version

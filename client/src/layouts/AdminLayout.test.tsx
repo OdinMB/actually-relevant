@@ -26,6 +26,22 @@ describe('admin nav badges', () => {
     expect(link.querySelector('[data-critical]')).not.toBeNull()
   })
 
+  it('shows Overviews only while the overview step is on or any overview exists', () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <NavItems badgeCounts={{}} />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('link', { name: 'Overviews' })).not.toBeInTheDocument()
+    unmount()
+    render(
+      <MemoryRouter>
+        <NavItems badgeCounts={{}} shown={{ overviews: true }} />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'Overviews' })).toHaveAttribute('href', '/admin/overviews')
+  })
+
   it('shows no badge on Notices with nothing unseen, and keeps the Feedback badge', () => {
     renderNav({ feedback: 2, notices: { unseen: 0, unseenCritical: 0 } })
     expect(screen.getByRole('link', { name: /^Notices$/ })).toBeInTheDocument()

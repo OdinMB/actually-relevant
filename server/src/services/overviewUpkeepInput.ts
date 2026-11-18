@@ -28,7 +28,8 @@ const roleFrom = (role: string, kind: string | null): Role => {
 /**
  * The stories a join flagged as reporting their overview's end event (`reportsEndEvent` on a live
  * `joined` link decision), still active members and published, of an overview that is open or quiet
- * and not frozen, with no `close` decision for that pair but a failed one; oldest first. Each with
+ * and not frozen, with no `close` decision for that pair but a failed one (an undone one included: an
+ * editor's undo of a closing is not judged again); oldest first. Each with
  * the overview's charter and its newest other entries published on or before the story's day.
  */
 export async function pendingClosings(db: OverviewDb): Promise<CloseCase[]> {
@@ -42,7 +43,7 @@ export async function pendingClosings(db: OverviewDb): Promise<CloseCase[]> {
       AND s.status = 'published' AND o.status IN ('open', 'quiet') AND NOT o.frozen
       AND NOT EXISTS (
         SELECT 1 FROM overview_decisions c
-        WHERE c.kind = 'close' AND c.story_id = d.story_id AND c.overview_id = d.overview_id AND c.outcome <> 'failed' AND c.undone_at IS NULL
+        WHERE c.kind = 'close' AND c.story_id = d.story_id AND c.overview_id = d.overview_id AND c.outcome <> 'failed'
       )
     ORDER BY s.date_published, s.id
   `
@@ -93,10 +94,11 @@ const newest = (dates: readonly Date[]): Date | null => (dates.length === 0 ? nu
  * Every overview with an active entry, oldest founding first, as the status machine reads it
  * (`OverviewState`): its active entries of published stories counted, and those of stories no longer
  * published listed; the most stories of one publication day the pipeline joined to it within
- * `nightHours` of `now` and after its last freeze or review (so the joins one freeze answered, its
- * review having cleared it, never freeze it again the next run); when a burst froze it, while no review
- * has run since; while closing, the story whose end-event report began it; and whether a closure
- * review ran for its current closing.
+ * `nightHours` of `now` and after its last freeze, unfreeze, undo or review (so the joins one freeze
+ * answered, its review or an editor having cleared it, never freeze it again the next run); when a
+ * burst froze it, while no review has run since and no editor froze it after (an editor's freeze holds
+ * until an editor lifts it); while closing, the story whose end-event report began it; whether a live
+ * closure review ran for its current closing; and when a person last reopened it, while that stands.
  */
 export async function overviewStates(
   db: OverviewDb,
@@ -120,22 +122,38 @@ export async function overviewStates(
       FROM overview_entries e JOIN stories s ON s.id = e.story_id
       WHERE e.status = 'active' AND e.overview_id = ANY(${ids}::text[])
     `,
-    db.$queryRaw<{ overview_id: string; kind: string; story_id: string | null; trigger: string | null; closing_since: string | null; created_at: Date }[]>`
-      SELECT d.overview_id, d.kind::text AS kind, d.story_id, d.inputs->>'trigger' AS trigger, d.inputs->>'closingSince' AS closing_since, d.created_at
+    db.$queryRaw<
+      {
+        overview_id: string
+        kind: string
+        outcome: string
+        story_id: string | null
+        trigger: string | null
+        closing_since: string | null
+        reopens: boolean
+        created_at: Date
+      }[]
+    >`
+      SELECT d.overview_id, d.kind::text AS kind, d.outcome, d.story_id, d.inputs->>'trigger' AS trigger,
+             d.inputs->>'closingSince' AS closing_since,
+             COALESCE(d.inputs->>'reopens' = 'true' AND d.undone_at IS NULL, false) AS reopens, d.created_at
       FROM overview_decisions d
       WHERE d.overview_id = ANY(${ids}::text[])
-        AND ((d.kind = 'status' AND d.outcome = 'frozen') OR (d.kind = 'review' AND d.outcome = 'reviewed')
-             OR (d.kind = 'close' AND d.outcome = 'closing' AND d.undone_at IS NULL))
+        AND ((d.kind = 'status' AND d.outcome = 'frozen') OR (d.kind = 'review' AND d.outcome = 'reviewed' AND d.undone_at IS NULL)
+             OR (d.kind = 'close' AND d.outcome = 'closing' AND d.undone_at IS NULL)
+             OR d.kind IN ('editor_freeze', 'editor_close', 'undo'))
       ORDER BY d.created_at, d.id
     `,
   ])
   return rows.map(r => {
     const own = entries.filter(e => e.overview_id === r.id)
     const log = decisions.filter(d => d.overview_id === r.id)
-    const frozenAt = log.filter(d => d.kind === 'status').at(-1)?.created_at ?? null
-    const reviewedSince = frozenAt !== null && log.some(d => d.kind === 'review' && d.created_at.getTime() > frozenAt.getTime())
-    // Joins a freeze or a review already answered count no more
-    const countFrom = newest([since, ...log.filter(d => d.kind === 'status' || d.kind === 'review').map(d => d.created_at)])!
+    // The newest freeze: a burst's (a status decision) or an editor's
+    const lastFreeze = log.filter(d => d.kind === 'status' || (d.kind === 'editor_freeze' && d.outcome === 'frozen')).at(-1) ?? null
+    const reviewedSince = lastFreeze !== null && log.some(d => d.kind === 'review' && d.created_at.getTime() > lastFreeze.created_at.getTime())
+    // Joins a freeze, an unfreeze or a review already answered count no more
+    const answered = log.filter(d => d.kind === 'status' || d.kind === 'review' || d.kind === 'editor_freeze' || d.kind === 'undo')
+    const countFrom = newest([since, ...answered.map(d => d.created_at)])!
     const joinsByDay = new Map<string, number>()
     for (const e of own)
       if (e.pipeline_join && e.pipeline_join.getTime() > countFrom.getTime() && e.published && e.date_published)
@@ -156,8 +174,10 @@ export async function overviewStates(
       entriesAtLastReview: r.entries_at_last_review,
       reviewedAt: r.reviewed_at,
       burstJoins: Math.max(0, ...joinsByDay.values()),
-      burstAt: r.frozen && frozenAt !== null && !reviewedSince ? frozenAt : null,
+      // An editor's freeze holds until an editor lifts it: no burst review clears it
+      burstAt: r.frozen && lastFreeze?.kind === 'status' && !reviewedSince ? lastFreeze.created_at : null,
       closureReviewed: closing !== null && log.some(d => d.kind === 'review' && d.trigger === 'closure' && d.closing_since === closing),
+      reopenedAt: newest(log.filter(d => d.reopens).map(d => d.created_at)),
     }
   })
 }

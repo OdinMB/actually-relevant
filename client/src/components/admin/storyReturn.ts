@@ -23,6 +23,7 @@ const LABELS: [RegExp, string][] = [
   [/^\/admin\/stories\/?$/, 'stories'],
   [/^\/admin\/newsletters\/[^/]+\/?$/, 'newsletter'],
   [/^\/admin\/podcasts\/[^/]+\/?$/, 'podcast'],
+  [/^\/admin\/overviews\/[^/]+\/?$/, 'overview'],
 ]
 const UNNAMED = 'previous page'
 const KNOWN_LABELS = new Set([...LABELS.map(([, label]) => label), UNNAMED])

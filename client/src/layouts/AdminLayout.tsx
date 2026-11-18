@@ -23,11 +23,13 @@ import {
   BellAlertIcon,
   ChartBarIcon,
   BanknotesIcon,
+  QueueListIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../lib/auth'
 import { adminApi } from '../lib/admin-api'
 import { useServerTime } from '../hooks/useJobs'
 import { useNoticeCount } from '../hooks/useNotices'
+import { overviewsShown, useOverviewsState } from '../hooks/useOverviews'
 import { useAdminScroll } from '../hooks/useAdminScroll'
 import { feedbackBadge, noticeBadge, type BadgeKey, type NavBadge } from './navBadges'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
@@ -41,6 +43,8 @@ const navigation = [
   { name: 'Dashboard', href: '/admin', icon: HomeIcon, end: true },
   { name: 'Stories', href: '/admin/stories', icon: DocumentTextIcon },
   { name: 'Clusters', href: '/admin/clusters', icon: Square3Stack3DIcon },
+  // Shown while the overview step is on or any overview exists (`useOverviewsState`)
+  { name: 'Overviews', href: '/admin/overviews', icon: QueueListIcon, when: 'overviews' as const },
   { name: 'Feeds', href: '/admin/feeds', icon: RssIcon },
   { name: 'Issues', href: '/admin/issues', icon: TagIcon },
   { name: 'Newsletters', href: '/admin/newsletters', icon: EnvelopeIcon },
@@ -56,10 +60,22 @@ const navigation = [
   { name: 'Stats', href: '/admin/stats', icon: ChartBarIcon },
 ]
 
-export function NavItems({ onClick, badgeCounts }: { onClick?: () => void; badgeCounts: Partial<Record<BadgeKey, NavBadge>> }) {
+/** Nav items that show only while their feature is in use. */
+type Optional = 'overviews'
+
+export function NavItems({
+  onClick,
+  badgeCounts,
+  shown = {},
+}: {
+  onClick?: () => void
+  badgeCounts: Partial<Record<BadgeKey, NavBadge>>
+  shown?: Partial<Record<Optional, boolean>>
+}) {
   return (
     <>
       {navigation.map(item => {
+        if ('when' in item && item.when && !shown[item.when]) return null
         const badge = item.badge ? badgeCounts[item.badge] : undefined
         return (
           <NavLink
@@ -115,6 +131,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     staleTime: 30_000,
   })
   const noticeCountQuery = useNoticeCount()
+  const overviews = useOverviewsState()
   const badgeCounts = {
     feedback: feedbackBadge(feedbackCountQuery.data?.unreadCount),
     notices: noticeBadge(noticeCountQuery.data),
@@ -126,7 +143,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <span className="text-lg font-bold text-neutral-900">Admin</span>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4" aria-label="Admin navigation">
-        <NavItems onClick={onNavigate} badgeCounts={badgeCounts} />
+        <NavItems onClick={onNavigate} badgeCounts={badgeCounts} shown={{ overviews: overviewsShown(overviews.data) }} />
       </nav>
       <ServerClock />
       <div className="border-t border-neutral-200 px-3 py-3">

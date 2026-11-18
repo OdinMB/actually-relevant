@@ -42,8 +42,10 @@ export default defineConfig({
       // raised to 83; statements kept at 84, branches at 80 and lines at 84, as above). Raised
       // 2026-11-18 with the prompt layout and the research cost changes: measured 85.05, 80.94,
       // 83.91, 85.64 (lines raised to 85; statements kept at 84, branches at 80 and functions at 83,
-      // since 85, 81 and 84 would leave no margin)
-      thresholds: { statements: 84, branches: 80, functions: 83, lines: 85 },
+      // since 85, 81 and 84 would leave no margin). Raised 2026-11-18 with the overviews' admin
+      // views: measured 85.45, 80.85, 84.37, 86.13 (statements raised to 85, functions to 84;
+      // branches kept at 80 and lines at 85, since 81 and 86 would leave no margin)
+      thresholds: { statements: 85, branches: 80, functions: 84, lines: 85 },
     },
     projects: [
       {

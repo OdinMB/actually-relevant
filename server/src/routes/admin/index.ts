@@ -18,6 +18,7 @@ import researchRouter from './research.js'
 import researchPassRouter from './researchPass.js'
 import spendingRouter from './spending.js'
 import storyContextRouter from './storyContext.js'
+import overviewRouter from './overviews.js'
 
 const router = Router()
 
@@ -43,6 +44,8 @@ router.use('/cache', cacheRouter)
 router.use('/research', researchRouter)
 // Research passes, research's and context's successor (.context/research-passes.md, "Admin routes")
 router.use('/research-passes', researchPassRouter)
+// Ongoing-story overviews: the list, one overview, a story's block, editor actions and undo (.context/overviews.md, "Admin")
+router.use('/overviews', overviewRouter)
 router.use('/spending', spendingRouter)
 
 export default router

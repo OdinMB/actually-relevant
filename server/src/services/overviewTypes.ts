@@ -132,4 +132,10 @@ export interface OverviewState {
   burstAt: Date | null
   /** A review with the trigger `closure` ran after its closing began. */
   closureReviewed: boolean
+  /**
+   * When a person last reopened it (an editor's reopen, or an undone closure), while that decision
+   * stands: quiet and fading count from then when it is later than the last entry, so a reopen is not
+   * closed again by the next run.
+   */
+  reopenedAt: Date | null
 }
