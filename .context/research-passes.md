@@ -129,7 +129,7 @@ So no pass row, version or Update exists: `updates` is empty on every story, and
 | `POST /passes` | The bulk "Research again" over `{ storyIds }`: 202 `{ taskId }`; 409 while switched off or when another task processes every one of them |
 | `POST /stories/:storyId/undo` | "Undo this update": 204; 409 with nothing to undo, for a status that takes no research write, or when the story changed |
 
-There is no apply endpoint: a pass applies itself. `passEligibility(db, storyId)` (`services/researchPassInput.ts`) gives a story's status, whether a pass of it is running, and the kind of pass it would get: `later` when it has an article to judge (a current version, or `stories.research` set, which the legacy import makes version 1), else `first`, so a story whose first passes kept no article gets a first pass again.
+There is no apply endpoint: a pass applies itself. `passEligibility(db, storyId)` (`services/researchPassInput.ts`) gives a story's status and whether a pass of it is running. The kind of pass is the claim's alone (`passKindOf`, after the legacy import): `later` when the story has a current version to judge (a story with `stories.research` set gets version 1 from the import), else `first`, so a story whose first passes kept no article gets a first pass again.
 
 ## The public updates field
 

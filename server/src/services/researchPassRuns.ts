@@ -10,7 +10,7 @@
  * `research_pass`'s month and checked against that warning level. Nothing here runs while the step's
  * switch is closed (`passSwitchRefusal`). Refusals are ServiceErrors.
  */
-import type { ResearchRunTrigger } from '@prisma/client'
+import type { Prisma, ResearchRunTrigger } from '@prisma/client'
 import { config } from '../config.js'
 import { addMonthSpend } from '../jobs/jobLease.js'
 import { createLogger } from '../lib/logger.js'
@@ -68,11 +68,20 @@ export interface PassClaim {
 type Claim = PassClaim | { refused: 'in-progress' } | { refused: 'cap'; spentUsd: number; ceilingUsd: number }
 
 /**
+ * The kind of pass the story gets: `later` while it has a current version to judge, else `first`
+ * (a story whose first passes kept no article gets a first pass again). The one rule a claim and a
+ * skipped pass record.
+ */
+async function passKindOf(tx: Pick<Prisma.TransactionClient, 'articleVersion'>, storyId: string): Promise<'first' | 'later'> {
+  return (await tx.articleVersion.count({ where: { storyId, status: 'current' } })) > 0 ? 'later' : 'first'
+}
+
+/**
  * Claim a pass of the story, under research's reservation lock, so concurrent starts (the step's, an
  * editor's, a research run's) never pass the cap or run one story twice: cut-off passes marked first,
  * the legacy runs imported into the pool once (read before the lock, written under it), then the pass
- * row written `running` at its ceiling. A
- * story with a current version (the import may make one) gets a later pass, any other a first.
+ * row written `running` at its ceiling. Its kind is `passKindOf`'s once the import ran, so a story
+ * researched before passes gets a later pass against version 1.
  */
 export async function claimPass(storyId: string, trigger: ResearchRunTrigger, now: Date = new Date()): Promise<Claim> {
   // The import's reads before the lock every claim and research start waits on; it checks again under it
@@ -83,7 +92,7 @@ export async function claimPass(storyId: string, trigger: ResearchRunTrigger, no
       await markInterruptedPasses(tx, now)
       if ((await tx.researchPass.count({ where: { storyId, status: 'running' } })) > 0) return { refused: 'in-progress' as const }
       await importLegacyPool(tx, storyId, legacy)
-      const kind = (await tx.articleVersion.count({ where: { storyId, status: 'current' } })) > 0 ? ('later' as const) : ('first' as const)
+      const kind = await passKindOf(tx, storyId)
       const ceilingUsd = passCeilingUsd(kind)
       const spentUsd = await monthToDateUsd(tx, now)
       if (spentUsd + ceilingUsd > config.research.monthlyCapUsd) return { refused: 'cap' as const, spentUsd, ceilingUsd }
@@ -107,7 +116,7 @@ export async function recordSkippedPass(storyId: string, reason: string, now: Da
     async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RESEARCH_RESERVATION_LOCK}::bigint)`
       const top = await tx.researchPass.aggregate({ where: { storyId }, _max: { number: true } })
-      const kind = (await tx.articleVersion.count({ where: { storyId, status: 'current' } })) > 0 ? ('later' as const) : ('first' as const)
+      const kind = await passKindOf(tx, storyId)
       const pass = await tx.researchPass.create({
         data: {
           storyId,
@@ -307,17 +316,29 @@ async function recordSpend(scope: RunScope, storyId: string): Promise<void> {
   }
 }
 
-/** The claimed pass, counted in its task; never throws; the caller completes the task. */
+/**
+ * The claimed pass, counted in its task; never throws; the caller completes the task. A failure
+ * outside the pass (its run scope, the task's counts) fails the pass at its reservation, so no pass
+ * is left `running` until a restart's stale rule finds it.
+ */
 async function passInTask(taskId: string, storyId: string, claimed: { claim: PassClaim; read: ReadState }): Promise<void> {
-  // A person waits on it: standard price, never flex
-  const scope = createRunScope({ jobName: RESEARCH_PASS_JOB, flex: false })
-  const end = await runInScope(scope, () => executePass(storyId, claimed.claim, { actor: 'editor', read: claimed.read }))
-  // A pass whose result the story never took is no "Researched again": the editor is told why
-  if (end.ended === 'completed' && end.why) taskRegistry.skip(taskId, storyId, `Not applied: ${end.why}`)
-  else if (end.ended === 'completed') taskRegistry.increment(taskId, 'completed')
-  else if (end.ended === 'skipped') taskRegistry.skip(taskId, storyId, `Not researched: ${end.reason}`)
-  else taskRegistry.increment(taskId, 'failed', end.ended === 'error' ? end.error : 'The pass failed on a technical problem; the pass view shows the error')
-  await recordSpend(scope, storyId)
+  const { passId } = claimed.claim
+  try {
+    // A person waits on it: standard price, never flex
+    const scope = createRunScope({ jobName: RESEARCH_PASS_JOB, flex: false })
+    const end = await runInScope(scope, () => executePass(storyId, claimed.claim, { actor: 'editor', read: claimed.read }))
+    // A pass whose result the story never took is no "Researched again": the editor is told why
+    if (end.ended === 'completed' && end.why) taskRegistry.skip(taskId, storyId, `Not applied: ${end.why}`)
+    else if (end.ended === 'completed') taskRegistry.increment(taskId, 'completed')
+    else if (end.ended === 'skipped') taskRegistry.skip(taskId, storyId, `Not researched: ${end.reason}`)
+    else taskRegistry.increment(taskId, 'failed', end.ended === 'error' ? end.error : 'The pass failed on a technical problem; the pass view shows the error')
+    await recordSpend(scope, storyId)
+  } catch (err) {
+    const error = sanitizedError(err)
+    log.error({ taskId, storyId, passId, error }, 'research pass task failed outside the pass; the pass is failed at its reservation')
+    await failPass(passId, error)
+    taskRegistry.increment(taskId, 'failed', error)
+  }
 }
 
 /** Start an editor's pass of one story in the background, as a one-story task; refusals as `claimEditorPass`'s. */
@@ -325,7 +346,9 @@ export async function startEditorPass(storyId: string, now: Date = new Date()): 
   const claimed = await claimEditorPass(storyId, now)
   const taskId = taskRegistry.create('research', 1, [storyId])
   log.info({ storyId, passId: claimed.claim.passId, taskId }, 'research pass started by an editor')
-  void passInTask(taskId, storyId, claimed).finally(() => taskRegistry.complete(taskId))
+  void passInTask(taskId, storyId, claimed)
+    .catch((err: unknown) => log.error({ taskId, storyId, error: sanitizedError(err) }, 'research pass task failed'))
+    .finally(() => taskRegistry.complete(taskId))
   return { taskId, passId: claimed.claim.passId }
 }
 
@@ -357,7 +380,9 @@ export async function startEditorPassBatch(storyIds: string[]): Promise<{ taskId
   const taskId = taskRegistry.create('research', chosen.length, queued)
   for (const id of chosen) if (processing.has(id)) taskRegistry.skip(taskId, id, 'Already being processed by another task')
   const semaphore = new Semaphore(config.research.pass.concurrency)
-  void Promise.all(queued.map(id => semaphore.run(() => batchOne(taskId, id)))).finally(() => taskRegistry.complete(taskId))
+  void Promise.all(queued.map(id => semaphore.run(() => batchOne(taskId, id))))
+    .catch((err: unknown) => log.error({ taskId, error: sanitizedError(err) }, 'bulk research passes failed'))
+    .finally(() => taskRegistry.complete(taskId))
   log.info({ taskId, stories: queued.length }, 'bulk research passes started')
   return { taskId }
 }

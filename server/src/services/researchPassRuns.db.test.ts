@@ -39,6 +39,18 @@ vi.mock('./sourceFavicons.js', async importOriginal => ({
   fetchSourceFaviconsInBackground: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('./relatedStories.js', async importOriginal => ({ ...(await importOriginal<typeof import('./relatedStories.js')>()), forgetRelatedStories: vi.fn() }))
+// A run scope that cannot be made: a failure of an editor's task outside its pass
+const scopes = vi.hoisted(() => ({ fail: false }))
+vi.mock('../lib/runUsage.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/runUsage.js')>()
+  return {
+    ...actual,
+    createRunScope: (...args: Parameters<typeof actual.createRunScope>) => {
+      if (scopes.fail) throw new Error('no run scope')
+      return actual.createRunScope(...args)
+    },
+  }
+})
 
 const { claimPass, markInterruptedPasses, PASS_INTERRUPTED, recordSkippedPass, runPipelinePass, startEditorPass, startEditorPassBatch } =
   await import('./researchPassRuns.js')
@@ -182,6 +194,7 @@ describeDb('research passes (PostgreSQL)', () => {
 
   beforeEach(async () => {
     gate.closed = null
+    scopes.fail = false
     vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
     _setProcessStartedAt(ago(24 * 60))
     mockGenerate.mockReset().mockResolvedValue({ embedding: axisVector(5), hash: 'researched' })
@@ -205,13 +218,19 @@ describeDb('research passes (PostgreSQL)', () => {
 
     expect(await claimPass(story.id, 'editor')).toEqual({ refused: 'in-progress' })
 
+    // A first pass that kept no article leaves nothing to judge: the next is a first pass again
     await prisma.researchPass.update({ where: { id: first.passId }, data: { status: 'completed' } })
+    const again = await claimPass(story.id, 'editor')
+    expect(again).toMatchObject({ kind: 'first', ceilingUsd: FIRST })
+    if (!('passId' in again)) throw new Error('refused')
+    await prisma.researchPass.update({ where: { id: again.passId }, data: { status: 'completed' } })
+
     const v = firstVersion()
     await prisma.articleVersion.create({ data: { storyId: story.id, number: 1, kind: 'first', status: 'current', research: v.research } })
     const later = await claimPass(story.id, 'editor')
     expect(later).toMatchObject({ kind: 'later', ceilingUsd: LATER })
     if (!('passId' in later)) throw new Error('refused')
-    expect(await passOf(later.passId)).toMatchObject({ number: 2, trigger: 'editor', kind: 'later', costUsd: LATER })
+    expect(await passOf(later.passId)).toMatchObject({ number: 3, trigger: 'editor', kind: 'later', costUsd: LATER })
   })
 
   it('claims a later pass for a story research already researched: the claim imports its legacy runs as version 1, once', async () => {
@@ -527,6 +546,25 @@ describeDb('research passes (PostgreSQL)', () => {
       { outcome: 'update_failed', verdict: null },
       { outcome: 'update_failed', verdict: null },
     ])
+  })
+
+  it("fails an editor's pass at its reservation when its task breaks outside the pass, so none is left running, alone or in a batch", async () => {
+    const story = await researchable('published')
+    scopes.fail = true
+
+    const { taskId, passId } = await startEditorPass(story.id)
+    await vi.waitFor(() => expect(taskRegistry.get(taskId)?.status).not.toBe('running'), { timeout: 5000, interval: 20 })
+    // The error as it is safe to store and show
+    const error = 'unexpected error (Error)'
+    expect(taskRegistry.get(taskId)).toMatchObject({ completed: 0, failed: 1, errors: [error] })
+    expect(await passOf(passId)).toMatchObject({ status: 'failed', outcome: 'technical', error, costUsd: FIRST })
+
+    const other = await researchable('published')
+    const batch = await startEditorPassBatch([other.id])
+    await vi.waitFor(() => expect(taskRegistry.get(batch.taskId)?.status).not.toBe('running'), { timeout: 5000, interval: 20 })
+    expect(taskRegistry.get(batch.taskId)).toMatchObject({ completed: 0, failed: 1 })
+    expect(await prisma.researchPass.findFirstOrThrow({ where: { storyId: other.id } })).toMatchObject({ status: 'failed', error })
+    expect(mockPass.runResearchPass).not.toHaveBeenCalled()
   })
 
   it('runs a bulk pass as one task, skipping a story it cannot research with the reason', async () => {

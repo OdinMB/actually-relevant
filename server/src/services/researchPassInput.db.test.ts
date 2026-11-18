@@ -198,20 +198,15 @@ describeDb('passEligibility', () => {
       data: { storyId, number, trigger: 'editor', kind: 'first', status, outcome: status === 'running' ? null : 'fallback', costUsd: 0 },
     })
 
-  it("says a story's status, whether a pass of it is running, and which kind of pass it would get", async () => {
+  it("says a story's status and whether a pass of it is running", async () => {
     const feedId = await feed()
     const fresh = await createStory({ feedId, status: 'analyzed', ...assessed })
-    const researched = await createStory({ feedId, status: 'published', ...assessed, datePublished: ago(2) })
-    await prisma.story.update({ where: { id: researched.id }, data: { research: research as unknown as Prisma.InputJsonObject } })
     const running = await createStory({ feedId, status: 'selected', ...assessed })
     await pass(running.id, 'completed', 1)
     await pass(running.id, 'running', 2)
 
-    expect(await passEligibility(prisma, fresh.id)).toEqual({ status: 'analyzed', running: false, kind: 'first' })
-    // Researched before passes: the legacy import makes version 1, so the pass is a later one
-    expect(await passEligibility(prisma, researched.id)).toEqual({ status: 'published', running: false, kind: 'later' })
-    // A first pass that kept no article leaves nothing to judge: the next is a first pass again
-    expect(await passEligibility(prisma, running.id)).toEqual({ status: 'selected', running: true, kind: 'first' })
+    expect(await passEligibility(prisma, fresh.id)).toEqual({ status: 'analyzed', running: false })
+    expect(await passEligibility(prisma, running.id)).toEqual({ status: 'selected', running: true })
     expect(await passEligibility(prisma, '00000000-0000-0000-0000-000000000000')).toBeNull()
   })
 })

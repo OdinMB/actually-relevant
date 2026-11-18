@@ -130,23 +130,21 @@ async function storyInput(
   }
 }
 
+/**
+ * What an editor's pass needs of a story before its claim (`.context/research-passes.md`, "Admin
+ * routes"); which kind of pass it gets is the claim's to decide (`claimPass`).
+ */
 export interface PassEligibility {
   status: string
   /** A pass of the story is running: one at a time. */
   running: boolean
-  /**
-   * `later` when the story has an article to judge: a current version, or researched text the legacy
-   * import makes version 1. A story whose first passes kept no article gets a first pass again.
-   */
-  kind: 'first' | 'later'
 }
 
-/** What an editor's pass needs of a story (`.context/research-passes.md`, "Admin routes"); null for an unknown story. */
+/** What an editor's pass needs of a story; null for an unknown story. */
 export async function passEligibility(db: ResearchDb, storyId: string): Promise<PassEligibility | null> {
-  const [row] = await db.$queryRaw<{ status: string; running: boolean; versioned: boolean }[]>`
+  const [row] = await db.$queryRaw<PassEligibility[]>`
     SELECT s.status::text AS status,
-           EXISTS (SELECT 1 FROM research_passes p WHERE p.story_id = s.id AND p.status = 'running') AS running,
-           (s.research IS NOT NULL OR EXISTS (SELECT 1 FROM article_versions v WHERE v.story_id = s.id AND v.status = 'current')) AS versioned
+           EXISTS (SELECT 1 FROM research_passes p WHERE p.story_id = s.id AND p.status = 'running') AS running
     FROM stories s WHERE s.id = ${storyId}`
-  return row ? { status: row.status, running: row.running, kind: row.versioned ? 'later' : 'first' } : null
+  return row ?? null
 }
