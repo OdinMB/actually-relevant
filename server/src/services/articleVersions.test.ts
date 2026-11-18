@@ -148,6 +148,49 @@ describe('withFrozen', () => {
     expect(merged.caveats).toEqual([old.caveats[1]])
     expect(merged.sources.map(s => s.id)).toEqual(['S0', 'S1', 'E1'])
   })
+
+  it('keeps the source a frozen section cites when the rebuilt projection gives its id to another, renaming that id in the rewritten sections', () => {
+    const old = projection({ paragraphs: [{ sentences: [cited('Fires burned.', 'S0')] }, { sentences: [cited('Smoke closed schools.', 'E1')] }] })
+    const otherEarlier = { ...source('E1', 'earlier'), storyId: 'earlier-2', title: 'Another earlier story' }
+    const next = projection({
+      paragraphs: [{ sentences: [cited('Fires burned more.', 'S0', 'E1')] }, { sentences: [cited('REBUILT', 'E1')] }],
+      whyThisMatters: [],
+      caveats: [],
+      sources: [source('S0', 'original'), otherEarlier],
+    })
+    const before = structuredClone(next)
+    const merged = withFrozen(next, old, [{ part: 'story', from: 1, to: 1 }])
+    expect(merged.paragraphs[1]).toBe(old.paragraphs[1])
+    expect(merged.paragraphs[0]!.sentences[0]!.citations.map(c => c.sourceId)).toEqual(['S0', 'E2'])
+    expect(merged.sources.map(s => [s.id, s.storyId])).toEqual([
+      ['S0', null],
+      ['E1', 'earlier-1'],
+      ['E2', 'earlier-2'],
+    ])
+    expect(next).toEqual(before)
+  })
+
+  it("keeps the kept quote's source, and the same source under its id is no collision", () => {
+    const old = projection({ quoteSourceId: 'S1' })
+    const moved = { ...source('S1'), url: 'https://another.example/b', title: 'Another article' }
+    const next = projection({
+      paragraphs: [{ sentences: [cited('Fires burned more.', 'S0')] }, { sentences: [cited('Smoke closed 12 schools.', 'S1')] }],
+      whyThisMatters: [cited('REBUILT', 'S1')],
+      caveats: [],
+      quoteSourceId: 'S1',
+      sources: [source('S0', 'original'), moved],
+    })
+    const merged = withFrozen(next, old, [{ part: 'whyThisMatters', from: 0, to: 0 }])
+    expect(merged.quoteSourceId).toBe('S1')
+    expect(merged.paragraphs[1]!.sentences[0]!.citations.map(c => c.sourceId)).toEqual(['S2'])
+    expect(merged.sources.map(s => [s.id, s.url])).toEqual([
+      ['S0', 'https://s0.example/a'],
+      ['S1', 'https://s1.example/a'],
+      ['S2', 'https://another.example/b'],
+    ])
+    // The original is the same article under the same id: nothing renamed
+    expect(merged.paragraphs[0]!.sentences[0]!.citations.map(c => c.sourceId)).toEqual(['S0'])
+  })
 })
 
 describe('nextVersion', () => {

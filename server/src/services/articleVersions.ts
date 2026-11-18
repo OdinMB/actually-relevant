@@ -105,14 +105,50 @@ export interface Kept {
   to: number
 }
 
+/** What a source is, whatever id a projection gave it: an earlier story by its id, any other by its address, or its outlet and headline without one. */
+const sourceKey = (s: ResearchedSource) => (s.origin === 'earlier' ? `earlier:${s.storyId}` : s.url ? `url:${s.url}` : `named:${s.outlet}\n${s.title}`)
+
+/** A maker of ids no projection source has: the id's letters with the next number free for them. */
+function freshIds(taken: string[]): (id: string) => string {
+  const top = new Map<string, number>()
+  for (const id of taken) {
+    const m = /^(\D+)(\d+)$/.exec(id)
+    if (m) top.set(m[1]!, Math.max(top.get(m[1]!) ?? 0, Number(m[2])))
+  }
+  return id => {
+    const letters = /^\D+/.exec(id)?.[0] ?? 'S'
+    const n = (top.get(letters) ?? 0) + 1
+    top.set(letters, n)
+    return `${letters}${n}`
+  }
+}
+
 /**
  * The next version's projection: `next`, built from the pool for the new article, with every section
  * `frozen` names taken from `old` as readers saw it, its citations included, so a section no change
  * touched is the same byte for byte; the sources are those something cites, the original first and
  * our earlier stories last, as a projection lists them.
+ *
+ * An id `old` lists keeps `old`'s source: a frozen section cites it, or the quote, which is never
+ * rewritten, or an Update's earlier text. Where `next` gives that id to another source (a legacy
+ * version's numbering is not the pool's), the rewritten sections cite it under an id of its own.
  */
 export function withFrozen(next: ResearchedStory, old: ResearchedStory, frozen: Kept[]): ResearchedStory {
-  const story = { paragraphs: [...next.paragraphs], whyThisMatters: [...next.whyThisMatters], caveats: [...next.caveats] }
+  const oldById = new Map(old.sources.map(s => [s.id, s]))
+  const fresh = freshIds([...old.sources, ...next.sources].map(s => s.id))
+  const renamed = new Map<string, string>()
+  for (const s of next.sources) {
+    const kept = oldById.get(s.id)
+    if (kept && sourceKey(kept) !== sourceKey(s)) renamed.set(s.id, fresh(s.id))
+  }
+  const touched = (t: CitedText) => t.citations.some(c => renamed.has(c.sourceId))
+  const rename = (t: CitedText): CitedText =>
+    touched(t) ? { ...t, citations: t.citations.map(c => ({ ...c, sourceId: renamed.get(c.sourceId) ?? c.sourceId })) } : t
+  const story = {
+    paragraphs: next.paragraphs.map(p => (p.sentences.some(touched) ? { sentences: p.sentences.map(rename) } : p)),
+    whyThisMatters: next.whyThisMatters.map(rename),
+    caveats: next.caveats.map(rename),
+  }
   for (const k of frozen) {
     if (k.part === 'story') {
       const p = old.paragraphs[k.from]
@@ -124,7 +160,12 @@ export function withFrozen(next: ResearchedStory, old: ResearchedStory, frozen: 
   }
   const all = [...story.paragraphs.flatMap(p => p.sentences), ...story.whyThisMatters, ...story.caveats]
   const cited = new Set([...all.flatMap(t => t.citations.map(c => c.sourceId)), ...(next.quoteSourceId ? [next.quoteSourceId] : [])])
-  const known = new Map<string, ResearchedSource>([...old.sources, ...next.sources].map(s => [s.id, s]))
+  const known = new Map<string, ResearchedSource>(oldById)
+  for (const s of next.sources) {
+    const id = renamed.get(s.id)
+    if (id) known.set(id, { ...s, id })
+    else if (!known.has(s.id)) known.set(s.id, s)
+  }
   const listed = [...known.values()].filter(s => s.origin === 'original' || cited.has(s.id))
   return {
     ...story,
