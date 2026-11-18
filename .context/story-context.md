@@ -101,7 +101,7 @@ No budget stops the step (owner decision 2026-11-16, ADR-0060). A story's calls 
 
 ## What readers get
 
-`GET /api/stories/:slug/context` (`routes/public/stories.ts`, `services/storyContextView.ts`), `Cache-Control: public, max-age=60`. **Not in the OpenAPI contract**, like `/appearances`, so modules 2 and 3 can still change the shape. Only a published story's boxes of its newest run that wrote any, not demoted, in order; a sentence citing a fact no longer shown (rejected or demoted) is dropped with it, and a box left with no sentence and no visual is left out before places are worked out (so is an honest gap stored before 2026-11-17; an In numbers box stored before then is never read, Records above). A story without context, unknown or not published gets `boxes: []`, so cards built before publishing appear with the story when it is published, never before. The route reads the story's text and `research` (for its places) only once a box is served, so a story without cards costs two small queries.
+`GET /api/stories/:slug/context` (`routes/public/stories.ts`, `services/storyContextView.ts`), `Cache-Control: public, max-age=60`. **Not in the OpenAPI contract**, like `/appearances`, so modules 2 and 3 can still change the shape. Only a published story's boxes of its newest run that wrote any, not demoted, in order, unless a research pass wrote cards: then the newest such pass's, and no context run's (`cardRecords`, `services/storyCards.ts`; `.context/research-passes.md`, "The cards a pass writes"; no pass runs while that step is off); a sentence citing a fact no longer shown (rejected or demoted) is dropped with it, and a box left with no sentence and no visual is left out before places are worked out (so is an honest gap stored before 2026-11-17; an In numbers box stored before then is never read, Records above). A story without context, unknown or not published gets `boxes: []`, so cards built before publishing appear with the story when it is published, never before. The route reads the story's text and `research` (for its places) only once a box is served, so a story without cards costs two small queries.
 
 ```ts
 {
@@ -140,15 +140,16 @@ Routes in `routes/admin/storyContext.ts` (mounted under `/api/admin/stories`, ad
   ```ts
   {
     run: { id; status; outcome; startedAt; finishedAt; costUsd; modelUsd; searchUsd; tavilyCredits; boxes; error; result /* ContextRunRecord */ } | null,  // the newest run
-    boxes: { id; type; heading; teaser; status; hidden; place /* where the page shows it now; its stored place, or section, when the page does not serve it */; storedPlace /* P<n>, W<n> or null */; placeByEditor; sources: { outlet; url }[]; asOf; position }[],  // the newest run that wrote boxes, hidden ones included; placed as the page places them, on the story's day (today for a story not published)
+    boxes: { id; type; heading; teaser; status; hidden; place /* where the page shows it now; its stored place, or section, when the page does not serve it */; storedPlace /* P<n>, W<n> or null */; placeByEditor; sources: { outlet; url }[]; asOf; position }[],  // the boxes the page serves (the newest research pass's, else the newest run's that wrote boxes), hidden ones included; placed as the page places them, on the story's day (today for a story not published)
+    pass: { id; number; writtenAt } | null,  // the research pass that wrote the boxes, null for a context run's; the admin then shows it in place of the run
     places: { place /* P<n>, W<n>, section */; label /* 'Paragraph 1', 'Why This Matters 1', 'More context' */; text /* its start, 80 characters */ }[],
     placement: 'model' | 'random' | 'section',
     gather: { eligible /* published, with research facts */; refusal /* why Gather context is closed now: web search off, not eligible, a run running; or null */ }
   }
   ```
 - `POST /api/admin/stories/:id/context/run` (rate-limited as an expensive operation) → 202 `{ taskId, runId }`: starts an editor's run ("On demand") as a one-story task, polled at `GET /api/admin/stories/tasks/:taskId`. 409 with the reason while it cannot start; 404 for an unknown story.
-- `PUT /api/admin/stories/:id/context { hidden: boolean }` → 204: hides every box (`demoted`) or shows the hidden ones again (`unreviewed`). Nothing is deleted.
-- `PATCH /api/admin/stories/:id/context/boxes/:boxId { hidden?: boolean, place?: 'P<n>' | 'W<n>' | 'section' }` (at least one) → 204: hides or shows one box, and moves it, setting `place_by_editor`. 400 for a place the story does not have; 404 for an In numbers box stored before 2026-11-17 (until then, moving it out of the section was a 400).
+- `PUT /api/admin/stories/:id/context { hidden: boolean }` → 204: hides every box the page serves (`demoted`) or shows the hidden ones again (`unreviewed`): the newest pass's when a pass wrote cards, an older pass's and the context runs' left as they are. Nothing is deleted.
+- `PATCH /api/admin/stories/:id/context/boxes/:boxId { hidden?: boolean, place?: 'P<n>' | 'W<n>' | 'section' }` (at least one) → 204: hides or shows one box, a context run's or a pass's, and moves it, setting `place_by_editor`. 400 for a place the story does not have; 404 for an In numbers box stored before 2026-11-17 (until then, moving it out of the section was a 400).
 
 Hiding and moving are the one way a person changes what the step built (ADR-0062); an editor's run writes new cards by the step's own rules and checks, keeping those choices. Who hid a card, and when, is not recorded.
 
@@ -191,6 +192,7 @@ That change also sets `.context/ai-transparency.md` (the story-context row) and 
 | `server/src/services/storyContextLabels.ts` | A tile's label without what its card already says (`tileLabel`), applied by the view |
 | `server/src/services/storyContextSources.ts`, `storyContextSearch.ts` | Pass 2's request, source filter, cache key and passage; the cache and Tavily |
 | `server/src/services/storyContextLayout.ts`, `storyContextPlacement.ts` | A story's places; where each box sits |
+| `server/src/services/storyCards.ts` | Which records a story's cards come from: the newest research pass's boxes and the pool's facts, else the context runs' (`cardRecords`, the view's and the admin's read) |
 | `server/src/services/storyContextServed.ts` | Which boxes the page serves and what each shows, placed: the one entry point of the view, the admin and the eval |
 | `server/src/services/storyContextView.ts` | The public route's answer |
 | `server/src/services/storyContextAdmin.ts`, `server/src/routes/admin/storyContext.ts` | The admin's view and edits |
