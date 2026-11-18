@@ -1,8 +1,9 @@
 /**
  * The overview evals' own prompts and output schemas, never production's: drafting a gap key
- * (`gapDraft.ts`), and the strong judge's three questions on story context (`contextJudge.ts`):
+ * (`gapDraft.ts`), the strong judge's three questions on story context (`contextJudge.ts`):
  * which key needs the kept cards meet, whether a figure fact's structured fields are right, and
- * whether a note beside a paragraph or point adds to it. Box support is judged with production's own
+ * whether a note beside a paragraph or point adds to it; and its question on a later pass's Update
+ * note (`update.ts`): whether it says what changed and why. Box support is judged with production's own
  * fact-check prompt, not here. Written under `.context/prompting.md`: role, goal, XML blocks,
  * declarative requirements, format guidance in the schemas' `.describe()`s. Every fetched text sits
  * in escaped XML behind research's untrusted-input line; our own story is marked as ours. Plain
@@ -325,5 +326,74 @@ ${notes}
 - A card adds to its passage when it gives a reader of that passage something the passage does not say and that helps them understand it: a comparison for its figure, a cause, who it reaches, what is being done, what comes next, a term it uses.
 - A card that restates its passage does not add to it, nor does one that bears on another part of the story rather than this passage.
 - Judge the card's place beside its passage only, not whether its facts are true.
+</REQUIREMENTS>`
+}
+
+// ---------------------------------------------------------------------------
+// Judge: an Update note (the `update` step)
+// ---------------------------------------------------------------------------
+
+export const noteJudgeSchema = z.object({
+  accurate: z.boolean().describe('True when everything the note says matches <CHANGES> and <FACTS>. False when it states anything they do not.'),
+  complete: z
+    .boolean()
+    .describe('True when the note says what changed in the story and why: the newer reporting behind the change. False when either is missing.'),
+  problem: z.string().describe('One short sentence: what the note gets wrong or leaves out. Empty string when it is accurate and complete.'),
+})
+
+export type NoteJudgeAnswer = z.infer<typeof noteJudgeSchema>
+
+export interface NoteJudgeInput {
+  /** The story's day, `YYYY-MM-DD`. */
+  storyDay: string
+  /** Each section the update changed: its text before, and after (null when it was removed). */
+  changes: { section: string; before: string; after: string | null }[]
+  /** The newer facts the changes rest on, and the facts they showed wrong. */
+  facts: { id: string; statement: string; outlet: string; date: string | null; contradicted: boolean }[]
+  note: string
+}
+
+export function buildNoteJudgePrompt(input: NoteJudgeInput): string {
+  const changes = input.changes
+    .map(
+      c => `<CHANGE section="${escapeXml(c.section)}">
+${tag('BEFORE', c.before)}
+${c.after === null ? '<AFTER removed="true"></AFTER>' : tag('AFTER', c.after)}
+</CHANGE>`,
+    )
+    .join('\n')
+  const facts = input.facts
+    .map(
+      f =>
+        `<FACT id="${escapeXml(f.id)}" outlet="${escapeXml(f.outlet)}" date="${escapeXml(f.date ?? 'unknown')}"${f.contradicted ? ' contradicted="true"' : ''}>${escapeXml(f.statement)}</FACT>`,
+    )
+    .join('\n')
+  return `<ROLE>
+You are a standards editor. You check the short Update a news site prints at the top of a story it has corrected or brought up to date.
+</ROLE>
+
+<GOAL>
+Judge whether <NOTE> tells a reader accurately and completely what changed in the story and why.
+</GOAL>
+
+${tag('STORY_DATE', input.storyDay)}
+
+<CHANGES>
+The sections of our story the update changed, as they read before and after. Our own text.
+${changes}
+</CHANGES>
+
+<FACTS>
+The newer reporting the changes rest on; a fact marked contradicted is one the story had relied on and newer reporting showed wrong. ${UNTRUSTED}
+${facts}
+</FACTS>
+
+${tag('NOTE', input.note)}
+
+<REQUIREMENTS>
+- The note is accurate when every claim in it is stated by <CHANGES> or <FACTS>: no figure, date, name or cause they do not give.
+- The note is complete when a reader learns what in the story changed (the claim, figure or section) and why (the newer reporting, or the earlier claim shown wrong). Every change need not be listed when the note names the main one and says the rest were brought up to date.
+- A note that only says the story was updated, without what changed, is not complete.
+- Judge the note against <CHANGES> and <FACTS> only, never on your own knowledge of the subject.
 </REQUIREMENTS>`
 }

@@ -1,22 +1,26 @@
 /**
- * The story inputs the `gap-draft` and `context` steps read, through the read-only session, each
- * kind cached by slug in its own file: `gap-draft`'s production `loadContextInput` per story (its
- * text and places, its newest research run with facts, the reusable facts of the earlier stories
- * research linked) in `.cache/context-inputs.json`, and `context`'s first-pass input
+ * The story inputs the `gap-draft`, `context` and `update` steps read, through the read-only
+ * session, each kind cached by slug in its own file: `gap-draft`'s production `loadContextInput` per
+ * story (its text and places, its newest research run with facts, the reusable facts of the earlier
+ * stories research linked) in `.cache/context-inputs.json`; `context`'s first-pass input
  * (`loadFirstPassInput`: research's story, the story's own places, the earlier stories' reusable
- * facts) in `.cache/pass-inputs.json`. The cache keeps the prompts, and with them the call cache's
- * keys, stable while the database changes; a slug it does not hold is loaded and added, and
+ * facts) in `.cache/pass-inputs.json`; and `update`'s researched story (its day, the pool and
+ * version the legacy import makes) in `.cache/update-inputs.json`. The cache keeps the prompts, and
+ * with them the call cache's keys, stable while the database changes; a slug it does not hold is loaded and added, and
  * `--refresh-fixtures` loads every slug again. A story with no input is cached as null.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { readLegacyImport } from '../../../services/legacyPool.js'
 import type { PassInput } from '../../../services/researchPass.js'
 import { loadFirstPassInput } from '../../../services/researchPassInput.js'
 import { loadContextInput } from '../../../services/storyContextInput.js'
 import type { ContextInput } from '../../../services/storyContextPipeline.js'
 import type { SelectDb } from '../readOnlyDb.js'
+import type { UpdateStory } from './updateFixtures.js'
 
 export const CONTEXT_INPUTS_VERSION = 1
 export const PASS_INPUTS_VERSION = 1
+export const UPDATE_INPUTS_VERSION = 1
 
 export interface InputCache<T> {
   version: number
@@ -43,6 +47,19 @@ export const loadInputsBySlug = (db: SelectDb, slugs: string[]): Promise<Map<str
 /** Each slug's first-pass input: none for a story research cannot run on. */
 export const loadPassInputsBySlug = (db: SelectDb, slugs: string[]): Promise<Map<string, PassInput | null>> =>
   bySlug(db, slugs, (id, slug) => loadFirstPassInput(db, id, `eval-${slug}`))
+
+/**
+ * Each slug's researched story as the `update` step reads it: its publishing day, and the pool and
+ * version 1 the legacy import makes of its runs (`readLegacyImport`: read, never written). None for
+ * a story not published or without a researched version.
+ */
+export const loadUpdateStoriesBySlug = (db: SelectDb, slugs: string[]): Promise<Map<string, UpdateStory | null>> =>
+  bySlug(db, slugs, async (id, slug) => {
+    const [row] = await db.$queryRaw<{ day: Date | null }[]>`SELECT s.date_published AS day FROM stories s WHERE s.id = ${id} AND s.status = 'published'`
+    if (!row?.day) return null
+    const { pool, version } = await readLegacyImport(db, id)
+    return version ? { slug, storyDay: row.day.toISOString().slice(0, 10), version, pool: { sources: pool.sources, facts: pool.facts } } : null
+  })
 
 function readCache<T>(file: string, version: number): InputCache<T> | null {
   if (!existsSync(file)) return null

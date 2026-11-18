@@ -1,6 +1,6 @@
 /**
  * `overview-eval.md` for `eval:overviews`: a section per step that ran (the answer keys, the gap keys
- * and their drafts, story context against its bars, the fact check under planted errors, research's
+ * and their drafts, story context against its bars, a later pass's updates against theirs, the fact check under planted errors, research's
  * cost baseline), what was skipped and why, then the spend and the fixtures' anchor. The name
  * carries a tag for every departure from the default run, so a trial never overwrites the report of
  * record. Pure.
@@ -21,6 +21,8 @@ import type { GapKeyResult } from './gapKeyCheck.js'
 import type { KeyResult } from './keyCheck.js'
 import { expectedSupported, FIELD_KINDS, VARIANT_KINDS, type VariantKind } from './plant.js'
 import { cell, metText, quoted, spreadText, usd } from './reportText.js'
+import type { UpdateStepReport } from './update.js'
+import { updateLines } from './updateReport.js'
 
 export type ReportNameInput = Pick<OverviewOptions, 'steps' | 'arms' | 'size' | 'repeat' | 'limit' | 'facts' | 'half'>
 
@@ -65,6 +67,7 @@ export interface OverviewReportInput {
   gapKeys?: GapKeyResult[]
   gapDraft?: GapDraftReport
   context?: ContextStepReport
+  update?: UpdateStepReport
   factCheck?: FactCheckReport
   baseline?: Baseline
   skipped: { step: string; reason: string }[]
@@ -232,6 +235,7 @@ export function renderOverviewReport(input: OverviewReportInput): string {
     ...(input.gapKeys ? ['## Gap keys', '', ...gapKeyLines(input.gapKeys), ''] : []),
     ...(input.gapDraft ? ['## Gap-key drafts', '', ...gapDraftLines(input.gapDraft), ''] : []),
     ...(input.context ? ['## Story context against the bars', '', ...contextLines(input.context), ''] : []),
+    ...(input.update ? ["## A later pass's updates against the bars", '', ...updateLines(input.update), ''] : []),
     ...(input.factCheck ? ['## Fact check under planted errors', '', ...factCheckLines(input.factCheck), ''] : []),
     ...(input.baseline ? ["## Research's cost baseline", '', ...baselineLines(input.baseline), ''] : []),
     ...(input.skipped.length > 0 ? ['## Skipped', '', ...input.skipped.map(s => `- ${s.step}: ${s.reason}`), ''] : []),

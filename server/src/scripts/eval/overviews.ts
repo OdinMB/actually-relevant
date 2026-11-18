@@ -3,13 +3,15 @@
  * answer keys against the database, production's research fact check under planted errors, and
  * research's real cost; and story context's gate: the gap keys drafted and checked, production's
  * first research pass replayed on their stories against the bars (its cards judged), and the fact
- * check on its facts.
+ * check on its facts; and a later pass's article step replayed on the answer keys' researched
+ * stories with the facts found since and planted corrections (`update`), its notes judged.
  *
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps fact-check --repeat 3 --budget 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps gap-draft
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps context,fact-check --facts context --half judge --repeat 3
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval --steps update --half judge --repeat 3
  *
  * Reads the database through the read-only session and writes nothing to any database; its only
  * HTTP is OpenAI, and Tavily for the `context` step. Writes overview-eval[-tags].md into --out, the
@@ -28,7 +30,14 @@ import { loadBaselineRuns, summarizeBaseline, type Baseline } from './overviews/
 import type { CallEstimate } from './overviews/callBudget.js'
 import { runContextStep, type ContextStepOptions, type ContextStepRun } from './overviews/context.js'
 import { contextFactFixtures } from './overviews/contextFacts.js'
-import { contextInputsFor, loadInputsBySlug, loadPassInputsBySlug, PASS_INPUTS_VERSION } from './overviews/contextInputs.js'
+import {
+  contextInputsFor,
+  loadInputsBySlug,
+  loadPassInputsBySlug,
+  loadUpdateStoriesBySlug,
+  PASS_INPUTS_VERSION,
+  UPDATE_INPUTS_VERSION,
+} from './overviews/contextInputs.js'
 import { estimateFactCheck, runFactCheck } from './overviews/factCheck.js'
 import { scoreArm } from './overviews/factCheckScore.js'
 import { loadFactFixtures, reusableFixtures, type FactFixture, type FactFixtures } from './overviews/factFixtures.js'
@@ -37,12 +46,14 @@ import { checkGapKeyFiles } from './overviews/gapKeyCheck.js'
 import { checkKeyFiles, loadKeyStories } from './overviews/keyCheck.js'
 import { readGapKeyFiles, readKeyFiles } from './overviews/keyFiles.js'
 import { overviewReportName, renderOverviewReport, type FactCheckReport, type FactSample, type OverviewReportInput } from './overviews/report.js'
+import { runUpdateStep, type UpdateStepOptions } from './overviews/update.js'
+import type { UpdateStory } from './overviews/updateFixtures.js'
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 const pct = (v: number | null) => (v === null ? 'n/a' : `${(v * 100).toFixed(1)}%`)
 const presence = (v: string | undefined) => (v ? 'present' : 'missing')
 /** The steps that call a model; a run of none of them, or a dry run, is offline. */
-const CALLING_STEPS: OverviewStep[] = ['gap-draft', 'context', 'fact-check']
+const CALLING_STEPS: OverviewStep[] = ['gap-draft', 'context', 'update', 'fact-check']
 
 /** The read-only session, opened on first use only: a run of the key format alone needs none. */
 function lazySession() {
@@ -157,8 +168,19 @@ async function main(): Promise<void> {
     console.log(`pass inputs: ${r.loaded} of ${slugs.length} loaded from the database, the rest cached`)
     return r.inputs
   }
+  /** A researched story's version and pool per slug, cached in `.cache/update-inputs.json`: the `update` step replays a later pass on it. */
+  const updateStories = async (slugs: string[]) => {
+    const r = await contextInputsFor<UpdateStory>(slugs, {
+      file: join(cacheDir, 'update-inputs.json'),
+      version: UPDATE_INPUTS_VERSION,
+      refresh: opts.refreshFixtures,
+      load: async s => (await session.get()).read(q => loadUpdateStoriesBySlug(q, s)),
+    })
+    console.log(`update stories: ${r.loaded} of ${slugs.length} loaded from the database, the rest cached`)
+    return r.inputs
+  }
   try {
-    const keyFiles = runs('keys') || runs('gap-draft') ? readKeyFiles() : []
+    const keyFiles = runs('keys') || runs('gap-draft') || runs('update') ? readKeyFiles() : []
     if (runs('keys')) for (const k of keyFiles) console.log(`${k.file}: ${k.errors.length === 0 ? 'format ok' : `${k.errors.length} format errors`}`)
     const gapKeyFiles = runs('gap-keys') || runs('context') ? readGapKeyFiles() : []
     if (runs('gap-keys')) {
@@ -192,6 +214,19 @@ async function main(): Promise<void> {
       budgetUsd: opts.budget,
       onDone: r => console.log(`context: ${r.slug} run ${r.run}: ${r.result.status}, ${r.result.outcome ?? 'no outcome'}, ${r.result.boxes.length} cards`),
     })
+    const updateOptions = (dryRun: boolean): UpdateStepOptions => ({
+      ctx,
+      files: keyFiles,
+      half: opts.half,
+      ...limit,
+      stories: updateStories,
+      canCall,
+      dryRun,
+      repeat: opts.repeat,
+      concurrency: opts.concurrency,
+      budgetUsd: opts.budget,
+      onDone: r => console.log(`update: ${r.fixture.id} run ${r.run}: ${r.result.outcome}, ${r.result.demoted.length} demoted`),
+    })
 
     const fx = runs('fact-check') && opts.facts === 'research' ? await getFactFixtures(opts, cacheDir, session) : null
     const facts = fx ? (opts.limit === undefined ? fx.facts : fx.facts.slice(0, opts.limit)) : []
@@ -214,6 +249,13 @@ async function main(): Promise<void> {
         const { report } = await runContextStep(contextOptions(true))
         console.log(
           `context: ${report.stories} stories of ${report.keys} keys × ${report.repeat} run(s); desk estimate up to ${usd(report.deskUsd ?? 0)} (the pipeline's bound and the strong judge)`,
+        )
+      }
+      if (runs('update')) {
+        const { report } = await runUpdateStep(updateOptions(true))
+        const cases = Object.values(report.cases).reduce((a, b) => a + b, 0)
+        console.log(
+          `update: ${cases} cases from ${report.stories} stories × ${report.repeat} run(s); desk estimate up to ${usd(report.deskUsd ?? 0)} (each case's reserve and the note judge)`,
         )
       }
       console.log(`folder spend so far ${usd(ctx.spentUsd())}; budget ${usd(opts.budget)} (a cap on the folder's model ledger plus Tavily credits)`)
@@ -275,6 +317,24 @@ async function main(): Promise<void> {
             console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no verdicts' : b.met ? 'met' : 'not met'})`)
         } catch (err) {
           failed('context', err)
+        }
+      }
+    }
+    if (runs('update')) {
+      if (!canCall) {
+        skipped.push({
+          step: 'update',
+          reason: "needs OPENAI_API_KEY: each step's calls depend on the answers before them, so whether the cache holds them all is known only by running",
+        })
+      } else {
+        try {
+          const u = await runUpdateStep(updateOptions(false))
+          report.update = u.report
+          if (u.report.judge?.stopped) skipped.push({ step: 'update (note judge)', reason: u.report.judge.stopped })
+          for (const b of u.report.score.bars)
+            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no verdicts' : b.met ? 'met' : 'not met'})`)
+        } catch (err) {
+          failed('update', err)
         }
       }
     }

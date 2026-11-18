@@ -78,6 +78,12 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   // what the step runs; held below to doing no I/O of its own.
   'services/researchPass.js': '*',
   'services/researchPool.js': '*',
+  // A later pass's article step, so the `update` step runs what a later pass runs; held below to doing no I/O of its own.
+  'services/researchPassLater.js': '*',
+  // A version's article and its sections as readers see them (pure): the `update` step's fixtures and its identity bar.
+  'services/articleVersions.js': ['versionArticle', 'sectionTexts'],
+  // What the legacy import makes of a story's runs, read with SELECTs through the client it is given (held below), never written.
+  'services/legacyPool.js': ['readLegacyImport'],
   // The text readers see of an applied research version (pure): eval:overviews finds the answer keys' quotes in it.
   'services/researchedStory.js': ['storedResearchText'],
   // Production's story context steps, so the `context` step of eval:overviews runs what the job
@@ -118,6 +124,7 @@ const RESEARCH_SERVICE_MODULES = [
   'researchCopying.ts',
   'researchPass.ts',
   'researchPool.ts',
+  'researchPassLater.ts',
 ]
 
 /** Constants a research module may take from the Tavily module, which makes the HTTP request: never its request function. */
@@ -226,6 +233,16 @@ describe('eval harness has no write path', () => {
     expect(importsOf(text).filter(i => /lib\/prisma(\.js)?$|\.\/llm\.js$|lib\/tavily\.js$/.test(i.specifier))).toEqual([])
     expect(/\bprisma\.|\$executeRaw|\$queryRawUnsafe/.test(text)).toBe(false)
     const queries = [...text.matchAll(/\$queryRaw<[^`]*`([^`]*)`/g)].map(m => m[1]!.trim())
+    expect(queries.length).toBeGreaterThan(0)
+    expect(queries.filter(q => !/^SELECT\b/.test(q))).toEqual([])
+  })
+
+  it('reads what the legacy import makes with SELECTs only, through the client it is given, and writes nothing', () => {
+    const text = stripComments(readFileSync(join(ROOT, '../../services/legacyPool.ts'), 'utf8'))
+    const read = /export async function readLegacyImport[\s\S]*?\n}/.exec(text)?.[0] ?? ''
+    expect(read).not.toBe('')
+    expect(/\bprisma\.|\$executeRaw|\$queryRawUnsafe|insert[A-Z]\w*\(/.test(read)).toBe(false)
+    const queries = [...read.matchAll(/\$queryRaw<[^`]*`([^`]*)`/g)].map(m => m[1]!.trim())
     expect(queries.length).toBeGreaterThan(0)
     expect(queries.filter(q => !/^SELECT\b/.test(q))).toEqual([])
   })
