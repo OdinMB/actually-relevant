@@ -204,7 +204,8 @@ class WorkingPool {
   readonly sources: PoolSource[]
   readonly facts: PoolFact[]
   readonly changed = new Set<string>()
-  private readonly keys: Set<string>
+  /** Each fact's key and the ref the pool holds it under. */
+  private readonly keys = new Map<string, string>()
 
   constructor(
     private readonly pool: Pool,
@@ -212,7 +213,15 @@ class WorkingPool {
   ) {
     this.sources = pool.sources.map(s => ({ ...s }))
     this.facts = pool.facts.map(f => ({ ...f }))
-    this.keys = new Set(this.facts.map(f => poolFactKey(f, this.sourceOf(f))))
+    for (const f of this.facts) {
+      const key = poolFactKey(f, this.sourceOf(f))
+      if (!this.keys.has(key)) this.keys.set(key, f.ref)
+    }
+  }
+
+  /** Whether the pool holds a fact of this key (`poolFactKey`). */
+  holds(key: string): boolean {
+    return this.keys.has(key)
   }
 
   sourceOf(f: Pick<PoolFact, 'sourceRef'>): PoolSource {
@@ -235,15 +244,16 @@ class WorkingPool {
     return added
   }
 
-  /** A fact of a pool source, unless the pool holds it already by key; its ref. */
-  add(source: PoolSource, f: Omit<PoolFact, 'id' | 'ref' | 'sourceRef' | 'firstPassId' | 'checkedBy' | 'status' | 'drop'>): string | null {
+  /** A fact of a pool source, added unless the pool holds it already by key; its ref in the pool either way. */
+  add(source: PoolSource, f: Omit<PoolFact, 'id' | 'ref' | 'sourceRef' | 'firstPassId' | 'checkedBy' | 'status' | 'drop'>): string {
     const key = poolFactKey(f, source)
-    if (this.keys.has(key)) return null
-    this.keys.add(key)
+    const known = this.keys.get(key)
+    if (known !== undefined) return known
     const ref = nextFactRef(
       source.ref,
       this.facts.map(x => x.ref),
     )
+    this.keys.set(key, ref)
     this.facts.push({ ...f, id: null, ref, sourceRef: source.ref, firstPassId: this.passId, checkedBy: null, status: 'unreviewed', drop: null })
     return ref
   }
@@ -659,7 +669,12 @@ const pickStructured = (f: ContextFactData) => ({
   validity: f.validity,
 })
 
-/** The linked earlier stories' facts offered to the gap list and the cards, at most `maxReusedFacts`, under source refs after the pool's. */
+/**
+ * The linked earlier stories' facts offered to the gap list and the cards, each once by its key, at
+ * most `maxReusedFacts`, under source refs after the pool's. A fact the pool holds already (an earlier
+ * pass joined it, or one of the story's pages says it) is the pool's, never offered again: the cards
+ * see it under its pool ref as they see the pages' facts, and not at all once the pool demoted it.
+ */
 function offered(input: PassInput, pool: WorkingPool): ContextFactData[] {
   const linked = new Set(pool.sources.flatMap(s => (s.origin === 'earlier' && s.earlierStoryId ? [s.earlierStoryId] : [])))
   // Numbered after the pool's pages as they stand at each call, so they never take a page's ref
@@ -671,8 +686,16 @@ function offered(input: PassInput, pool: WorkingPool): ContextFactData[] {
   )
   const ids = new Map<string, string>()
   const count = new Map<string, number>()
+  const seen = new Set<string>()
+  // The key a cited one joins the pool under (`writeCards`): its page's, as a search source's
+  const isNew = ({ fact: f }: OfferedFact) => {
+    const key = poolFactKey(f, { url: f.source.url, earlierStoryId: null })
+    if (pool.holds(key) || seen.has(key)) return false
+    seen.add(key)
+    return true
+  }
   return input.reusable
-    .filter(o => linked.has(o.storyId))
+    .filter(o => linked.has(o.storyId) && isNew(o))
     .slice(0, config.storyContext.maxReusedFacts)
     .map(({ fact: f }) => {
       if (!ids.has(f.source.url)) ids.set(f.source.url, `S${next++}`)
@@ -771,20 +794,19 @@ async function writeCards(
         voices: [],
         optOutChecked: true,
       })
-      const ref =
-        pool.add(source, {
-          reusedFromId: f.reusedFromId,
-          supportingSentence: f.supportingSentence,
-          passage: f.passage,
-          supportFound: f.supportFound,
-          statement: f.statement,
-          measures: f.counted,
-          slot: f.slot,
-          structured: { ...pickStructured(f), by: { model: f.model, promptVersion: f.promptVersion } },
-          extractedBy: { model: f.model, promptVersion: f.promptVersion },
-          verdict: 'supported',
-          verdictProblem: null,
-        }) ?? f.ref
+      const ref = pool.add(source, {
+        reusedFromId: f.reusedFromId,
+        supportingSentence: f.supportingSentence,
+        passage: f.passage,
+        supportFound: f.supportFound,
+        statement: f.statement,
+        measures: f.counted,
+        slot: f.slot,
+        structured: { ...pickStructured(f), by: { model: f.model, promptVersion: f.promptVersion } },
+        extractedBy: { model: f.model, promptVersion: f.promptVersion },
+        verdict: 'supported',
+        verdictProblem: null,
+      })
       for (const b of boxes) renameRef(b, f.ref, ref)
       all.push({ ...f, ref, source: { ...f.source, id: source.ref } })
     }

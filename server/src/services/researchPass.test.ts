@@ -12,6 +12,7 @@ import { emptyResearch, type CheckPass, type ResearchSearchAnswer } from './rese
 import { emptyContextRecord } from './storyContextPipeline.js'
 import { cardFacts, EMPTY_POOL, researchView, type Pool, type PoolFact, type PoolSource } from './researchPool.js'
 import { storyLayout } from './storyContextLayout.js'
+import { boxRefs } from './storyContextRecords.js'
 
 const words = (seed: string, n = 150) => Array.from({ length: n }, (_, i) => `${seed}w${i}`).join(' ')
 
@@ -574,6 +575,120 @@ describe('runResearchPass, a later pass', () => {
     expect(result).toMatchObject({ outcome: 'budget', version: null, boxes: [] })
     expect(result.pool.facts.find(f => f.ref === 'S1F1')?.status).toBe('demoted')
     expect(fake.stepsCalled()).not.toContain('cards-write')
+  })
+
+  describe("with an earlier story's fact an earlier pass joined to the pool", () => {
+    // The first pass linked earlier-a and joined its offered fact as S2F1; the earlier story offers it again
+    const earlierA: PoolSource = { ...pageSource('E1', '', 'Actually Relevant', 'earlier'), earlierStoryId: 'earlier-a', relation: 'background' }
+    const joinedSource: PoolSource = { ...pageSource('S2', 'https://a.example/x', 'Outlet', 'search'), relation: 'background' }
+    const joined: PoolFact = { ...poolFact('S2F1', 'Statement of fact-a.'), supportingSentence: 'Sentence of fact-a.', reusedFromId: 'fact-a' }
+    const joinedPool: Pool = { ...pool, sources: [...pool.sources, earlierA, joinedSource], facts: [...pool.facts, joined] }
+    const reusedA = {
+      storyId: 'earlier-a',
+      fact: {
+        ...fields,
+        approx: 'exact' as const,
+        validity: 'fixed' as const,
+        creditedKind: null,
+        asOf: null,
+        id: 'fact-a',
+        ref: 'S2F1',
+        origin: 'search' as const,
+        reusedFromId: null,
+        slot: null,
+        source: { id: 'S2', url: 'https://a.example/x', outlet: 'Outlet', title: 'Title', date: '2026-09-30', kind: 'news-report' },
+        supportingSentence: 'Sentence of fact-a.',
+        passage: null,
+        supportFound: true,
+        statement: 'Statement of fact-a.',
+        verdict: 'supported' as const,
+        verdictProblem: null,
+        model: 'm',
+        promptVersion: 'v',
+      },
+    }
+    /** A card citing every fact the write offers whose text holds `needle`, under whichever ref it was offered. */
+    const citing = (needle: string) => (prompt: string) => ({
+      boxes: [
+        {
+          slot: 'compared',
+          heading: 'As before',
+          teaser: '',
+          place: 'P1',
+          sentences: [
+            {
+              text: 'The earlier story reported it.',
+              factIds: [...prompt.matchAll(/<FACT id="([^"]+)"[^>]*>([^<]*)<\/FACT>/g)].filter(m => m[2]!.includes(needle)).map(m => m[1]!),
+            },
+          ],
+          visual: noVisual,
+        },
+      ],
+    })
+    const secondLater = (over: Partial<PassInput> = {}) => later({ pool: joinedPool, reusable: [reusedA], ...over })
+    const unchangedJudge = () => ({ sections: [], contradicted: [] })
+    const occurrences = (prompt: string, text: string) => prompt.split(text).length - 1
+
+    it('offers that fact once, under its pool ref, and every ref a card cites is a fact of the pool', async () => {
+      const fake = fakeDeps({ judge: unchangedJudge, 'cards-write': citing('Statement of fact-a.') })
+      const result = await runResearchPass(secondLater(), fake.deps)
+
+      expect(result.record.cards).toBe('written')
+      for (const step of ['gap-list', 'cards-write'] as const)
+        expect(occurrences(fake.calls.find(c => c.step === step)!.prompt, 'Statement of fact-a.'), step).toBe(1)
+      const refs = new Set(result.pool.facts.map(f => f.ref))
+      for (const box of result.boxes) for (const ref of boxRefs(box)) expect(refs, ref).toContain(ref)
+      expect(result.boxes.flatMap(boxRefs)).toEqual(['S2F1'])
+      expect(result.pool.facts.filter(f => f.reusedFromId === 'fact-a').map(f => f.ref)).toEqual(['S2F1'])
+      expect(result.boxFacts.get('S2F1')?.statement).toBe('Statement of fact-a.')
+    })
+
+    it('never offers it again once this story’s pool demoted it', async () => {
+      const demoted: Pool = {
+        ...joinedPool,
+        facts: joinedPool.facts.map(f =>
+          f.ref === 'S2F1' ? { ...f, status: 'demoted', drop: { passId: 'pass-1', reason: 'contradicted', contradictedBy: ['S1F1'] } } : f,
+        ),
+      }
+      const fake = fakeDeps({ judge: unchangedJudge, 'cards-write': citing('Statement of fact-a.') })
+      const result = await runResearchPass(secondLater({ pool: demoted }), fake.deps)
+
+      expect(occurrences(fake.calls.find(c => c.step === 'cards-write')!.prompt, 'Statement of fact-a.')).toBe(0)
+      expect(result.boxes.flatMap(boxRefs)).toEqual([])
+    })
+
+    it('leaves the cards citing the facts they were written from when a later pass adds a source and keeps them', async () => {
+      const second = await runResearchPass(secondLater(), fakeDeps({ judge: unchangedJudge, 'cards-write': citing('Statement of fact-a.') }).deps)
+      expect(second.boxes.flatMap(boxRefs).length).toBeGreaterThan(0)
+
+      // A third pass reads one more report, whose facts its fact check rejects: the pool gains no supported fact, so the cards stay
+      const bbc = { ...original, storyId: 'member-3', url: 'https://bbc.com/solar', outlet: 'BBC', content: `BBC on the boom. ${words('bbc')}` }
+      const rejectAll = (prompt: string): FactCheck => ({
+        items: items(prompt).map(i => ({
+          number: i.number,
+          supported: false,
+          problem: 'Not in the sentence.',
+          key: false,
+          copiedSentence: '',
+          followsSource: '',
+        })),
+      })
+      const third = await runResearchPass(
+        secondLater({
+          passId: 'pass-3',
+          pool: second.pool,
+          story: { ...story, clusterMembers: [...story.clusterMembers, reuters, bbc] },
+          lastPassDay: '2026-11-20',
+          today: '2026-11-25',
+        }),
+        fakeDeps({ 'facts-check': rejectAll }).deps,
+      )
+
+      expect(third.record.cards).toBe('kept')
+      expect(third.pool.sources.filter(s => s.url === 'https://bbc.com/solar')).toHaveLength(1)
+      const byRef = new Map(third.pool.facts.map(f => [f.ref, f]))
+      for (const ref of second.boxes.flatMap(boxRefs)) expect(byRef.get(ref)?.statement, ref).toBe(second.boxFacts.get(ref)?.statement)
+    })
   })
 })
 

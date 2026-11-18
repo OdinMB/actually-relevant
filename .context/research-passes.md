@@ -37,7 +37,7 @@ A story's pool (`services/researchPool.ts`, the in-memory types; `services/passR
 3. **Gap list and searches** (context's `gapStage`) over the pool and the offered earlier facts, the searches planned by `planSearches` (`response` first from both angles while not covered and not reported, then the other slots), at most `research.pass.maxGapSearches` (3), skipping what any earlier pass searched; pages the pool holds or left out are not read. The gap facts join the pool.
 4. **Fact check**: research's fact-check prompt through context's `checkFacts`, once on every `unjudged` fact of a page.
 5. **Article**: research's write, checks, repair rounds, derive and gate (`runPassArticle`) from the pages' **supported** facts and our earlier stories' facts, every source shown to the copying checks. A kept draft becomes version 1 (`first`).
-6. **Cards**: context's write and box check (`writeBoxes`) from the pages' supported, structured facts and the offered facts of the earlier stories the pass links, on version 1's places when it made one, else the story's own. An offered fact a kept card cites joins the pool (`reused_from_id`), and the card cites it by its pool ref.
+6. **Cards**: context's write and box check (`writeBoxes`) from the pages' supported, structured facts and the offered facts of the earlier stories the pass links, on version 1's places when it made one, else the story's own. An offered fact a kept card cites joins the pool (`reused_from_id`), and the card cites it by its pool ref. An earlier story's fact the pool already holds (a pass joined it, or a page says it) is never offered again: the gap list and the cards see it once, under its pool ref, and not at all once the pool demoted it, so every ref a card cites is a fact of the pool.
 
 Rules:
 
