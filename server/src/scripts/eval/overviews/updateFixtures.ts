@@ -23,7 +23,7 @@ import { draftItems, type DraftItem } from '../../../services/researchChecks.js'
 import type { UpdateInput } from '../../../services/researchPassLater.js'
 import { nextSourceRef, usable, type ArticleVersionData, type Pool, type PoolFact, type PoolSource } from '../../../services/researchPool.js'
 import { inHalf, type Half } from './contextScore.js'
-import { normalizeQuote } from './keyCheck.js'
+import { normalizeQuote } from '../../../lib/quoteMatch.js'
 import type { AnswerKey } from './keySchema.js'
 import { wrongNumber, wrongYear, type Planted } from './plant.js'
 

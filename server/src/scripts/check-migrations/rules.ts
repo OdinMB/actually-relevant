@@ -28,6 +28,9 @@ export const UNMODELED_INDEXES: readonly UnmodeledIndex[] = [
   { name: EMBEDDING_INDEX, table: 'story_embeddings', using: 'hnsw' },
   // At most one current article version per story, a partial unique index (20261117230407_research_passes; ADR-0067)
   { name: 'article_versions_one_current', table: 'article_versions' },
+  // At most one active overview entry per story, and one current "Where this stands" per overview (20261118203742_overviews; ADR-0070)
+  { name: 'overview_entries_one_active', table: 'overview_entries' },
+  { name: 'overview_stands_one_current', table: 'overview_stands' },
 ]
 
 /** The line a destructive migration carries once someone has reviewed it, with a reason. */

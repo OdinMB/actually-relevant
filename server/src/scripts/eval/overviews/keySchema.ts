@@ -74,6 +74,17 @@ const entrySchema = z.object({
   why: text('One line: why it belongs, or for an optional join why it is borderline.'),
 })
 
+const responseSchema = z.object({
+  date: date('When the response was reported as under way'),
+  what: text('What is being done about the development, by whom, in one line, e.g. "WHO ring vaccination in Bunia".'),
+  slug: z.string().nullable().default(null).describe('The entry that reports it; null when none of our stories does.'),
+  quote: z
+    .string()
+    .nullable()
+    .default(null)
+    .describe('The exact words from that story that report it, so a checker can find them; null exactly when `slug` is null.'),
+})
+
 const nearMissSchema = z.object({
   slug: text("The story's slug exactly as the archive has it."),
   date: date("The story's datePublished day (UTC)"),
@@ -82,7 +93,9 @@ const nearMissSchema = z.object({
 })
 
 export const answerKeySchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z
+    .union([z.literal(1), z.literal(2)])
+    .describe('1, or 2 for a key that lists `responses` (decision D10: what is being done about the development).'),
   id: text('The development\'s id, also the file name (`keys/<id>.json`), e.g. "ebola-drc-2026".'),
   title: text('The development in a few words, e.g. "Ebola outbreak in eastern DR Congo".'),
   charter: z.object({
@@ -109,6 +122,12 @@ export const answerKeySchema = z.object({
     .default([])
     .describe(
       '5 to 15 stories a careless system could join but should not: same place, same agency, same vocabulary, or a neighboring development; the most tempting first.',
+    ),
+  responses: z
+    .array(responseSchema)
+    .default([])
+    .describe(
+      'Version 2 only: each response under way that a reader of the overview should learn of, in date order, sourced by one of our stories where one reports it.',
     ),
   notes: z
     .string()
@@ -150,6 +169,21 @@ export function validateKey(key: AnswerKey): string[] {
   }
   for (const n of key.nearMisses) if (entrySlugs.has(n.slug)) errors.push(`${n.slug} is both an entry and a near miss`)
   if (key.closed && hasText(key.closed.slug) && !entrySlugs.has(key.closed.slug)) errors.push(`closed.slug ${key.closed.slug} is not an entry`)
+  errors.push(...responseErrors(key, entrySlugs))
+  return errors
+}
+
+/** `responses` only in a version 2 key, in date order, each sourced by an entry with its quote or by none. */
+function responseErrors(key: AnswerKey, entrySlugs: ReadonlySet<string>): string[] {
+  if (key.schemaVersion === 1) return key.responses.length > 0 ? ['responses need schemaVersion 2'] : []
+  const errors: string[] = []
+  let previous = ''
+  for (const r of key.responses) {
+    if (r.date < previous) errors.push(`responses not in date order at "${r.what}" (${r.date} after ${previous})`)
+    previous = r.date > previous ? r.date : previous
+    if (hasText(r.slug) && !entrySlugs.has(r.slug)) errors.push(`response "${r.what}": slug ${r.slug} is not an entry`)
+    if (hasText(r.slug) !== hasText(r.quote)) errors.push(`response "${r.what}": a quote goes with a slug, and none without one`)
+  }
   return errors
 }
 

@@ -142,6 +142,36 @@ describe('validateKey', () => {
     expect(rule(k => (k.closed = { slug: null, date: '2026-07-01' }))).toEqual([])
   })
 
+  describe('responses (version 2)', () => {
+    const response = (extra: Record<string, unknown> = {}) => ({
+      date: '2026-06-02',
+      what: 'WHO ring vaccination',
+      slug: 'a',
+      quote: 'ring vaccination',
+      ...extra,
+    })
+    const v2 = (k: ReturnType<typeof key>, responses: object[]) => Object.assign(k, { schemaVersion: 2, responses })
+
+    it('accepts sourced and unsourced responses in date order, and a version 1 key without any', () => {
+      expect(rule(k => v2(k, [response(), response({ date: '2026-06-05', slug: null, quote: null })]))).toEqual([])
+      expect(rule(k => v2(k, []))).toEqual([])
+      expect(parseKey(key()).key?.responses).toEqual([])
+    })
+
+    it('wants responses only in a version 2 key', () => {
+      expect(rule(k => Object.assign(k, { responses: [response()] }))).toEqual(['responses need schemaVersion 2'])
+    })
+
+    it('wants them in date order, each slug an entry, and a quote exactly with a slug', () => {
+      expect(rule(k => v2(k, [response({ date: '2026-06-05' }), response()]))).toEqual([
+        'responses not in date order at "WHO ring vaccination" (2026-06-02 after 2026-06-05)',
+      ])
+      expect(rule(k => v2(k, [response({ slug: 'x' })]))).toEqual(['response "WHO ring vaccination": slug x is not an entry'])
+      expect(rule(k => v2(k, [response({ quote: null })]))).toEqual(['response "WHO ring vaccination": a quote goes with a slug, and none without one'])
+      expect(rule(k => v2(k, [response({ slug: null })]))).toEqual(['response "WHO ring vaccination": a quote goes with a slug, and none without one'])
+    })
+  })
+
   it('reports every broken rule at once', () => {
     const parsed = parseKey(key()).key
     expect(parsed).not.toBeNull()

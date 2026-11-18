@@ -11,7 +11,8 @@ import { utcDay } from '../../../lib/days.js'
 import { halfOf, type Half } from './contextScore.js'
 import type { GapKey } from './gapKeySchema.js'
 import type { GapKeyFile } from './keyFiles.js'
-import { normalizeQuote, publishedTexts, type KeyStory } from './keyCheck.js'
+import { normalizeQuote } from '../../../lib/quoteMatch.js'
+import { publishedTexts, type KeyStory } from './keyCheck.js'
 
 /** A story a gap key names, as the check reads it: `hasResearchFacts` is what the `context` step needs. */
 export type GapKeyStory = Omit<KeyStory, 'hasResearchRun'>

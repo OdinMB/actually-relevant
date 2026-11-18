@@ -74,6 +74,8 @@ describe('findProblems', () => {
       const again = `${drop}\nCREATE UNIQUE INDEX "${index.name}" ON "${index.table}"${using};`
       expect(findProblems([{ name: '7_again', sql: again }], new Set()), index.name).toEqual([])
     }
-    expect(UNMODELED_INDEXES.map(i => i.name)).toContain('article_versions_one_current')
+    expect(UNMODELED_INDEXES.map(i => i.name)).toEqual(
+      expect.arrayContaining(['article_versions_one_current', 'overview_entries_one_active', 'overview_stands_one_current']),
+    )
   })
 })

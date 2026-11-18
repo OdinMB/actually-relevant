@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseKey, type AnswerKey } from './keySchema.js'
-import { checkKey, checkKeyFiles, keySlugs, normalizeQuote, publishedTexts, summarizeKey, type KeyStory } from './keyCheck.js'
+import { normalizeQuote } from '../../../lib/quoteMatch.js'
+import { checkKey, checkKeyFiles, keySlugs, publishedTexts, summarizeKey, type KeyStory } from './keyCheck.js'
 
 const story = (slug: string, extra: Partial<KeyStory> = {}): KeyStory => ({
   slug,
@@ -111,6 +112,21 @@ describe('checkKey', () => {
     )
     expect(checkKey(quote('counted 5,000 deaths'), stories)).toEqual([])
     expect(checkKey(quote('counted 5,100 deaths'), stories)).toEqual(['entry a: quote not found: "counted 5,100 deaths"'])
+  })
+
+  it("finds a response's quote in the story it names, and reports one it does not state", () => {
+    const responding = (q: string) =>
+      answerKey(k => {
+        k.entries[0].values[0].quote = 'counted 5,000 deaths'
+        Object.assign(k, { schemaVersion: 2, responses: [{ date: '2026-06-02', what: 'Vaccination', slug: 'a', quote: q }] })
+      })
+    const stories = byslug(
+      story('a', { research: research('WHO counted 5,000 deaths by June; ring vaccination began.') }),
+      story('b', { datePublished: new Date('2026-06-02T10:00:00Z') }),
+      story('x'),
+    )
+    expect(checkKey(responding('ring vaccination began'), stories)).toEqual([])
+    expect(checkKey(responding('mass vaccination began'), stories)).toEqual(['response a: quote not found: "mass vaccination began"'])
   })
 })
 

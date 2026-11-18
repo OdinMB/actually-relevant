@@ -6,6 +6,7 @@
  * issues one SELECT through the read-only session; the rest is pure but for the loader it is given.
  */
 import { utcDay } from '../../../lib/days.js'
+import { normalizeQuote } from '../../../lib/quoteMatch.js'
 import { storedResearchText } from '../../../services/researchedStory.js'
 import type { SelectDb } from '../readOnlyDb.js'
 import type { KeyFile } from './keyFiles.js'
@@ -48,16 +49,6 @@ export async function loadKeyStories(db: SelectDb, slugs: string[]): Promise<Map
   return new Map(rows.map(r => [r.slug, r]))
 }
 
-/** Whitespace runs to one space, curly and angle quote marks to straight ones, every dash to a hyphen. Case and words stay. */
-export function normalizeQuote(text: string): string {
-  return text
-    .replace(/[‘’‚‛′‹›`´]/g, "'")
-    .replace(/[“”„‟″«»]/g, '"')
-    .replace(/[‐-―−﹘﹣－]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
 /** The story's published text, field by field: title, summary, relevance reasons, antifactors, and the applied research's paragraphs. */
 export function publishedTexts(story: Pick<KeyStory, 'title' | 'summary' | 'relevanceReasons' | 'antifactors' | 'research'>): string[] {
   return [story.title, story.summary, story.relevanceReasons, story.antifactors, storedResearchText(story.research)].filter((t): t is string => !!t)
@@ -84,6 +75,12 @@ export function checkKey(key: AnswerKey, stories: ReadonlyMap<string, KeyStory>)
     }
   }
   for (const n of key.nearMisses) published('near miss', n.slug)
+  for (const r of key.responses) {
+    const s = r.slug && r.quote ? stories.get(r.slug) : undefined
+    if (!s || !r.quote) continue
+    const quote = normalizeQuote(r.quote)
+    if (!publishedTexts(s).some(t => normalizeQuote(t).includes(quote))) errors.push(`response ${r.slug}: quote not found: "${r.quote}"`)
+  }
   return errors
 }
 

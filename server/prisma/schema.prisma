@@ -125,6 +125,8 @@ model Story {
   poolFacts              PoolFact[]
   articleVersions        ArticleVersion[]
   passBoxes              PassBox[]
+  overviewEntries        OverviewEntry[]
+  overviewDecisions      OverviewDecision[]
   createdAt              DateTime     @default(now()) @map("created_at")
   updatedAt              DateTime     @updatedAt @map("updated_at")
 
@@ -249,6 +251,7 @@ model Issue {
   minPreRating       Int?     @map("min_pre_rating")
   feeds              Feed[]
   stories            Story[]
+  overviews          Overview[]
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
@@ -906,6 +909,196 @@ model PassBox {
   @@index([storyId])
   @@index([passId])
   @@map("pass_boxes")
+}
+
+// --- Ongoing-story overviews (.context/overviews.md, ADR-0070) ---
+// A development's record: its charter, its entries (our stories), the versions of "Where this stands"
+// and the log of every automated or editor decision. Overviews hold no fact of their own: the stands
+// cite the members' pool facts by id. `services/overviewLifecycle.ts` is the only writer of the four
+// tables (a fence test holds it). Nothing is added to `stories`.
+
+/// `single`: one active entry or none, not public; `forming`: two or more, waiting for its review at 3; `ongoing`: public
+enum OverviewScope {
+  single
+  forming
+  ongoing
+}
+
+enum OverviewStatus {
+  open
+  quiet
+  closing
+  closed
+}
+
+/// What an entry is: only our stories for now (later modules add values with ALTER TYPE … ADD VALUE)
+enum EntryKind {
+  story
+}
+
+enum EntryRole {
+  turning_point
+  routine
+}
+
+/// At most one `active` entry per story: the partial unique index `overview_entries_one_active`, raw SQL in the 20261118203742_overviews migration; check:migrations fails on a migration that drops it
+enum EntryStatus {
+  active
+  detached
+}
+
+/// At most one `current` version per overview: the partial unique index `overview_stands_one_current`, guarded as `overview_entries_one_active` is
+enum StandsStatus {
+  current
+  superseded
+}
+
+enum OverviewDecisionKind {
+  link
+  found
+  role
+  stands
+  status
+  close
+  review
+  editor_attach
+  editor_detach
+  editor_role
+  editor_retitle
+  editor_freeze
+  editor_hide
+  undo
+}
+
+/// One development followed across our stories. Its dates (`founded_at`, `last_entry_at`) are the development's time, its stories' publication dates, so a backfill forms it as it would have formed live
+model Overview {
+  id                   String             @id @default(uuid())
+  /// Set when it first goes public, never changed after (a slug once given stays reserved)
+  slug                 String?            @unique
+  title                String
+  /// The area chip: the founding story's issue
+  issueId              String?            @map("issue_id")
+  issue                Issue?             @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  scope                OverviewScope      @default(forming)
+  status               OverviewStatus     @default(open)
+  /// { in, out: string[], endEvent }, the answer keys' shape
+  charter              Json
+  charterModel         String             @map("charter_model")
+  charterPromptVersion String             @map("charter_prompt_version")
+  /// Automation paused until a review or an editor clears it
+  frozen               Boolean            @default(false)
+  /// An editor's unpublish: never public, and its stories show no link
+  hidden               Boolean            @default(false)
+  /// The founding story's publication date
+  foundedAt            DateTime           @map("founded_at")
+  /// The newest active entry's publication date
+  lastEntryAt          DateTime?          @map("last_entry_at")
+  closingSince         DateTime?          @map("closing_since")
+  closedAt             DateTime?          @map("closed_at")
+  /// end_event, faded or editor
+  closedReason         String?            @map("closed_reason")
+  entriesAtLastReview  Int                @default(0) @map("entries_at_last_review")
+  reviewedAt           DateTime?          @map("reviewed_at")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+  entries              OverviewEntry[]
+  stands               OverviewStands[]
+  decisions            OverviewDecision[]
+
+  @@index([scope, status])
+  @@index([issueId])
+  @@map("overviews")
+}
+
+/// One entry of an overview's timeline: today always one of our stories (a CHECK holds that a `story` entry has one). A detached entry stays a row, for the audit and the admin
+model OverviewEntry {
+  id            String            @id @default(uuid())
+  overviewId    String            @map("overview_id")
+  overview      Overview          @relation(fields: [overviewId], references: [id], onDelete: Cascade)
+  kind          EntryKind         @default(story)
+  storyId       String?           @map("story_id")
+  story         Story?            @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  role          EntryRole
+  /// A turning point's kind (setback, response, spread, decision, escalation, deescalation, money, science, people, milestone); null for a routine entry
+  roleKind      String?           @map("role_kind")
+  status        EntryStatus       @default(active)
+  judgment      JudgmentStatus    @default(unreviewed)
+  /// link, founding or editor
+  joinedBy      String            @map("joined_by")
+  /// pipeline, review or an editor's id; null while active
+  detachedBy    String?           @map("detached_by")
+  detachReason  String?           @map("detach_reason")
+  /// An editor's attach or detach, which automation never reverses
+  locked        Boolean           @default(false)
+  /// The judgment record: { cause, place, end }, each { story, other } quoting this entry's story and the other side (the overview, or the founding partner)
+  shared        Json?
+  /// The model's stated probability that the story belongs, 0 to 1
+  confidence    Float?
+  model         String?
+  promptVersion String?           @map("prompt_version")
+  /// The decision that made it
+  decisionId    String?           @map("decision_id")
+  decision      OverviewDecision? @relation(fields: [decisionId], references: [id], onDelete: SetNull)
+  joinedAt      DateTime          @default(now()) @map("joined_at")
+  detachedAt    DateTime?         @map("detached_at")
+
+  @@index([overviewId, status])
+  @@index([storyId])
+  @@map("overview_entries")
+}
+
+/// One version of "Where this stands" and "What's being done": sentences citing the members' pool facts by id, never facts of its own
+model OverviewStands {
+  id            String       @id @default(uuid())
+  overviewId    String       @map("overview_id")
+  overview      Overview     @relation(fields: [overviewId], references: [id], onDelete: Cascade)
+  /// 1… per overview
+  number        Int
+  status        StandsStatus @default(current)
+  /// [{ text, facts: [poolFactId] }]
+  sentences     Json
+  /// [{ text, facts: [poolFactId] }]
+  doing         Json         @default("[]")
+  /// The pool facts offered, with their ids, for refresh and audit
+  factsSeen     Json         @default("[]") @map("facts_seen")
+  asOf          DateTime     @map("as_of") @db.Date
+  model         String
+  promptVersion String       @map("prompt_version")
+  /// The checks
+  record        Json?
+  writtenAt     DateTime     @default(now()) @map("written_at")
+
+  @@unique([overviewId, number])
+  @@map("overview_stands")
+}
+
+/// The audit and automation log: one row per automated or editor decision. A story with a live (not undone) `link` decision of a settling outcome is settled for the job; "Undo" works from this table. Inputs are ids, never page text
+model OverviewDecision {
+  id            String               @id @default(uuid())
+  kind          OverviewDecisionKind
+  overviewId    String?              @map("overview_id")
+  overview      Overview?            @relation(fields: [overviewId], references: [id], onDelete: SetNull)
+  storyId       String?              @map("story_id")
+  story         Story?               @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  /// joined, founded, none, rejected, held, conflict, failed (a link); founded, disagreed, refused, failed (a founding)
+  outcome       String
+  /// Ids only: the candidates and their distances, the founding partner
+  inputs        Json                 @default("{}")
+  answer        Json?
+  model         String?
+  promptVersion String?              @map("prompt_version")
+  confidence    Float?
+  costUsd       Float                @default(0) @map("cost_usd")
+  /// pipeline, review or an editor's id
+  actor         String
+  createdAt     DateTime             @default(now()) @map("created_at")
+  undoneAt      DateTime?            @map("undone_at")
+  undoneBy      String?              @map("undone_by")
+  entries       OverviewEntry[]
+
+  @@index([storyId, kind])
+  @@index([overviewId, createdAt])
+  @@map("overview_decisions")
 }
 
 /// One row per show and ISO week whose Saturday publish slot found no weekly episode to publish: the claim that makes the missed-week alert go out once
