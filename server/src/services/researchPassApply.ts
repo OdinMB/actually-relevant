@@ -7,7 +7,8 @@
  * Every story write is fenced on the story as read before the pass: an editor's move or edit during
  * the pass wins, and the pass's rows are then stored without its version. A first pass's `stale` or
  * `contradicted` verdict rejects the story through `transition`, which takes only a selected story;
- * a first pass on a published story is recorded as an Update (For Odin 5, `firstPassUpdate`). A later
+ * a first pass on a published story is recorded as an Update (For Odin 5, `firstPassUpdate`), and a
+ * later pass's rewrite before publication is none (`versionForReaders`). A later
  * pass that could not fix what it found wrong (`update_failed`) keeps the article and raises one
  * admin notice; nothing is unpublished or rejected. Never throws a refusal: an embedding or database
  * error throws.
@@ -18,7 +19,7 @@ import { utcDay } from '../lib/days.js'
 import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import prisma from '../lib/prisma.js'
-import { firstPassUpdate, versionValues } from './articleVersions.js'
+import { firstPassUpdate, versionForReaders, versionValues } from './articleVersions.js'
 import { storePassResult, type PassRowResult, type PassWrite } from './passRecords.js'
 import { REJECTED_FOR, rejects, storyColumns, whyChanged, write, type ReadState } from './researchApply.js'
 import type { PassResult } from './researchPass.js'
@@ -122,9 +123,10 @@ export async function applyPass(input: PassApplyInput): Promise<PassApplied> {
   const story = await storyColumns(storyId)
   const changed = whyChanged(story, read)
   if (changed || !story) return stored('skipped', `not applied: ${changed}`)
-  // A first pass on a story readers already have is an Update: the single-source text stays readable
-  const version: ArticleVersionData =
-    result.kind === 'first' && read.status === 'published' ? { ...result.version, ...firstPassUpdate(story, result.version, utcDay(now)) } : result.version
+  // Updates start with publication: a first pass on a story readers already have is one (the
+  // single-source text stays readable), and a rewrite before publication is none
+  const first = result.version
+  const version = versionForReaders(first, read.status === 'published', () => firstPassUpdate(story, first, utcDay(now)))
   const columns = { research: asJson(version.research), preResearch: asJson(snapshotForApply(story.preResearch, story)) }
   let written: boolean
   try {

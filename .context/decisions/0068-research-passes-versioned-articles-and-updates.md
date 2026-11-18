@@ -88,14 +88,12 @@ page and the admin do, not the words readers see: the header link, the section's
   and "Use this version" and the review-before-apply flow go.
 - **Cards refresh without an Update (6), decided:** a later pass rewrites the cards, and no Update
   entry lists card changes.
-
-## Open owner decisions
-
-Proceeding on the plan's recommendation, which takes effect only at the switch; recorded here when the
-owner answers:
-
-- **A first pass on a published single-source story (5):** recorded as an Update ("Researched with N
-  more sources on <date>; the story was rewritten from them"), the earlier version readable.
+- **Updates and their marks start with publication (5), decided 2026-11-18:** "Update markers only
+  starting after the initial publication." A first pass on a published single-source story is an
+  Update ("Researched with N more sources on <date>; the story was rewritten from them"), the earlier
+  version readable and the sections it lists marked. A later pass's rewrite of a story not yet
+  published keeps its changes in the admin but gets no note, so it is no Update and marks nothing,
+  also once the story is published (`versionForReaders`).
 
 ## Consequences
 

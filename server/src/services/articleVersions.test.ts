@@ -10,6 +10,7 @@ import {
   updatesEarlierStoryIds,
   updatesForReaders,
   versionArticle,
+  versionForReaders,
   versionValues,
   withFrozen,
 } from './articleVersions.js'
@@ -358,6 +359,23 @@ describe('firstPassUpdate', () => {
     expect(firstPassUpdate({ ...single, relevanceReasons: null, antifactors: null }, version({ research }), '2026-11-02').note.text).toBe(
       'Researched with 2 more sources on Nov 2; the story was rewritten from them.',
     )
+  })
+})
+
+describe('versionForReaders', () => {
+  const note = cited('The toll rose.', 'S1')
+  const firstUpdate = () => ({ changes: [], note: cited('Researched on Nov 19; the story was rewritten.') })
+
+  it('makes no Update of a rewrite before the story is published: its changes stay, its note goes', () => {
+    const update = version({ kind: 'update', note })
+    expect(versionForReaders(update, false, firstUpdate)).toEqual({ ...update, note: null })
+    expect(publicUpdates([{ ...versionForReaders(update, false, firstUpdate), createdAt: new Date() }])).toEqual([])
+  })
+
+  it("keeps a published story's later Update, and makes its first pass one", () => {
+    expect(versionForReaders(version({ kind: 'update', note }), true, firstUpdate).note).toEqual(note)
+    expect(versionForReaders(version({ kind: 'first', note: null }), true, firstUpdate).note).toEqual(firstUpdate().note)
+    expect(versionForReaders(version({ kind: 'first', note: null }), false, firstUpdate).note).toBeNull()
   })
 })
 

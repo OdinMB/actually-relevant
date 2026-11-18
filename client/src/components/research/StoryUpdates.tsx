@@ -108,8 +108,13 @@ export function StoryUpdates({ updates }: { updates: PublicStoryUpdate[] }) {
 /** The mark after a rewritten paragraph or point: a small link to the Updates section. */
 export function UpdatedMark() {
   return (
-    // The name starts with the visible word (WCAG 2.5.3) and says where the link leads
-    <a href={`#${UPDATES_ID}`} aria-label={updatedLinkText} className={`ml-1 whitespace-nowrap text-xs font-medium align-baseline ${TEXT_LINK}`}>
+    // The name starts with the visible word (WCAG 2.5.3) and says where the link leads. It sits in a
+    // box one line tall and centers in it, as the citation chips before it do (Citation.tsx)
+    <a
+      href={`#${UPDATES_ID}`}
+      aria-label={updatedLinkText}
+      className={`ml-1 inline-flex min-h-[1lh] items-center whitespace-nowrap align-top text-xs font-medium ${TEXT_LINK}`}
+    >
       {UPDATE_COPY.mark}
     </a>
   )

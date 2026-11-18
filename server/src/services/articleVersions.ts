@@ -273,6 +273,21 @@ export function firstPassUpdate(
   return { changes, note: uncited(text) }
 }
 
+/**
+ * The version a pass applies, as readers will get it (ADR-0068, owner 2026-11-18): Updates start
+ * with the story's publication. A first pass on a story already published is one (`firstPassUpdate`);
+ * a later pass's rewrite of a story readers do not have yet keeps its changes for the admin but no
+ * note, so it is never an Update and marks nothing, also once the story is published.
+ */
+export function versionForReaders(
+  version: ArticleVersionData,
+  published: boolean,
+  firstUpdate: () => Pick<ArticleVersionData, 'changes' | 'note'>,
+): ArticleVersionData {
+  if (!published) return version.kind === 'update' ? { ...version, note: null } : version
+  return version.kind === 'first' ? { ...version, ...firstUpdate() } : version
+}
+
 /** The sections readers see on the story page: the headline, the paragraphs, the key quote and the bullets; the summary and the blurb stay in the admin. */
 export const isPageSection = (label: string): boolean => label !== 'Summary' && label !== 'Blurb'
 
