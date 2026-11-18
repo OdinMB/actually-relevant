@@ -17,6 +17,17 @@ describe('buildArticleSchema', () => {
     const long = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
     expect(buildArticleSchema(makeStory({ summary: `_${long}_` })).description).toBe(long.slice(0, 200))
   })
+
+  it("gives the newest Update's day as dateModified, and none for a story never updated", () => {
+    const update = { note: { text: 'n', citations: [] }, changes: [], sources: [] }
+    const updates = [
+      { ...update, date: '2026-11-18' },
+      { ...update, date: '2026-11-15' },
+    ]
+    expect(buildArticleSchema(makeStory(), updates).dateModified).toBe('2026-11-18')
+    expect(buildArticleSchema(makeStory(), [])).not.toHaveProperty('dateModified')
+    expect(buildArticleSchema(makeStory())).not.toHaveProperty('dateModified')
+  })
 })
 
 describe('buildPodcastEpisodeSchema', () => {

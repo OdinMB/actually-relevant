@@ -25,7 +25,7 @@ import LoadFailure from '../components/LoadFailure'
 import { loadStateOf } from '../lib/loadState'
 import { SEO, CommonOgTags } from '../lib/seo'
 import { storyOgImageUrl } from '../lib/api'
-import { buildArticleSchema, buildBreadcrumbSchema, toJsonLd } from '../lib/structured-data'
+import { buildArticleSchema, buildBreadcrumbSchema, lastUpdated, toJsonLd } from '../lib/structured-data'
 import { FOCUS_RING, TEXT_LINK } from '../lib/control-classes'
 
 /** The links under Related Stories: a 24px box each (WCAG 2.5.8), not underlined since they stand alone. */
@@ -112,6 +112,9 @@ export default function StoryPage() {
   const colors = getCategoryColor(issueSlug)
   // The cited version, when the story has one and it could be served; the label keys on `researched` instead
   const research = story.research ?? null
+  // The Updates show with the researched version they changed; the newest one's day is the page's modified date
+  const updates = research ? (story.updates ?? []) : []
+  const modified = lastUpdated(updates)
   // Story context: notes beside their paragraph or point, the rest under More context (.context/public-website.md)
   const contextSources = new Map((context?.sources ?? []).map(source => [source.id, source]))
   const note = (inPoint: boolean) => (box: ContextBoxView | undefined) =>
@@ -133,9 +136,10 @@ export default function StoryPage() {
         <meta property="og:url" content={`${SEO.siteUrl}/stories/${story.slug}`} />
         <meta property="article:author" content="RelevanceAI by Actually Relevant" />
         {story.datePublished && <meta property="article:published_time" content={story.datePublished} />}
+        {modified && <meta property="article:modified_time" content={modified} />}
         {/* The story's own preview image; the server injects the same tags for crawlers (.context/seo.md) */}
         {CommonOgTags({ image: storyOgImageUrl(story.slug) })}
-        <script type="application/ld+json">{toJsonLd(buildArticleSchema(story))}</script>
+        <script type="application/ld+json">{toJsonLd(buildArticleSchema(story, updates))}</script>
         <script type="application/ld+json">
           {toJsonLd(
             buildBreadcrumbSchema([{ name: 'Home', url: SEO.siteUrl }, { name: issueName, url: `${SEO.siteUrl}/issues/${issueSlug}` }, { name: displayTitle }]),
@@ -191,6 +195,7 @@ export default function StoryPage() {
             paragraphNotes={placed?.paragraphNotes.map(note(false))}
             pointNotes={placed?.pointNotes.map(note(true))}
             context={placed && <StoryContext boxes={placed.section} sources={contextSources} colors={colors} wide={noted} />}
+            updates={updates}
           />
 
           {/* Report an error: a note on the analysis above, so it sits right under it, small and to the side */}

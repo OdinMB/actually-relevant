@@ -6,8 +6,10 @@ import AiBadge from '../ai/AiBadge'
 import { AI_DISCLOSURE_COPY } from '../ai/aiDisclosureCopy'
 import { SourceIcon } from '../research/SourceIcon'
 import { outletName, sourceDate } from '../research/sourceText'
+import { UPDATE_COPY, UPDATES_ID, updateDay } from '../research/StoryUpdates'
 import { Tooltip } from '../ui/Tooltip'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
+import { lastUpdated } from '../../lib/structured-data'
 
 /*
  * The metadata row's text items (date, source, "Original article", AI label). From `md` up this
@@ -26,6 +28,8 @@ const PHONE_SEPARATOR =
 const ROW_LINK = `text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5`
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric', year: 'numeric' }
+/** As the researched items date the original: "Nov 18, 2026". */
+const SHORT_DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' }
 
 /** The "|" between the row's items from `md` up; visual only, so screen readers don't read it out. */
 export function MetaSeparator() {
@@ -125,19 +129,30 @@ function ResearchedItems({ story, research }: { story: PublicStoryDetail; resear
 }
 
 /**
- * The text items of the row under the headline: the single-source or the researched items, then the
- * AI label. A single-source label is plain text followed by "How it works"; a researched label links
- * its own opening words to the methodology page's research section instead (owner, 2026-11-13). The
- * label keys on `researched` (the text fields carry researched text), the items on the cited version.
+ * The text items of the row under the headline: the single-source or the researched items, "Updated
+ * <date>" linking the Updates section when the story has any (ADR-0068), then the AI label. A
+ * single-source label is plain text followed by "How it works"; a researched label links its own
+ * opening words to the methodology page's research section instead (owner, 2026-11-13). The label
+ * keys on `researched` (the text fields carry researched text), the items on the cited version.
  */
 export function StoryMetaRow({ story, research }: { story: PublicStoryDetail; research: ResearchedStory | null }) {
   const researchedLabel = AI_DISCLOSURE_COPY.researchedStoryLabel
   const storyLabel = story.researched ? researchedLabel : AI_DISCLOSURE_COPY.storyLabel
   // The badge is the label's only "AI"; screen readers hear it as the word, so the sentence reads the same aloud
   const badge = <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="ml-1 align-middle" />
+  // The Updates show with the cited version they changed, so the link to them does too
+  const updated = research ? lastUpdated(story.updates) : null
   return (
     <div className={META_TEXT_ROW}>
       {research ? <ResearchedItems story={story} research={research} /> : <PlainItems story={story} />}
+      {updated && (
+        <>
+          <MetaSeparator />
+          <a href={`#${UPDATES_ID}`} className={`inline-flex min-h-6 items-center ${ROW_LINK} ${PHONE_SEPARATOR}`}>
+            {UPDATE_COPY.headerLink}&nbsp;<time dateTime={updated}>{updateDay(updated, SHORT_DATE)}</time>
+          </a>
+        </>
+      )}
       <MetaSeparator />
       <span className={`inline-flex flex-wrap items-center gap-x-2 ${PHONE_SEPARATOR}`}>
         {story.researched ? (

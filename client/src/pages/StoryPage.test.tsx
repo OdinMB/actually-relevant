@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { axe } from 'vitest-axe'
-import type { ResearchedSource, ResearchedStory } from '@shared/types'
+import type { PublicStoryUpdate, ResearchedSource, ResearchedStory } from '@shared/types'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -15,6 +15,7 @@ import { focusRingProblems, sizeByBreakpoint } from '../test/classes'
 import { contrastRatio } from '../test/contrast'
 import { announcedText } from '../test/stories'
 import { contextBox, contextSource, storyContext } from '../test/context'
+import { updatedLinkText } from '../components/research/StoryUpdates'
 
 const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -758,6 +759,81 @@ describe('StoryPage researched format', () => {
     it('passes axe with notes and the section', async () => {
       mockContext.current = withNotes
       const { container } = renderStory(researched)
+      expect(await axe(container)).toHaveNoViolations()
+    })
+  })
+
+  describe('with Updates', () => {
+    const twoParagraphs: ResearchedStory = {
+      ...research,
+      paragraphs: [...research.paragraphs, { sentences: [{ text: 'The toll rose to 212.', citations: [{ sourceId: 'S1', sentence: null }] }] }],
+    }
+    const updates: PublicStoryUpdate[] = [
+      {
+        date: '2026-11-18',
+        note: { text: 'The death toll was revised to 212 from 180.', citations: [{ sourceId: 'S1', sentence: 'The toll is 212.' }] },
+        changes: [{ section: 'Story paragraph 2', before: { text: 'At least 180 people died.', citations: [] }, removed: false }],
+        sources: [SOURCES[1]!],
+      },
+      {
+        date: '2026-11-15',
+        note: { text: 'A caveat was revised.', citations: [] },
+        changes: [{ section: 'Caveat 1', before: { text: 'An older caveat.', citations: [] }, removed: false }],
+        sources: [],
+      },
+    ]
+    const updated = { ...researched, research: twoParagraphs, updates }
+    const row = () => screen.getByRole('heading', { level: 1 }).nextElementSibling as HTMLElement
+
+    it('renders a story without Updates as before: no section, no header link, no marks, no modified date', async () => {
+      renderStory({ ...researched, updates: [] })
+      expect(screen.queryByRole('region', { name: 'Updates' })).toBeNull()
+      expect(within(row()).queryByRole('link', { name: /^Updated/ })).toBeNull()
+      expect(screen.queryByRole('link', { name: updatedLinkText })).toBeNull()
+      await waitFor(() => expect(document.head.querySelector('script[type="application/ld+json"]')).not.toBeNull())
+      expect(document.head.querySelector('meta[property="article:modified_time"]')).toBeNull()
+      expect(document.head.innerHTML).not.toContain('dateModified')
+    })
+
+    it('links "Updated <date>" in the header to the Updates section, which follows Caveats, the newest first', () => {
+      renderStory(updated)
+      const link = within(row()).getByRole('link', { name: 'Updated Nov 18, 2026' })
+      expect(link).toHaveAttribute('href', '#updates')
+      const section = screen.getByRole('region', { name: 'Updates' })
+      const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+      expect(follows(screen.getByRole('heading', { name: 'Caveats' }), section)).toBe(true)
+      expect(follows(section, screen.getByRole('heading', { name: 'Sources' }))).toBe(true)
+      expect(within(section).getAllByRole('listitem')[0]).toHaveTextContent('November 18, 2026')
+    })
+
+    it('marks each rewritten paragraph and point with an "Updated" link to the section', () => {
+      renderStory(updated)
+      const marks = screen.getAllByRole('link', { name: updatedLinkText })
+      expect(marks).toHaveLength(2)
+      expect(marks[0]!.closest('p')).toHaveTextContent('The toll rose to 212.')
+      expect(marks[1]!.closest('p')).toHaveTextContent('Researched caveat.')
+      expect(screen.getByText('Researched first sentence.').closest('p')).not.toContainElement(marks[0]!)
+    })
+
+    it('gives search engines the newest Update as the modified date', async () => {
+      renderStory(updated)
+      await waitFor(() => expect(document.head.querySelector('meta[property="article:modified_time"]')).toHaveAttribute('content', '2026-11-18'))
+      const article = [...document.head.querySelectorAll('script[type="application/ld+json"]')]
+        .map(s => JSON.parse(s.textContent!))
+        .find(s => s['@type'] === 'NewsArticle')
+      expect(article.dateModified).toBe('2026-11-18')
+    })
+
+    it('shows no Updates when the cited version they changed could not be served', async () => {
+      renderStory({ ...updated, research: null })
+      expect(screen.queryByRole('region', { name: 'Updates' })).toBeNull()
+      expect(within(row()).queryByRole('link', { name: /^Updated/ })).toBeNull()
+      await waitFor(() => expect(document.head.querySelector('script[type="application/ld+json"]')).not.toBeNull())
+      expect(document.head.querySelector('meta[property="article:modified_time"]')).toBeNull()
+    })
+
+    it('passes axe with the Updates section and marks', async () => {
+      const { container } = renderStory(updated)
       expect(await axe(container)).toHaveNoViolations()
     })
   })

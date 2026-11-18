@@ -1,12 +1,14 @@
 import type { CSSProperties, ReactNode } from 'react'
 import Markdown from 'react-markdown'
-import type { PublicStoryDetail, ResearchedCitedText, ResearchedStory } from '@shared/types'
+import type { PublicStoryDetail, PublicStoryUpdate, ResearchedCitedText, ResearchedStory } from '@shared/types'
 import { shiftHex, type CategoryColor } from '../../lib/category-colors'
 import { parsePoints } from '../../lib/parse-points'
 import { quoteAttributionLine } from '../ai/aiDisclosureCopy'
 import { Citation, type SourcesById } from '../research/Citation'
 import { CitedParagraphs, CitedSentences } from '../research/CitedText'
 import { SourcesList } from '../research/SourcesList'
+import { StoryUpdates, UpdatedMark } from '../research/StoryUpdates'
+import { updateMarks, type UpdateMarks } from '../research/updateMarks'
 
 // ---------------------------------------------------------------------------
 // Analysis section with ruled heading + numbered points
@@ -74,11 +76,12 @@ interface AnalysisPoints {
 /** Analysis points from a plain field's Markdown bullets. */
 const markdownPoints = (text: string | null): ReactNode[] => (text ? parsePoints(text).map(point => <Markdown>{point}</Markdown>) : [])
 
-/** Analysis points from the researched version's cited bullets. */
-const citedPoints = (bullets: ResearchedCitedText[], sources: SourcesById): ReactNode[] =>
-  bullets.map(bullet => (
+/** Analysis points from the researched version's cited bullets; a point in `marked` ends with the "Updated" mark. */
+const citedPoints = (bullets: ResearchedCitedText[], sources: SourcesById, marked: ReadonlySet<number>): ReactNode[] =>
+  bullets.map((bullet, i) => (
     <p>
       <CitedSentences items={[bullet]} sources={sources} />
+      {marked.has(i) && <UpdatedMark />}
     </p>
   ))
 
@@ -90,11 +93,12 @@ function analysisOf(
   story: Pick<PublicStoryDetail, 'relevanceReasons' | 'antifactors'>,
   research: ResearchedStory | null,
   sources: SourcesById,
+  marks: UpdateMarks,
 ): { reasons: AnalysisPoints; caveats: AnalysisPoints } {
   if (research) {
     return {
-      reasons: { points: citedPoints(research.whyThisMatters, sources), aiField: 'research' },
-      caveats: { points: citedPoints(research.caveats, sources), aiField: 'research' },
+      reasons: { points: citedPoints(research.whyThisMatters, sources, marks.whyThisMatters), aiField: 'research' },
+      caveats: { points: citedPoints(research.caveats, sources, marks.caveats), aiField: 'research' },
     }
   }
   return {
@@ -108,7 +112,9 @@ function analysisOf(
  * paragraphs or the summary, the key quote (cited in the researched format), Why This Matters and
  * Caveats, and a researched story's Sources list. Story context comes in from the page: a note after
  * a paragraph (the single-source summary counts as one) or inside a Why This Matters point, by index,
- * and the More context section (`context`) after Caveats.
+ * and the More context section (`context`) after Caveats. A researched story's Updates (ADR-0068)
+ * follow Caveats, before the context, and every paragraph and point an Update rewrote ends with an
+ * "Updated" mark linking them.
  */
 export function StoryBody({
   story,
@@ -117,6 +123,7 @@ export function StoryBody({
   paragraphNotes = [],
   pointNotes = [],
   context,
+  updates = [],
 }: {
   story: PublicStoryDetail
   research: ResearchedStory | null
@@ -124,10 +131,15 @@ export function StoryBody({
   paragraphNotes?: ReactNode[]
   pointNotes?: ReactNode[]
   context?: ReactNode
+  /** The story's Updates, newest first; shown only with the researched version they changed */
+  updates?: PublicStoryUpdate[]
 }) {
   const sources: SourcesById = new Map((research?.sources ?? []).map(source => [source.id, source]))
-  const { reasons, caveats } = analysisOf(story, research, sources)
+  const shownUpdates = research ? updates : []
+  const marks = updateMarks(shownUpdates)
+  const { reasons, caveats } = analysisOf(story, research, sources, marks)
   const dropCap = { '--drop-cap-color': colors.hex } as CSSProperties
+  const paragraphMarks = research?.paragraphs.map((_, i) => (marks.paragraphs.has(i) ? <UpdatedMark key={i} /> : null))
 
   return (
     <>
@@ -135,7 +147,7 @@ export function StoryBody({
       {research ? (
         <section className="mb-10" data-ai-generated="research">
           <div className="prose drop-cap" style={dropCap}>
-            <CitedParagraphs paragraphs={research.paragraphs} sources={sources} notes={paragraphNotes} />
+            <CitedParagraphs paragraphs={research.paragraphs} sources={sources} notes={paragraphNotes} after={paragraphMarks} />
           </div>
         </section>
       ) : (
@@ -199,6 +211,8 @@ export function StoryBody({
           aiField={caveats.aiField}
         />
       )}
+
+      <StoryUpdates updates={shownUpdates} />
 
       {/* More context: the cards not beside the text */}
       {context}

@@ -28,16 +28,19 @@ export function CitedSentences({ items, sources }: { items: ResearchedCitedText[
 /**
  * The researched story's paragraphs, in place of the summary. A paragraph with a note beside it
  * (`notes`, by paragraph index) shares a `relative` box with it, which the note places itself in and
- * which carries the paragraph's spacing from lg.
+ * which carries the paragraph's spacing from lg. `after` (by paragraph index) ends a paragraph's own
+ * text, as the "Updated" mark does.
  */
 export function CitedParagraphs({
   paragraphs,
   sources,
   notes = [],
+  after = [],
 }: {
   paragraphs: { sentences: ResearchedCitedText[] }[]
   sources: SourcesById
   notes?: ReactNode[]
+  after?: ReactNode[]
 }) {
   return (
     <>
@@ -45,6 +48,7 @@ export function CitedParagraphs({
         const paragraph = (
           <p>
             <CitedSentences items={p.sentences} sources={sources} />
+            {after[i]}
           </p>
         )
         // From lg the note leaves the flow and the paragraph its margin (index.css), so the box spaces paragraphs

@@ -1,4 +1,4 @@
-import type { PublicPodcastEpisode, PublicStory } from '@shared/types'
+import type { PublicPodcastEpisode, PublicStory, PublicStoryUpdate } from '@shared/types'
 import type { PublicIssue } from './api'
 import { markdownToPlainText } from './plainText'
 import { podcastTranscriptPath, PODCAST_SHOWS } from './podcast'
@@ -31,9 +31,14 @@ const publisher = {
   },
 }
 
-export function buildArticleSchema(story: PublicStory) {
+/** The day of a story's newest Update (they come newest first), or null for a story never updated: its modified date for search engines. */
+export const lastUpdated = (updates: readonly Pick<PublicStoryUpdate, 'date'>[] | undefined): string | null => updates?.[0]?.date ?? null
+
+/** `updates`: the story's Updates, newest first; the newest one's day is the article's `dateModified`. */
+export function buildArticleSchema(story: PublicStory, updates?: readonly Pick<PublicStoryUpdate, 'date'>[]) {
   const displayTitle = story.titleLabel && story.title ? `${story.titleLabel}: ${story.title}` : story.title || ''
   const issueName = story.issue?.name ?? story.feed?.issue?.name ?? 'News'
+  const modified = lastUpdated(updates)
 
   return {
     '@context': 'https://schema.org',
@@ -41,6 +46,7 @@ export function buildArticleSchema(story: PublicStory) {
     headline: displayTitle.slice(0, 110),
     description: (markdownToPlainText(story.summary ?? '') || displayTitle).slice(0, 200),
     datePublished: story.datePublished || story.dateCrawled,
+    ...(modified ? { dateModified: modified } : {}),
     author: {
       '@type': 'Organization',
       name: SEO.siteName,
