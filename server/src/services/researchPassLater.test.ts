@@ -198,7 +198,7 @@ describe('updateArticle', () => {
         { sourceId: 'S1', sentence: 'Smoke closed 40 schools. (as reported)' },
       ],
     })
-    expect(r.record.note).toEqual({ text: 'The education ministry counted 12 closed schools, not 40.', fallback: false, problems: [] })
+    expect(r.record.note).toEqual({ text: 'The education ministry counted 12 closed schools, not 40.', fallback: false, problems: [], checked: 1, copied: 0 })
     // The rewrite is asked for the flagged section alone; the checks read it, then the note
     const update = fake.calls.find(c => c.step === 'update')!.prompt
     const repairs = update.slice(update.lastIndexOf('<REPAIRS>'), update.lastIndexOf('</REPAIRS>'))
@@ -269,9 +269,27 @@ describe('updateArticle', () => {
     const fake = fakeDeps({ ...defaults, note: noting('The ministry said “only 12” schools closed.', ['S5F2']) })
     const r = await updateArticle(input(), fake.deps)
     expect(r.next!.note.text).toBe('Updated: Story paragraph 2 rewritten after new reporting from Agency.')
-    expect(r.record.note).toEqual({ text: r.next!.note.text, fallback: true, problems: ['quotes words; an Update has no quotation marks'] })
+    // The code's checks failed it both times, so production's fact check never ran on it
+    expect(r.record.note).toEqual({
+      text: r.next!.note.text,
+      fallback: true,
+      problems: ['quotes words; an Update has no quotation marks'],
+      checked: 0,
+      copied: 0,
+    })
     expect(fake.steps().filter(s => s === 'note')).toHaveLength(2)
     expect(fake.calls[fake.calls.length - 1]!.prompt).toContain('<PREVIOUS>')
+  })
+
+  it('counts the notes the checks ran on and those a copying check flagged', async () => {
+    let round = 0
+    const copyingOnce: Answer = prompt => {
+      const answer = checking()(prompt) as FactCheck
+      if (!prompt.includes('label="Update note"') || round++ > 0) return answer
+      return { items: answer.items.map(i => ({ ...i, copiedSentence: 'S5F2' })) }
+    }
+    const r = await updateArticle(input(), fakeDeps({ ...defaults, 'fact-check': copyingOnce }).deps)
+    expect(r.record.note).toMatchObject({ fallback: false, checked: 2, copied: 1 })
   })
 
   it('ends on the budget when a call is skipped, and as a technical failure when one fails', async () => {

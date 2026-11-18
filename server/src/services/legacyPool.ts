@@ -306,6 +306,41 @@ export function legacyVersionOf(story: StoryColumns): ArticleVersionData | null 
   }
 }
 
+/** Runs SELECTs only: the import's reads, and the eval's read-only session. */
+interface SelectOnly {
+  $queryRaw<T = unknown>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>
+}
+
+/**
+ * The pool and version 1 the import makes of the story's legacy runs and columns, read with SELECTs
+ * only and written nowhere: the import's reads, and the `update` eval's later-pass fixtures.
+ */
+export async function readLegacyImport(db: SelectOnly, storyId: string): Promise<{ pool: Pool; version: ArticleVersionData | null }> {
+  const [runRow] = await db.$queryRaw<{ result: unknown }[]>`
+    SELECT r.result FROM story_research_runs r
+    WHERE r.story_id = ${storyId} AND ${RUN_WITH_FACTS_SQL}
+    ORDER BY r.started_at DESC, r.id DESC LIMIT 1`
+  const run = runRow ? runSchema.safeParse(runRow.result) : null
+  const [contextFacts, contextRuns, [story]] = await Promise.all([
+    db.$queryRaw<(FactColumns & { status: string })[]>`
+      SELECT ${FACT_COLUMNS_SQL}, f.status::text AS status FROM context_facts f JOIN story_context_runs r ON r.id = f.run_id
+      WHERE f.story_id = ${storyId} AND r.status = 'completed' ORDER BY r.started_at DESC, r.id DESC, f.ref, f.id`,
+    db.$queryRaw<
+      { result: unknown }[]
+    >`SELECT r.result FROM story_context_runs r WHERE r.story_id = ${storyId} AND r.status = 'completed' ORDER BY r.started_at, r.id`,
+    db.$queryRaw<StoryColumns[]>`
+      SELECT s.title, s.title_label, s.summary, s.marketing_blurb, s.quote, s.quote_attribution, s.relevance_reasons, s.antifactors,
+             s.emotion_tag::text AS emotion_tag, s.research
+      FROM stories s WHERE s.id = ${storyId}`,
+  ])
+  const pool = legacyPoolOf(
+    run?.success ? run.data : null,
+    contextFacts,
+    contextRuns.map(r => r.result),
+  )
+  return { pool, version: story ? legacyVersionOf(story) : null }
+}
+
 /**
  * Import the story's legacy runs into its pool, in the caller's transaction (the pass's claim):
  * `present` when the story already has pool rows or versions, `none` when it has nothing to import.
@@ -316,29 +351,7 @@ export async function importLegacyPool(tx: Prisma.TransactionClient, storyId: st
         OR EXISTS (SELECT 1 FROM article_versions WHERE story_id = ${storyId}) AS present`
   if (present?.present) return 'present'
 
-  const [runRow] = await tx.$queryRaw<{ result: unknown }[]>`
-    SELECT r.result FROM story_research_runs r
-    WHERE r.story_id = ${storyId} AND ${RUN_WITH_FACTS_SQL}
-    ORDER BY r.started_at DESC, r.id DESC LIMIT 1`
-  const run = runRow ? runSchema.safeParse(runRow.result) : null
-  const [contextFacts, contextRuns, [story]] = await Promise.all([
-    tx.$queryRaw<(FactColumns & { status: string })[]>`
-      SELECT ${FACT_COLUMNS_SQL}, f.status::text AS status FROM context_facts f JOIN story_context_runs r ON r.id = f.run_id
-      WHERE f.story_id = ${storyId} AND r.status = 'completed' ORDER BY r.started_at DESC, r.id DESC, f.ref, f.id`,
-    tx.$queryRaw<
-      { result: unknown }[]
-    >`SELECT r.result FROM story_context_runs r WHERE r.story_id = ${storyId} AND r.status = 'completed' ORDER BY r.started_at, r.id`,
-    tx.$queryRaw<StoryColumns[]>`
-      SELECT s.title, s.title_label, s.summary, s.marketing_blurb, s.quote, s.quote_attribution, s.relevance_reasons, s.antifactors,
-             s.emotion_tag::text AS emotion_tag, s.research
-      FROM stories s WHERE s.id = ${storyId}`,
-  ])
-  const pool = legacyPoolOf(
-    run?.success ? run.data : null,
-    contextFacts,
-    contextRuns.map(r => r.result),
-  )
-  const version = story ? legacyVersionOf(story) : null
+  const { pool, version } = await readLegacyImport(tx, storyId)
   if (pool.sources.length === 0 && pool.searches.length === 0 && !version) return 'none'
 
   await insertPoolRows(tx, storyId, pool)
