@@ -9,7 +9,8 @@
  */
 import { utcDay } from '../lib/days.js'
 import { currentVersion, loadPool } from './passRecords.js'
-import type { OfferedFact, PassInput } from './researchPass.js'
+import type { PassInput } from './researchPass.js'
+import type { OfferedFact } from './researchPassPool.js'
 import { storedPlan, type CoveragePlan } from './researchPassPlan.js'
 import { researchStoriesByIds, type ResearchDb } from './researchInput.js'
 import { EMPTY_POOL, type ArticleVersionData, type Pool } from './researchPool.js'

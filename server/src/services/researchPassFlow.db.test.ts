@@ -13,7 +13,8 @@ import { promptText } from '../lib/promptCache.js'
 import prisma from '../lib/prisma.js'
 import { axisVector, createCluster, createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createResearchRun } from '../test/db/storyContext.js'
-import type { PassDeps, PassStep } from './researchPass.js'
+import type { PassDeps } from './researchPass.js'
+import type { PassStep } from './researchPassSteps.js'
 import type { ResearchedSource, ResearchedStory } from './researchedStory.js'
 
 vi.mock('./researchPassGate.js', () => ({ PASS_EVAL_GATE: null }))

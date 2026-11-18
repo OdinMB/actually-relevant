@@ -5,12 +5,11 @@ import { coverageExtractionSchema, type Draft, type Extraction, type FactCheck }
 import type { GapList } from '../schemas/storyContext.js'
 import { articleOf } from './articleVersions.js'
 import { buildResearchedStory } from './researchedStory.js'
-import type { CitationProblem } from './researchChecks.js'
-import { passCalls, passItemTally, runResearchPass, type PassDeps, type PassInput, type PassRecord, type PassStep } from './researchPass.js'
-import type { UpdateRecord } from './researchPassLater.js'
+import { runResearchPass, type PassDeps, type PassInput } from './researchPass.js'
+import { passCalls, passItemTally } from './researchPassRecord.js'
+import type { PassStep } from './researchPassSteps.js'
 import type { ResearchStory } from './researchInput.js'
-import { emptyResearch, type CheckPass, type ResearchSearchAnswer } from './researchPipeline.js'
-import { emptyContextRecord } from './storyContextPipeline.js'
+import type { ResearchSearchAnswer } from './researchPipeline.js'
 import { cardFacts, EMPTY_POOL, researchView, type Pool, type PoolFact, type PoolSource } from './researchPool.js'
 import { storyLayout } from './storyContextLayout.js'
 import { boxRefs } from './storyContextRecords.js'
@@ -889,68 +888,5 @@ describe('runResearchPass, a later pass', () => {
       const byRef = new Map(third.pool.facts.map(f => [f.ref, f]))
       for (const ref of second.boxes.flatMap(boxRefs)) expect(byRef.get(ref)?.statement, ref).toBe(second.boxFacts.get(ref)?.statement)
     })
-  })
-})
-
-describe('passItemTally', () => {
-  const problem = (label: string): CitationProblem => ({ label, text: 'text', problem: 'unsupported', kind: 'fact', by: 'judge' })
-  const check = (rechecked: string[] | undefined, failing: string[] = []): CheckPass => ({
-    problems: failing.map(problem),
-    longestRuns: [],
-    unjudged: [],
-    numberHints: [],
-    ...(rechecked ? { rechecked } : {}),
-  })
-  const record = (over: Partial<PassRecord>): PassRecord => ({
-    research: emptyResearch('story-1', true),
-    context: emptyContextRecord(true),
-    cards: 'none',
-    cardsError: null,
-    skippedQueries: [],
-    plan: { confirm: null, queries: null, use: {} },
-    update: null,
-    ...over,
-  })
-  const update = (over: Partial<UpdateRecord>): UpdateRecord => ({
-    calls: [],
-    judgments: [],
-    demoted: [],
-    superseded: [],
-    checks: [],
-    problems: [],
-    failedOn: null,
-    note: null,
-    error: null,
-    ...over,
-  })
-
-  it("counts each of the draft's cited sections once however many rounds checked it, a failing one once, beside the cards' tally", () => {
-    const context = { ...emptyContextRecord(true), tally: { checked: 4, failed: 1 } }
-    const research = {
-      ...emptyResearch('story-1', true),
-      draft: {
-        ...draft(),
-        caveats: [
-          { text: 'The grid lags behind.', factIds: [] },
-          { text: 'Prices may rise.', factIds: [] },
-        ],
-      },
-      checks: [check(undefined, ['Caveat 2']), check(['Caveat 2'], ['Caveat 2']), check(['Caveat 2'], ['Caveat 2'])],
-      problems: [problem('Caveat 2'), problem('Caveat 2')],
-    }
-    // Story paragraph 1, Why This Matters 1, Caveats 1 and 2
-    expect(passItemTally(record({ research, context }))).toEqual({ checked: 4 + 4, failed: 1 + 1 })
-  })
-
-  it('counts nothing of an article no check ran on', () => {
-    expect(passItemTally(record({ research: { ...emptyResearch('story-1', true), draft: draft() } }))).toEqual({ checked: 0, failed: 0 })
-  })
-
-  it("counts a later pass's rechecked sections once each, and a dropped one that failed", () => {
-    const later = update({
-      checks: [check(['Story paragraph 2', 'Caveat 1'], ['Caveat 1']), check(['Caveat 1'], ['Caveat 1'])],
-      problems: [problem('Caveat 1')],
-    })
-    expect(passItemTally(record({ update: later }))).toEqual({ checked: 2, failed: 1 })
   })
 })

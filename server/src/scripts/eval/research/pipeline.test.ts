@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import { config } from '../../../config.js'
-import { PASS_STEP_TIERS, passStepEffort } from '../../../services/researchPass.js'
+import { PASS_STEP_TIERS, passStepEffort } from '../../../services/researchPassSteps.js'
 import type { ResearchStory } from '../../../services/researchInput.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
 import type { Arm, CallRecord, SuiteContext } from '../types.js'

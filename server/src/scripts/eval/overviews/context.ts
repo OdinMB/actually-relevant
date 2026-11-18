@@ -12,7 +12,8 @@
  * history. Stories start only while the budget covers one more first pass (`runStories`); the judge
  * runs only when its planned calls fit what is left (`callBudget.ts`).
  */
-import { cardsLayout, type PassInput, type PassResult } from '../../../services/researchPass.js'
+import type { PassInput, PassResult } from '../../../services/researchPass.js'
+import { cardsLayout } from '../../../services/researchPassCards.js'
 import { cardFacts } from '../../../services/researchPool.js'
 import type { StoryContextResult } from '../../../services/storyContextPipeline.js'
 import { runNumbers } from '../repeats.js'

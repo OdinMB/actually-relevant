@@ -74,9 +74,13 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/researchFilter.js': '*',
   'services/researchChecks.js': '*',
   'services/researchCopying.js': '*',
-  // Production's research pass and its pool's shapes, so eval:research and the `context` step run
-  // what the step runs; held below to doing no I/O of its own.
+  // Production's research pass, its steps, record, working pool, card stage and its pool's shapes, so
+  // eval:research and the `context` step run what the step runs; held below to doing no I/O of its own.
   'services/researchPass.js': '*',
+  'services/researchPassSteps.js': '*',
+  'services/researchPassRecord.js': '*',
+  'services/researchPassPool.js': '*',
+  'services/researchPassCards.js': '*',
   'services/researchPool.js': '*',
   // A later pass's article step, so the `update` step runs what a later pass runs; held below to doing no I/O of its own.
   'services/researchPassLater.js': '*',
@@ -123,6 +127,10 @@ const RESEARCH_SERVICE_MODULES = [
   'researchChecks.ts',
   'researchCopying.ts',
   'researchPass.ts',
+  'researchPassSteps.ts',
+  'researchPassRecord.ts',
+  'researchPassPool.ts',
+  'researchPassCards.ts',
   'researchPool.ts',
   'researchPassLater.ts',
 ]
