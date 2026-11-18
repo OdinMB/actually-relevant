@@ -5,8 +5,9 @@
  * judgments, version and cards) and, when the pass made a version, the story's columns and projection
  * through research's fenced write (`researchApply.ts`'s `write`), so neither lands without the other.
  * Every story write is fenced on the story as read before the pass: an editor's move or edit during
- * the pass wins, and the pass's rows are then stored without its version. A first pass's `stale` or
- * `contradicted` verdict rejects the story through `transition`, which takes only a selected story;
+ * the pass wins, and the pass's rows are then stored without its version. A pipeline pass's first
+ * `stale` or `contradicted` verdict rejects the story through `transition`, which takes only a
+ * selected story; an editor's never rejects: the verdict stays on the pass, for the editor to act on;
  * a first pass on a published story is recorded as an Update (For Odin 5, `firstPassUpdate`), and a
  * later pass's rewrite before publication is none (`versionForReaders`). A later
  * pass that could not fix what it found wrong (`update_failed`) keeps the article and raises one
@@ -33,7 +34,8 @@ const log = createLogger('research_pass')
 /**
  * What became of a pass's result: `applied` (its version is on the story), `rejected` (its verdict
  * rejected the selected story), `stored` (its rows stored, the story left as it is: no version, an
- * `unchanged` or `update_failed` later pass, a fallback, a budget stop or a technical failure),
+ * `unchanged` or `update_failed` later pass, a fallback, a budget stop, a technical failure, or an
+ * editor's pass whose verdict would reject the story),
  * `skipped` (the story moved or was written during the pass, or the step was switched off: its rows
  * stored without its version), `dropped` (a restart marked the pass cut off first: nothing stored).
  */
@@ -104,8 +106,10 @@ export async function applyPass(input: PassApplyInput): Promise<PassApplied> {
 
   if (!input.applies) return stored('skipped', 'not applied: the step was switched off during the pass')
 
-  // A first pass's verdict against the story: rejected only while it is still selected and unwritten
+  // A first pass's verdict against the story: an editor's pass records it on the pass and leaves the
+  // story to the editor; the step's rejects it, only while it is still selected and unwritten
   if (result.kind === 'first' && rejects(result.verdict.kind)) {
+    if (input.actor !== 'pipeline') return stored('stored')
     const reason = REJECTED_FOR[result.verdict.kind]
     const changed = whyChanged(await storyColumns(storyId), read)
     const moved =

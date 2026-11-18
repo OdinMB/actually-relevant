@@ -107,8 +107,16 @@ describe('ResearchPassView', () => {
     const { unmount } = renderPass(pass({ outcome: 'update_failed', record: { update: update({ failedOn: 'Title' }) } }))
     expect(screen.getByText(/could not fix it \(Title\): the article stays/)).toBeInTheDocument()
     unmount()
-    renderPass(pass({ kind: 'first', outcome: 'contradicted' }))
+    renderPass(pass({ kind: 'first', trigger: 'pipeline', outcome: 'contradicted' }))
     expect(screen.getByText('contradicted.')).toBeInTheDocument()
+  })
+
+  it("says an editor's pass only recorded a verdict that would reject the story, and the step's pass does not", () => {
+    const { unmount } = renderPass(pass({ kind: 'first', trigger: 'editor', outcome: 'stale' }))
+    expect(screen.getByText(/^old news\. Recorded only: /)).toBeInTheDocument()
+    unmount()
+    renderPass(pass({ kind: 'first', trigger: 'pipeline', outcome: 'stale' }))
+    expect(screen.queryByText(/Recorded only/)).not.toBeInTheDocument()
   })
 
   it('says a running pass holds its reservation, and why a pass was skipped or failed', () => {

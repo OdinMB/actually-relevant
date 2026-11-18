@@ -56,7 +56,11 @@ function outcomeText(pass: ResearchPass): string | null {
     case 'written':
       return 'Written: the story took the researched version this pass wrote.'
     case 'stale':
-    case 'contradicted':
+    case 'contradicted': {
+      const text = verdict ? verdictText(verdict) : `${OUTCOME_NAMES[pass.outcome]}.`
+      // The step's pass rejects the story on this verdict; an editor's leaves it to the editor
+      return pass.trigger === 'editor' ? `${text} Recorded only: a pass an editor starts never rejects the story.` : text
+    }
     case 'research-rating':
     case 'fallback':
       return verdict ? verdictText(verdict) : `${OUTCOME_NAMES[pass.outcome]}.`

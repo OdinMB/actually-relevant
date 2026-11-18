@@ -346,6 +346,18 @@ describeDb('research passes (PostgreSQL)', () => {
     expect(await prisma.researchPass.findFirstOrThrow({ where: { storyId: story.id } })).toMatchObject({ outcome: 'stale', verdict: 'stale' })
   })
 
+  it("never rejects a story on an editor's pass: the verdict is recorded on the pass and the story stays as it is", async () => {
+    const story = await researchable()
+    mockPass.runResearchPass.mockResolvedValue(passResult({ outcome: 'contradicted', verdict: { kind: 'contradicted', factIds: ['S1F1'] }, version: null }))
+
+    const { taskId, passId } = await startEditorPass(story.id)
+    await vi.waitFor(() => expect(taskRegistry.get(taskId)?.status).toBe('completed'), { timeout: 5000, interval: 20 })
+
+    expect(await prisma.story.findUniqueOrThrow({ where: { id: story.id } })).toMatchObject({ status: 'selected', rejectionReason: null })
+    expect(await passOf(passId)).toMatchObject({ status: 'completed', outcome: 'contradicted', verdict: 'contradicted', versionId: null, error: null })
+    expect(taskRegistry.get(taskId)).toMatchObject({ completed: 1, failed: 0 })
+  })
+
   it('settles a story the loader cannot research with a $0 skipped pass, and one past the cap too', async () => {
     const unreadable = await researchable()
     mockInput.loadPassInput.mockResolvedValueOnce(null)
