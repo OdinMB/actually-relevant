@@ -1,8 +1,8 @@
-# Research passes (the `research_pass` step, built in part and switched off)
+# Research passes (the `research_pass` step, wired and switched off)
 
 A **research pass** is one repeatable step over one **evidence pool** per story: it searches, extracts and checks facts into the story's pool, writes the article from the pool's supported facts (research's write, checks, repair and gate) and the context cards from the pool (context's write and box check). A story's first pass writes version 1 of its article; a later pass judges the current version against the facts found since and rewrites only the sections they make wrong or substantially different, with an Update note that says what changed and why. It is to replace the research step (`research_stories`, `.context/story-research.md`) and story context (`build_story_context`, `.context/story-context.md`) with one switch, one budget and one spending line. Plan: `.plans/2026-11-17_research-passes.md` (approved 2026-11-17; built in phases). Decisions: ADR-0067 (the step and its pool), ADR-0068 (versions, the later pass and Updates).
 
-**What is built and what it does today.** The records (phase 1), the first pass and its input (phase 2), the later pass, article versions with undo and revert, and the `update` eval (phase 3), and the evals' adapters. **Nothing in production calls the pass**: the `research_pass` job is seeded disabled, enabling it is refused, and its handler only reports that it is not wired. The tables are empty until a pass runs. The old steps, their tables and their readers are unchanged; "Undo this update" (`undoUpdate`) has no route yet, and the version marks on "Revert to single-source" and a re-assess touch no row while no version exists. Still to come: the pass lifecycle and job (claim, reservation, store, apply, the publish gate, mutual exclusion with the old jobs, the `update_failed` notice), the admin view and "Research again", the public Updates, and the old steps' retirement.
+**What is built and what it does today.** The records (phase 1), the first pass and its input (phase 2), the later pass, article versions with undo and revert, and the `update` eval (phase 3), the evals' adapters, and the wiring (phase 4): the pass's lifecycle, the job in the daily edition, the publish gate, one switch for the old steps and the new one, the cap shared with research, the admin routes and the public `updates` field. **It is switched off, and nothing in production runs a pass** ("How the switch stays off"): the tables stay empty, the daily edition skips the step, the publish gate holds nothing for it, every editor's start is refused, and `updates` is an empty list on every story. The version marks on "Revert to single-source" and a re-assess touch no row while no version exists. The old steps, their tables and their readers are unchanged until the retirement. Still to come: the pass view, "Research again" and "Undo this update" in the admin and the Updates on the story page (phase 5), the eval report and the switch (phase 6), and the old steps' retirement (phase 7).
 
 ## The pool
 
@@ -59,24 +59,80 @@ A story with a current version gets a later pass (ADR-0068): steps 1 to 4 as abo
 
 Outcomes: `updated` (a new version, kind `update`), `unchanged`, `update_failed`, `technical`, and `budget`, which ends the pass. **Cards are written only when the pool changed**: a later pass that gained no supported fact of a page and demoted nothing keeps the cards (`cards: kept`); otherwise step 6 runs on the new version's places. Cards never carry an Update.
 
-## Versions, undo and revert
+## Versions and Updates
 
-`services/articleVersions.ts` (pure): a version's article (`versionArticle`), its sections as readers see them (`sectionTexts`), the projection with untouched sections frozen (`withFrozen`), the next version (`nextVersion`), the sources every Update cites (`updateSources`), and what an undo restores (`undoPlan`, `versionValues`). The writes are `services/articleVersionWrites.ts`, in the caller's transaction:
+`services/articleVersions.ts` (pure): a version's article (`versionArticle`), its sections as readers see them (`sectionTexts`), the projection with untouched sections frozen (`withFrozen`), the next version (`nextVersion`), a first pass's Update on a published story (`firstPassUpdate`), the Updates readers get with the sources each cites (`publicUpdates`, `updatesForReaders`; "The public updates field"), and what an undo restores (`undoPlan`, `versionValues`). The writes are `services/articleVersionWrites.ts`, in the caller's transaction:
 
-- **Undo this update** (`undoUpdate`, `services/researchApply.ts`; no route yet): only the newest version, and only an update (refused on a first or legacy version, or when no earlier version is left). The previous version's fields go back on the story through research's fenced write, and in the same transaction the current version becomes `reverted` and the previous one `current`, each fenced on its status (a 409 when the story changed meanwhile), and **the facts the undone update's pass demoted are back in use** (`unreviewed`, their drop cleared): left demoted, the next pass would rewrite a restored section citing one with nothing new found. Another pass's demotions stay. Undoing twice walks back one update at a time.
+- **Undo this update** (`undoUpdate`, `services/researchApply.ts`; `POST /api/admin/research-passes/stories/:storyId/undo`): only the newest version, and only an update (refused on a first or legacy version, or when no earlier version is left). The previous version's fields go back on the story through research's fenced write, and in the same transaction the current version becomes `reverted` and the previous one `current`, each fenced on its status (a 409 when the story changed meanwhile), and **the facts the undone update's pass demoted are back in use** (`unreviewed`, their drop cleared): left demoted, the next pass would rewrite a restored section citing one with nothing new found. Another pass's demotions stay. Undoing twice walks back one update at a time.
 - **Revert to single-source** (`revertResearch`) and a **re-assess** (`assessStory` on a researched story) mark every version `reverted` in the transaction that writes the story (`recordAnalysis`'s `also`), so no version stays current over text readers no longer see.
 
 ## Budget
 
-One meter for the whole pass: research's `createRunMeter` (`services/researchCalls.ts`), which meters the card steps' and the later pass's calls (their desk output estimates in `STEP_OUTPUT_TOKENS`: judge 1,500, update 3,000, note 400) and the gap searches (at basic depth's credits; a cached answer costs nothing) as it meters research's, against the pass's ceiling and what the month's cap leaves. A call without room is `skipped`, a search without room throws `BudgetExhaustedError`. The ceilings are `config.research.pass.firstPassUsd` (0.40) and `laterPassUsd` (0.25), about twice a pass's target; `perRun` (20) and `concurrency` (4) are the job's, for the wiring. Reserving the ceiling at start under research's advisory lock comes with the lifecycle.
+One meter for the whole pass: research's `createRunMeter` (`services/researchCalls.ts`), which meters the card steps' and the later pass's calls (their desk output estimates in `STEP_OUTPUT_TOKENS`: judge 1,500, update 3,000, note 400) and the gap searches (at basic depth's credits; a cached answer costs nothing) as it meters research's, against the pass's ceiling and what the month's cap leaves. A call without room is `skipped`, a search without room throws `BudgetExhaustedError`. The ceilings are `config.research.pass.firstPassUsd` (0.40) and `laterPassUsd` (0.25), about twice a pass's target, reserved when the pass is claimed.
 
-## The job
+- **One monthly cap for research runs and passes** (`config.research.monthlyCapUsd`, ADR-0067): `monthToDateUsd` (`services/researchSpend.ts`) sums the cost of every research run and pass started this UTC month, each once, deleted stories' and running reservations included; a meter leaves out its own run or pass. Research's runs reserve against the same sum under the same advisory lock (`RESEARCH_RESERVATION_LOCK`), so a run and a pass started at once never pass the cap together. While no pass runs, the sum is research's alone, as it was.
+- **Spending**: the step's month is `research_pass`'s `job_month_spend` row. A step run adds its usage when it finishes (`finishJobRun`); an editor's pass runs in a run scope of the step's job, adds its own usage in its task (`addMonthSpend`) and checks that line's warning level ($20, seeded by the migration). So the Spending page shows the step as one line in the daily edition's group, and `editor_research` and `build_story_context` keep only their past months.
 
-`research_pass` (`jobs/researchPass.ts`, "Research Passes" on the Jobs page): seeded **disabled** by `20261117230407_research_passes` and `seed-jobs.ts`, with a $20 spending warning level (build_story_context's). **Enabling it is refused** (`PASS_NOT_WIRED`, `jobs/jobEnableChecks.ts`) until the step is wired; its handler only reports "Research passes are off: the step is not wired yet", so "Run now" writes nothing. It is in `MODEL_JOBS` (a Flex switch, and a $0 line on the Spending page) and `RESUMABLE_JOBS`, and in no chain yet.
+## Running a pass
 
-## Admin
+`services/researchPassRuns.ts`:
 
-`passEligibility(db, storyId)` (`services/researchPassInput.ts`): the story's status, whether a pass of it is running (one at a time), and the kind of pass it would get: `later` when it has an article to judge (a current version, or `stories.research` set, which the legacy import makes version 1), else `first`, so a story whose first passes kept no article gets a first pass again. No route reads it yet.
+- **The claim** (`claimPass`), one transaction under research's reservation lock: the passes a restart cut off are marked first; refused while a pass of the story runs (one at a time); the story's legacy runs are imported once (`importLegacyPool`); the kind is decided (`later` when the story has a current version, the import's included, else `first`); refused when the month's spend plus that kind's ceiling would pass the cap; then the pass row is written `running` at its ceiling, numbered one more than the story's highest. Concurrent claims (the step's, an editor's, a research run's) never pass the cap or run one story twice.
+- **Execution** (`executePass`): the input (`loadPassInput`; a story the loader cannot research ends the pass `skipped` at $0), the pass over production's deps (`productionPassDeps`: the metered calls and searches, the gap search with its 7-day cache and opt-out check, the opt-out policy, `transientFailure`), **a second attempt in the same pass** when it failed on a problem that may pass, then the apply. It never throws: an error outside the pipeline fails the pass at its reservation.
+- **Cost**: a finished pass's `cost_usd` is the larger of what the meter counted (both attempts) and its model cost plus its credits at their price; a running pass counts at its ceiling, and so does one a restart cut off.
+- **Interrupted passes** (`markInterruptedPasses`): a `running` pass past context's stale rule (`storyContextStale.ts`: older than `storyContext.staleRunMinutes`, or, in the scheduling process, started before it) is marked `failed`, `technical`, "interrupted: the server restarted during the pass", keeping its cost. It runs before every claim, every step run and every admin read. A cut-off pass settles its story.
+- **Skipped passes** (`recordSkippedPass`): a pipeline pass that never started (the cap reached, a story the loader cannot research, a failure outside the pass) is recorded `skipped` at $0 with its reason, so it settles its story and counts nothing against the cap.
+- **An editor's pass** (`startEditorPass`, `startEditorPassBatch`): checked (the switch, the status, the analysis research needs, a running pass, the cap) and claimed before the answer, then run in the background as a `research` task, at standard price (a person waits on it), in a run scope of the step's job. A bulk pass is one task over up to `research.bulkMaxStories` (50) stories, `research.pass.concurrency` (4) at a time, each claimed when its turn comes, so a later one sees the cost of those before it; a refused story is skipped with the reason.
+
+## Applying a pass
+
+`services/researchPassApply.ts`. **A pass applies itself** (plan, For Odin 3), the nightly pass and an editor's alike:
+
+- One transaction writes the pass's rows (`storePassResult`) and, when it made a version, the story's columns and projection through research's fenced write (`write`, `researchApply.ts`), so neither lands without the other. **Every story write is fenced on the story as read before the pass**: an editor's move or edit during the pass wins, and the pass's rows are stored without its version, with the error "not applied: …". A pass a restart marked cut off before its store is dropped, and the story write rolls back with it.
+- A first pass's `stale` or `contradicted` verdict rejects the story through `transition`, which takes only a selected story. Every other kept draft, `research-rating` included, becomes version 1, as research's step applies one; the single-source snapshot (`pre_research`) is taken once, as research's apply takes it. A later pass stores no gate verdict.
+- **A first pass on a published story is an Update** (For Odin 5, `firstPassUpdate`): its note, which code words and dates ("Researched with 3 more sources on Nov 19; the story was rewritten from them."), and the single-source text section by section under the page's labels (the title, the summary as the story's one paragraph, the bullets), so readers can read what the story said before.
+- **A later pass's `update_failed` keeps the article** and raises one admin notice for the story (`research-update-failed:<id>`, reopened by the next such pass): nothing is unpublished or rejected.
+- A pass that ends after the step was switched off stores its rows and applies nothing.
+- After an apply, the outlets' favicons are fetched in the background.
+
+## The job and the gate
+
+`research_pass` (`jobs/researchPass.ts`, "Research Passes" on the Jobs page), seeded **disabled** by `20261117230407_research_passes` and `seed-jobs.ts`. It is a step of `daily_edition_chain`, after `build_story_context` and before `publish_stories`; a disabled step is skipped, so the edition runs the old steps until the switch. **A failure of the job as a whole stops the chain before publishing**, as research's does; a story's failure never fails it. It is in `MODEL_JOBS` (a Flex switch) and `RESUMABLE_JOBS` (it takes only stories with no pipeline pass, and a cut-off pass settles its story).
+
+- **A run** marks cut-off passes, then **does nothing unless the step works** (the eval gate open, research's switch on: the key set, every model priced) **and its job is enabled**: a "Run now" of the disabled job reports why and researches nothing, unlike research's. It takes up to `research.pass.perRun` (20) owed stories, oldest crawled first, `concurrency` (4) at once, with no time limit. Before each story it re-reads that state and starts no other once the step is switched off; a pass in flight finishes and is stored without being applied. A story whose turn failed outside its pass gets a $0 skipped pass. Its summary: "Researched 12 stories: 9 applied, 1 rejected, 1 failed, 1 not applied, 3 left for the next run".
+- **Failure share** (`.context/scheduler.md`): the items are the cards' checked items plus the article's rechecked sections, and the notice is in the step's words (`failureShare.ts`). When more than the share of at least `research.pass.failedStoriesMin` (5) stories failed technically, the run records the failed-stories notice (`stories-failing:research_pass`).
+- **Owed stories** (`researchPassQueue.ts`, SELECT only): selected, no research applied (`pre_research` null), and no pipeline pass. A pipeline pass settles its story once it is completed, skipped or failed, or running past the stale rule; an editor's pass settles nothing.
+- **The publish gate** (`awaitingPass`, after research's and context's, each holding only while its own job is on): while the step works and its job is enabled, a selected story with no settled pipeline pass waits at most `research.pipeline.maxWaitMinutes` (120) after its selection, **in the daily edition too**. The cards are made inside the pass, so no separate wait for cards exists, and a card failure holds nothing.
+- **One switch at a time** (`jobEnableChecks.ts`, `services/job.ts`): enabling `research_pass` switches `research_stories` and `build_story_context` off in the same transaction, and the scheduler reloads all three; enabling either old job is refused (422) while it is on. Switching back is the rollback: disable it, then enable the old two.
+
+## How the switch stays off
+
+Until the owner switches the step on (plan phase 6), four layers each keep production from running a pass:
+
+1. **The eval gate** (`PASS_EVAL_GATE`, `services/researchPassGate.ts`): a constant, not a setting, so nothing at run time opens it; the change that switches the step on sets it to null. While it is set, enabling the job is refused (422, naming it), the step "does not work", and every editor's start is refused (409).
+2. **The job row is disabled**: the chain skips a disabled step, and a step has no schedule of its own.
+3. **The handler** researches nothing unless the gate is open, research's switch on and the job enabled.
+4. **The publish gate** holds nothing for the step unless it works and its job is enabled.
+
+So no pass row, version or Update exists: `updates` is empty on every story, and the old research and context steps run as before.
+
+## Admin routes
+
+`/api/admin/research-passes` (`routes/admin/researchPass.ts`, admins and editors; reads in `services/researchPassViews.ts`):
+
+| Route | What it does |
+|-------|--------------|
+| `GET /usage` | The month's spend under the one cap, both ceilings, and why no editor's pass can start now (`refusal`, null while one can) |
+| `GET /stories/:storyId` | The story's passes, newest first (each row with its record), its versions, newest first (reverted ones too), its pool (sources, facts, searches, the pages left out) and its legacy research runs; 404 for an unknown story |
+| `POST /stories/:storyId/passes` | An editor's "Research again": 202 `{ taskId, passId }`; 409 while switched off, for a status other than analyzed, selected or published, a story without the analysis research needs, a pass running, or at the cap; 404 |
+| `POST /passes` | The bulk "Research again" over `{ storyIds }`: 202 `{ taskId }`; 409 while switched off or when another task processes every one of them |
+| `POST /stories/:storyId/undo` | "Undo this update": 204; 409 with nothing to undo, for a status that takes no research write, or when the story changed |
+
+There is no apply endpoint: a pass applies itself. `passEligibility(db, storyId)` (`services/researchPassInput.ts`) gives a story's status, whether a pass of it is running, and the kind of pass it would get: `later` when it has an article to judge (a current version, or `stories.research` set, which the legacy import makes version 1), else `first`, so a story whose first passes kept no article gets a first pass again.
+
+## The public updates field
+
+`GET /api/stories/{slug}` serves `updates` (`publicUpdateSchema`, `services/articleVersions.ts`; additive to `PublicStoryDetail`, snapshot refreshed): newest first, every version with a note that is not reverted (a later pass's update, or a first pass's Update on a published story), each with its day (UTC, `YYYY-MM-DD`), its note, each changed section shown on the page with its earlier text and whether the update removed it, labeled by where it was before (`from`; the summary and the blurb stay in the admin), and the sources the note and the earlier texts cite (found in the version, else in the version it replaced). As for `research`, an earlier story no longer published leaves with its citations and the rest take their current slug, in one lookup for both. `aiGenerated.fields` lists `updates` while the story serves any (`aiProvenance.ts`). An undone update is reverted, so it leaves the list.
 
 ## Evals and the gate
 
@@ -98,7 +154,14 @@ One meter for the whole pass: research's `createRunMeter` (`services/researchCal
 | `server/src/services/researchPassPlan.ts` | Which coverage and gap searches a pass makes, a later pass's window, and the pages it never reads again |
 | `server/src/services/researchPassInput.ts` | One story's pass input, a first pass's input for the eval, and `passEligibility` |
 | `server/src/services/researchCalls.ts` | The run meter, shared with research runs |
-| `server/src/jobs/researchPass.ts` | The job's stub handler and `PASS_NOT_WIRED` |
+| `server/src/services/researchSpend.ts` | The one monthly cap's sum over runs and passes, and the reservation lock |
+| `server/src/services/researchPassRuns.ts` | A pass's lifecycle: claim and reservation, production deps, execution, interrupted and skipped passes, editors' passes |
+| `server/src/services/researchPassApply.ts` | A pass's result put into the story's state, fenced; the first-pass Update; the `update_failed` notice |
+| `server/src/services/researchPassQueue.ts` | The step's state, the stories it owes and the publish gate (SELECT only) |
+| `server/src/services/researchPassGate.ts` | The eval gate, the constant that keeps the step off |
+| `server/src/services/researchPassViews.ts` | The admin's reads: usage under the cap, a story's passes, versions, pool and legacy runs |
+| `server/src/jobs/researchPass.ts` | The job: the worker pool, switch-off re-checks, the tallies and notices |
+| `server/src/routes/admin/researchPass.ts` | The admin endpoints |
 | `server/prisma/migrations/20261117230407_research_passes/` | The six tables, the partial index, the disabled job row and its warning level |
 | `server/prisma/migrations/20261118120000_article_version_draft/` | The versions' `draft` column |
 | `server/src/scripts/eval/research/pipeline.ts` | The evals' adapter to the pass |

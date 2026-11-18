@@ -110,3 +110,16 @@ take effect only at the switch (plan, "For Odin" 1, 4 and 7):
 - **One jsonb pool per story:** nothing for module 2 to query or demote by row.
 - **Swapping the pipeline behind `research_stories` and keeping its row:** that job is live in
   production, so the merged step would ship switched on, before its eval.
+
+## Amendment 2026-11-18: wired, and kept off by its eval gate
+
+The plan's phase 4 wires the pass (claim, reservation, apply, the job in the daily edition between
+`build_story_context` and `publish_stories`, `awaitingPass`, the one-switch rule, editors' passes and
+the public `updates` field). `PASS_NOT_WIRED` goes, and **enabling `research_pass` stays refused
+outright until its evals meet their bars** (D8): the refusal is now the eval gate, `PASS_EVAL_GATE`
+(`services/researchPassGate.ts`), a code constant rather than a setting, which the change that switches
+the step on (plan phase 6) sets to null; after it, research's own switch (the key, priced models). The
+gate also stops the handler, the publish gate and every editor's start, and a "Run now" of the
+disabled job researches nothing, so the old steps and this one never both run on a night. The cap's
+month sums both tables' rows from now on (`monthToDateUsd`), which changes nothing while no pass
+runs. Everything else stands as written.
