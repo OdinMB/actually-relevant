@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import type { PublicStoryUpdate, ResearchedSource } from '@shared/types'
-import { StoryUpdates, UpdatedMark, updatedLinkText } from './StoryUpdates'
+import { sectionName, StoryUpdates, updateDay, UpdatedMark, updatedLinkText } from './StoryUpdates'
 
 const source = (id: string, outlet: string): ResearchedSource => ({
   id,
@@ -70,5 +70,24 @@ describe('UpdatedMark', () => {
     const link = screen.getByRole('link', { name: updatedLinkText })
     expect(link).toHaveAttribute('href', '#updates')
     expect(link).toHaveTextContent(/^Updated/)
+  })
+})
+
+describe('sectionName', () => {
+  it('names each section where readers saw it, and passes an unknown label through', () => {
+    expect(sectionName('Title')).toBe('the headline')
+    expect(sectionName('Key quote')).toBe('the key quote')
+    expect(sectionName('Story paragraph 3')).toBe('paragraph 3')
+    expect(sectionName('Why This Matters 2')).toBe('Why This Matters, point 2')
+    expect(sectionName('Caveat 1')).toBe('Caveats, point 1')
+    expect(sectionName('Summary')).toBe('Summary')
+  })
+})
+
+describe('updateDay', () => {
+  it('gives the day in UTC as readers read it, and an unreadable day as it came', () => {
+    expect(updateDay('2026-11-18')).toBe('November 18, 2026')
+    expect(updateDay('2026-11-18', { month: 'short', day: 'numeric', year: 'numeric' })).toBe('Nov 18, 2026')
+    expect(updateDay('soon')).toBe('soon')
   })
 })

@@ -17,6 +17,8 @@ const mockPrisma = vi.hoisted(() => ({
   podcast: { findFirst: vi.fn() },
   contextBox: { findFirst: vi.fn(), findMany: vi.fn() },
   contextFact: { findMany: vi.fn() },
+  // No pass wrote cards here, so the context runs' are served
+  passBox: { findFirst: vi.fn(), findMany: vi.fn() },
   $queryRaw: vi.fn(),
   $disconnect: vi.fn(),
 }))

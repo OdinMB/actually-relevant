@@ -120,8 +120,9 @@ export default defineConfig({
       // the Spending card (risen again since): 81.64, 80.37, 70.80, 82.41; raised 2026-11-17 with the
       // story context client: 82.38, 80.64, 72.08, 83.09; raised 2026-11-17 with the story page and the
       // stories list's tests: 84.27, 82.72, 74.46, 84.98; raised 2026-11-17 with the story page's tabs
-      // and action bar: 84.58, 83.25, 74.90, 85.32
-      thresholds: { statements: 84, branches: 83, functions: 74, lines: 85 },
+      // and action bar: 84.58, 83.25, 74.90, 85.32; raised 2026-11-18 with the research pass's
+      // interfaces: 85.35, 84.31, 76.09, 86.02
+      thresholds: { statements: 85, branches: 84, functions: 76, lines: 86 },
     },
   },
 })
