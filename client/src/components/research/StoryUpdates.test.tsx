@@ -71,6 +71,16 @@ describe('UpdatedMark', () => {
     expect(link).toHaveAttribute('href', '#updates')
     expect(link).toHaveTextContent(/^Updated/)
   })
+
+  it('centers in a box one line of the surrounding text tall, as the chips before it do, its own small text inside', () => {
+    render(<UpdatedMark />)
+    const link = screen.getByRole('link', { name: updatedLinkText })
+    const box = link.parentElement!
+    // `1lh` is the line height of the box's own font: the paragraph's, never the mark's smaller text
+    expect(box).toHaveClass('inline-flex', 'min-h-[1lh]', 'items-center', 'align-top')
+    expect(box.className).not.toMatch(/\btext-(xs|sm)\b/)
+    expect(link).toHaveClass('text-xs')
+  })
 })
 
 describe('sectionName', () => {
