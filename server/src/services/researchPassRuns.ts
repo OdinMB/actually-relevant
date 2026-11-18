@@ -24,7 +24,7 @@ import { researchSourcePolicy } from './publisherOptOut.js'
 import { createRunMeter, type RunMeter } from './researchCalls.js'
 import type { ReadState } from './researchApply.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds } from './researchInput.js'
-import { runResearchPass, type PassDeps, type PassOutcome, type PassResult } from './researchPass.js'
+import { passItemTally, runResearchPass, type PassDeps, type PassOutcome } from './researchPass.js'
 import { applyPass, type PassApplied } from './researchPassApply.js'
 import { loadPassInput, passEligibility } from './researchPassInput.js'
 import { PASS_JOB_DISABLED, passStepState, passSwitchRefusal, RESEARCH_PASS_JOB } from './researchPassQueue.js'
@@ -171,16 +171,6 @@ export interface ExecuteOptions {
   deps?: (meter: RunMeter) => PassDeps
 }
 
-/** The pass's items checked and failed, for the step's failure share: the cards' tally plus the article's checked sections. */
-function itemTally(result: PassResult): { checked: number; failed: number } {
-  const checks = result.record.research.checks.flatMap(c => c.rechecked ?? [])
-  const failing = new Set(result.record.research.problems.map(p => p.label))
-  return {
-    checked: result.record.context.tally.checked + checks.length,
-    failed: result.record.context.tally.failed + [...new Set(checks)].filter(l => failing.has(l)).length,
-  }
-}
-
 /** Fail a claimed pass outside its run, keeping its reservation as its cost; never throws. */
 async function failPass(passId: string, error: string): Promise<void> {
   await prisma.researchPass
@@ -215,7 +205,7 @@ export async function executePass(storyId: string, claim: PassClaim, options: Ex
     const applies = options.applies ? await options.applies() : true
     const applied = await applyPass({ storyId, passId: claim.passId, actor: options.actor, read: options.read, result, spentUsd: meter.spentUsd(), applies })
     log.info({ storyId, passId: claim.passId, kind: result.kind, outcome: result.outcome, applied, costUsd: meter.spentUsd() }, 'research pass finished')
-    return { ended: result.status, outcome: result.outcome, applied, triedTwice, tally: itemTally(result) }
+    return { ended: result.status, outcome: result.outcome, applied, triedTwice, tally: passItemTally(result.record) }
   } catch (err) {
     const error = sanitizedError(err)
     log.error({ storyId, passId: claim.passId, error }, 'research pass failed')

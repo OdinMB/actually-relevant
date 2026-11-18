@@ -13,7 +13,7 @@ import type { z } from 'zod'
 import { config } from '../config.js'
 import { TAVILY_DEPTH } from '../lib/tavily.js'
 import type { StoryText } from '../prompts/storyContext.js'
-import { decideGate, publishedDay, type GateVerdict } from './researchChecks.js'
+import { decideGate, draftItems, publishedDay, type GateVerdict } from './researchChecks.js'
 import type { ResearchStory } from './researchInput.js'
 import {
   BudgetExhaustedError,
@@ -735,6 +735,21 @@ export function cardFacts(pool: Pool): ContextFactData[] {
   return pool.sources
     .filter(s => s.origin !== 'earlier')
     .flatMap(s => pool.facts.filter(f => f.sourceRef === s.ref && f.structured !== null).map(f => contextFact(f, s)))
+}
+
+/**
+ * The pass's items checked and failed, for the step's failure share: the cards' tally plus the
+ * article's sections, each once however many rounds checked it. Checked: every cited section of the
+ * draft research's checks ran on, and every section a later pass's checks ran on; failed: each
+ * section the final problems name, which counts as checked too (a section dropped after failing is
+ * in no final draft).
+ */
+export function passItemTally(record: PassRecord): { checked: number; failed: number } {
+  const { research, update } = record
+  const failed = new Set([...research.problems, ...(update?.problems ?? [])].map(p => p.label))
+  const drafted = research.checks.length > 0 && research.draft ? draftItems(research.draft).filter(i => i.cited) : []
+  const checked = new Set([...drafted.map(i => i.label), ...(update?.checks ?? []).flatMap(c => c.rechecked ?? []), ...failed])
+  return { checked: record.context.tally.checked + checked.size, failed: record.context.tally.failed + failed.size }
 }
 
 /** Every call the pass made, research's steps first, each under its pass step's name. */

@@ -4,9 +4,12 @@ import type { Draft, Extraction, FactCheck } from '../schemas/research.js'
 import type { GapList } from '../schemas/storyContext.js'
 import { articleOf } from './articleVersions.js'
 import { buildResearchedStory } from './researchedStory.js'
-import { cardFacts, passCalls, runResearchPass, type PassDeps, type PassInput, type PassStep } from './researchPass.js'
+import type { CitationProblem } from './researchChecks.js'
+import { cardFacts, passCalls, passItemTally, runResearchPass, type PassDeps, type PassInput, type PassRecord, type PassStep } from './researchPass.js'
+import type { UpdateRecord } from './researchPassLater.js'
 import type { ResearchStory } from './researchInput.js'
-import type { ResearchSearchAnswer } from './researchPipeline.js'
+import { emptyResearch, type CheckPass, type ResearchSearchAnswer } from './researchPipeline.js'
+import { emptyContextRecord } from './storyContextPipeline.js'
 import { EMPTY_POOL, researchView, type Pool, type PoolFact, type PoolSource } from './researchPool.js'
 import { storyLayout } from './storyContextLayout.js'
 
@@ -226,6 +229,8 @@ describe('runResearchPass, a first pass', () => {
     ])
     expect(result.version).toMatchObject({ number: 1, kind: 'first', passId: 'pass-1', title: 'Pakistan adds 22 GW of rooftop solar' })
     expect(result.version?.research.sources.map(s => s.id)).toEqual(['S0'])
+    // The failure share's items: the draft's three cited sections, checked once each, none failing
+    expect(passItemTally(result.record)).toEqual({ checked: 3, failed: 0 })
     expect(result.record.cards).toBe('written')
     expect(result.boxes.map(b => b.type)).toEqual(['compared'])
     expect(result.pool.searches.map(s => [s.kind, s.query, s.passId])).toEqual([['coverage', 'Pakistan rooftop solar 22 GW', 'pass-1']])
@@ -552,6 +557,8 @@ describe('runResearchPass, a later pass', () => {
       drop: { passId: 'pass-2', reason: 'contradicted', contradictedBy: ['S2F1'] },
     })
     expect(result.changed).toContain('S1F1')
+    // The failure share's items: the one rewritten section the update's checks ran on, and no first-pass draft
+    expect(passItemTally(result.record)).toEqual({ checked: 1, failed: 0 })
     // The cards are written for the new version's places, from facts the demoted one is no longer among
     const cards = fake.calls.find(c => c.step === 'cards-write')!.prompt
     expect(cards).toContain('Rooftop panels cut grid demand.')
@@ -567,5 +574,67 @@ describe('runResearchPass, a later pass', () => {
     expect(result).toMatchObject({ outcome: 'budget', version: null, boxes: [] })
     expect(result.pool.facts.find(f => f.ref === 'S1F1')?.status).toBe('demoted')
     expect(fake.stepsCalled()).not.toContain('cards-write')
+  })
+})
+
+describe('passItemTally', () => {
+  const problem = (label: string): CitationProblem => ({ label, text: 'text', problem: 'unsupported', kind: 'fact', by: 'judge' })
+  const check = (rechecked: string[] | undefined, failing: string[] = []): CheckPass => ({
+    problems: failing.map(problem),
+    longestRuns: [],
+    unjudged: [],
+    numberHints: [],
+    ...(rechecked ? { rechecked } : {}),
+  })
+  const record = (over: Partial<PassRecord>): PassRecord => ({
+    research: emptyResearch('story-1', true),
+    context: emptyContextRecord(true),
+    cards: 'none',
+    cardsError: null,
+    skippedQueries: [],
+    update: null,
+    ...over,
+  })
+  const update = (over: Partial<UpdateRecord>): UpdateRecord => ({
+    calls: [],
+    judgments: [],
+    demoted: [],
+    superseded: [],
+    checks: [],
+    problems: [],
+    failedOn: null,
+    note: null,
+    error: null,
+    ...over,
+  })
+
+  it("counts each of the draft's cited sections once however many rounds checked it, a failing one once, beside the cards' tally", () => {
+    const context = { ...emptyContextRecord(true), tally: { checked: 4, failed: 1 } }
+    const research = {
+      ...emptyResearch('story-1', true),
+      draft: {
+        ...draft(),
+        caveats: [
+          { text: 'The grid lags behind.', factIds: [] },
+          { text: 'Prices may rise.', factIds: [] },
+        ],
+      },
+      checks: [check(undefined, ['Caveat 2']), check(['Caveat 2'], ['Caveat 2']), check(['Caveat 2'], ['Caveat 2'])],
+      problems: [problem('Caveat 2'), problem('Caveat 2')],
+    }
+    // Story paragraph 1, Why This Matters 1, Caveats 1 and 2
+    expect(passItemTally(record({ research, context }))).toEqual({ checked: 4 + 4, failed: 1 + 1 })
+  })
+
+  it('counts nothing of an article no check ran on', () => {
+    expect(passItemTally(record({ research: { ...emptyResearch('story-1', true), draft: draft() } }))).toEqual({ checked: 0, failed: 0 })
+  })
+
+  it("counts a later pass's rechecked sections once each, and a dropped one that failed", () => {
+    const later = update({
+      checks: [check(['Story paragraph 2', 'Caveat 1'], ['Caveat 1']), check(['Caveat 1'], ['Caveat 1'])],
+      problems: [problem('Caveat 1')],
+    })
+    expect(passItemTally(record({ update: later }))).toEqual({ checked: 2, failed: 1 })
   })
 })
