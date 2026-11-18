@@ -34,8 +34,8 @@ router.post('/stories/:storyId/runs', failsWith('Failed to start research'), exp
 })
 
 // The stories list's bulk Research: one task over the batch, polled at /stories/tasks/:taskId
-router.post('/runs', failsWith('Failed to start bulk research'), expensiveOpLimiter, validateBody(bulkResearchIdsSchema), (req, res) => {
-  res.status(202).json(startResearchBatch(req.body.storyIds))
+router.post('/runs', failsWith('Failed to start bulk research'), expensiveOpLimiter, validateBody(bulkResearchIdsSchema), async (req, res) => {
+  res.status(202).json(await startResearchBatch(req.body.storyIds))
 })
 
 // One embedding call each, no model call

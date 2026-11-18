@@ -10,6 +10,15 @@ import type { StoryResearch } from './researchPipeline.js'
 const mockPipeline = vi.hoisted(() => ({ researchStory: vi.fn() }))
 vi.mock('./researchPipeline.js', async importOriginal => ({ ...(await importOriginal<typeof import('./researchPipeline.js')>()), ...mockPipeline }))
 
+// The research pass's eval gate, closed as in production unless a test opens it
+const gate = vi.hoisted(() => ({ closed: 'the eval gate is closed' as string | null }))
+vi.mock('./researchPassGate.js', () => ({
+  get PASS_EVAL_GATE() {
+    return gate.closed
+  },
+}))
+
+const { startResearchBatch } = await import('./researchBatch.js')
 const { listResearchRuns, newestResearchRun, recordSkippedRun, researchUsage, runPipelineResearch, startResearchRun } = await import('./researchRuns.js')
 
 const RESERVATION = config.research.maxRunUsd
@@ -77,6 +86,7 @@ describeDb('story research runs', () => {
 
   beforeEach(() => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
+    gate.closed = 'the eval gate is closed'
     mockPipeline.researchStory.mockReset()
     mockPipeline.researchStory.mockImplementation(async (s: { id: string }) => research(s.id))
   })
@@ -276,6 +286,26 @@ describeDb('story research runs', () => {
     const untitled = await createStory({ feedId: feed.id, status: 'analyzed', title: null, summary: 'Summary', relevance: 6 })
     await expect(startResearchRun(untitled.id)).rejects.toMatchObject({ status: 409, message: 'This story lacks the analysis research needs' })
     expect(await prisma.storyResearchRun.count()).toBe(0)
+  })
+
+  it("refuses an editor's run and a bulk Research while research passes are switched on, before writing any row, and the usage says why", async () => {
+    const story = await researchable()
+    await prisma.jobRun.create({ data: { jobName: 'research_pass', cronExpression: '30 1 * * *', enabled: true } })
+
+    // The job enabled and the gate closed: the step is off, and nothing is refused for it
+    expect((await researchUsage()).refusal).toBeNull()
+
+    gate.closed = null
+    const usage = await researchUsage()
+    expect(usage).toMatchObject({ enabled: true, refusal: expect.stringMatching(/^Research passes are switched on: .*Research again/) })
+    await expect(startResearchRun(story.id)).rejects.toMatchObject({ status: 409, message: usage.refusal })
+    await expect(startResearchBatch([story.id])).rejects.toMatchObject({ status: 409, message: usage.refusal })
+    expect(await prisma.storyResearchRun.count()).toBe(0)
+    expect(taskRegistry.getProcessingStoryIds()).toEqual([])
+
+    // With its job disabled the step is off again
+    await prisma.jobRun.update({ where: { jobName: 'research_pass' }, data: { enabled: false } })
+    expect((await researchUsage()).refusal).toBeNull()
   })
 
   it('lists a story’s runs newest first, at most the configured number, with their cost summaries', async () => {

@@ -2,7 +2,7 @@
  * The stories list's bulk Research (`.context/story-research.md`, "Bulk research"): the stories an
  * editor selected, researched as one `research` task, `config.research.pipeline.concurrency` at a
  * time in the order chosen. Each takes the Research button's own path when its turn comes
- * (`reserveEditorRun`: the switch, the status, the analysis, a run in progress and the monthly cap,
+ * (`reserveEditorRun`: the switches, the status, the analysis, a run in progress and the monthly cap,
  * reserved under the advisory lock), so a later story sees the measured cost of the runs before it.
  * A story that path refuses is skipped with the refusal as its reason, and the batch goes on. As
  * with the button, a run only records itself: nothing is applied to a story.
@@ -13,8 +13,7 @@ import { sanitizedError } from '../lib/runErrors.js'
 import { Semaphore } from '../lib/semaphore.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
 import { ConflictError, ServiceError } from '../utils/errors.js'
-import { reserveEditorRun, runInTask } from './researchRuns.js'
-import { switchRefusal } from './researchSwitch.js'
+import { reserveEditorRun, runInTask, startRefusal } from './researchRuns.js'
 
 const log = createLogger('research')
 
@@ -52,12 +51,13 @@ async function researchAll(taskId: string, storyIds: string[]): Promise<void> {
 }
 
 /**
- * Start researching the chosen stories in the background: 409 while research is switched off, or
- * when another task is processing every one of them. A story another task is processing is skipped
- * as the other bulk actions skip it; one chosen twice is taken once.
+ * Start researching the chosen stories in the background: 409 while no editor's run can start
+ * (`startRefusal`: research switched off, or research passes on), or when another task is processing
+ * every one of them. A story another task is processing is skipped as the other bulk actions skip
+ * it; one chosen twice is taken once.
  */
-export function startResearchBatch(storyIds: string[]): { taskId: string } {
-  const off = switchRefusal()
+export async function startResearchBatch(storyIds: string[]): Promise<{ taskId: string }> {
+  const off = await startRefusal()
   if (off) throw new ConflictError(off)
   const chosen = [...new Set(storyIds)]
   const processing = new Set(taskRegistry.getProcessingStoryIds())

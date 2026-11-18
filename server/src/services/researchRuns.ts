@@ -23,6 +23,7 @@ import { FALLBACK_CATEGORIES, type FallbackCategory, type GateVerdict } from './
 import { sanitizedError } from '../lib/runErrors.js'
 import { summarizeRunCost, type RunCostSummary } from './researchCost.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds, type ResearchStory } from './researchInput.js'
+import { replacedByPasses } from './researchPassQueue.js'
 import { researchStory, type StepName, type StoryResearch } from './researchPipeline.js'
 import { monthToDateUsd, RESEARCH_RESERVATION_LOCK } from './researchSpend.js'
 import { stepModels, switchRefusal } from './researchSwitch.js'
@@ -67,7 +68,7 @@ export interface ResearchRunView {
 export interface ResearchUsageView {
   /** Key present and every step's model priced. */
   enabled: boolean
-  /** Why a run would be refused now (switched off, unpriced model, cap reached), or null. */
+  /** Why an editor's run would be refused now (switched off, unpriced model, research passes on, cap reached), or null. */
   refusal: string | null
   monthToDateUsd: number
   monthlyCapUsd: number
@@ -223,15 +224,27 @@ export async function runInTask(taskId: string, runId: string, story: ResearchSt
   )
 }
 
+/** While research passes are on, "Research again" researches the story into a new version, with its cards. */
+const REPLACED = 'a research run is no longer started'
+
 /**
- * An editor's run of one story, checked and reserved: 404 for an unknown story; 409 when research is
- * switched off or a model is unpriced, for a status other than analyzed, selected or published, for
- * a story without the analysis research needs (checked before any reservation is written), at the
- * cap, or while a run of the story is in progress. The one path both the Research button and the
- * stories list's bulk Research (`researchBatch.ts`) take.
+ * Why no editor can start a run now, whatever the story, or null: research switched off or a model
+ * unpriced (`switchRefusal`), or research passes switched on (`replacedByPasses`), whose versions a
+ * run's apply would bypass.
+ */
+export async function startRefusal(): Promise<string | null> {
+  return switchRefusal() ?? (await replacedByPasses(REPLACED))
+}
+
+/**
+ * An editor's run of one story, checked and reserved: 409 first while `startRefusal` gives a reason
+ * (for any id); then 404 for an unknown story; 409 for a status other than analyzed, selected or
+ * published, for a story without the analysis research needs (checked before any reservation is
+ * written), at the cap, or while a run of the story is in progress. The one path both the Research
+ * button and the stories list's bulk Research (`researchBatch.ts`) take.
  */
 export async function reserveEditorRun(storyId: string, now: Date = new Date()): Promise<{ runId: string; story: ResearchStory }> {
-  const off = switchRefusal()
+  const off = await startRefusal()
   if (off) throw new ConflictError(off)
   const row = await prisma.story.findUnique({ where: { id: storyId }, select: { status: true } })
   if (!row) throw new NotFoundError('Story not found')
@@ -350,11 +363,10 @@ async function monthFallbacks(now: Date): Promise<ResearchUsageView['fallbacksTh
 }
 
 export async function researchUsage(now: Date = new Date()): Promise<ResearchUsageView> {
-  const [monthToDateUsd, fallbacksThisMonth] = await Promise.all([monthSpendUsd(prisma, now), monthFallbacks(now)])
-  const off = switchRefusal()
+  const [monthToDateUsd, fallbacksThisMonth, off] = await Promise.all([monthSpendUsd(prisma, now), monthFallbacks(now), startRefusal()])
   const atCap = monthToDateUsd + config.research.maxRunUsd > config.research.monthlyCapUsd
   return {
-    enabled: off === null,
+    enabled: switchRefusal() === null,
     refusal: off ?? (atCap ? capRefusal(monthToDateUsd) : null),
     monthToDateUsd,
     monthlyCapUsd: config.research.monthlyCapUsd,

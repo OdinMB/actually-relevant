@@ -36,15 +36,6 @@ function controlledRuns() {
   return ends
 }
 
-function thrown(fn: () => unknown): unknown {
-  try {
-    fn()
-  } catch (err) {
-    return err
-  }
-  throw new Error('expected a refusal')
-}
-
 const finished = async (taskId: string) => {
   await vi.waitFor(() => expect(taskRegistry.get(taskId)?.status).not.toBe('running'))
   return taskRegistry.get(taskId)!
@@ -63,7 +54,7 @@ describe('startResearchBatch', () => {
     const ends = controlledRuns()
     const ids = Array.from({ length: config.research.pipeline.concurrency + 2 }, (_, i) => `s${i}`)
 
-    const { taskId } = startResearchBatch(ids)
+    const { taskId } = await startResearchBatch(ids)
 
     await vi.waitFor(() => expect(mockRuns.runInTask).toHaveBeenCalledTimes(config.research.pipeline.concurrency))
     expect(mockRuns.reserveEditorRun.mock.calls.map(([id]) => id)).toEqual(ids.slice(0, config.research.pipeline.concurrency))
@@ -86,7 +77,7 @@ describe('startResearchBatch', () => {
       return { runId: `run-${storyId}`, story: { id: storyId } }
     })
 
-    const { taskId } = startResearchBatch(['s1', 's2', 's3', 's4'])
+    const { taskId } = await startResearchBatch(['s1', 's2', 's3', 's4'])
 
     expect(await finished(taskId)).toMatchObject({
       status: 'completed',
@@ -107,14 +98,14 @@ describe('startResearchBatch', () => {
       return { runId: `run-${storyId}`, story: { id: storyId } }
     })
 
-    const { taskId } = startResearchBatch(['s1', 's2'])
+    const { taskId } = await startResearchBatch(['s1', 's2'])
 
     expect(await finished(taskId)).toMatchObject({ completed: 1, failed: 1, errors: ['unexpected error (Error)'], skipped: [] })
   })
 
   // The guarantee the single-story action gives: a run records itself and applies nothing
   it('runs each story with exactly its task, run and material, passing no hook to the run path, and never reaches an apply', async () => {
-    const { taskId } = startResearchBatch(['s1', 's2'])
+    const { taskId } = await startResearchBatch(['s1', 's2'])
     await finished(taskId)
 
     expect(mockRuns.runInTask.mock.calls).toEqual([
@@ -127,7 +118,7 @@ describe('startResearchBatch', () => {
   })
 
   it('takes a story chosen twice once', async () => {
-    const { taskId } = startResearchBatch(['s1', 's1', 's2'])
+    const { taskId } = await startResearchBatch(['s1', 's1', 's2'])
 
     expect(await finished(taskId)).toMatchObject({ total: 2, completed: 2, storyIds: ['s1', 's2'] })
     expect(mockRuns.reserveEditorRun).toHaveBeenCalledTimes(2)
@@ -136,7 +127,7 @@ describe('startResearchBatch', () => {
   it('skips the stories another task is processing, leaving them out of its own', async () => {
     taskRegistry.create('assess', 1, ['s1'])
 
-    const { taskId } = startResearchBatch(['s1', 's2'])
+    const { taskId } = await startResearchBatch(['s1', 's2'])
 
     expect(await finished(taskId)).toMatchObject({
       total: 2,
@@ -148,18 +139,18 @@ describe('startResearchBatch', () => {
     expect(mockRuns.reserveEditorRun).not.toHaveBeenCalledWith('s1')
   })
 
-  it('refuses the batch when every story is being processed, creating no task', () => {
+  it('refuses the batch when every story is being processed, creating no task', async () => {
     taskRegistry.create('assess', 2, ['s1', 's2'])
 
-    expect(thrown(() => startResearchBatch(['s1', 's2']))).toMatchObject({ status: 409, message: expect.stringMatching(/already being processed/) })
+    await expect(startResearchBatch(['s1', 's2'])).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/already being processed/) })
     expect(taskRegistry.getProcessingStoryIds().sort()).toEqual(['s1', 's2'])
     expect(mockRuns.reserveEditorRun).not.toHaveBeenCalled()
   })
 
-  it('refuses the batch while research is switched off, creating no task', () => {
+  it('refuses the batch while research is switched off, creating no task', async () => {
     mockRuns.switchRefusal.mockReturnValue('Research is switched off: TAVILY_API_KEY is not set')
 
-    expect(thrown(() => startResearchBatch(['s1']))).toMatchObject({ status: 409, message: expect.stringMatching(/switched off/) })
+    await expect(startResearchBatch(['s1'])).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/switched off/) })
     expect(taskRegistry.getProcessingStoryIds()).toEqual([])
     expect(mockRuns.reserveEditorRun).not.toHaveBeenCalled()
   })
