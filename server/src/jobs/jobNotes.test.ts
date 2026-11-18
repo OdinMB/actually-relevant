@@ -59,6 +59,16 @@ describe('jobNotes', () => {
       ),
       ['4', '5', '30%', '31', '7'],
     ],
+    ['research_pass', () => override(config.research.pass, { perRun: 37, concurrency: 29, failedStoriesMin: 7 }), ['37', '29', '7']],
+    [
+      'research_pass',
+      () => (
+        override(config.research, { monthlyCapUsd: 13 }),
+        override(config.research.pipeline, { maxWaitMinutes: 47 }),
+        override(config.jobs.failureShare, { share: 0.3, minItems: 31 })
+      ),
+      ['$13', '47', '30%', '31'],
+    ],
     ['preassess_stories', () => override(config.preassess, { batchSize: 17 }), ['17']],
     ['assess_stories', () => (override(config.assess, { fullAssessmentThreshold: 9 }), override(config.dedup, { timeWindowDays: 23 })), ['9', '23']],
     ['select_stories', () => override(config.selection, { ratio: 0.3, relevanceMin: 6, maxGroupSize: 33 }), ['30%', '6', '33']],
@@ -126,6 +136,14 @@ describe('jobNotes', () => {
         expect(warned).toEqual(state === researchOn ? [] : ['research_stories'])
       }
     })
+  })
+
+  it('says the research pass takes the place of the two old steps, and that it cannot be switched on while its evals are pending', () => {
+    researchOn()
+    const { note } = jobNotes('research_pass')
+    expect(note).toMatch(/switches Research Stories and Build Story Context off/)
+    expect(note).toMatch(/cannot be enabled until its quality checks/)
+    expect(note).toMatch(/"Run now" does nothing while the job is disabled/)
   })
 
   it('has neither for a job it does not know', () => {

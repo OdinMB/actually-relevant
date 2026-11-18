@@ -395,6 +395,11 @@ export const config = {
       /** Selected stories one run of the job takes, and how many at once. */
       perRun: 20,
       concurrency: 4,
+      /**
+       * The step records the failed-stories notice when more than `jobs.failureShare.share` of the
+       * stories a run took failed technically, from this many stories on (`jobs/researchPass.ts`).
+       */
+      failedStoriesMin: 5,
     },
   },
   /**

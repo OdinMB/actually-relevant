@@ -11,8 +11,9 @@ export const CHAINS: Readonly<Record<string, readonly string[]>> = {
   // feed's articles. Crawled stories are assessed in the same run: a person's part starts with assessed stories
   intake_chain: ['crawl_feeds', 'preassess_stories', 'assess_stories'],
   // Story context comes before publishing, so stories go out with their cards (owner decision 2026-11-17,
-  // .context/story-context.md); its failure does not stop the edition (GOES_ON_PAST_FAILURE)
-  daily_edition_chain: ['select_stories', 'research_stories', 'build_story_context', 'publish_stories'],
+  // .context/story-context.md); its failure does not stop the edition (GOES_ON_PAST_FAILURE). The research
+  // pass replaces both once switched on (.context/research-passes.md): one of the two kinds runs, the other is off
+  daily_edition_chain: ['select_stories', 'research_stories', 'build_story_context', 'research_pass', 'publish_stories'],
   // Saturday morning: each edition's issue is built (with its test email), then sent
   newsletter_chain: ['generate_newsletter', 'publish_newsletter', 'generate_uplifting_newsletter', 'publish_uplifting_newsletter'],
   // Friday's one run builds both shows' episodes (a failed build is retried within the run); both

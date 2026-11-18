@@ -562,7 +562,8 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
       r.verdict = decideGate(stop ?? { failed: 'no coverage', category: 'technical' }, deps.relevanceMin)
     }
     if (isBudgetFallback(r.verdict)) return budgetStop()
-    version = r.verdict.kind === 'keep' ? firstVersion(r, input.passId) : null
+    // A draft rated below the publish bar is kept as research's step keeps it: that rating rejects nothing
+    version = r.verdict.kind === 'keep' || r.verdict.kind === 'research-rating' ? firstVersion(r, input.passId) : null
   }
 
   // Step 9: the cards from the pool's supported facts, never our own stories', for the new version's

@@ -55,10 +55,9 @@ describeDb('spending (PostgreSQL)', () => {
       const overview = await getSpendingOverview(NOW)
 
       const daily = overview.groups.find(g => g.chain === 'daily_edition_chain')
-      expect(daily?.rows.map(r => r.scope)).toEqual(['select_stories', 'research_stories', 'build_story_context', 'publish_stories'])
+      expect(daily?.rows.map(r => r.scope)).toEqual(['select_stories', 'research_stories', 'build_story_context', 'research_pass', 'publish_stories'])
       expect(overview.groups.map(g => g.chain)).toEqual(['intake_chain', 'daily_edition_chain', 'newsletter_chain', 'podcast_chain', null])
-      // research_pass joins the daily edition once it is wired (.context/research-passes.md); until then it is listed with the rest
-      expect(overview.groups.at(-1)?.rows.map(r => r.scope)).toEqual(['editor_research', 'research_pass', 'social_auto_post'])
+      expect(overview.groups.at(-1)?.rows.map(r => r.scope)).toEqual(['editor_research', 'social_auto_post'])
       // A job that uses models is listed though it spent nothing; one that does not, only once it has spent
       expect(rowOf(overview, 'preassess_stories')).toMatchObject({ thisMonth: { totalUsd: 0 }, previousUsd: [0, 0], levelUsd: null, warning: null })
       expect(rows(overview).some(r => r.scope === 'crawl_feeds' || r.scope === 'bluesky_update_metrics')).toBe(false)
@@ -80,6 +79,20 @@ describeDb('spending (PostgreSQL)', () => {
         previousUsd: [expect.closeTo(0.3, 6), 0],
       })
       expect(overview.total).toMatchObject({ scope: 'all', thisMonth: { totalUsd: expect.closeTo(2.5, 6) }, previousUsd: [expect.closeTo(0.3, 6), 0] })
+    })
+
+    it("counts an editor's research pass once, on the research pass step's line, never as research an editor started", async () => {
+      // An editor's pass adds its usage to the step's month (addMonthSpend); its row is the cap's, not the overview's
+      await prisma.researchPass.create({
+        data: { number: 1, trigger: 'editor', kind: 'first', status: 'completed', costUsd: 0.3, startedAt: new Date('2026-11-03T10:00:00Z') },
+      })
+      await spent('research_pass', '2026-11', 0.3)
+
+      const overview = await getSpendingOverview(NOW)
+
+      expect(rowOf(overview, 'research_pass')).toMatchObject({ thisMonth: { totalUsd: expect.closeTo(0.3, 6) } })
+      expect(rowOf(overview, 'editor_research')).toMatchObject({ thisMonth: { totalUsd: 0 } })
+      expect(overview.total).toMatchObject({ thisMonth: { totalUsd: expect.closeTo(0.3, 6) } })
     })
 
     it("totals every row with the total's level, and gives the podcast's voice characters this month against its cap", async () => {

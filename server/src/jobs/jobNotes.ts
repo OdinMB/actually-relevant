@@ -7,6 +7,7 @@
  */
 import { config } from '../config.js'
 import type { RunUsage } from '../lib/runUsage.js'
+import { PASS_EVAL_GATE } from '../services/researchPassGate.js'
 import { researchSwitchOff } from '../services/researchRuns.js'
 import { failureShareExceeded, failureShareLine } from './failureShare.js'
 
@@ -42,6 +43,25 @@ function researchNote(): string {
     `It takes up to ${count(perRun, 'story', 'stories')} a run, ${concurrency} at once. ` +
     `Once the month's research budget of $${config.research.monthlyCapUsd} is spent, stories publish without research. ` +
     'Disabling the job stops it from starting more stories, and publishing stops waiting. A run started by hand applies its results too, even while the job is disabled.'
+  )
+}
+
+function researchPassNote(): string {
+  const { perRun, concurrency, failedStoriesMin } = config.research.pass
+  const { share, minItems } = config.jobs.failureShare
+  const switchOn = PASS_EVAL_GATE
+    ? 'It cannot be enabled until its quality checks meet their bars and the owner switches it on.'
+    : 'It can be enabled only once web search is set up.'
+  return (
+    'Researches each selected story in one pass: it searches the web, checks every fact against its source, rewrites the story from what holds up and builds its context cards, ' +
+    'taking the place of Research Stories and Build Story Context. A story is rejected only when the pass finds it is old news or its main claim is contradicted, ' +
+    'and when the pass cannot produce a usable version, the story publishes as it was. ' +
+    `While this job is enabled, Publish Stories waits for a story's pass, in the daily edition too, but only up to ${count(config.research.pipeline.maxWaitMinutes, 'minute')} after the story was selected. ` +
+    `It takes up to ${count(perRun, 'story', 'stories')} a run, ${concurrency} at once, and its passes share the month's research budget of $${config.research.monthlyCapUsd}; once that is spent, stories publish without a pass. ` +
+    `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; ` +
+    `so is a notice when more than ${Math.round(share * 100)}% of at least ${failedStoriesMin} stories fail. Nothing pauses. ` +
+    'Enabling it switches Research Stories and Build Story Context off, and neither can be enabled while it is on; to go back, disable it and enable those two. ' +
+    `"Run now" does nothing while the job is disabled. ${switchOn}`
   )
 }
 
@@ -94,6 +114,7 @@ export const NOTES: Readonly<Record<string, () => string>> = {
     'Selects the best of the assessed stories, researches them, builds their context cards and publishes them, in that order, so stories go out with their research and cards as soon as they are ready instead of at a fixed time. ' +
     `${CHAIN_RULES} ` +
     'One exception: if Build Story Context fails, the chain still goes on to publish, and those stories go out without cards. ' +
+    'Research Passes, off until it is switched on in their place, does the work of both in one step; if it fails as a whole, the chain stops before publishing. ' +
     'Once publishing is done, Build Story Context also builds the cards of published stories that still lack them, so publishing never waits for those. ' +
     'Once its flex hours (the Flex column of its Whole chain row) have passed since the run started, every call goes at standard price, so a slow flex queue cannot hold up publishing for long.',
   newsletter_chain: () =>
@@ -114,11 +135,13 @@ export const NOTES: Readonly<Record<string, () => string>> = {
     `Picks about ${Math.round(config.selection.ratio * 100)}% of the analyzed stories with a relevance of at least ${config.selection.relevanceMin}, ` +
     `comparing up to ${config.selection.maxGroupSize} stories at a time, and rejects the rest. The picked stories go on to Research Stories and Publish Stories.`,
   research_stories: researchNote,
+  research_pass: researchPassNote,
   publish_stories: () =>
     'Publishes the selected stories. Of several stories about the same event, only the one chosen to lead the group is published, and the others are rejected as duplicates. ' +
     `While Research Stories is enabled and research is on, a story selected less than ${count(config.research.pipeline.maxWaitMinutes, 'minute')} ago waits for its research and goes out at a later run. ` +
     'When you run it here while Build Story Context is enabled and web search is set up, a researched story waits for its context cards in the same way. ' +
-    'In the daily edition it never waits for them: they are built just before, and a story whose cards failed or did not come in time goes out without them.',
+    'In the daily edition it never waits for them: they are built just before, and a story whose cards failed or did not come in time goes out without them. ' +
+    'While Research Passes is enabled in their place, a selected story waits for its pass in the same way, in the daily edition too.',
   build_story_context: () => {
     const c = config.storyContext
     const { share, minItems } = config.jobs.failureShare

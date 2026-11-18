@@ -13,6 +13,8 @@ vi.mock('../services/story.js', () => ({
 vi.mock('../services/storyLifecycle.js', () => ({ transition: mockTransition }))
 vi.mock('../services/researchQueue.js', () => ({ awaitingResearch: mockAwaiting }))
 vi.mock('../services/storyContextQueue.js', () => ({ awaitingContext: mockAwaitingContext }))
+const mockAwaitingPass = vi.hoisted(() => vi.fn())
+vi.mock('../services/researchPassQueue.js', () => ({ awaitingPass: mockAwaitingPass }))
 
 const { runPublishStories } = await import('./publishStories.js')
 const { createRunScope, runInScope } = await import('../lib/runUsage.js')
@@ -22,6 +24,7 @@ describe('runPublishStories', () => {
     vi.clearAllMocks()
     mockAwaiting.mockResolvedValue(new Set())
     mockAwaitingContext.mockResolvedValue(new Set())
+    mockAwaitingPass.mockResolvedValue(new Set())
     mockTransition.mockImplementation(async (ids: string[]) => ({ moved: ids, skipped: [] }))
   })
 
@@ -63,6 +66,19 @@ describe('runPublishStories', () => {
     expect(mockAwaitingContext).toHaveBeenCalledWith(['a', 'c', 'd'])
     expect(mockTransition).toHaveBeenCalledWith(['a', 'd'], { to: 'published' }, 'pipeline')
     expect(scope.summary).toBe('Published 2 stories, 1 waiting for research, 1 waiting for context cards')
+  })
+
+  it('leaves the stories awaiting their research pass for a later run, after the other gates', async () => {
+    mockGetStoryIdsByStatus.mockResolvedValue(['a', 'b', 'c'])
+    mockAwaitingContext.mockResolvedValue(new Set(['a']))
+    mockAwaitingPass.mockResolvedValue(new Set(['c']))
+
+    const scope = createRunScope({ jobName: 'publish_stories', flex: false })
+    await runInScope(scope, () => runPublishStories())
+
+    expect(mockAwaitingPass).toHaveBeenCalledWith(['b', 'c'])
+    expect(mockTransition).toHaveBeenCalledWith(['b'], { to: 'published' }, 'pipeline')
+    expect(scope.summary).toBe('Published 1 story, 1 waiting for context cards, 1 waiting for their research pass')
   })
 
   it('publishes nothing when every selected story awaits research or its context cards', async () => {

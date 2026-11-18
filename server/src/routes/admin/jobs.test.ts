@@ -33,7 +33,12 @@ const mockJobsWithLiveLease = vi.hoisted(() => vi.fn())
 const mockJobEnableRefusal = vi.hoisted(() => vi.fn().mockReturnValue(null))
 vi.mock('../../jobs/scheduler.js', () => ({ runJob: mockRunJob, reloadJob: mockReloadJob, isJobRunning: mockIsJobRunning, runningJobs: new Set() }))
 vi.mock('../../jobs/jobLease.js', () => ({ jobsWithLiveLease: mockJobsWithLiveLease }))
-vi.mock('../../jobs/jobEnableChecks.js', () => ({ jobEnableRefusal: mockJobEnableRefusal }))
+const mockJobEnableConflict = vi.hoisted(() => vi.fn().mockResolvedValue(null))
+vi.mock('../../jobs/jobEnableChecks.js', () => ({
+  jobEnableRefusal: mockJobEnableRefusal,
+  jobEnableConflict: mockJobEnableConflict,
+  SWITCHED_OFF_BY: { research_pass: ['research_stories', 'build_story_context'] },
+}))
 vi.mock('../../jobs/crawlFeeds.js', () => ({ runCrawlFeeds: mockRunCrawlFeeds }))
 vi.mock('../../jobs/preassessStories.js', () => ({ runPreassessStories: mockRunPreassessStories }))
 vi.mock('../../jobs/assessStories.js', () => ({ runAssessStories: mockRunAssessStories }))
@@ -124,6 +129,34 @@ describe('Admin Jobs API', () => {
       expect(mockJobEnableRefusal).toHaveBeenCalledWith('generate_podcast')
       expect(mockPrisma.jobRun.update).not.toHaveBeenCalled()
       expect(mockReloadJob).not.toHaveBeenCalled()
+    })
+
+    it('refuses to enable an old research step while the research pass is on, and saves nothing', async () => {
+      mockJobEnableConflict.mockResolvedValueOnce("research_pass is on and does this step's work: disable it first")
+      const res = await request(app).put('/api/admin/jobs/research_stories').set(authHeader()).send({ enabled: true })
+      expect(res.status).toBe(422)
+      expect(res.body.error).toContain('research_pass is on')
+      expect(mockPrisma.jobRun.update).not.toHaveBeenCalled()
+    })
+
+    it('switches the steps the research pass replaces off in the same write as enabling it, and reloads each', async () => {
+      const tx = {
+        jobRun: {
+          update: vi.fn().mockResolvedValue({ jobName: 'research_pass', enabled: true }),
+          findMany: vi.fn().mockResolvedValue([{ jobName: 'research_stories' }]),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+      }
+      Object.assign(mockPrisma, { $transaction: vi.fn((fn: (t: typeof tx) => unknown) => fn(tx)) })
+      const res = await request(app).put('/api/admin/jobs/research_pass').set(authHeader()).send({ enabled: true })
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ jobName: 'research_pass', enabled: true })
+      expect(tx.jobRun.findMany).toHaveBeenCalledWith({
+        where: { jobName: { in: ['research_stories', 'build_story_context'] }, enabled: true },
+        select: { jobName: true },
+      })
+      expect(tx.jobRun.updateMany).toHaveBeenCalledWith({ where: { jobName: { in: ['research_stories'] } }, data: { enabled: false } })
+      expect(mockReloadJob.mock.calls.map(c => c[0])).toEqual(['research_pass', 'research_stories'])
     })
 
     it("saves a Flex switch, and a chain step review pause and a chain's flex cut-off in hours", async () => {

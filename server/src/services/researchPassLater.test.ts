@@ -218,6 +218,20 @@ describe('updateArticle', () => {
     expect(r.record.calls.map(c => c.step)).toEqual(['judge', 'update', 'note'])
   })
 
+  it("cites the note's sources under the ids the projection gives them where the version before gave a pool id to another source", async () => {
+    const old = version()
+    const elsewhere = { ...old.research.sources.find(s => s.id === 'S1')!, url: 'https://elsewhere.example/a', host: 'elsewhere.example' }
+    const legacy = { ...old, research: { ...old.research, sources: old.research.sources.map(s => (s.id === 'S1' ? elsewhere : s)) } }
+    const r = await updateArticle(input({ version: legacy }), fakeDeps(defaults).deps)
+    expect(r.outcome).toBe('updated')
+    // The pool's S1 is another source than the version's S1, so the note cites it as S6, and the frozen bullet keeps the old S1
+    expect(r.next!.note.citations.map(c => c.sourceId)).toEqual(['S5', 'S6'])
+    expect(r.next!.research.whyThisMatters[0]).toBe(legacy.research.whyThisMatters[0])
+    const listed = new Map(r.next!.research.sources.map(s => [s.id, s.url]))
+    expect(listed.get('S1')).toBe('https://elsewhere.example/a')
+    expect(listed.get('S6')).toBe(sources.find(s => s.ref === 'S1')!.url)
+  })
+
   it('rewrites a section citing a demoted fact even when the judge passes it, on a legacy version read from its citations', async () => {
     const legacy = version({ kind: 'legacy', article: null })
     const fake = fakeDeps({ ...defaults, judge: judging({ contradicted: [{ factId: 'S1F1', byFactIds: ['S5F2'], reason: 'Twelve, not forty.' }] }) })

@@ -201,6 +201,13 @@ const input = (pool: Pool = EMPTY_POOL): PassInput => ({
 })
 
 describe('runResearchPass, a first pass', () => {
+  it("makes version 1 of a draft rated below the publish bar too, as research's step applies one", async () => {
+    const fake = fakeDeps({})
+    const result = await runResearchPass(input(), { ...fake.deps, relevanceMin: 11 })
+    expect(result).toMatchObject({ outcome: 'research-rating', verdict: { kind: 'research-rating' } })
+    expect(result.version).toMatchObject({ number: 1, kind: 'first', passId: 'pass-1' })
+  })
+
   it('checks each fact once, writes the article from the supported ones only, and makes it version 1 with its cards', async () => {
     const fake = fakeDeps({ 'facts-check': checking(['S1F1']) })
     const result = await runResearchPass(input(), fake.deps)

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { createLogger } from '../../lib/logger.js'
 import cron from 'node-cron'
 import { runJob, reloadJob, isJobRunning } from '../../jobs/scheduler.js'
-import { jobEnableRefusal } from '../../jobs/jobEnableChecks.js'
+import { jobEnableConflict, jobEnableRefusal } from '../../jobs/jobEnableChecks.js'
 import { validateBody } from '../../middleware/validate.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import { updateJobSchema } from '../../schemas/job.js'
@@ -43,15 +43,16 @@ router.put('/:jobName', failsWith('Failed to update job', { notFound: 'Job not f
     return
   }
   if (req.body.enabled === true) {
-    const refusal = jobEnableRefusal(jobName)
+    const refusal = jobEnableRefusal(jobName) ?? (await jobEnableConflict(jobName))
     if (refusal) {
       res.status(422).json({ error: `Cannot enable ${req.params.jobName!}: ${refusal}` })
       return
     }
   }
 
-  const job = await updateJob(req.params.jobName!, req.body)
-  await reloadJob(req.params.jobName!)
+  // Enabling the research pass switches the steps it replaces off in the same write
+  const { job, switchedOff } = await updateJob(jobName, req.body)
+  for (const name of [jobName, ...switchedOff]) await reloadJob(name)
   res.json(job)
 })
 

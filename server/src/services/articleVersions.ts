@@ -7,11 +7,12 @@
  * readers get from a story's versions, with the sources they cite. Pure: the undo and the reverts are
  * written by `researchApply.ts` and `articleVersionWrites.ts`.
  */
+import { z } from 'zod'
 import { utcDay } from '../lib/days.js'
 import { EMOTION_TAGS } from '../schemas/llm.js'
 import type { Draft } from '../schemas/research.js'
 import { draftItems, LABELS } from './researchChecks.js'
-import type { Citation, CitedText, ResearchedSource, ResearchedStory } from './researchedStory.js'
+import { citedTextSchema, researchedSourceSchema, type Citation, type CitedText, type ResearchedSource, type ResearchedStory } from './researchedStory.js'
 import type { ArticleText } from './researchPipeline.js'
 import type { Article, ArticleVersionData, Pool, VersionChange, VersionFields } from './researchPool.js'
 import { researchedValues, type SwappedValues } from './researchSwap.js'
@@ -124,16 +125,11 @@ function freshIds(taken: string[]): (id: string) => string {
 }
 
 /**
- * The next version's projection: `next`, built from the pool for the new article, with every section
- * `frozen` names taken from `old` as readers saw it, its citations included, so a section no change
- * touched is the same byte for byte; the sources are those something cites, the original first and
- * our earlier stories last, as a projection lists them.
- *
- * An id `old` lists keeps `old`'s source: a frozen section cites it, or the quote, which is never
- * rewritten, or an Update's earlier text. Where `next` gives that id to another source (a legacy
- * version's numbering is not the pool's), the rewritten sections cite it under an id of its own.
+ * The ids of `next`'s sources that `old` gives to another source, each with the new id it is cited
+ * under in the next version: none where both name the same source, or the pool's ids are the old
+ * version's, as they are once a pass made it. Deterministic, so the note and the projection agree.
  */
-export function withFrozen(next: ResearchedStory, old: ResearchedStory, frozen: Kept[]): ResearchedStory {
+export function sourceRenames(next: Pick<ResearchedStory, 'sources'>, old: Pick<ResearchedStory, 'sources'>): ReadonlyMap<string, string> {
   const oldById = new Map(old.sources.map(s => [s.id, s]))
   const fresh = freshIds([...old.sources, ...next.sources].map(s => s.id))
   const renamed = new Map<string, string>()
@@ -141,11 +137,33 @@ export function withFrozen(next: ResearchedStory, old: ResearchedStory, frozen: 
     const kept = oldById.get(s.id)
     if (kept && sourceKey(kept) !== sourceKey(s)) renamed.set(s.id, fresh(s.id))
   }
-  const touched = (t: CitedText) => t.citations.some(c => renamed.has(c.sourceId))
-  const rename = (t: CitedText): CitedText =>
-    touched(t) ? { ...t, citations: t.citations.map(c => ({ ...c, sourceId: renamed.get(c.sourceId) ?? c.sourceId })) } : t
+  return renamed
+}
+
+/** The text with its citations under the renamed ids; the very object when none is renamed. */
+export function renameCited(t: CitedText, renamed: ReadonlyMap<string, string>): CitedText {
+  if (!t.citations.some(c => renamed.has(c.sourceId))) return t
+  return { ...t, citations: t.citations.map(c => ({ ...c, sourceId: renamed.get(c.sourceId) ?? c.sourceId })) }
+}
+
+/**
+ * The next version's projection: `next`, built from the pool for the new article, with every section
+ * `frozen` names taken from `old` as readers saw it, its citations included, so a section no change
+ * touched is the same byte for byte; the sources are those something cites, the original first and
+ * our earlier stories last, as a projection lists them.
+ *
+ * An id `old` lists keeps `old`'s source: a frozen section cites it, or the quote, which is never
+ * rewritten, or an Update's earlier text. Where `next` gives that id to another source (a legacy
+ * version's numbering is not the pool's), the rewritten sections cite it under an id of its own
+ * (`sourceRenames`). `alsoCited` are texts the page shows beside the article (the Update note, its ids
+ * renamed the same way, `renameCited`): their sources are listed too.
+ */
+export function withFrozen(next: ResearchedStory, old: ResearchedStory, frozen: Kept[], alsoCited: CitedText[] = []): ResearchedStory {
+  const oldById = new Map(old.sources.map(s => [s.id, s]))
+  const renamed = sourceRenames(next, old)
+  const rename = (t: CitedText) => renameCited(t, renamed)
   const story = {
-    paragraphs: next.paragraphs.map(p => (p.sentences.some(touched) ? { sentences: p.sentences.map(rename) } : p)),
+    paragraphs: next.paragraphs.map(p => (p.sentences.some(t => rename(t) !== t) ? { sentences: p.sentences.map(rename) } : p)),
     whyThisMatters: next.whyThisMatters.map(rename),
     caveats: next.caveats.map(rename),
   }
@@ -158,7 +176,7 @@ export function withFrozen(next: ResearchedStory, old: ResearchedStory, frozen: 
       if (t) story[k.part][k.to] = t
     }
   }
-  const all = [...story.paragraphs.flatMap(p => p.sentences), ...story.whyThisMatters, ...story.caveats]
+  const all = [...story.paragraphs.flatMap(p => p.sentences), ...story.whyThisMatters, ...story.caveats, ...alsoCited.map(rename)]
   const cited = new Set([...all.flatMap(t => t.citations.map(c => c.sourceId)), ...(next.quoteSourceId ? [next.quoteSourceId] : [])])
   const known = new Map<string, ResearchedSource>(oldById)
   for (const s of next.sources) {
@@ -215,49 +233,123 @@ export function nextVersion(current: ArticleVersionData, next: NextVersion): Art
   }
 }
 
+/** A single-source story's text as readers see it: its headline, its summary as the story, and its bullet lists. */
+export type SingleSourceText = Pick<VersionFields, 'title' | 'summary' | 'relevanceReasons' | 'antifactors'>
+
+const bulletsOf = (text: string | null) =>
+  (text ?? '')
+    .split('\n')
+    .map(line => line.replace(/^\s*[-*•]\s*/, '').trim())
+    .filter(Boolean)
+
+const dayLabel = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+
+/**
+ * The Update a first pass records on a story already published (plan, For Odin 5): the note, which
+ * counts the outside sources the version cites ("Researched with 3 more sources on Nov 19; the story was
+ * rewritten from them."), and the single-source text as it was, section by section under the page's
+ * labels (its summary is the story's one paragraph), each beside the section that now has that label,
+ * or none. Code words and dates it, never a model.
+ */
+export function firstPassUpdate(
+  before: SingleSourceText,
+  version: Pick<ArticleVersionData, 'research' | 'article'>,
+  day: string,
+): Pick<ArticleVersionData, 'changes' | 'note'> {
+  const now = version.article ? sectionTexts(version.article, version.research) : new Map<string, CitedText>()
+  const changes: VersionChange[] = []
+  const add = (label: string, text: string | null) => {
+    if (text) changes.push({ section: label, from: label, before: uncited(text), after: now.get(label) ?? null })
+  }
+  add('Title', before.title)
+  add(LABELS.story(0), before.summary)
+  bulletsOf(before.relevanceReasons).forEach((text, i) => add(LABELS.whyThisMatters(i), text))
+  bulletsOf(before.antifactors).forEach((text, i) => add(LABELS.caveats(i), text))
+  const n = version.research.sources.filter(s => s.origin === 'source').length
+  const text =
+    n === 0
+      ? `Researched on ${dayLabel(day)}; the story was rewritten.`
+      : `Researched with ${n} more source${n === 1 ? '' : 's'} on ${dayLabel(day)}; the story was rewritten from ${n === 1 ? 'it' : 'them'}.`
+  return { changes, note: uncited(text) }
+}
+
 /** The sections readers see on the story page: the headline, the paragraphs, the key quote and the bullets; the summary and the blurb stay in the admin. */
 export const isPageSection = (label: string): boolean => label !== 'Summary' && label !== 'Blurb'
 
 /**
- * One Update as readers get it: its day, its note, and each changed section shown on the page with
- * its earlier text, labeled by where it was in the version before (unique among an Update's changes),
- * and whether the update removed it.
+ * One Update as readers get it: its day, its note, each changed section shown on the page with its
+ * earlier text, labeled by where it was in the version before (unique among an Update's changes), and
+ * whether the update removed it; and the sources the note and the earlier texts cite. The public
+ * contract's shape (`GET /api/stories/{slug}`, `updates`).
  */
-export interface PublicUpdate {
-  /** `YYYY-MM-DD`, the day the version was made: code dates it, never the model. */
-  date: string
-  note: CitedText
-  changes: { section: string; before: CitedText | null; removed: boolean }[]
-}
+export const publicUpdateSchema = z.object({
+  date: z.string().describe('The day the story was updated, `YYYY-MM-DD` (UTC).'),
+  note: citedTextSchema.describe(
+    'What changed and why, cited: written by an AI model and checked against its sources, or, when that note fails its checks, a fixed line naming the sections and outlets; on the first update of a story published before it was researched, a fixed line.',
+  ),
+  changes: z
+    .array(
+      z.object({
+        section: z
+          .string()
+          .describe('Where the section was on the page before the update: `Title`, `Story paragraph 2`, `Key quote`, `Why This Matters 1`, `Caveat 2`.'),
+        before: citedTextSchema.nullable().describe('The earlier text, with the citations it carried; null for a section the update added.'),
+        removed: z.boolean().describe('Whether the update removed the section rather than rewrote it.'),
+      }),
+    )
+    .describe('Each changed section shown on the story page, with its earlier text.'),
+  sources: z.array(researchedSourceSchema).describe('The sources the note and the earlier texts cite, the original article first.'),
+})
+
+export type PublicUpdate = z.infer<typeof publicUpdateSchema>
+
+const BY_ORIGIN: Record<ResearchedSource['origin'], number> = { original: 0, source: 1, earlier: 2 }
 
 /**
  * The Updates of a story, newest first: every version with a note that is not reverted (an update,
  * or a first pass's on a story already published), with the page's sections among its changes. An
- * undone update is reverted, and leaves the list.
+ * undone update is reverted, and leaves the list. Its sources are found in its own version's
+ * projection, which lists what the note cites, else in the version it replaced (the newest earlier
+ * one not reverted), whose text the earlier texts are; a pass keeps an id meaning one source across
+ * the two (`withFrozen`). A citation neither lists is left out.
  */
-export function publicUpdates(versions: (Pick<ArticleVersionData, 'number' | 'kind' | 'status' | 'changes' | 'note'> & { createdAt: Date })[]): PublicUpdate[] {
-  return versions
-    .filter(v => v.status !== 'reverted' && v.kind !== 'legacy' && v.note !== null)
-    .sort((a, b) => b.number - a.number)
-    .map(v => ({
-      date: utcDay(v.createdAt),
-      note: v.note!,
-      changes: v.changes.filter(c => isPageSection(c.section)).map(c => ({ section: c.from, before: c.before, removed: c.after === null })),
-    }))
+export function publicUpdates(
+  versions: (Pick<ArticleVersionData, 'number' | 'kind' | 'status' | 'changes' | 'note' | 'research'> & { createdAt: Date })[],
+): PublicUpdate[] {
+  const kept = versions.filter(v => v.status !== 'reverted').sort((a, b) => b.number - a.number)
+  return kept.flatMap((v, i) => {
+    if (v.kind === 'legacy' || v.note === null) return []
+    const replaced = kept[i + 1]
+    const known = new Map([...(replaced?.research.sources ?? []), ...v.research.sources].map(s => [s.id, s]))
+    const listed = (t: CitedText): CitedText => ({ ...t, citations: t.citations.filter(c => known.has(c.sourceId)) })
+    const note = listed(v.note)
+    const changes = v.changes
+      .filter(c => isPageSection(c.section))
+      .map(c => ({ section: c.from, before: c.before && listed(c.before), removed: c.after === null }))
+    const cited = new Set([...note.citations, ...changes.flatMap(c => c.before?.citations ?? [])].map(c => c.sourceId))
+    const sources = [...known.values()].filter(s => cited.has(s.id)).sort((a, b) => BY_ORIGIN[a.origin] - BY_ORIGIN[b.origin])
+    return [{ date: utcDay(v.createdAt), note, changes, sources }]
+  })
 }
 
-/**
- * The sources the Updates' notes and earlier texts cite, beside the current projection's: each
- * version's projection lists what its own text cites, so an earlier text's sources are in the version
- * before, and a note cites only facts its changed sections rest on now or rested on before. By id,
- * the newest version's entry first.
- */
-export function updateSources(versions: Pick<ArticleVersionData, 'number' | 'status' | 'research'>[]): ResearchedSource[] {
-  const byId = new Map<string, ResearchedSource>()
-  for (const v of [...versions].filter(x => x.status !== 'reverted').sort((a, b) => b.number - a.number)) {
-    for (const s of v.research.sources) if (!byId.has(s.id)) byId.set(s.id, s)
-  }
-  return [...byId.values()]
+/** The ids of the earlier stories the Updates cite, for the read-time lookup (`forReaders`'s). */
+export const updatesEarlierStoryIds = (updates: PublicUpdate[]): string[] => [
+  ...new Set(updates.flatMap(u => u.sources.flatMap(s => (s.origin === 'earlier' && s.storyId ? [s.storyId] : [])))),
+]
+
+/** The Updates as readers get them now: as `forReaders` serves the article, an earlier story no longer published leaves with its citations, and the rest take their current slugs. */
+export function updatesForReaders(updates: PublicUpdate[], publishedSlugs: ReadonlyMap<string, string>): PublicUpdate[] {
+  return updates.map(u => {
+    const slugOf = (s: ResearchedSource) => (s.origin === 'earlier' && s.storyId ? publishedSlugs.get(s.storyId) : undefined)
+    const gone = new Set(u.sources.filter(s => s.origin === 'earlier' && slugOf(s) === undefined).map(s => s.id))
+    const keep = (t: CitedText): CitedText => ({ ...t, citations: t.citations.filter(c => !gone.has(c.sourceId)) })
+    return {
+      ...u,
+      note: keep(u.note),
+      changes: u.changes.map(c => ({ ...c, before: c.before && keep(c.before) })),
+      sources: u.sources.filter(s => !gone.has(s.id)).map(s => ({ ...s, slug: slugOf(s) ?? s.slug })),
+    }
+  })
 }
 
 /**

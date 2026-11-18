@@ -6,6 +6,7 @@ import { jobNotes } from '../jobs/jobNotes.js'
 import { CHAINS, chainOf } from '../jobs/chainDefinitions.js'
 import { canContinue } from '../jobs/chains.js'
 import { MODEL_JOBS } from '../jobs/modelJobs.js'
+import { SWITCHED_OFF_BY } from '../jobs/jobEnableChecks.js'
 import { emptyUsage, type RunUsage } from '../lib/runUsage.js'
 
 /**
@@ -38,6 +39,10 @@ export async function chainContinueStep(chainName: string): Promise<string | nul
   return row && canContinue(chainName, row) ? row.resumeStep : null
 }
 
+/**
+ * Write the job's settings. Enabling a job that replaces others (`SWITCHED_OFF_BY`: the research pass)
+ * switches those off in the same transaction; `switchedOff` names them, so the caller reloads them too.
+ */
 export async function updateJob(
   jobName: string,
   data: {
@@ -49,5 +54,12 @@ export async function updateJob(
     flexHours?: number | null
   },
 ) {
-  return prisma.jobRun.update({ where: { jobName }, data })
+  const replaced = data.enabled === true ? (SWITCHED_OFF_BY[jobName] ?? []) : []
+  if (replaced.length === 0) return { job: await prisma.jobRun.update({ where: { jobName }, data }), switchedOff: [] as string[] }
+  return prisma.$transaction(async tx => {
+    const job = await tx.jobRun.update({ where: { jobName }, data })
+    const on = await tx.jobRun.findMany({ where: { jobName: { in: [...replaced] }, enabled: true }, select: { jobName: true } })
+    await tx.jobRun.updateMany({ where: { jobName: { in: on.map(j => j.jobName) } }, data: { enabled: false } })
+    return { job, switchedOff: on.map(j => j.jobName) }
+  })
 }

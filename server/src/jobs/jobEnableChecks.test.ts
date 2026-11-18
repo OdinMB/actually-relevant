@@ -3,7 +3,8 @@ import { config } from '../config.js'
 
 const mockGuards = vi.hoisted(() => ({ assertPodcastRunnable: vi.fn() }))
 
-vi.mock('../lib/prisma.js', () => ({ default: {} }))
+const mockJobRun = vi.hoisted(() => ({ findUnique: vi.fn() }))
+vi.mock('../lib/prisma.js', () => ({ default: { jobRun: mockJobRun } }))
 vi.mock('../services/podcastGuards.js', async importOriginal => ({ ...(await importOriginal<typeof import('../services/podcastGuards.js')>()), ...mockGuards }))
 // The real gate (Actually Uplifting is closed by default), wrapped so a test can open the show.
 vi.mock('../services/podcastEdition.js', async importOriginal => {
@@ -11,7 +12,8 @@ vi.mock('../services/podcastEdition.js', async importOriginal => {
   return { ...actual, upliftingShowProblem: vi.fn(actual.upliftingShowProblem) }
 })
 
-const { jobEnableRefusal } = await import('./jobEnableChecks.js')
+const { jobEnableConflict, jobEnableRefusal, SWITCHED_OFF_BY } = await import('./jobEnableChecks.js')
+const { passSwitchRefusal } = await import('../services/researchPassQueue.js')
 const { PodcastBlockedError } = await import('../services/podcastGuards.js')
 const { GENERATE_PODCAST_JOB } = await import('../services/podcastAudioStages.js')
 const { PUBLISH_PODCAST_JOB } = await import('./publishPodcast.js')
@@ -112,15 +114,28 @@ describe('jobEnableRefusal', () => {
     }
   })
 
-  it('refuses research passes until they are wired, with the Tavily key set too', () => {
+  it('refuses research passes while their eval gate is closed, with the Tavily key set too; once it opens, only without the key', () => {
     const saved = process.env.TAVILY_API_KEY
     try {
       process.env.TAVILY_API_KEY = 'tvly-test'
-      expect(jobEnableRefusal('research_pass')).toMatch(/not wired/)
+      expect(jobEnableRefusal('research_pass')).toMatch(/switched off: their evals have not yet met the plan's bars/)
+      expect(passSwitchRefusal(null)).toBeNull()
+      delete process.env.TAVILY_API_KEY
+      expect(passSwitchRefusal(null)).toMatch(/TAVILY_API_KEY/)
     } finally {
       if (saved === undefined) delete process.env.TAVILY_API_KEY
       else process.env.TAVILY_API_KEY = saved
     }
+  })
+
+  it('refuses either old research step while the research pass is enabled, and nothing else', async () => {
+    mockJobRun.findUnique.mockResolvedValue({ enabled: true })
+    expect(await jobEnableConflict('research_stories')).toMatch(/research_pass is on/)
+    expect(await jobEnableConflict('build_story_context')).toMatch(/research_pass is on/)
+    expect(await jobEnableConflict('crawl_feeds')).toBeNull()
+    mockJobRun.findUnique.mockResolvedValue({ enabled: false })
+    expect(await jobEnableConflict('research_stories')).toBeNull()
+    expect(SWITCHED_OFF_BY.research_pass).toEqual(['research_stories', 'build_story_context'])
   })
 
   it('lets an unexpected error through rather than reading it as a missing setting', () => {

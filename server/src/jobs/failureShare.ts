@@ -26,6 +26,9 @@ export const FAILURE_SHARE_MESSAGES: Readonly<Record<string, string>> = {
   build_story_context:
     'The checks dropped more of what the step wrote than usual. Nothing paused, and readers see only what passed. ' +
     "Each story's Context section shows what was dropped and why; switch the step off on the Jobs page if it keeps happening.",
+  research_pass:
+    'The checks dropped more of what the research pass wrote than usual. Nothing paused, and readers see only what passed. ' +
+    "Each story's research view shows what was dropped and why; switch the step off on the Jobs page if it keeps happening.",
 }
 
 const PLAIN_MESSAGE = 'Its checks failed more of what it wrote than usual. Nothing paused; switch it off on the Jobs page if it keeps happening.'

@@ -14,7 +14,7 @@ import { buildFactCheckPrompt } from '../prompts/research.js'
 import { buildJudgePrompt, buildNotePrompt, buildUpdateRewritePrompt, type NoteInput, type PassFactBrief } from '../prompts/researchPass.js'
 import { factCheckSchema, repairSchema } from '../schemas/research.js'
 import { judgeSchema, noteSchema, type JudgeAnswer } from '../schemas/researchPass.js'
-import { versionArticle, withFrozen } from './articleVersions.js'
+import { renameCited, sourceRenames, versionArticle, withFrozen } from './articleVersions.js'
 import {
   draftItems,
   dropFailing,
@@ -27,7 +27,7 @@ import {
   type PoolFact as CitableFact,
 } from './researchChecks.js'
 import { checkCopying, sourceLines } from './researchCopying.js'
-import { buildResearchedStory, type CitedText, type ResearchedStory } from './researchedStory.js'
+import { buildResearchedStory, type CitedText, type ResearchedSource, type ResearchedStory } from './researchedStory.js'
 import { citableFacts, recheck, repairDraft, type CheckContext, type CheckPass, type CheckState, type StepCaller, type StepResult } from './researchPipeline.js'
 import { researchView, usable, type Article, type ArticleVersionData, type Pool, type PoolFact, type VersionChange } from './researchPool.js'
 import {
@@ -230,10 +230,20 @@ export async function updateArticle(input: UpdateInput, deps: UpdateDeps): Promi
   }
   const { changes, frozen } = versionChanges({ article, research: input.version.research }, { article: final, research: built }, dropped)
   if (changes.length === 0) return done('unchanged')
-  const projection = withFrozen(built, input.version.research, frozen)
 
-  const note = await writeNote({ article: final, changes, plan: plan.judgments, fresh: freshRefs, demoted, demotedNow, pool, ctx, call, research }, record)
+  const written = await writeNote({ article: final, changes, plan: plan.judgments, fresh: freshRefs, demoted, demotedNow, pool, ctx, call, research }, record)
+  // The note cites by the pool's ids, as the rebuilt sections do: both take the same new ids where the
+  // version before gave one to another source, and the version lists the note's sources with its own
+  const next = { ...built, sources: [...built.sources, ...written.sources.filter(s => !built.sources.some(b => b.id === s.id))] }
+  const note = renameCited(written.note, sourceRenames(next, input.version.research))
+  const projection = withFrozen(next, input.version.research, frozen, [note])
   return done('updated', { article: final, research: projection, changes, note })
+}
+
+/** The note with its citations, and the sources it cites besides the original (pool refs as ids). */
+interface CitedNote {
+  note: CitedText
+  sources: ResearchedSource[]
 }
 
 interface NoteContext {
@@ -255,7 +265,7 @@ interface NoteContext {
  * research's fact check and by both copying checks, with one repair round; a note that still fails,
  * or that the budget or a failed call leaves unwritten, is the fixed line (`fallbackNote`).
  */
-async function writeNote(n: NoteContext, record: UpdateRecord): Promise<CitedText> {
+async function writeNote(n: NoteContext, record: UpdateRecord): Promise<CitedNote> {
   const items = new Map(draftItems(n.article).map(i => [i.label, i]))
   const after = n.changes.filter(c => c.after !== null).flatMap(c => items.get(c.section)?.factIds ?? [])
   const founding = n.plan.flatMap(j => j.founding)
@@ -283,8 +293,10 @@ async function writeNote(n: NoteContext, record: UpdateRecord): Promise<CitedTex
   const checkFacts = citableFacts(view.sources, view.earlier)
   const known = new Set(facts.map(f => f.id))
   const changes = n.changes.map(c => ({ label: c.section, before: c.before?.text ?? '', after: c.after?.text ?? null }))
-  const cite = (text: string, factIds: string[]): CitedText =>
-    buildResearchedStory({ draft: { story: [], whyThisMatters: [{ text, factIds }], caveats: [], quoteSourceId: '' }, ...view }).whyThisMatters[0]!
+  const cite = (text: string, factIds: string[]): CitedNote => {
+    const built = buildResearchedStory({ draft: { story: [], whyThisMatters: [{ text, factIds }], caveats: [], quoteSourceId: '' }, ...view })
+    return { note: built.whyThisMatters[0]!, sources: built.sources.filter(s => s.origin !== 'original') }
+  }
 
   let previous: NoteInput['problems']
   const counts = { checked: 0, copied: 0, unsupported: 0 }

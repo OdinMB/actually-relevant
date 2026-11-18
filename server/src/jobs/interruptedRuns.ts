@@ -29,7 +29,7 @@ export const RESUMABLE_JOBS: ReadonlySet<string> = new Set([
   'publish_stories',
   // Takes only stories with no context run, and a cut-off run is marked failed and settles its story
   'build_story_context',
-  // A placeholder until its passes are wired: it does nothing, so a rerun repeats nothing
+  // Takes only selected stories with no pipeline pass, and a cut-off pass is marked failed and settles its story
   'research_pass',
   // A chain resumes from the step it was cut off in when that step is resumable, else after it, so a
   // cut-off send, post or publish is never repeated (chains.ts startStep)

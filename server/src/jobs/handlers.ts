@@ -32,7 +32,7 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   publish_stories: runPublishStories,
   // Run on its own, both of its parts in one run (SPLIT_STEPS below)
   build_story_context: () => runBuildStoryContext('all'),
-  // Seeded disabled, its enabling refused until its passes are wired (jobs/researchPass.ts)
+  // Seeded disabled, its enabling refused until its evals meet their bars (services/researchPassGate.ts)
   research_pass: runResearchPassJob,
   social_auto_post: runSocialAutoPost,
   bluesky_update_metrics: runBlueskyUpdateMetrics,

@@ -115,7 +115,7 @@ export interface PassEligibility {
   kind: 'first' | 'later'
 }
 
-/** What an editor's pass needs of a story (`.context/research-passes.md`, "Admin"); null for an unknown story. */
+/** What an editor's pass needs of a story (`.context/research-passes.md`, "Admin routes"); null for an unknown story. */
 export async function passEligibility(db: ResearchDb, storyId: string): Promise<PassEligibility | null> {
   const [row] = await db.$queryRaw<{ status: string; running: boolean; versioned: boolean }[]>`
     SELECT s.status::text AS status,

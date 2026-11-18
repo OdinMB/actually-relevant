@@ -3,8 +3,10 @@
  * warning levels and their once-a-month notices (`.context/scheduler.md`, "Spending"). Each job's
  * spend comes from `job_month_spend`, which every finished run adds to (`finishJobRun`); research an
  * editor started runs outside any job, so its spend comes from its own `story_research_runs` rows
- * (the research step's runs are already in its job's spend). Nothing stops on cost: a level only
- * records a notice. `paceUsd` and `warningsDue` are pure.
+ * (the research step's runs are already in its job's spend). An editor's research pass adds its
+ * usage to `research_pass`'s month itself (`researchPassRuns.ts`), so the research pass step has one
+ * line and `editor_research` keeps only the runs from before passes. Nothing stops on cost: a level
+ * only records a notice. `paceUsd` and `warningsDue` are pure.
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
