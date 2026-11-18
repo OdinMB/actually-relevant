@@ -33,3 +33,11 @@ Rule: a run writes only its own row; never add research fields to `stories`.
 - **Columns on `stories`:** next to published fields and every public select.
 - **One JSON blob per story with only the latest run:** no history, and the cap would undercount on re-runs.
 - **Recording tokens only and pricing them at display time:** the cap needs a stored USD figure, and prices change.
+
+## Amendment 2026-11-18: research passes (ADR-0067)
+
+From the day the owner switches the `research_pass` job on, new work is a `research_passes` row,
+reserved and settled the same way, and `story_research_runs` gets no new rows; it stays as read-only
+history. The cap's month sum counts both tables' rows of the month. A pass writes its own rows and
+applies its result to the story's columns through the fenced apply research's step already uses; the
+rule against research fields on `stories` stands. Until the switch this entry holds as written.

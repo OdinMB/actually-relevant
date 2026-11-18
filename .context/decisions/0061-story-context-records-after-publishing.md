@@ -234,3 +234,13 @@ stories (about 4 to 11), three at a time, each run bounded by its calls' own tim
 slow night delays publishing by the first part's whole length. Everything else stands: the step is
 off until switched on, a failed step never stops the edition, and the publish gate holds nothing in
 the daily edition.
+
+## Amendment 2026-11-18: research passes (ADR-0067)
+
+From the day the owner switches the `research_pass` job on, this step is merged into the research
+pass, which keeps a story's facts and cards per story (`pool_facts`, `pass_boxes`) instead of copying
+them per run; `reused_from_id` stays only for facts offered from linked earlier stories. The pass
+reuses this step's prompts, checks, card write and rules unchanged. On the plan's recommendation,
+still open with the owner, the after-publish part is retired at the switch. The tables here stay as
+read-only history, and the cards they hold are served until a pass of the story writes its own.
+Until the switch this entry holds as written.
