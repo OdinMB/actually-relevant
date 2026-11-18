@@ -16,19 +16,25 @@ export interface LlmTokenUsage {
   input: number
   /** Input tokens served from the prompt cache (subset of `input`). */
   cached: number
+  /**
+   * Input tokens written to the prompt cache (subset of `input`, apart from `cached`), billed at the
+   * write price. Absent on usage recorded before 2026-11-18, which counted none.
+   */
+  cacheWrite?: number
   /** Billed output tokens, reasoning included. */
   output: number
   /** Reasoning tokens (subset of `output`). */
   reasoning: number
 }
 
-export const ZERO_USAGE: LlmTokenUsage = { input: 0, cached: 0, output: 0, reasoning: 0 }
+export const ZERO_USAGE: LlmTokenUsage = { input: 0, cached: 0, cacheWrite: 0, output: 0, reasoning: 0 }
 
 export function usageFrom(message: AIMessage): LlmTokenUsage {
   const u = message.usage_metadata
   return {
     input: u?.input_tokens ?? 0,
     cached: u?.input_token_details?.cache_read ?? 0,
+    cacheWrite: u?.input_token_details?.cache_creation ?? 0,
     output: u?.output_tokens ?? 0,
     reasoning: u?.output_token_details?.reasoning ?? 0,
   }

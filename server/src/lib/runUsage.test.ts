@@ -33,6 +33,24 @@ describe('run usage', () => {
     expect(standardCallUsd('model-without-price', { input: 1, cached: 0, output: 1 })).toBeNull()
   })
 
+  it('prices the input tokens written to the cache at the write price, never also at the input rate', () => {
+    expect(standardCallUsd('gpt-6-luna', { input: 1_000_000, cached: 200_000, cacheWrite: 300_000, output: 0 })).toBeCloseTo(
+      0.5 * luna.input + 0.2 * luna.cached + 0.3 * luna.cacheWrite,
+    )
+  })
+
+  it('counts the tokens written to the cache in the run and every run around it', () => {
+    const chain = createRunScope({ jobName: 'daily_edition', flex: false })
+    const step = runInScope(chain, async () => createRunScope({ jobName: 'assess_stories', flex: false }))
+    return step.then(s => {
+      recordCall(s, call('standard', { cached: 100, cacheWrite: 400 }))
+      recordCall(s, call('standard'))
+      expect(s.usage.cacheWriteTokens).toBe(400)
+      expect(chain.usage.cacheWriteTokens).toBe(400)
+      expect(s.usage.cachedTokens).toBe(100)
+    })
+  })
+
   it('bills a flex call at the flex factor and counts what it would have cost at standard', () => {
     const scope = createRunScope({ jobName: 'assess_stories', flex: true })
     recordCall(scope, call('flex'))

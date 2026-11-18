@@ -3,6 +3,7 @@
  */
 import type { z } from 'zod'
 import type { ReasoningEffort } from '../../config.js'
+import type { Prompt } from '../../lib/promptCache.js'
 import type { Fixtures } from './fixtures.js'
 
 export type ModelId = 'gpt-5-nano' | 'gpt-5-mini' | 'gpt-5.2' | 'gpt-6-luna' | 'gpt-6-sol' | 'gpt-6.1-sol'
@@ -23,6 +24,8 @@ export interface TokenUsage {
   input: number
   /** Input tokens served from the prompt cache (subset of `input`). */
   cached: number
+  /** Input tokens written to the prompt cache (subset of `input`); absent on ledger entries made before 2026-11-18. */
+  cacheWrite?: number
   /** Billed output tokens, reasoning included. */
   output: number
   /** Reasoning tokens (subset of `output`). */
@@ -48,13 +51,14 @@ export interface CallRecord<T = unknown> {
 export interface PlannedCall {
   arm: Arm
   schemaName: string
-  prompt: string
+  /** As the call sends it: a split prompt with its cache breakpoint, as production sends it. */
+  prompt: Prompt
   /** Expected billed output tokens for today's baseline at medium effort. */
   baseOutputTokens: number
 }
 
 export interface SuiteContext {
-  call<T>(arm: Arm, schemaName: string, schema: z.ZodType<T>, prompt: string): Promise<CallRecord<T>>
+  call<T>(arm: Arm, schemaName: string, schema: z.ZodType<T>, prompt: Prompt): Promise<CallRecord<T>>
   /** Max fixture items per suite part (`--limit`), or undefined for all. */
   limit?: number
 }

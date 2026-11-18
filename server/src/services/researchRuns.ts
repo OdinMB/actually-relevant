@@ -12,7 +12,7 @@
  */
 import type { Prisma, ResearchRunTrigger, StoryResearchRun } from '@prisma/client'
 import prisma from '../lib/prisma.js'
-import { config } from '../config.js'
+import { config, type ModelPrice } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
 import { ConflictError, NotFoundError } from '../utils/errors.js'
@@ -32,7 +32,7 @@ const INTERRUPTED = 'interrupted: the server restarted during the run'
 
 /** The prices a run was counted at, stored with it. */
 export interface ResearchPrices {
-  models: Record<string, { input: number; cached: number; output: number }>
+  models: Record<string, ModelPrice>
   cacheWriteFactor: number
   tavilyUsdPerCredit: number
 }

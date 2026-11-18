@@ -59,7 +59,7 @@ describe('createRunMeter: model calls', () => {
     const m = meter()
     const res = await m.call('write', schema, 'prompt')
     const model = config.llm.models.medium.name
-    const usage = { input: 1000, cached: 400, output: 300, reasoning: 100 }
+    const usage = { input: 1000, cached: 400, cacheWrite: 0, output: 300, reasoning: 100 }
     expect(res).toEqual({ parsed: { a: 1 }, outcome: 'ok', usage, costUsd: callCostUsd(model, usage), model })
     expect(mocks.getLLMByTier).toHaveBeenCalledWith('medium')
     expect(mocks.rateLimitDelay.mock.invocationCallOrder[0]).toBeLessThan(mocks.invoke.mock.invocationCallOrder[0]!)
@@ -102,7 +102,7 @@ describe('createRunMeter: model calls', () => {
     expect(skipped).toEqual({
       parsed: null,
       outcome: 'skipped',
-      usage: { input: 0, cached: 0, output: 0, reasoning: 0 },
+      usage: { input: 0, cached: 0, cacheWrite: 0, output: 0, reasoning: 0 },
       costUsd: 0,
       model: config.llm.models.small.name,
     })

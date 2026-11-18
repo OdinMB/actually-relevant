@@ -79,6 +79,86 @@ describe('llm client construction', () => {
       const { createChatModel } = await loadLlm()
       expect(() => createChatModel({ name: 'gpt-6-sol', reasoningEffort: 'medium' })).not.toThrow()
     })
+
+    it('turns caching off unless a prompt marks it, for models that take the controls only', async () => {
+      const { createChatModel } = await loadLlm()
+      expect(paramsOf(createChatModel({ name: 'gpt-6-luna', reasoningEffort: 'low' })).prompt_cache_options).toEqual({ mode: 'explicit' })
+      expect(paramsOf(createChatModel({ name: 'gpt-6.1-sol', reasoningEffort: 'medium' })).prompt_cache_options).toEqual({ mode: 'explicit' })
+      expect(paramsOf(createChatModel({ name: 'gpt-5-mini', reasoningEffort: 'medium' })).prompt_cache_options).toBeUndefined()
+      expect(paramsOf(createChatModel({ name: 'some-future-model', reasoningEffort: 'medium' })).prompt_cache_options).toBeUndefined()
+    })
+  })
+
+  describe('the request body', () => {
+    const answer = () =>
+      new Response(
+        JSON.stringify({
+          id: 'x',
+          object: 'chat.completion',
+          created: 0,
+          model: 'm',
+          choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: '{"ok":true}' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+
+    async function sent(model: string, split: boolean): Promise<Record<string, unknown>> {
+      vi.stubEnv('OPENAI_API_KEY', 'test-key-not-real')
+      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(answer())
+      vi.stubGlobal('fetch', fetchMock)
+      try {
+        const { z } = await import('zod')
+        const { createChatModel } = await loadLlm()
+        const { promptMessage, promptParts } = await import('../lib/promptCache.js')
+        const prompt = split ? promptParts('Stable rules.', 'Call data.') : 'Stable rules.\n\nCall data.'
+        await createChatModel({ name: model, reasoningEffort: 'low' })
+          .withStructuredOutput(z.object({ ok: z.boolean() }))
+          .invoke([promptMessage(prompt, model)])
+        return JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<string, unknown>
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    }
+
+    it('carries explicit mode and the breakpoint after the stable part for a split prompt on gpt-6', async () => {
+      const body = await sent('gpt-6-luna', true)
+      expect(body.prompt_cache_options).toEqual({ mode: 'explicit' })
+      expect(body.reasoning_effort).toBe('low')
+      expect(body.messages).toEqual([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Stable rules.\n\n', prompt_cache_breakpoint: { mode: 'explicit' } },
+            { type: 'text', text: 'Call data.' },
+          ],
+        },
+      ])
+    })
+
+    it('carries explicit mode and no breakpoint for a plain prompt: nothing is cached or written', async () => {
+      const body = await sent('gpt-6-luna', false)
+      expect(body.prompt_cache_options).toEqual({ mode: 'explicit' })
+      expect(body.messages).toEqual([{ role: 'user', content: 'Stable rules.\n\nCall data.' }])
+    })
+
+    it('sends neither to a model without the controls, the split prompt as its whole text', async () => {
+      const body = await sent('gpt-5-mini', true)
+      expect(body).not.toHaveProperty('prompt_cache_options')
+      expect(body.messages).toEqual([{ role: 'user', content: 'Stable rules.\n\nCall data.' }])
+    })
+  })
+
+  describe('getLLMAtEffort', () => {
+    it("gives a tier's own client at its own effort, and a client at another effort apart from it", async () => {
+      const { getLLMAtEffort, getSmallLLM } = await loadLlm()
+      const { config } = await import('../config.js')
+      expect(getLLMAtEffort('small', config.llm.models.small.reasoningEffort)).toBe(getSmallLLM())
+      const lower = getLLMAtEffort('small', 'none')
+      expect(paramsOf(lower).reasoning_effort).toBe('none')
+      expect(paramsOf(lower).model).toBe(config.llm.models.small.name)
+      expect(getLLMAtEffort('small', 'none')).toBe(lower)
+    })
   })
 
   describe('tier getters', () => {

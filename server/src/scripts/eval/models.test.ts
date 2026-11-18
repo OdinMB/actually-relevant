@@ -21,9 +21,10 @@ describe('costOf', () => {
     expect(costOf('gpt-5-nano', { input: 0, cached: 0, output: M, reasoning: 800_000 })).toBeCloseTo(0.4)
   })
 
-  it('adds the GPT-6 cache-write surcharge to uncached input only', () => {
-    // 1M uncached at 0.10 × 1.25, 1M cached at 0.01
-    expect(costOf('gpt-6-luna', { input: 2 * M, cached: M, output: 0, reasoning: 0 })).toBeCloseTo(0.135)
+  it('prices a GPT-6 call as billed: the tokens written to the cache at 1.25× input, the rest of the uncached input at the input rate', () => {
+    // 0.5M uncached at 0.10, 0.5M written at 0.10 × 1.25, 1M cached at 0.01
+    expect(costOf('gpt-6-luna', { input: 2 * M, cached: M, cacheWrite: M / 2, output: 0, reasoning: 0 })).toBeCloseTo(0.1225)
+    expect(costOf('gpt-6-luna', { input: 2 * M, cached: M, output: 0, reasoning: 0 })).toBeCloseTo(0.11)
   })
 
   it('throws for an unknown model ID', () => {

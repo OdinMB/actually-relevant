@@ -1,20 +1,22 @@
 /**
  * One metered, cached, budget-guarded structured-output call for an eval arm.
  *
- * Calls go through the production client factory (`createChatModel`) and
- * `withStructuredOutput`, so the eval exercises the exact request the app
- * sends. They are deliberately NOT wrapped in `withRetry`: parse failures and
- * declines are what the eval measures. Transport retries come from
- * ChatOpenAI's own `maxRetries: 3`.
+ * Calls go through the production client factory (`createChatModel`),
+ * `withStructuredOutput` and production's message (`promptMessage`: a split
+ * prompt with its cache breakpoint), so the eval exercises the exact request
+ * the app sends. They are deliberately NOT wrapped in `withRetry`: parse
+ * failures and declines are what the eval measures. Transport retries come
+ * from ChatOpenAI's own `maxRetries: 3`.
  */
 import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { HumanMessage, type AIMessage } from '@langchain/core/messages'
+import type { AIMessage } from '@langchain/core/messages'
 import { toJsonSchema } from '@langchain/core/utils/json_schema'
 import type { z } from 'zod'
 import type { ReasoningEffort } from '../../config.js'
 import { classifyOutcome, contentText, finishReasonOf, usageFrom, ZERO_USAGE } from '../../lib/llmUsage.js'
+import { promptKey, promptMessage, promptText, takesCacheControls, type Prompt } from '../../lib/promptCache.js'
 import { Semaphore } from '../../lib/semaphore.js'
 import { createChatModel } from '../../services/llm.js'
 import type { Arm, CallRecord, ModelId, PlannedCall, SuiteContext, TokenUsage } from './types.js'
@@ -27,7 +29,7 @@ interface ModelPrice {
   input: number
   cached: number
   output: number
-  /** Multiplier on uncached input for cache writes (GPT-5.6+ bill writes at 1.25×). */
+  /** What a token written to the cache costs, as a multiple of `input` (GPT-5.6+ bill writes at 1.25×). */
   cacheWrite: number
   /** Output-token multiplier used for dry-run estimates (Luna writes ~25% more). */
   outputFactor: number
@@ -83,14 +85,21 @@ function priceOf(model: string): ModelPrice {
 
 /**
  * USD for one call. `output` already includes reasoning tokens (that is how
- * the API reports and bills them); uncached input carries the cache-write
- * surcharge, a conservative upper bound because Chat Completions usage does
- * not report cache writes separately.
+ * the API reports and bills them). A model with the cache controls is priced
+ * as billed: it caches only at a prompt's breakpoint, and its answer reports
+ * the tokens written. Any other model's uncached input carries the cache-write
+ * surcharge, a conservative upper bound (OpenAI's default may write unasked).
  */
 export function costOf(model: ModelId, usage: TokenUsage): number {
   const p = priceOf(model)
-  const uncached = Math.max(0, usage.input - usage.cached)
-  return (uncached * p.input * p.cacheWrite + usage.cached * p.cached + usage.output * p.output) / 1_000_000
+  const reads = usage.cached * p.cached + usage.output * p.output
+  if (!takesCacheControls(model)) {
+    const uncached = Math.max(0, usage.input - usage.cached)
+    return (uncached * p.input * p.cacheWrite + reads) / 1_000_000
+  }
+  const written = usage.cacheWrite ?? 0
+  const uncached = Math.max(0, usage.input - usage.cached - written)
+  return (uncached * p.input + written * p.input * p.cacheWrite + reads) / 1_000_000
 }
 
 const HAN = /\p{Script=Han}/gu
@@ -101,16 +110,19 @@ export function estimateInputTokens(text: string): number {
   return Math.ceil(han + (text.length - han) / 4)
 }
 
+/** An upper bound: a split prompt's stable part is counted as written to the cache, never as read. */
 export function estimateCallUsd(call: PlannedCall): number {
   const p = priceOf(call.arm.model)
   const effortFactor = EFFORT_OUTPUT_FACTOR[call.arm.effort] ?? 1
   const output = Math.round(call.baseOutputTokens * p.outputFactor * effortFactor)
-  return costOf(call.arm.model, { input: estimateInputTokens(call.prompt), cached: 0, output, reasoning: 0 })
+  const cacheWrite = typeof call.prompt === 'string' || !takesCacheControls(call.arm.model) ? 0 : estimateInputTokens(call.prompt.stable)
+  return costOf(call.arm.model, { input: estimateInputTokens(promptText(call.prompt)), cached: 0, cacheWrite, output, reasoning: 0 })
 }
 
-export function cacheKey(a: Arm, schemaName: string, prompt: string): string {
+/** A split prompt sent with its breakpoint keys apart from its text sent whole (`promptKey`): the requests differ. */
+export function cacheKey(a: Arm, schemaName: string, prompt: Prompt): string {
   return createHash('sha256')
-    .update(`${armKey(a)}\n${schemaName}\n${prompt}`)
+    .update(`${armKey(a)}\n${schemaName}\n${promptKey(prompt, a.model)}`)
     .digest('hex')
 }
 
@@ -186,7 +198,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
     return rec
   }
 
-  async function invoke<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: string, key: string): Promise<CallRecord<T>> {
+  async function invoke<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: Prompt, key: string): Promise<CallRecord<T>> {
     const base = { key, arm: armKey(a), schema: schemaName, at: new Date().toISOString() }
     if (spent + external() >= options.budgetUsd) {
       return {
@@ -206,7 +218,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
     const started = Date.now()
     live++
     try {
-      const result = await structured.invoke([new HumanMessage(prompt)])
+      const result = await structured.invoke([promptMessage(prompt, a.model)])
       const latencyMs = Date.now() - started
       const raw = result.raw as AIMessage
       const content = contentText(raw)
@@ -240,7 +252,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
 
   return {
     limit: options.limit,
-    async call<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: string): Promise<CallRecord<T>> {
+    async call<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: Prompt): Promise<CallRecord<T>> {
       const key = cacheKey(a, schemaName, prompt)
       const hit = ledger.get(key)
       if (hit) return hit as CallRecord<T>

@@ -1,16 +1,18 @@
 /**
  * One structured-output call on a tier's model, as research's and story context's steps make it:
  * after the shared rate-limit delay, never wrapped in `withRetry` (the SDK's `maxRetries` already
- * retries, `.context/llm-analysis.md`, "Retries"), its usage read from the answer and priced at
- * research's prices (`callCostUsd`, an upper bound), and its outcome classified; an answer the
- * outcome rejects keeps its cost but not its value. A thrown error is an `error` outcome with no
- * usage, and the error itself for the caller to judge (a budget, a second attempt).
+ * retries, `.context/llm-analysis.md`, "Retries"), its prompt sent as `promptMessage` sends it (a split
+ * prompt with its cache breakpoint), its usage read from the answer and priced at research's prices
+ * (`callCostUsd`), and its outcome classified; an answer the outcome rejects keeps its cost but not
+ * its value. A step may ask for its own reasoning effort (`researchEffort.ts`). A thrown error is an
+ * `error` outcome with no usage, and the error itself for the caller to judge (a budget, a second attempt).
  */
-import { HumanMessage, type AIMessage } from '@langchain/core/messages'
+import type { AIMessage } from '@langchain/core/messages'
 import type { z } from 'zod'
-import { config } from '../config.js'
+import { config, type ReasoningEffort } from '../config.js'
 import { classifyOutcome, contentText, finishReasonOf, usageFrom, ZERO_USAGE, type LlmCallOutcome, type LlmTokenUsage } from '../lib/llmUsage.js'
-import { getLLMByTier, rateLimitDelay } from './llm.js'
+import { promptMessage, type Prompt } from '../lib/promptCache.js'
+import { getLLMAtEffort, getLLMByTier, rateLimitDelay } from './llm.js'
 import { callCostUsd } from './researchCost.js'
 
 export type ModelTier = 'small' | 'medium' | 'large'
@@ -25,13 +27,22 @@ export interface StructuredCallResult<T> {
   error?: unknown
 }
 
-export async function structuredCall<T>(tier: ModelTier, schema: z.ZodType<T>, prompt: string): Promise<StructuredCallResult<T>> {
+export interface StructuredCallOptions {
+  /** The step's own reasoning effort, instead of its tier's. */
+  effort?: ReasoningEffort
+}
+
+export async function structuredCall<T>(
+  tier: ModelTier,
+  schema: z.ZodType<T>,
+  prompt: Prompt,
+  options: StructuredCallOptions = {},
+): Promise<StructuredCallResult<T>> {
   const model = config.llm.models[tier].name
   await rateLimitDelay()
   try {
-    const result = await getLLMByTier(tier)
-      .withStructuredOutput(schema, { includeRaw: true })
-      .invoke([new HumanMessage(prompt)])
+    const llm = options.effort ? getLLMAtEffort(tier, options.effort) : getLLMByTier(tier)
+    const result = await llm.withStructuredOutput(schema, { includeRaw: true }).invoke([promptMessage(prompt, model)])
     const raw = result.raw as AIMessage
     // The schema parsed it: the structured-output runnable types its result loosely
     const parsed = (result.parsed ?? null) as T | null

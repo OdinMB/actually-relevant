@@ -395,7 +395,9 @@ function CostTable({ run }: { run: ResearchRun }) {
         </table>
       </div>
       <p className="text-neutral-500">
-        Uncached input is counted at {result.prices.cacheWriteFactor} times the input price, an upper bound: the API reports no cache writes.
+        {Object.values(result.prices.models).some(p => p.cacheWrite !== undefined)
+          ? `A call to a model with explicit prompt caching is counted as billed, its cache writes at the write price. Any other model's uncached input is counted at ${result.prices.cacheWriteFactor} times the input price, an upper bound.`
+          : `Uncached input is counted at ${result.prices.cacheWriteFactor} times the input price, an upper bound: the API reports no cache writes.`}
       </p>
       <div>
         <h4 className={H}>Searches</h4>

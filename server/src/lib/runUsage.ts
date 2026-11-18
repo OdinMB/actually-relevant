@@ -20,6 +20,8 @@ export interface RunUsage {
   inputTokens: number
   /** Input tokens served from the prompt cache (part of `inputTokens`). */
   cachedTokens: number
+  /** Input tokens written to the prompt cache (part of `inputTokens`), at the write price. */
+  cacheWriteTokens: number
   outputTokens: number
   /** USD for the calls at the price each was billed at, plus `otherUsd`. */
   costUsd: number
@@ -60,6 +62,7 @@ export const emptyUsage = (): RunUsage => ({
   flexFallbacks: 0,
   inputTokens: 0,
   cachedTokens: 0,
+  cacheWriteTokens: 0,
   outputTokens: 0,
   costUsd: 0,
   standardCostUsd: 0,
@@ -128,17 +131,23 @@ export interface CallRecord {
   tier: 'flex' | 'standard'
   input: number
   cached: number
+  /** Input tokens written to the prompt cache (part of `input`), priced at the write price. */
+  cacheWrite?: number
   output: number
   /** The call was asked at flex, refused as busy and sent at standard price. */
   fellBack: boolean
 }
 
+/** The token counts a call is priced from: cache reads and writes are parts of `input`. */
+export type CallTokens = Pick<CallRecord, 'input' | 'cached' | 'cacheWrite' | 'output'>
+
 /** USD for one call at standard price, or null for a model with no price on record. */
-export function standardCallUsd(model: string, tokens: Pick<CallRecord, 'input' | 'cached' | 'output'>): number | null {
+export function standardCallUsd(model: string, tokens: CallTokens): number | null {
   const price = config.llm.modelPrices[model]
   if (!price) return null
-  const uncached = Math.max(0, tokens.input - tokens.cached)
-  return (uncached * price.input + tokens.cached * price.cached + tokens.output * price.output) / 1_000_000
+  const written = tokens.cacheWrite ?? 0
+  const uncached = Math.max(0, tokens.input - tokens.cached - written)
+  return (uncached * price.input + tokens.cached * price.cached + written * price.cacheWrite + tokens.output * price.output) / 1_000_000
 }
 
 /** Add one call to `scope` and every scope around it. */
@@ -152,6 +161,7 @@ export function recordCall(scope: RunScope, call: CallRecord): void {
     if (call.fellBack) u.flexFallbacks++
     u.inputTokens += call.input
     u.cachedTokens += call.cached
+    u.cacheWriteTokens += call.cacheWrite ?? 0
     u.outputTokens += call.output
     if (standard === null || billed === null) {
       u.unpricedCalls++

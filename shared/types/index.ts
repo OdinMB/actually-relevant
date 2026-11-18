@@ -929,6 +929,8 @@ export interface JobRunUsage {
   flexFallbacks: number
   inputTokens: number
   cachedTokens: number
+  /** Input tokens written to the prompt cache, priced at the write price; absent on runs recorded before 2026-11-18. */
+  cacheWriteTokens?: number
   outputTokens: number
   /** USD at the price each call was billed at, plus other paid services. */
   costUsd: number
@@ -1122,6 +1124,8 @@ export type ResearchCallOutcome = 'ok' | 'parse_failure' | 'empty' | 'truncated'
 export interface ResearchTokenUsage {
   input: number
   cached: number
+  /** Input tokens written to the prompt cache; absent on calls recorded before 2026-11-18. */
+  cacheWrite?: number
   /** Reasoning tokens included. */
   output: number
   reasoning: number
@@ -1272,7 +1276,8 @@ export interface ResearchResult {
   /** Each step's model; a run stored before a step existed has none for it (`derive`, 2026-11-13). */
   models: Partial<Record<ResearchStep, string>>
   prices: {
-    models: Record<string, { input: number; cached: number; output: number }>
+    /** `cacheWrite` absent on runs stored before 2026-11-18. */
+    models: Record<string, { input: number; cached: number; cacheWrite?: number; output: number }>
     cacheWriteFactor: number
     tavilyUsdPerCredit: number
   }

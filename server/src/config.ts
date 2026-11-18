@@ -16,6 +16,14 @@ export function parseEffort(value: string | undefined, fallback: ReasoningEffort
   return effort
 }
 
+/** USD per 1M tokens: uncached input, a cache read, a cache write (instead of `input`), output. */
+export interface ModelPrice {
+  input: number
+  cached: number
+  cacheWrite: number
+  output: number
+}
+
 export const COOKIE_SAME_SITE_VALUES = ['strict', 'lax', 'none'] as const
 export type CookieSameSite = (typeof COOKIE_SAME_SITE_VALUES)[number]
 
@@ -264,14 +272,16 @@ export const config = {
     /**
      * USD per 1M tokens at standard pricing, from the eval's verified table (scripts/eval/models.ts).
      * A job's cost on the Jobs page (lib/runUsage.ts) and story research's cost both read it; a model
-     * without a row is counted as an unpriced call. Check the live pricing page before budgeting.
+     * without a row is counted as an unpriced call. `cacheWrite` is what an input token written to
+     * the prompt cache costs instead of `input`: 1.25 times it from GPT-5.6 on (30-minute lifetime).
+     * Check the live pricing page before budgeting.
      */
     modelPrices: {
-      'gpt-6-luna': { input: 0.1, cached: 0.01, output: 0.5 },
-      'gpt-6-sol': { input: 2.0, cached: 0.2, output: 10.0 },
-      'gpt-6.1-sol': { input: 2.0, cached: 0.2, output: 10.0 },
-      'text-embedding-3-small': { input: 0.02, cached: 0.02, output: 0 },
-    } as Record<string, { input: number; cached: number; output: number } | undefined>,
+      'gpt-6-luna': { input: 0.1, cached: 0.01, cacheWrite: 0.125, output: 0.5 },
+      'gpt-6-sol': { input: 2.0, cached: 0.2, cacheWrite: 2.5, output: 10.0 },
+      'gpt-6.1-sol': { input: 2.0, cached: 0.2, cacheWrite: 2.5, output: 10.0 },
+      'text-embedding-3-small': { input: 0.02, cached: 0.02, cacheWrite: 0.02, output: 0 },
+    } as Record<string, ModelPrice | undefined>,
     /**
      * OpenAI flex processing (.context/llm-analysis.md, "Flex processing"), used by a job whose Flex
      * switch is on: half the token price, slower answers, and calls OpenAI may refuse with 429 when
@@ -341,10 +351,14 @@ export const config = {
      * the research cost stays an upper bound. A step whose model has no row is refused before the run
      * starts, so a tier override never runs uncounted.
      */
-    get modelPrices(): Record<string, { input: number; cached: number; output: number } | undefined> {
+    get modelPrices(): Record<string, ModelPrice | undefined> {
       return config.llm.modelPrices
     },
-    /** Uncached input is billed at this factor: Chat Completions reports no cache writes, so it is an upper bound. */
+    /**
+     * A call to a model without the cache controls (`lib/promptCache.ts`) counts its uncached input at
+     * this factor, an upper bound: OpenAI's default may write it to the cache unasked. A call with the
+     * controls is priced as billed, its cache writes at their own price (`researchCost.ts`).
+     */
     cacheWriteFactor: 1.25,
     /**
      * A `running` run older than this was cut off by a restart, and is marked failed. Above a live run's

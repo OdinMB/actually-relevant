@@ -120,7 +120,22 @@ describe('openAiFetch', () => {
   })
 
   it('reads Responses API usage too', () => {
-    expect(tokensOf({ usage: { input_tokens: 10, output_tokens: 3, input_tokens_details: { cached_tokens: 4 } } })).toEqual({ input: 10, cached: 4, output: 3 })
-    expect(tokensOf({})).toEqual({ input: 0, cached: 0, output: 0 })
+    expect(tokensOf({ usage: { input_tokens: 10, output_tokens: 3, input_tokens_details: { cached_tokens: 4 } } })).toEqual({
+      input: 10,
+      cached: 4,
+      cacheWrite: 0,
+      output: 3,
+    })
+    expect(tokensOf({})).toEqual({ input: 0, cached: 0, cacheWrite: 0, output: 0 })
+  })
+
+  it('reads the tokens written to the cache from Chat Completions and Responses answers', () => {
+    expect(tokensOf({ usage: { prompt_tokens: 10, completion_tokens: 3, prompt_tokens_details: { cached_tokens: 2, cache_write_tokens: 5 } } })).toEqual({
+      input: 10,
+      cached: 2,
+      cacheWrite: 5,
+      output: 3,
+    })
+    expect(tokensOf({ usage: { input_tokens: 10, output_tokens: 3, input_tokens_details: { cache_write_tokens: 6 } } })).toMatchObject({ cacheWrite: 6 })
   })
 })

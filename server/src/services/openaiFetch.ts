@@ -50,14 +50,19 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 const num = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
 
-/** The token counts of a Chat Completions, Responses or Embeddings answer. */
-export function tokensOf(json: unknown): { input: number; cached: number; output: number } {
+/** The token counts of a Chat Completions, Responses or Embeddings answer: cache reads (`cached`) and writes (`cacheWrite`) are parts of `input`. */
+export function tokensOf(json: unknown): { input: number; cached: number; cacheWrite: number; output: number } {
   const usage = (json as { usage?: Record<string, unknown> } | null)?.usage
-  if (!usage) return { input: 0, cached: 0, output: 0 }
+  if (!usage) return { input: 0, cached: 0, cacheWrite: 0, output: 0 }
   // Chat Completions and Embeddings: prompt_/completion_tokens; Responses: input_/output_tokens
   const input = num(usage.prompt_tokens ?? usage.input_tokens)
   const details = (usage.prompt_tokens_details ?? usage.input_tokens_details) as Record<string, unknown> | undefined
-  return { input, cached: num(details?.cached_tokens), output: num(usage.completion_tokens ?? usage.output_tokens) }
+  return {
+    input,
+    cached: num(details?.cached_tokens),
+    cacheWrite: num(details?.cache_write_tokens),
+    output: num(usage.completion_tokens ?? usage.output_tokens),
+  }
 }
 
 /** Record the answered request's tokens in the run, read from a copy so the SDK still gets the body. */
