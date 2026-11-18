@@ -41,6 +41,14 @@ const log = createLogger('research_pass')
  */
 export type PassApplied = 'applied' | 'rejected' | 'stored' | 'skipped' | 'dropped'
 
+/** What became of the result, and why nothing was applied when it was `skipped` or `dropped` (null otherwise). */
+export interface PassApply {
+  applied: PassApplied
+  why: string | null
+}
+
+const CUT_OFF = 'a restart marked the pass cut off before it was stored'
+
 /** The pass row's columns from its result: a later pass stores no gate verdict; the cost is what the meter counted, both attempts included. */
 export function passRow(result: PassResult, spentUsd: number): PassRowResult {
   return {
@@ -85,7 +93,7 @@ function iconHints(version: ArticleVersionData, pool: Pool) {
   return version.research.sources.flatMap(s => (s.host ? [{ host: s.host, favicon: favicons.get(s.id) ?? null }] : []))
 }
 
-export async function applyPass(input: PassApplyInput): Promise<PassApplied> {
+export async function applyPass(input: PassApplyInput): Promise<PassApply> {
   const { storyId, passId, read, result } = input
   const now = input.now ?? new Date()
   const pass = passRow(result, input.spentUsd)
@@ -101,10 +109,11 @@ export async function applyPass(input: PassApplyInput): Promise<PassApplied> {
     pass,
     now,
   }
-  const stored = async (outcome: PassApplied, error?: string): Promise<PassApplied> =>
-    (await store(error ? { ...w, pass: { ...pass, error: pass.error ?? error } } : w)) ? outcome : 'dropped'
+  // `why` (nothing applied) is stored as the pass's error; a pass cut off first is dropped
+  const stored = async (applied: PassApplied, why: string | null = null): Promise<PassApply> =>
+    (await store(why ? { ...w, pass: { ...pass, error: pass.error ?? `not applied: ${why}` } } : w)) ? { applied, why } : { applied: 'dropped', why: CUT_OFF }
 
-  if (!input.applies) return stored('skipped', 'not applied: the step was switched off during the pass')
+  if (!input.applies) return stored('skipped', 'the step was switched off during the pass')
 
   // A first pass's verdict against the story: an editor's pass records it on the pass and leaves the
   // story to the editor; the step's rejects it, only while it is still selected and unwritten
@@ -115,18 +124,18 @@ export async function applyPass(input: PassApplyInput): Promise<PassApplied> {
     const moved =
       !changed && (await transition([storyId], { to: 'rejected', reason }, 'pipeline', { where: { updatedAt: read.updatedAt } })).moved.includes(storyId)
     log.info({ storyId, passId, reason, moved }, 'research pass verdict rejects the story')
-    return stored(moved ? 'rejected' : 'skipped', moved ? undefined : `not applied: ${changed ?? 'the story changed during the pass'}`)
+    return moved ? stored('rejected') : stored('skipped', changed ?? 'the story changed during the pass')
   }
 
   if (!result.version) {
     const outcome = await stored('stored')
-    if (outcome !== 'dropped' && result.outcome === 'update_failed') await notifyUpdateFailed(storyId, result)
+    if (outcome.applied !== 'dropped' && result.outcome === 'update_failed') await notifyUpdateFailed(storyId, result)
     return outcome
   }
 
   const story = await storyColumns(storyId)
   const changed = whyChanged(story, read)
-  if (changed || !story) return stored('skipped', `not applied: ${changed}`)
+  if (changed || !story) return stored('skipped', changed ?? 'the story was deleted during the pass')
   // Updates start with publication: a first pass on a story readers already have is one (the
   // single-source text stays readable), and a rewrite before publication is none
   const first = result.version
@@ -138,13 +147,13 @@ export async function applyPass(input: PassApplyInput): Promise<PassApplied> {
       if (!(await storePassResult(tx, { ...w, version }))) throw new PassCutOff()
     })
   } catch (err) {
-    if (err instanceof PassCutOff) return 'dropped'
+    if (err instanceof PassCutOff) return { applied: 'dropped', why: CUT_OFF }
     throw err
   }
-  if (!written) return stored('skipped', 'not applied: the story changed during the pass')
+  if (!written) return stored('skipped', 'the story changed during the pass')
   void fetchSourceFaviconsInBackground(iconHints(version, result.pool))
   log.info({ storyId, passId, kind: result.kind, actor: input.actor }, 'research pass applied')
-  return 'applied'
+  return { applied: 'applied', why: null }
 }
 
 /** One notice a story, reopened by the next such pass: the article stays as it was, which a person reads. */

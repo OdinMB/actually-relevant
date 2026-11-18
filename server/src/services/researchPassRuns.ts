@@ -155,7 +155,15 @@ function passMeter(claim: PassClaim): RunMeter {
  * story the loader cannot research); or failed outside the pass (its reservation kept).
  */
 export type PassEnd =
-  | { ended: 'completed' | 'failed'; outcome: PassOutcome; applied: PassApplied; triedTwice: boolean; tally: { checked: number; failed: number } }
+  | {
+      ended: 'completed' | 'failed'
+      outcome: PassOutcome
+      applied: PassApplied
+      /** Why nothing was applied (`skipped`, `dropped`); null otherwise. */
+      why: string | null
+      triedTwice: boolean
+      tally: { checked: number; failed: number }
+    }
   | { ended: 'skipped'; reason: string }
   | { ended: 'error'; error: string }
 
@@ -203,9 +211,17 @@ export async function executePass(storyId: string, claim: PassClaim, options: Ex
       result = await runResearchPass(input, deps)
     }
     const applies = options.applies ? await options.applies() : true
-    const applied = await applyPass({ storyId, passId: claim.passId, actor: options.actor, read: options.read, result, spentUsd: meter.spentUsd(), applies })
+    const { applied, why } = await applyPass({
+      storyId,
+      passId: claim.passId,
+      actor: options.actor,
+      read: options.read,
+      result,
+      spentUsd: meter.spentUsd(),
+      applies,
+    })
     log.info({ storyId, passId: claim.passId, kind: result.kind, outcome: result.outcome, applied, costUsd: meter.spentUsd() }, 'research pass finished')
-    return { ended: result.status, outcome: result.outcome, applied, triedTwice, tally: passItemTally(result.record) }
+    return { ended: result.status, outcome: result.outcome, applied, why, triedTwice, tally: passItemTally(result.record) }
   } catch (err) {
     const error = sanitizedError(err)
     log.error({ storyId, passId: claim.passId, error }, 'research pass failed')
@@ -291,7 +307,9 @@ async function passInTask(taskId: string, storyId: string, claimed: { claim: Pas
   // A person waits on it: standard price, never flex
   const scope = createRunScope({ jobName: RESEARCH_PASS_JOB, flex: false })
   const end = await runInScope(scope, () => executePass(storyId, claimed.claim, { actor: 'editor', read: claimed.read }))
-  if (end.ended === 'completed') taskRegistry.increment(taskId, 'completed')
+  // A pass whose result the story never took is no "Researched again": the editor is told why
+  if (end.ended === 'completed' && end.why) taskRegistry.skip(taskId, storyId, `Not applied: ${end.why}`)
+  else if (end.ended === 'completed') taskRegistry.increment(taskId, 'completed')
   else if (end.ended === 'skipped') taskRegistry.skip(taskId, storyId, `Not researched: ${end.reason}`)
   else taskRegistry.increment(taskId, 'failed', end.ended === 'error' ? end.error : 'The pass failed on a technical problem; the pass view shows the error')
   await recordSpend(scope, storyId)

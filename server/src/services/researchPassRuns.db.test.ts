@@ -325,6 +325,23 @@ describeDb('research passes (PostgreSQL)', () => {
     expect(await prisma.articleVersion.count({ where: { storyId: story.id } })).toBe(0)
   })
 
+  it("counts an editor's pass that applied nothing as skipped, with why, not as researched", async () => {
+    const story = await researchable('published')
+    mockPass.runResearchPass.mockImplementation(async () => {
+      await prisma.story.update({ where: { id: story.id }, data: { status: 'selected' } })
+      return passResult()
+    })
+
+    const { taskId } = await startEditorPass(story.id)
+    await vi.waitFor(() => expect(taskRegistry.get(taskId)?.status).toBe('completed'), { timeout: 5000, interval: 20 })
+
+    expect(taskRegistry.get(taskId)).toMatchObject({
+      completed: 0,
+      failed: 0,
+      skipped: [{ storyId: story.id, reason: 'Not applied: the story moved to selected during the run' }],
+    })
+  })
+
   it('stores a pass that ends after the step was switched off without applying it', async () => {
     const story = await researchable()
 
