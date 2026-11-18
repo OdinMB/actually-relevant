@@ -79,7 +79,9 @@ These take effect when the owner switches `research_pass` on, not before:
 Recorded here when answered; until then the work proceeds on the plan's recommendations, all of which
 take effect only at the switch (plan, "For Odin" 1, 4 and 7):
 
-- **The monthly cap:** recommended $60 when the step is switched on (today $30, research only).
+- **The monthly cap, decided 2026-11-18:** $60, set in the change that switches the step on (today
+  $30, research only). Odin also decided the same day that this branch merges only after the whole
+  eval plan (`2026-11-18_prompt-caching-eval-plan.md`) meets its bars.
 - **The after-publish catch-up:** recommended retired; a story published without a pass gets one when
   an editor clicks "Research again".
 - **The methodology paragraph:** the plan's replacement text goes into "Researched Stories" in the
