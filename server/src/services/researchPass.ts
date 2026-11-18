@@ -438,7 +438,8 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
       writer: null,
       record,
       credits: r.credits + spent.credits,
-      modelUsd: [...r.calls, ...context.calls].reduce((sum, c) => sum + c.costUsd, 0),
+      // Every call the pass made, a later pass's judge, rewrite and note among them
+      modelUsd: passCalls(record).reduce((sum, c) => sum + c.costUsd, 0),
       error: null,
       transient: false,
       ...over,

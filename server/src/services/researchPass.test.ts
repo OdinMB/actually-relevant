@@ -503,6 +503,11 @@ describe('runResearchPass, a later pass', () => {
     expect(judge.slice(judge.indexOf('<NEW_FACTS>'))).toContain('Reuters')
     expect(result.record.update?.judgments.every(j => j.outcome === 'unchanged')).toBe(true)
     expect(passCalls(result.record).map(c => c.step)).toContain('judge')
+    // The judge's call is priced with the others, so the cap and the spending line count it
+    expect(result.modelUsd).toBeCloseTo(
+      passCalls(result.record).reduce((sum, c) => sum + c.costUsd, 0),
+      10,
+    )
   })
 
   it('makes no card write when the pool gained no supported fact and lost none', async () => {
