@@ -141,7 +141,7 @@ function updated(over: { second?: unknown; note?: UpdateRecord['note']; checks?:
     record: record({
       judgments: [judgment('Story paragraph 1', 'demoted-fact', ['S1F1']), judgment('Story paragraph 2', 'unchanged'), judgment('Title', 'follows-opening')],
       demoted: [{ ref: 'S1F1', contradictedBy: ['S2F1'], reason: 'Six, not four.' }],
-      note: over.note === undefined ? { text: 'The count is now 6,000.', fallback: false, problems: [], checked: 1, copied: 0 } : over.note,
+      note: over.note === undefined ? { text: 'The count is now 6,000.', fallback: false, problems: [], checked: 1, copied: 0, unsupported: 0 } : over.note,
       checks: over.checks ?? [],
     }),
   }
@@ -208,7 +208,7 @@ describe('scoreUpdates', () => {
     expect(s.listed.falseDemotions.map(f => [f.id, f.ref])).toEqual([['floods:benign', 'S1F2']])
   })
 
-  it('reads the notes: the judged share, the fixed lines, any served note the checks did not pass, and copying against the paragraphs', () => {
+  it('reads the notes: the judged share, the fixed lines, every written note the fact check found unsupported, and copying against the paragraphs', () => {
     const check = (copying: boolean): CheckPass => ({
       problems: copying ? [{ label: 'Story paragraph 1', text: 't', problem: 'repeats', kind: 'copying', by: 'code' }] : [],
       longestRuns: [],
@@ -220,16 +220,34 @@ describe('scoreUpdates', () => {
       run(planted, updated({ checks: [check(true)] }), { accurate: true, complete: false, problem: 'Says nothing of why.' }),
       run(
         planted,
-        updated({ note: { text: 'Updated: Story paragraph 1 rewritten.', fallback: true, problems: ['p'], checked: 2, copied: 2 }, checks: [check(false)] }),
+        updated({
+          note: { text: 'Updated: Story paragraph 1 rewritten.', fallback: true, problems: ['p'], checked: 2, copied: 2, unsupported: 0 },
+          checks: [check(false)],
+        }),
       ),
-      run(planted, updated({ note: { text: 'Bad.', fallback: false, problems: ['fails the fact check'], checked: 1, copied: 0 } }), good),
+      // Served after a repair round replaced a note the fact check found unsupported
+      run(planted, updated({ note: { text: 'Better.', fallback: false, problems: [], checked: 2, copied: 0, unsupported: 1 } }), good),
     ])
     const r = s.runs[0]!
-    expect(r.notes).toEqual({ hit: 1, of: 2, share: 0.5, served: 3, fallback: 1, unsupported: 1 })
-    expect(r.copying).toEqual({ notes: { hit: 2, of: 4, share: 0.5 }, paragraphs: { hit: 1, of: 2, share: 0.5 } })
+    expect(r.notes).toEqual({ hit: 1, of: 2, share: 0.5, served: 3, fallback: { hit: 1, of: 3, share: 1 / 3 }, written: 5, unsupported: 1 })
+    expect(r.copying).toEqual({ notes: { hit: 2, of: 5, share: 0.4 }, paragraphs: { hit: 1, of: 2, share: 0.5 } })
     expect(bar(s, 'unsupported')).toMatchObject({ value: 1, met: false })
-    expect(bar(s, 'copying')).toMatchObject({ value: 0, met: true })
+    expect(bar(s, 'copying').value).toBeCloseTo(-0.1, 10)
+    expect(bar(s, 'copying').met).toBe(true)
     expect(s.listed.notes).toEqual([{ id: 'floods:wrong-number', run: 1, note: 'The count is now 6,000.', problem: 'Says nothing of why.' }])
+  })
+
+  it('fails the unsupported bar on a run of fixed lines served after notes the fact check found unsupported', () => {
+    const fixedAfterUnsupported = updated({
+      note: { text: 'Updated: Story paragraph 1 rewritten.', fallback: true, problems: ['fails the fact check'], checked: 2, copied: 0, unsupported: 2 },
+    })
+    const s = scoreUpdates([run(planted, fixedAfterUnsupported, good), run(planted, fixedAfterUnsupported, good)])
+    expect(s.runs[0]!.notes).toMatchObject({ served: 2, fallback: { hit: 2, of: 2, share: 1 }, written: 4, unsupported: 4 })
+    expect(bar(s, 'unsupported')).toMatchObject({ value: 4, met: false })
+
+    // Fixed lines no fact check read leave the bar unmeasured, and a record stored before the count reads none
+    const unread = updated({ note: { text: 'Updated: Story paragraph 1 rewritten.', fallback: true, problems: ['quotes words'], checked: 0, copied: 0 } })
+    expect(bar(scoreUpdates([run(planted, unread, good)]), 'unsupported')).toMatchObject({ value: null, met: null })
   })
 
   it('counts a stopped case without measuring it, and reads the bars on the mean over the runs', () => {

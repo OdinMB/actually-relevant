@@ -13,7 +13,9 @@
  * - `demoted`: of the planted contradictions, the share whose old fact was demoted; at least 90%.
  * - `false-demotions`: of the cases, the share demoting a fact they do not expect; at most 5%.
  * - `notes`: of the served notes the strong judge read, the share accurate and complete; at least 90%.
- * - `unsupported`: served notes that production's checks did not pass (the fixed line aside); none.
+ * - `unsupported`: of the notes written, every round the fact check read counted (one a repair
+ *   round replaced, and one the fixed line was served after), how many it found unsupported; none.
+ *   The fixed lines' share of the served notes is reported beside it.
  * - `copying`: the share of written notes a copying check flagged, against the rewritten sections'
  *   share; no higher.
  *
@@ -71,7 +73,11 @@ export interface UpdateRunScore {
   identical: Count
   demoted: Count
   falseDemotions: Count
-  notes: Count & { served: number; fallback: number; unsupported: number }
+  /**
+   * The strong judge's verdicts (`hit` good of `of` judged); the notes served, the fixed lines among
+   * them and their share; the notes the fact check read (`written`) and those it found unsupported.
+   */
+  notes: Count & { served: number; fallback: Count; written: number; unsupported: number }
   copying: { notes: Count; paragraphs: Count }
 }
 
@@ -122,7 +128,7 @@ function runScore(run: number, runs: UpdateRun[]): UpdateRunScore {
     tally[k][0] += hit
     tally[k][1] += of
   }
-  const notes = { served: 0, fallback: 0, unsupported: 0, judged: 0, good: 0, checked: 0, copied: 0 }
+  const notes = { served: 0, fallback: 0, unsupported: 0, judged: 0, good: 0, written: 0, copied: 0 }
   for (const r of measured) {
     const { expected, kind } = r.fixture
     const judgments = r.result.record.judgments
@@ -146,13 +152,13 @@ function runScore(run: number, runs: UpdateRun[]): UpdateRunScore {
     if (r.result.next && note) {
       notes.served++
       if (note.fallback) notes.fallback++
-      else if (note.problems.length > 0) notes.unsupported++
       if (r.note) {
         notes.judged++
         if (r.note.accurate && r.note.complete) notes.good++
       }
-      notes.checked += note.checked
+      notes.written += note.checked
       notes.copied += note.copied
+      notes.unsupported += note.unsupported ?? 0
     }
   }
   const c = (k: keyof typeof tally) => count(...tally[k])
@@ -165,8 +171,14 @@ function runScore(run: number, runs: UpdateRun[]): UpdateRunScore {
     identical: c('identical'),
     demoted: c('demoted'),
     falseDemotions: c('falseDemotions'),
-    notes: { ...count(notes.good, notes.judged), served: notes.served, fallback: notes.fallback, unsupported: notes.unsupported },
-    copying: { notes: count(notes.copied, notes.checked), paragraphs: c('paragraphs') },
+    notes: {
+      ...count(notes.good, notes.judged),
+      served: notes.served,
+      fallback: count(notes.fallback, notes.served),
+      written: notes.written,
+      unsupported: notes.unsupported,
+    },
+    copying: { notes: count(notes.copied, notes.written), paragraphs: c('paragraphs') },
   }
 }
 
@@ -195,7 +207,8 @@ const BAR_RULES: { name: UpdateBarName; of: (s: UpdateRunScore) => number | null
   { name: 'demoted', of: s => s.demoted.share, ok: v => v >= DEMOTED_BAR },
   { name: 'false-demotions', of: s => s.falseDemotions.share, ok: v => v <= FALSE_DEMOTION_BAR },
   { name: 'notes', of: s => s.notes.share, ok: v => v >= NOTE_BAR },
-  { name: 'unsupported', of: s => (s.notes.served === 0 ? null : s.notes.unsupported), ok: v => v === 0 },
+  // Unmeasured only when the fact check read no note: a run of fixed lines after unsupported notes fails
+  { name: 'unsupported', of: s => (s.notes.written === 0 ? null : s.notes.unsupported), ok: v => v === 0 },
   { name: 'copying', of: copyingGap, ok: v => v <= 0 },
 ]
 

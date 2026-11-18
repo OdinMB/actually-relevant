@@ -89,10 +89,12 @@ export interface UpdateRecord {
   failedOn: string | null
   /**
    * The note served, whether it is the fixed line, what the checks found on the last note written,
-   * and of the notes written, how many the fact check and copying checks ran on (`checked`) and how
-   * many of those a copying check flagged (`copied`): the eval's copying bar.
+   * and of the notes written, how many the fact check and copying checks ran on (`checked`), how
+   * many of those a copying check flagged (`copied`: the eval's copying bar) and how many the fact
+   * check found unsupported (`unsupported`: its "none unsupported" bar, a round repaired after
+   * included). A record stored before `unsupported` reads it as absent.
    */
-  note: { text: string; fallback: boolean; problems: string[]; checked: number; copied: number } | null
+  note: { text: string; fallback: boolean; problems: string[]; checked: number; copied: number; unsupported?: number } | null
   /** Why the step failed, safe to store. */
   error: string | null
 }
@@ -285,8 +287,7 @@ async function writeNote(n: NoteContext, record: UpdateRecord): Promise<CitedTex
     buildResearchedStory({ draft: { story: [], whyThisMatters: [{ text, factIds }], caveats: [], quoteSourceId: '' }, ...view }).whyThisMatters[0]!
 
   let previous: NoteInput['problems']
-  let checked = 0
-  let copied = 0
+  const counts = { checked: 0, copied: 0, unsupported: 0 }
   for (let round = 0; round < 2; round++) {
     const res = await n.call('note', noteSchema, buildNotePrompt({ changes, facts, ...(previous ? { problems: previous } : {}) }))
     if (res.parsed === null) break
@@ -296,16 +297,17 @@ async function writeNote(n: NoteContext, record: UpdateRecord): Promise<CitedTex
     const found = coded.length > 0 ? null : await checkedNote({ text, factIds }, checkFacts, n.ctx, n.research)
     if (found === 'skipped') break
     if (found) {
-      checked++
-      if (found.some(p => p.kind === 'copying')) copied++
+      counts.checked++
+      if (found.problems.some(p => p.kind === 'copying')) counts.copied++
+      if (found.unsupported) counts.unsupported++
     }
-    const problems = found ? found.map(p => p.problem) : coded
+    const problems = found ? found.problems.map(p => p.problem) : coded
     if (problems.length === 0) {
-      record.note = { text, fallback: false, problems: [], checked, copied }
+      record.note = { text, fallback: false, problems: [], ...counts }
       return cite(text, factIds)
     }
     previous = { text, problems }
-    record.note = { text, fallback: true, problems, checked, copied }
+    record.note = { text, fallback: true, problems, ...counts }
   }
 
   // The fixed line, citing the new or demoted facts the changed sections rest on, and naming their outlets
@@ -316,17 +318,21 @@ async function writeNote(n: NoteContext, record: UpdateRecord): Promise<CitedTex
     return f && !n.demoted.has(ref) ? [sources.get(f.sourceRef)?.outlet ?? ''] : []
   })
   const text = fallbackNote(n.changes, outlets)
-  record.note = { text, fallback: true, problems: record.note?.problems ?? [], checked, copied }
+  record.note = { text, fallback: true, problems: record.note?.problems ?? [], ...counts }
   return cite(text, newer)
 }
 
-/** The note's fact check and both copying checks, as a story paragraph's; `skipped` when the budget skipped the call. */
+/**
+ * The note's fact check and both copying checks, as a story paragraph's: their problems, and whether
+ * the fact check found the note unsupported (a failed call is a problem, not that verdict); `skipped`
+ * when the budget skipped the call.
+ */
 async function checkedNote(
   note: { text: string; factIds: string[] },
   facts: ReadonlyMap<string, CitableFact>,
   ctx: CheckContext,
   call: StepCaller,
-): Promise<Pick<CitationProblem, 'problem' | 'kind'>[] | 'skipped'> {
+): Promise<{ problems: Pick<CitationProblem, 'problem' | 'kind'>[]; unsupported: boolean } | 'skipped'> {
   const item: DraftItem = { part: 'note', label: NOTE_LABEL, text: note.text, cited: true, factIds: note.factIds }
   const evidence = evidenceFor(note.factIds, facts)
   const hints = numberHints(note.text, evidence)
@@ -338,6 +344,7 @@ async function checkedNote(
     buildFactCheckPrompt([{ label: NOTE_LABEL, text: note.text, facts: evidence, numbersNotFound: hints }], lines, [...facts.values()]),
   )
   if (res.outcome === 'skipped') return 'skipped'
-  if (res.parsed === null) return [...copying.problems, { problem: `fact-check: ${res.outcome}`, kind: 'fact' }]
-  return [...copying.problems, ...judgedProblems(res.parsed, [{ item, evidence, numberHints: hints }], lines)]
+  if (res.parsed === null) return { problems: [...copying.problems, { problem: `fact-check: ${res.outcome}`, kind: 'fact' }], unsupported: false }
+  const judged = judgedProblems(res.parsed, [{ item, evidence, numberHints: hints }], lines)
+  return { problems: [...copying.problems, ...judged], unsupported: judged.some(p => p.kind === 'fact') }
 }

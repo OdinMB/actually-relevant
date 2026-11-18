@@ -27,7 +27,11 @@ const BAR_TEXT: Record<UpdateBarName, { measure: string; bar: string; show: (v: 
   demoted: { measure: 'Planted contradictions whose old fact was demoted', bar: `at least ${pct(DEMOTED_BAR)}`, show: pct },
   'false-demotions': { measure: 'Cases demoting a fact they do not expect', bar: `at most ${pct(FALSE_DEMOTION_BAR)}`, show: pct },
   notes: { measure: 'Served notes the strong judge finds accurate and complete', bar: `at least ${pct(NOTE_BAR)}`, show: pct },
-  unsupported: { measure: "Served notes production's checks did not pass (the fixed line aside)", bar: 'none', show: v => num(v, 1) },
+  unsupported: {
+    measure: "Notes written that production's fact check found unsupported (each round, a replaced note and one before a fixed line too)",
+    bar: 'none',
+    show: v => num(v, 1),
+  },
   copying: { measure: "Notes' copying-flag share less the rewritten sections' share", bar: 'at most 0', show: v => `${(v * 100).toFixed(1)} points` },
 }
 
@@ -39,7 +43,7 @@ const barRow = (b: UpdateBar) => {
 const share = (c: { hit: number; of: number; share: number | null }) => `${c.hit} / ${c.of} (${pct(c.share)})`
 
 const runRow = (s: UpdateRunScore) =>
-  `| ${s.run} | ${s.cases} | ${s.outcomes.updated} / ${s.outcomes.unchanged} / ${s.outcomes.update_failed} / ${s.outcomes.budget + s.outcomes.technical} | ${share(s.flagged)} | ${share(s.falseRewrites)} | ${share(s.identical)} | ${share(s.demoted)} | ${share(s.falseDemotions)} | ${share(s.notes)}; ${s.notes.fallback} fixed lines | ${share(s.copying.notes)} vs ${share(s.copying.paragraphs)} |`
+  `| ${s.run} | ${s.cases} | ${s.outcomes.updated} / ${s.outcomes.unchanged} / ${s.outcomes.update_failed} / ${s.outcomes.budget + s.outcomes.technical} | ${share(s.flagged)} | ${share(s.falseRewrites)} | ${share(s.identical)} | ${share(s.demoted)} | ${share(s.falseDemotions)} | ${share(s.notes)} | ${share(s.notes.fallback)} | ${s.notes.unsupported} / ${s.notes.written} | ${share(s.copying.notes)} vs ${share(s.copying.paragraphs)} |`
 
 export function updateLines(r: UpdateStepReport): string[] {
   const judge = r.judge
@@ -67,8 +71,8 @@ export function updateLines(r: UpdateStepReport): string[] {
     '',
     '### Per run',
     '',
-    '| Run | Cases | Updated / unchanged / failed / stopped | Flagged | False rewrites | Identical | Demoted | False demotions | Notes good | Copying: notes vs sections |',
-    '|---|---|---|---|---|---|---|---|---|---|',
+    '| Run | Cases | Updated / unchanged / failed / stopped | Flagged | False rewrites | Identical | Demoted | False demotions | Notes good | Fixed lines served | Notes unsupported / written | Copying: notes vs sections |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...r.score.runs.map(runRow),
     '',
     '### For a read',

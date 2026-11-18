@@ -198,7 +198,14 @@ describe('updateArticle', () => {
         { sourceId: 'S1', sentence: 'Smoke closed 40 schools. (as reported)' },
       ],
     })
-    expect(r.record.note).toEqual({ text: 'The education ministry counted 12 closed schools, not 40.', fallback: false, problems: [], checked: 1, copied: 0 })
+    expect(r.record.note).toEqual({
+      text: 'The education ministry counted 12 closed schools, not 40.',
+      fallback: false,
+      problems: [],
+      checked: 1,
+      copied: 0,
+      unsupported: 0,
+    })
     // The rewrite is asked for the flagged section alone; the checks read it, then the note
     const update = fake.calls.find(c => c.step === 'update')!.prompt
     const repairs = update.slice(update.lastIndexOf('<REPAIRS>'), update.lastIndexOf('</REPAIRS>'))
@@ -276,6 +283,7 @@ describe('updateArticle', () => {
       problems: ['quotes words; an Update has no quotation marks'],
       checked: 0,
       copied: 0,
+      unsupported: 0,
     })
     expect(fake.steps().filter(s => s === 'note')).toHaveLength(2)
     expect(fake.calls[fake.calls.length - 1]!.prompt).toContain('<PREVIOUS>')
@@ -289,7 +297,19 @@ describe('updateArticle', () => {
       return { items: answer.items.map(i => ({ ...i, copiedSentence: 'S5F2' })) }
     }
     const r = await updateArticle(input(), fakeDeps({ ...defaults, 'fact-check': copyingOnce }).deps)
-    expect(r.record.note).toMatchObject({ fallback: false, checked: 2, copied: 1 })
+    expect(r.record.note).toMatchObject({ fallback: false, checked: 2, copied: 1, unsupported: 0 })
+  })
+
+  it('counts the notes the fact check found unsupported, the fixed line served after them', async () => {
+    const r = await updateArticle(input(), fakeDeps({ ...defaults, 'fact-check': checking(['Update note']) }).deps)
+    expect(r.next!.note.text).toBe('Updated: Story paragraph 2 rewritten after new reporting from Agency.')
+    expect(r.record.note).toMatchObject({ fallback: true, checked: 2, copied: 0, unsupported: 2 })
+
+    // A failed fact-check call is a problem with the note, not a verdict that it is unsupported
+    let calls = 0
+    const failingOnNote: Answer = prompt => (prompt.includes('label="Update note"') && calls++ === 0 ? null : checking()(prompt))
+    const failed = await updateArticle(input(), fakeDeps({ ...defaults, 'fact-check': failingOnNote }).deps)
+    expect(failed.record.note).toMatchObject({ fallback: false, checked: 2, unsupported: 0 })
   })
 
   it('ends on the budget when a call is skipped, and as a technical failure when one fails', async () => {

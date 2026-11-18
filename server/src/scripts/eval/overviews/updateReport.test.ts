@@ -32,6 +32,25 @@ describe('updateLines', () => {
     expect(text).toContain('| Cases demoting a fact they do not expect | at most 5.0% |')
   })
 
+  it('gives each run its fixed lines served and its notes the fact check found unsupported', () => {
+    const c = (hit: number, of: number) => ({ hit, of, share: of === 0 ? null : hit / of })
+    const run = {
+      run: 1,
+      cases: 2,
+      outcomes: { updated: 2, unchanged: 0, update_failed: 0, budget: 0, technical: 0 },
+      flagged: c(2, 2),
+      falseRewrites: c(0, 1),
+      identical: c(4, 4),
+      demoted: c(1, 1),
+      falseDemotions: c(0, 2),
+      notes: { ...c(1, 2), served: 2, fallback: c(1, 2), written: 3, unsupported: 2 },
+      copying: { notes: c(0, 3), paragraphs: c(0, 2) },
+    }
+    const text = updateLines(report({ score: { ...scoreUpdates([]), runs: [run] } })).join('\n')
+    expect(text).toContain('| Notes good | Fixed lines served | Notes unsupported / written |')
+    expect(text).toContain('| 1 / 2 (50.0%) | 1 / 2 (50.0%) | 2 / 3 |')
+  })
+
   it('says when the judge did not run, and gives the report its section', () => {
     const stopped = report({ judge: { estimate: { calls: 2, uncached: 2, usd: 0.05 }, stopped: '2 uncached calls and OPENAI_API_KEY is missing' } })
     expect(updateLines(stopped).join('\n')).toContain('**The strong judge did not run:** 2 uncached calls and OPENAI_API_KEY is missing')

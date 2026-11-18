@@ -235,10 +235,10 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval -
   | Planted contradictions whose old fact was demoted | at least 90% |
   | Cases demoting a fact they do not expect | at most 5% |
   | Served notes the strong judge finds accurate and complete | at least 90% |
-  | Served notes production's checks did not pass (the fixed line aside) | none |
+  | Notes written that production's fact check found unsupported: every round it read counts, a note a repair round replaced and one the fixed line was served after too, so a run of fixed lines after unsupported notes fails; unmeasured when it read none | none |
   | Notes' copying-flag share (of the notes the checks ran on) against the rewritten sections' | no higher |
 
-  The report lists up to 30 missed changes, false rewrites, false demotions and notes judged short. The gate is the judged half, means over 3 runs (ADR-0066), beside the `context` step's bars.
+  Each run's row also gives the fixed lines' share of the served notes. The report lists up to 30 missed changes, false rewrites, false demotions and notes judged short. The gate is the judged half, means over 3 runs (ADR-0066), beside the `context` step's bars.
 
 ### `fact-check`: planted errors
 
