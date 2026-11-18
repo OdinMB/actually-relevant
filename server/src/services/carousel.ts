@@ -1,6 +1,6 @@
 import { createCanvas, GlobalFonts, type SKRSContext2D } from '@napi-rs/canvas'
 import PDFDocument from 'pdfkit'
-import archiver from 'archiver'
+import { ZipArchive } from 'archiver'
 import { createWriteStream, mkdirSync, unlinkSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -249,7 +249,7 @@ export function generateCarouselPdf(imagePaths: string[], outputPath: string): P
 function createZip(filePaths: string[], outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const output = createWriteStream(outputPath)
-    const archive = archiver('zip', { zlib: { level: 9 } })
+    const archive = new ZipArchive({ zlib: { level: 9 } })
 
     output.on('close', resolve)
     archive.on('error', reject)
