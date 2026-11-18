@@ -3,8 +3,9 @@
  * article a version holds, each section with its cited pool facts (read from the projection's
  * citations for a legacy version, which stored none); each section's cited text as readers see it;
  * the next version a later pass makes, whose projection keeps every section it did not rewrite as
- * readers saw it; and the Updates readers get from a story's versions. Pure: the undo and the reverts
- * are written by `articleVersionWrites.ts`.
+ * readers saw it; which version an undo restores and the columns it writes back; and the Updates
+ * readers get from a story's versions, with the sources they cite. Pure: the undo and the reverts are
+ * written by `researchApply.ts` and `articleVersionWrites.ts`.
  */
 import { utcDay } from '../lib/days.js'
 import { EMOTION_TAGS } from '../schemas/llm.js'
@@ -13,7 +14,7 @@ import { draftItems, LABELS } from './researchChecks.js'
 import type { Citation, CitedText, ResearchedSource, ResearchedStory } from './researchedStory.js'
 import type { ArticleText } from './researchPipeline.js'
 import type { Article, ArticleVersionData, Pool, VersionChange, VersionFields } from './researchPool.js'
-import { researchedValues } from './researchSwap.js'
+import { researchedValues, type SwappedValues } from './researchSwap.js'
 
 /** A draft's published fields with their cited facts: the article a version keeps. */
 export function articleOf(draft: Pick<Draft, keyof ArticleText | 'emotionTag'>): Article {
@@ -198,4 +199,48 @@ export function publicUpdates(versions: (Pick<ArticleVersionData, 'number' | 'ki
       note: v.note!,
       changes: v.changes.filter(c => isPageSection(c.section)).map(c => ({ section: c.section, before: c.before })),
     }))
+}
+
+/**
+ * The sources the Updates' notes and earlier texts cite, beside the current projection's: each
+ * version's projection lists what its own text cites, so an earlier text's sources are in the version
+ * before, and a note cites only facts its changed sections rest on now or rested on before. By id,
+ * the newest version's entry first.
+ */
+export function updateSources(versions: Pick<ArticleVersionData, 'number' | 'status' | 'research'>[]): ResearchedSource[] {
+  const byId = new Map<string, ResearchedSource>()
+  for (const v of [...versions].filter(x => x.status !== 'reverted').sort((a, b) => b.number - a.number)) {
+    for (const s of v.research.sources) if (!byId.has(s.id)) byId.set(s.id, s)
+  }
+  return [...byId.values()]
+}
+
+/**
+ * What undoing the current version restores (an editor's "Undo this update"): the current version,
+ * which must be an update, and the newest earlier one not reverted; else why there is nothing to undo.
+ */
+export function undoPlan<V extends Pick<ArticleVersionData, 'number' | 'kind' | 'status'>>(versions: V[]): { current: V; previous: V } | { refused: string } {
+  const current = versions.find(v => v.status === 'current')
+  if (!current) return { refused: 'This story has no current researched version' }
+  if (current.kind !== 'update') return { refused: 'Only an update can be undone; the current version is the first researched one' }
+  const previous = versions.filter(v => v.number < current.number && v.status === 'superseded').sort((a, b) => b.number - a.number)[0]
+  if (!previous) return { refused: 'No earlier version is left to restore' }
+  return { current, previous }
+}
+
+/** The story columns a version writes back, as an apply writes them; a version without a known emotion tag leaves the story's. */
+export function versionValues(v: VersionFields): SwappedValues {
+  const tag = emotionTagOf(v.emotionTag)
+  return {
+    title: v.title,
+    titleLabel: v.titleLabel,
+    summary: v.summary,
+    quote: v.quote,
+    quoteAttribution: v.quoteAttribution,
+    marketingBlurb: v.marketingBlurb,
+    relevanceReasons: v.relevanceReasons,
+    relevanceSummary: null,
+    antifactors: v.antifactors,
+    ...(tag !== undefined && { emotionTag: tag }),
+  }
 }
