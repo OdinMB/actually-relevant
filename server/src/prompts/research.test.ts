@@ -5,7 +5,6 @@ import {
   buildFactCheckPrompt,
   buildRepairPrompt,
   buildWritePrompt,
-  factsOfItems,
   LATEST_STATE,
   type CheckedItem,
   type PoolSourceBrief,
@@ -117,18 +116,9 @@ describe('the fact check shows each fact once', () => {
     ])
   })
 
-  it('holds the pool when an item is judged against it, and only the cited facts when none is', () => {
-    expect(factsOfItems(items, pool).map(x => x.id)).toEqual(['S1F1', 'S1F2', 'S2F1'])
-    expect(factsOfItems(items.slice(1, 2), pool).map(x => x.id)).toEqual(['S2F1', 'S1F1'])
-    expect(factsOfItems([{ label: 'Key quote', text: 'Q', facts: [], numbersNotFound: [] }], pool)).toEqual([])
-  })
-
-  it('refuses two different facts under one id, or a cited fact outside the pool beside an item judged against it', () => {
-    expect(() => factsOfItems([items[0]!, { label: 'Story paragraph 2', text: 'Two.', facts: [f('S1F1', 'Other.')], numbersNotFound: [] }], pool)).toThrow(
-      /share the id S1F1/,
-    )
-    expect(() => factsOfItems([{ label: 'Story paragraph 1', text: 'One.', facts: [f('S9F1')], numbersNotFound: [] }, items[2]!], pool)).toThrow(
-      /not in the pool/,
-    )
+  it('refuses two different facts under one id (`factsOfItems`)', () => {
+    expect(() =>
+      buildFactCheckPrompt([items[0]!, { label: 'Story paragraph 2', text: 'Two.', facts: [f('S1F1', 'Other.')], numbersNotFound: [] }], [], pool),
+    ).toThrow(/share the id S1F1/)
   })
 })

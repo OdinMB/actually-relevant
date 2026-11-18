@@ -122,7 +122,8 @@ export interface CheckedDraftItem {
   /**
    * The title, summary and blurb: they carry no citations yet state the development, so the fact
    * check judges them against every fact of the pool (2026-11-13, ADR-0057's amendment "headline,
-   * summary and blurb"), which its prompt shows once (`<POOL>`), not per item.
+   * summary and blurb"). Its prompt shows each fact once in `<FACTS>` (`factsOfItems`) and marks
+   * such an item `<AGAINST_POOL/>`, not per item.
    */
   againstPool?: boolean
   /**
@@ -152,6 +153,34 @@ export function checkedItems(draft: DraftParts, facts: ReadonlyMap<string, PoolF
     const evidence = evidenceFor(item.factIds, facts)
     return { item, evidence, numberHints: numberHints(item.text, evidence) }
   })
+}
+
+const sameFact = (a: PoolFact, b: PoolFact) => a.statement === b.statement && a.supportingSentence === b.supportingSentence && a.measures === b.measures
+
+/**
+ * Every fact the items' evidence holds, each once in the order first met, as the fact check's
+ * prompt shows them (each item lists its own by id); `'pool'` marks an item judged against `pool`.
+ * With such an item it is the pool, which holds every cited fact: what an AGAINST_POOL item is
+ * judged against is then exactly the pool. Ids name one fact each in every caller; a clash, or a
+ * cited fact outside the pool, is a bug and throws rather than show an item other evidence than it had.
+ */
+export function factsOfItems(items: { facts: PoolFact[] | 'pool' }[], pool: PoolFact[]): PoolFact[] {
+  const againstPool = items.some(item => item.facts === 'pool')
+  const byId = new Map<string, PoolFact>()
+  const add = (f: PoolFact) => {
+    const known = byId.get(f.id)
+    if (known && !sameFact(known, f)) throw new Error(`fact check: two facts share the id ${f.id}`)
+    byId.set(f.id, f)
+  }
+  if (againstPool) pool.forEach(add)
+  for (const item of items) {
+    if (item.facts === 'pool') continue
+    for (const f of item.facts) {
+      if (againstPool && !byId.has(f.id)) throw new Error(`fact check: ${f.id} is cited but not in the pool`)
+      add(f)
+    }
+  }
+  return [...byId.values()]
 }
 
 function citationProblems(item: DraftItem, facts: ReadonlyMap<string, PoolFact>): string[] {

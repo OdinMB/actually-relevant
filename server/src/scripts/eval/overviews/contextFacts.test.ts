@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { numberHints } from '../../../services/researchChecks.js'
+import { buildFactCheckPromptParts } from '../../../prompts/research.js'
+import { factsOfItems, numberHints, publishedFact } from '../../../services/researchChecks.js'
 import { factCheckItems, renderFact } from '../../../services/storyContextChecks.js'
 import { contextFact, contextResult } from '../../../test/contextFixtures.js'
 import { contextCheckedItem, contextFactFixtures, contextVariants } from './contextFacts.js'
@@ -64,12 +65,27 @@ describe('contextVariants', () => {
 })
 
 describe('contextCheckedItem', () => {
-  it("carries production's evidence and number hints for the text shown", () => {
+  it("carries production's evidence, named by the item's place, and number hints for the text shown", () => {
     const [production] = factCheckItems([fire])
     const same = contextCheckedItem(fire, renderFact(fire), 3)
-    expect(same).toEqual({ label: 'Fact 3', text: renderFact(fire), facts: production!.evidence, numbersNotFound: production!.numberHints })
+    const [own] = production!.evidence
+    expect(same).toEqual({
+      label: 'Fact 3',
+      text: renderFact(fire),
+      facts: [{ ...own!, id: 'S3F1' }, ...publishedFact('S3', fire.source.outlet, fire.source.date)],
+      numbersNotFound: production!.numberHints,
+    })
     const planted = contextCheckedItem(fire, 'Total area burned: 4.32 million hectares', 1)
     expect(planted.numbersNotFound).toEqual(numberHints('Total area burned: 4.32 million hectares', production!.evidence))
+  })
+
+  it("keeps two stories' facts that share a ref apart in one call", () => {
+    const other = contextFact('S0F1', { supportingSentence: 'Floods covered 40,000 hectares on Monday.', source: { ...fire.source, date: '2026-11-12' } })
+    const items = [contextCheckedItem(fire, renderFact(fire), 1), contextCheckedItem(other, renderFact(other), 2)]
+    const facts = factsOfItems(items, [])
+    expect(facts.map(f => f.supportingSentence)).toEqual(expect.arrayContaining([fire.supportingSentence, other.supportingSentence]))
+    expect(new Set(facts.map(f => f.id)).size).toBe(facts.length)
+    expect(() => buildFactCheckPromptParts(items, [], [])).not.toThrow()
   })
 
   it('is what checkedItem builds for a module-1 variant', () => {

@@ -6,6 +6,7 @@ import {
   draftItems,
   dropFailing,
   evidenceFor,
+  factsOfItems,
   judgedProblems,
   publishedDay,
   publishedFact,
@@ -131,6 +132,24 @@ describe('checkedItems', () => {
       ['Summary', pool, true, ['99']],
       ['Blurb', pool, true, []],
     ])
+  })
+})
+
+describe('factsOfItems', () => {
+  const f = (id: string, statement = `Fact ${id}.`): PoolFact => ({ id, statement, supportingSentence: `Sentence of ${id}.`, measures: '' })
+  const pool = [f('S1F1'), f('S1F2'), f('S2F1')]
+  const items: { facts: PoolFact[] | 'pool' }[] = [{ facts: [f('S1F1'), f('S1F2')] }, { facts: [f('S2F1'), f('S1F1')] }, { facts: 'pool' }]
+
+  it('holds the pool when an item is judged against it, and only the cited facts when none is', () => {
+    expect(factsOfItems(items, pool).map(x => x.id)).toEqual(['S1F1', 'S1F2', 'S2F1'])
+    expect(factsOfItems(items.slice(1, 2), pool).map(x => x.id)).toEqual(['S2F1', 'S1F1'])
+    expect(factsOfItems([{ facts: [] }], pool)).toEqual([])
+  })
+
+  it('refuses two different facts under one id, or a cited fact outside the pool beside an item judged against it', () => {
+    expect(() => factsOfItems([items[0]!, { facts: [f('S1F1', 'Other.')] }], pool)).toThrow(/share the id S1F1/)
+    expect(() => factsOfItems([{ facts: [{ ...f('S1F1'), measures: 'what it counts' }] }, items[0]!], [])).toThrow(/share the id S1F1/)
+    expect(() => factsOfItems([{ facts: [f('S9F1')] }, items[2]!], pool)).toThrow(/not in the pool/)
   })
 })
 

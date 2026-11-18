@@ -8,7 +8,7 @@
 import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
 import { buildGuidelinesXml, EMOTION_TAGS_PROMPT_BLOCK, escapeXml } from './shared.js'
 import type { AssessPromptInput } from '../services/promptInputs.js'
-import { publishedDay, type PoolFact, type QuoteCheck } from '../services/researchChecks.js'
+import { factsOfItems, publishedDay, type PoolFact, type QuoteCheck } from '../services/researchChecks.js'
 import { quoteId, type SourceLine } from '../services/researchCopying.js'
 import type { RepairTarget } from '../services/researchRepair.js'
 
@@ -568,7 +568,7 @@ export interface CheckedItem {
   /**
    * The item's evidence (`evidenceFor`), empty for a bullet that cites nothing and the key quote; or
    * `'pool'` for the title, summary and blurb, judged against every fact (`againstPool`). The prompt
-   * shows each fact once in <FACTS> (`factsOfItems`) and the item lists its evidence by id.
+   * shows each fact once in <FACTS> (`factsOfItems`, `researchChecks.ts`) and the item lists its evidence by id.
    */
   facts: PoolFact[] | 'pool'
   /** The numbers the code did not find in the item's evidence digit for digit (`checkedItems`): hints the check judges. */
@@ -597,32 +597,6 @@ const checkedFact = (f: PoolFact) =>
 /** An item's evidence: the ids of the facts it cites with their sources' others, in that order, or the mark that it is every fact in <FACTS>. */
 const itemEvidence = (facts: PoolFact[] | 'pool') =>
   facts === 'pool' ? '\n<AGAINST_POOL/>' : facts.length === 0 ? '' : `\n${tag('EVIDENCE', facts.map(f => f.id).join(', '))}`
-
-/**
- * Every fact an item's evidence holds, each once in the order first met (each item lists its own by
- * id). With an item judged against the pool it is the pool, which holds every cited fact: what an
- * AGAINST_POOL item is judged against is then exactly the pool. Ids name one fact each in every
- * caller; a clash, or a cited fact outside the pool, is a bug and throws rather than show an item
- * other evidence than it had.
- */
-export function factsOfItems(items: CheckedItem[], pool: PoolFact[]): PoolFact[] {
-  const againstPool = items.some(item => item.facts === 'pool')
-  const byId = new Map<string, PoolFact>()
-  const add = (f: PoolFact) => {
-    const known = byId.get(f.id)
-    if (known && checkedFact(known) !== checkedFact(f)) throw new Error(`fact check: two facts share the id ${f.id}`)
-    byId.set(f.id, f)
-  }
-  if (againstPool) pool.forEach(add)
-  for (const item of items) {
-    if (item.facts === 'pool') continue
-    for (const f of item.facts) {
-      if (againstPool && !byId.has(f.id)) throw new Error(`fact check: ${f.id} is cited but not in the pool`)
-      add(f)
-    }
-  }
-  return [...byId.values()]
-}
 
 /** Every fact once; nothing in a call whose items have no evidence. */
 function factsBlockOfCheck(facts: PoolFact[]): string {
