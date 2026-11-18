@@ -121,7 +121,9 @@ export interface ExtractionOptions {
  *
  * Cache: on. The rules come to over 1,024 tokens with the output schema, and a run extracts each
  * of its sources, several calls within the cache's 30 minutes (the first parallel batch on a cold
- * cache all write). The story, fixed for the run, and the source follow the breakpoint.
+ * cache all write). The story, fixed for the run, and the source follow the breakpoint. A
+ * research pass's extraction (`structured`) adds the structure step's rules, about 2,050 tokens
+ * with its schema, still one stable part for every source of the pass.
  */
 export function buildExtractionPromptParts(input: ExtractionInput, options: ExtractionOptions = {}): PromptParts {
   const s = input.source

@@ -10,6 +10,43 @@ Each prompt follows Role + Goal + Constraints:
 2. `<GOAL>` — What to produce, with key constraints inline (e.g., the fields a rating depends on)
 3. Constraint sections — XML-tagged blocks for guidelines, requirements, criteria
 
+## House order
+
+Every prompt is laid out for the prompt cache, cached or not (owner, 2026-11-18: one structure everywhere, valued above an extra calibration run; ADR-0069):
+
+1. **Fixed first**: the role, goal, rules, examples and the task, byte for byte the same on every call.
+2. **Fixed for the run next**: blocks every call of one run shares (the issue list of a pre-assessment run, the story a research run extracts for).
+3. **Per call last**: the article, the stories, the facts, the draft.
+4. **The call's values in a closing `<REQUEST>` block.** A date, count, character limit or id a rule needs is never written into the rule: the rule names the block ("Select exactly as many articles as `<REQUEST>` asks for", "before the old-news date `<REQUEST>` gives"), and `<REQUEST>` at the end holds the values. So the rules stay one string, and a value can never end up above the breakpoint.
+
+Each builder's doc comment states `Cache: on` or `Cache: off` with the reason, and its house order. Reordering is meant to keep each prompt's meaning: every rule, block and value is still there, only placed differently. A wording change made for the move (a rule that said "above" now names the block it means) keeps its sense. Each changed prompt still goes through its eval ("Checking a changed prompt" below), since order can shift a model's answers.
+
+## Prompt caching
+
+How the cache is asked for and priced is in `.context/llm-analysis.md`, "Prompt caching". The decision per prompt:
+
+- **On** when both hold: the stable part (fixed and run-fixed blocks, plus the response schema, which OpenAI counts in the prefix) reaches the cache's 1,024-token minimum, and the same stable part is sent at least twice within the cache's 30 minutes (several calls in one run, or one call per story of a daily-edition batch). A cached builder has `build…PromptParts()` returning `{ stable, data }` (`promptParts`), and the plain `build…Prompt()` returns their joined text, which versions and tests read. A write costs 1.25 times the input price once, a read 0.1 times after it; parallel first calls on a cold cache all write.
+- **Off** otherwise: one call a run (selection, newsletter, podcast), or rules under the minimum (dedup, social posts, related stories, the research queries, earlier coverage and derived fields, the later pass's note). Off is a plain string with no breakpoint, which explicit mode never writes.
+- **At the minimum** (about 1,050 tokens): on where a run repeats it many times (the context structure call, the later pass's judge); off for reclassification, an editor's rare bulk action, where the saving is small and the prefix may fall under the minimum.
+
+On today: full assessment, pre-assessment, research's extraction (a pass's with the structured fields too), write, repair and fact check, the context structure, gap list, extraction and card write, and a later pass's judge and update.
+
+**The prefix test.** `prompts/cachedPrompts.test.ts` holds every cached builder: two calls with different inputs share one stable part, the stable part holds none of the call's values, and the stable part plus the data is the plain builder's text. Add a builder there when it turns cached; a rule that interpolates a per-call value fails it.
+
+## Checking a changed prompt
+
+| Prompt | Check |
+|------|-------|
+| Pre-assessment, full assessment, dedup | `eval:recalibrate --steps preassess,assess` (and `dedup`), on a fresh sample with `--repeat 3` (`.context/model-eval.md`, "A rating-prompt change on a fresh sample") |
+| Reclassification, Actually Uplifting selection | `eval:recalibrate --steps reclassify`, `--steps uplifting-select` |
+| Selection, podcast selection and dialogue, social posts | `eval:recalibrate --steps selection`, `podcast`, `social-post`; newsletter selection with `eval:models --suites large` |
+| Related stories | `eval:models --suites related` |
+| Research's steps | `eval:research`; the fact check also `eval:overviews --steps fact-check` |
+| Context card steps, a pass's first pass | `eval:overviews --steps context` |
+| A later pass's judge, update and note | `eval:overviews --steps update` |
+
+Emotion-only tagging has no check of its own: the preassess step is its proxy (the same classification task).
+
 ## Key Principles
 
 **Declarative over procedural.** Content requirements describe *what* the output should contain, not step-by-step procedures. The model's internal reasoning determines the analysis path. Do not add procedural instructions like "First do X, then do Y."
