@@ -115,12 +115,23 @@ export function parseOptions(argv: string[]): EvalOptions {
 // eval:recalibrate
 // ---------------------------------------------------------------------------
 
-export const RECALIBRATION_STEPS = ['preassess', 'assess', 'dedup', 'rating-set', 'social-post', 'selection', 'podcast'] as const
+export const RECALIBRATION_STEPS = [
+  'preassess',
+  'assess',
+  'dedup',
+  'rating-set',
+  'social-post',
+  'selection',
+  'podcast',
+  'reclassify',
+  'uplifting-select',
+] as const
 export type RecalibrationStep = (typeof RECALIBRATION_STEPS)[number]
 /**
  * The recalibration's own checks. The rating set pays for gpt-5-mini and
  * rewrites the owner's file, and the ship checks (social post, selection,
- * podcast) test other prompts, so those run only when named.
+ * podcast) and the layout checks (reclassify, uplifting-select) test other
+ * prompts, so those run only when named.
  */
 export const RECALIBRATION_DEFAULT_STEPS: readonly RecalibrationStep[] = ['preassess', 'assess', 'dedup']
 const HALVES = ['calibration', 'holdout', 'all'] as const

@@ -13,11 +13,12 @@
 import 'dotenv/config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
-import { z } from 'zod'
+import { apiCheck } from './apiCheck.js'
 import { loadFixtures, type Fixtures } from './fixtures.js'
 import { excludedIds, fixtureMismatch } from './freshSample.js'
 import { classifyDb, openReadOnlyDb, readOnlyStatus } from './readOnlyDb.js'
-import { armKey, createEvalContext, estimateCallUsd, type EvalContext } from './models.js'
+import { createEvalContext, estimateCallUsd, type EvalContext } from './models.js'
+import { STEP_ARMS } from './research/pipeline.js'
 import { parseOptions, type EvalOptions } from './options.js'
 import { writeRatingDeliverable } from './ratingFiles.js'
 import { renderResults, type ReportInput } from './resultsReport.js'
@@ -90,24 +91,6 @@ function estimate(suites: Suite[], fx: Fixtures, ctx: EvalContext, limit?: numbe
   return out
 }
 
-/**
- * One trivial structured-output call per arm, through the same client path as
- * the suites. Proves each model accepts `reasoning_effort` on Chat Completions
- * and that usage is metered, without needing the database.
- */
-async function apiCheck(suites: Suite[], ctx: EvalContext): Promise<boolean> {
-  const arms = [...new Map(suites.flatMap(s => s.arms).map(a => [armKey(a), a])).values()]
-  const schema = z.object({ ok: z.boolean() })
-  const records = await Promise.all(arms.map(a => ctx.call(a, 'api-check', schema, 'Return a JSON object whose "ok" field is true.')))
-  for (const r of records) {
-    const u = r.usage
-    console.log(
-      `  ${r.arm}: ${r.outcome}${r.finishReason ? ` (${r.finishReason})` : ''}, in ${u.input} / cached ${u.cached} / out ${u.output} / reasoning ${u.reasoning} tokens, ${usd(r.costUsd)}, ${r.latencyMs} ms${r.error ? `, error: ${r.error}` : ''}`,
-    )
-  }
-  return records.every(r => r.outcome === 'ok')
-}
-
 /** A call site with budget-skipped calls has no trustworthy verdict. */
 function markIncomplete(result: SuiteResult): SuiteResult {
   for (const site of result.callSites) {
@@ -135,8 +118,9 @@ async function main(): Promise<void> {
   })
 
   if (opts.apiCheck) {
-    console.log('api check (one trivial call per arm):')
-    const ok = await apiCheck(suites, ctx)
+    // The suites' arms and the research steps' (the extraction steps at their own effort among them)
+    console.log('api check:')
+    const ok = await apiCheck([...suites.flatMap(s => s.arms), ...Object.values(STEP_ARMS)], ctx)
     console.log(`api check ${ok ? 'passed' : 'FAILED'}; this run ${usd(ctx.spentThisRunUsd())}, ledger ${usd(ctx.spentUsd())}`)
     if (!ok) process.exitCode = 1
     return

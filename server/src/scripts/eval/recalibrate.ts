@@ -31,8 +31,9 @@ import { sampleFor } from './recalibration.js'
 import { RECALIBRATION_STEP_DEFS, type RecalibrationStepDef, type StepSection } from './recalibrationChecks.js'
 import { recalibrationReportName, renderRecalibration, verdict } from './recalibrationReport.js'
 import { SHIP_STEP_DEFS } from './shipChecks.js'
+import { LAYOUT_STEP_DEFS } from './layoutChecks.js'
 
-const STEP_DEFS: Record<RecalibrationStep, RecalibrationStepDef> = { ...RECALIBRATION_STEP_DEFS, ...SHIP_STEP_DEFS }
+const STEP_DEFS: Record<RecalibrationStep, RecalibrationStepDef> = { ...RECALIBRATION_STEP_DEFS, ...SHIP_STEP_DEFS, ...LAYOUT_STEP_DEFS }
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 
