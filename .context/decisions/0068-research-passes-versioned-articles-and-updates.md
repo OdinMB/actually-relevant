@@ -70,19 +70,32 @@ pass and the owner switches `research_pass` on.
   and complete per the strong judge at least 90%, none unsupported, and notes' copying flags no
   higher than the rewritten sections'.
 
+## Owner decisions
+
+The owner, Odin, answered the plan's "For Odin" 2, 3 and 6 on 2026-11-17 and 2026-11-18, each as the
+plan recommended. Like everything here, they take effect only at the switch. They settle what the
+page and the admin do, not the words readers see: the header link, the section's heading, its
+"Earlier version" disclosures and the marks are drafts in `UPDATE_COPY`
+(`client/src/components/research/StoryUpdates.tsx`) that still await his review.
+
+- **Where Updates show (2), decided:** "Updated <date>" in the header, linking to an Updates section
+  after Caveats, newest first, each entry giving its date and note, with the earlier text of each
+  changed section folded under a closed disclosure with its citations. The page's modified date
+  (`dateModified`) is the newest Update's day. The "Updated" mark after each rewritten paragraph or
+  point is the plan's, built with the section; his answer did not name it.
+- **An editor's pass applies itself (3), decided:** "Research again" writes its version and its Update
+  at once, with "Undo this update" one click away. As the plan has it, "Revert to single-source" stays,
+  and "Use this version" and the review-before-apply flow go.
+- **Cards refresh without an Update (6), decided:** a later pass rewrites the cards, and no Update
+  entry lists card changes.
+
 ## Open owner decisions
 
-Proceeding on the plan's recommendations, all of which take effect only at the switch (plan, "For
-Odin" 2, 3, 5 and 6); recorded here when the owner answers:
+Proceeding on the plan's recommendation, which takes effect only at the switch; recorded here when the
+owner answers:
 
-- **Where Updates show (2):** "Updated <date>" in the header linking to a ruled Updates section after
-  Caveats, newest first, each entry's date, note and a closed "Earlier version" per changed section
-  with its citations, and an "Updated" link after each rewritten paragraph or point.
-- **An editor's pass applies itself (3):** yes; "Undo this update" and "Revert to single-source" stay
-  one click away, and "Use this version" and the review-before-apply flow go.
 - **A first pass on a published single-source story (5):** recorded as an Update ("Researched with N
   more sources on <date>; the story was rewritten from them"), the earlier version readable.
-- **Cards refresh without an Update (6):** yes.
 
 ## Consequences
 
