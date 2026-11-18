@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GapList } from '../schemas/storyContext.js'
-import { coverageSearches, gapSearches, knownPages, readPages } from './researchPassPlan.js'
+import { researchStory } from '../test/passFixtures.js'
+import { coverageSearches, gapSearches, knownPages, laterStory, laterWindow, readPages } from './researchPassPlan.js'
 import { EMPTY_POOL, type Pool, type PoolSearch, type PoolSource } from './researchPool.js'
 
 const gap = (response: 'yes' | 'no', searches: GapList['searches'] = [], quote = ''): GapList => ({
@@ -101,5 +102,30 @@ describe('the pages a pass does not read again', () => {
 
   it('give the gap searches the pages, their domains and the pages read before', () => {
     expect(readPages(pool)).toEqual({ urls: ['https://www.news.example/story?utm_source=x'], domains: ['news.example'], read: ['https://paywall.example/a'] })
+  })
+})
+
+describe("a later pass's window", () => {
+  it('starts at the last pass’s day and ends today, or at the eval’s sampling day before it', () => {
+    expect(laterWindow('2026-11-14', '2026-11-20')).toEqual({ start: '2026-11-14', end: '2026-11-20' })
+    expect(laterWindow('2026-11-14T22:00:00.000Z', '2026-11-20T01:00:00.000Z', '2026-11-18T00:00:00Z')).toEqual({ start: '2026-11-14', end: '2026-11-18' })
+    expect(laterWindow('2026-11-21', '2026-11-20')).toEqual({ start: '2026-11-20', end: '2026-11-20' })
+  })
+
+  it('offers the earlier-coverage step only our stories published since and not linked yet', () => {
+    const candidate = (id: string, day: string) => ({
+      id,
+      slug: null,
+      title: id,
+      titleLabel: null,
+      summary: '',
+      relevanceSummary: '',
+      whyItMatters: '',
+      datePublished: `${day}T08:00:00.000Z`,
+      distance: 0.1,
+    })
+    const story = researchStory({ earlier: [candidate('old', '2026-11-10'), candidate('linked', '2026-11-16'), candidate('new', '2026-11-16')] })
+    const linked = { sources: [page('E1', '', { origin: 'earlier', earlierStoryId: 'linked' })] }
+    expect(laterStory(story, linked, { start: '2026-11-14', end: '2026-11-20' }).earlier.map(e => e.id)).toEqual(['new'])
   })
 })

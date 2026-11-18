@@ -70,6 +70,8 @@ export function passInput(story: ResearchStory = researchStory(), extra: Partial
     story,
     pool: EMPTY_POOL,
     version: null,
+    lastPassDay: null,
+    today: '2026-11-18',
     current: {
       title: p.title,
       summary: p.summary,

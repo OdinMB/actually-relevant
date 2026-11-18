@@ -28,8 +28,8 @@ interface StoryRow {
  * uncapped: the pass offers those of the stories it links, at most `maxReusedFacts`.
  */
 export async function loadPassInput(db: ResearchDb, storyId: string, passId: string, now: Date = new Date()): Promise<PassInput | null> {
-  const [pool, version] = await Promise.all([loadPool(db, storyId), currentVersion(db, storyId)])
-  return storyInput(db, storyId, passId, now, pool, version)
+  const [pool, version, lastPassDay] = await Promise.all([loadPool(db, storyId), currentVersion(db, storyId), lastPassDayOf(db, storyId, passId)])
+  return storyInput(db, storyId, passId, now, pool, version, lastPassDay)
 }
 
 /**
@@ -37,7 +37,20 @@ export async function loadPassInput(db: ResearchDb, storyId: string, passId: str
  * version and the story's own columns. The eval's replay of a first pass on a story of any history.
  */
 export async function loadFirstPassInput(db: ResearchDb, storyId: string, passId: string, now: Date = new Date()): Promise<PassInput | null> {
-  return storyInput(db, storyId, passId, now, EMPTY_POOL, null)
+  return storyInput(db, storyId, passId, now, EMPTY_POOL, null, null)
+}
+
+/**
+ * The day the story's last completed pass, or legacy research run, started (`YYYY-MM-DD`): where a later
+ * pass's coverage window opens. Null for a story with neither; the running pass itself never counts.
+ */
+async function lastPassDayOf(db: ResearchDb, storyId: string, passId: string): Promise<string | null> {
+  const [row] = await db.$queryRaw<{ last: Date | null }[]>`
+    SELECT GREATEST(
+      (SELECT max(p.started_at) FROM research_passes p WHERE p.story_id = ${storyId} AND p.status = 'completed' AND p.id <> ${passId}),
+      (SELECT max(r.started_at) FROM story_research_runs r WHERE r.story_id = ${storyId} AND r.status = 'completed')
+    ) AS last`
+  return row?.last ? utcDay(row.last) : null
 }
 
 async function storyInput(
@@ -47,6 +60,7 @@ async function storyInput(
   now: Date,
   pool: Pool,
   version: ArticleVersionData | null,
+  lastPassDay: string | null,
 ): Promise<PassInput | null> {
   const [story] = await researchStoriesByIds(db, [storyId])
   if (!story) return null
@@ -72,6 +86,8 @@ async function storyInput(
     story,
     pool,
     version,
+    lastPassDay,
+    today: utcDay(now),
     current: {
       title: text.title ?? story.published.title,
       summary: text.summary ?? '',

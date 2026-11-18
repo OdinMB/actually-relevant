@@ -36,6 +36,10 @@ const STEP_OUTPUT_TOKENS: Record<PassStep, number> = {
   'facts-check': 1500,
   'cards-write': 3000,
   'box-check': 1500,
+  // A later pass's judge (a verdict per section), its rewrite of the flagged sections, and the Update note
+  judge: 1500,
+  update: 3000,
+  note: 400,
 }
 
 const HAN = /\p{Script=Han}/gu

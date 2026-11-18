@@ -12,6 +12,7 @@
 import type { z } from 'zod'
 import { dedupConfirmationSchema } from '../../../schemas/llm.js'
 import { deriveSchema, earlierSchema, extractionSchema, factCheckSchema, queriesSchema, repairSchema, writeSchema } from '../../../schemas/research.js'
+import { judgeSchema, noteSchema } from '../../../schemas/researchPass.js'
 import type { ResearchStory } from '../../../services/researchInput.js'
 import {
   CARD_STEPS,
@@ -81,9 +82,24 @@ export const STEP_ESTIMATES: Record<StepName, StepEstimate> = {
   'facts-check': { input: 18000, output: 4500, inDesign: false },
   'cards-write': { input: 10000, output: 3000, inDesign: false },
   'box-check': { input: 5000, output: 1500, inDesign: false },
+  // A later pass's article step: the plan's "with rewrite" row less its checks, which count under fact-check
+  judge: { input: 6000, output: 1500, inDesign: false },
+  update: { input: 12000, output: 3000, inDesign: false },
+  note: { input: 2500, output: 400, inDesign: false },
 }
 
+/** The later pass's steps: neither research's nor a card step. */
+type LaterStep = Exclude<StepName, ResearchStep | CardStep>
+
+/** The later pass's steps, under their own names. */
+const LATER_SCHEMA_NAMES = {
+  judge: versionedSchemaName('pass-judge', judgeSchema),
+  update: versionedSchemaName('pass-update', repairSchema),
+  note: versionedSchemaName('pass-note', noteSchema),
+} satisfies Record<LaterStep, string>
+
 const RESEARCH_SCHEMA_NAMES = {
+  ...LATER_SCHEMA_NAMES,
   confirm: versionedSchemaName('research-confirm', dedupConfirmationSchema),
   queries: versionedSchemaName('research-queries', queriesSchema),
   extract: versionedSchemaName('research-extract', extractionSchema),
@@ -92,13 +108,13 @@ const RESEARCH_SCHEMA_NAMES = {
   'fact-check': versionedSchemaName('research-fact-check', factCheckSchema),
   rewrite: versionedSchemaName('research-repair', repairSchema),
   derive: versionedSchemaName('research-derive', deriveSchema),
-} satisfies Record<ResearchStep, string>
+} satisfies Record<ResearchStep | LaterStep, string>
 
 const cardNames = new Map<CardStep, string>()
 
 const isCardStep = (step: StepName): step is CardStep => Object.hasOwn(CARD_STEPS, step)
 
-/** Research's step under research's name; a card step under its context step's, `overview-context-<step>#<schema fingerprint>`, computed once. */
+/** Research's step under research's name, a later pass's under `pass-<step>`; a card step under its context step's, `overview-context-<step>#<schema fingerprint>`, computed once. */
 function schemaNameOf(step: StepName, schema: z.ZodType): string {
   if (!isCardStep(step)) return RESEARCH_SCHEMA_NAMES[step]
   let name = cardNames.get(step)
@@ -153,6 +169,9 @@ export function firstPassInput(story: ResearchStory): PassInput {
     story,
     pool: EMPTY_POOL,
     version: null,
+    lastPassDay: null,
+    // The story's own day: a first pass's window is research's, around the article
+    today: story.datePublished.slice(0, 10),
     current: {
       title: p.title,
       summary: p.summary,

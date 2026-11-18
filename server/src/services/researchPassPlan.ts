@@ -2,11 +2,13 @@
  * Which searches a research pass makes, and which pages it reads (`.context/research-passes.md`,
  * "The steps"): research's coverage queries and context's gap searches, `response` first from its
  * two angles while open, each skipping what any earlier pass of the story searched (the pool's
- * searches: a normalized query, a `response` angle) and the pages the pool holds or left out. Pure.
+ * searches: a normalized query, a `response` angle) and the pages the pool holds or left out; and a
+ * later pass's window since the last pass, with only the earlier stories new since. Pure.
  */
 import { config } from '../config.js'
 import type { GapList } from '../schemas/storyContext.js'
-import { domainOf, normalizedUrl } from './researchFilter.js'
+import { domainOf, normalizedUrl, type SearchWindow } from './researchFilter.js'
+import type { ResearchStory } from './researchInput.js'
 import type { Pool } from './researchPool.js'
 import { planSearches, type ResponseAngle } from './storyContextPipeline.js'
 import { normalizedQuery } from './storyContextSources.js'
@@ -41,4 +43,21 @@ export function knownPages(pool: Pick<Pool, 'sources' | 'dropped'>): Set<string>
 export function readPages(pool: Pick<Pool, 'sources' | 'dropped'>): { urls: string[]; domains: string[]; read: string[] } {
   const urls = pool.sources.filter(s => s.url !== '').map(s => s.url)
   return { urls, domains: [...new Set(urls.map(domainOf).filter(Boolean))], read: pool.dropped.map(d => d.url) }
+}
+
+/**
+ * A later pass's coverage window: from the last pass's day to today (capped by `latest`, the eval's
+ * sampling time), what other outlets reported since. Both `YYYY-MM-DD`; a start past the end is the end.
+ */
+export function laterWindow(lastPassDay: string, today: string, latest?: string): SearchWindow {
+  const cap = latest?.slice(0, 10)
+  const end = cap !== undefined && cap < today.slice(0, 10) ? cap : today.slice(0, 10)
+  const start = lastPassDay.slice(0, 10)
+  return { start: start > end ? end : start, end }
+}
+
+/** The story as a later pass reads it: only our earlier stories published since its window opened and not in the pool yet. */
+export function laterStory(story: ResearchStory, pool: Pick<Pool, 'sources'>, window: SearchWindow): ResearchStory {
+  const linked = new Set(pool.sources.flatMap(s => (s.earlierStoryId ? [s.earlierStoryId] : [])))
+  return { ...story, earlier: story.earlier.filter(e => !linked.has(e.id) && e.datePublished.slice(0, 10) >= window.start) }
 }

@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
 import type { Draft, Extraction, FactCheck } from '../schemas/research.js'
 import type { GapList } from '../schemas/storyContext.js'
+import { articleOf } from './articleVersions.js'
+import { buildResearchedStory } from './researchedStory.js'
 import { cardFacts, passCalls, runResearchPass, type PassDeps, type PassInput, type PassStep } from './researchPass.js'
 import type { ResearchStory } from './researchInput.js'
 import type { ResearchSearchAnswer } from './researchPipeline.js'
-import { EMPTY_POOL, type Pool, type PoolFact, type PoolSource } from './researchPool.js'
+import { EMPTY_POOL, researchView, type Pool, type PoolFact, type PoolSource } from './researchPool.js'
 import { storyLayout } from './storyContextLayout.js'
 
 const words = (seed: string, n = 150) => Array.from({ length: n }, (_, i) => `${seed}w${i}`).join(' ')
@@ -194,6 +196,8 @@ const input = (pool: Pool = EMPTY_POOL): PassInput => ({
   },
   storyDay: '2026-11-13',
   reusable: [],
+  lastPassDay: null,
+  today: '2026-11-13',
 })
 
 describe('runResearchPass, a first pass', () => {
@@ -401,8 +405,146 @@ describe('runResearchPass, a first pass', () => {
     expect(result.boxFacts.get('S2F1')?.reusedFromId).toBe('fact-a')
   })
 
-  it('leaves a story with a version to the later pass, which is not built yet', async () => {
-    const result = await runResearchPass({ ...input(), version: { number: 1 } as never }, fakeDeps().deps)
-    expect(result).toMatchObject({ kind: 'later', status: 'failed', outcome: 'technical' })
+})
+
+describe('runResearchPass, a later pass', () => {
+  const pageSource = (ref: string, url: string, outlet: string, origin: PoolSource['origin']): PoolSource => ({
+    id: `src-${ref}`,
+    ref,
+    origin,
+    earlierStoryId: null,
+    url,
+    outlet,
+    title: outlet,
+    date: '2026-11-12',
+    kind: 'news-report',
+    country: 'Pakistan',
+    relation: 'same-development',
+    favicon: null,
+    usedRawContent: false,
+    voices: [],
+    optOutChecked: true,
+    firstPassId: 'pass-0',
+  })
+  const poolFact = (ref: string, statement: string): PoolFact => ({
+    id: `fact-${ref}`,
+    ref,
+    sourceRef: ref.replace(/F\d+$/, ''),
+    reusedFromId: null,
+    supportingSentence: `${statement} (sentence)`,
+    passage: null,
+    supportFound: true,
+    statement,
+    measures: '',
+    slot: null,
+    structured: { ...(fields as never), by: { model: 'm', promptVersion: 'v' } },
+    extractedBy: { model: 'm', promptVersion: 'v' },
+    verdict: 'supported',
+    verdictProblem: null,
+    checkedBy: { model: 'm', promptVersion: 'v', passId: 'pass-0' },
+    status: 'unreviewed',
+    firstPassId: 'pass-0',
+    drop: null,
+  })
+  const pool: Pool = {
+    sources: [pageSource('S0', original.url, 'Pakistan Today', 'original'), pageSource('S1', 'https://dawn.com/solar', 'Dawn', 'cluster')],
+    facts: [poolFact('S0F1', 'Pakistan added 22 GW of rooftop solar in two years.'), poolFact('S1F1', 'Imports of panels doubled.')],
+    searches: [],
+    dropped: [],
+  }
+  const article = { ...draft(['S0F1']), whyThisMatters: [{ text: 'Cheap power reaches millions.', factIds: ['S1F1'] }] }
+  const v1 = {
+    id: 'version-1',
+    number: 1,
+    kind: 'first' as const,
+    status: 'current' as const,
+    passId: 'pass-0',
+    title: article.title,
+    titleLabel: article.titleLabel,
+    summary: article.summary,
+    marketingBlurb: article.marketingBlurb,
+    quote: null,
+    quoteAttribution: null,
+    relevanceReasons: '- Cheap power reaches millions.',
+    antifactors: '- The grid lags behind.',
+    emotionTag: 'uplifting',
+    research: buildResearchedStory({ draft: article, ...researchView(pool) }),
+    article: articleOf(article),
+    changes: [],
+    note: null,
+  }
+  const reuters = { ...original, storyId: 'member-2', url: 'https://reuters.com/solar', outlet: 'Reuters', content: `Reuters on the boom. ${words('reuters')}` }
+  // A card on the new source's fact, which this pass adds as S2F2
+  const laterCards = () => ({
+    boxes: [{ slot: 'compared', heading: 'Less demand', teaser: '', place: 'P1', sentences: [{ text: 'Grid demand fell.', factIds: ['S2F2'] }], visual: noVisual }],
+  })
+  const later = (over: Partial<PassInput> = {}): PassInput => ({
+    ...input(pool),
+    passId: 'pass-2',
+    story: { ...story, clusterMembers: [...story.clusterMembers, reuters] },
+    version: v1,
+    lastPassDay: '2026-11-15',
+    today: '2026-11-20',
+    ...over,
+  })
+
+  it('searches only since the last pass, and with nothing flagged makes no version and refreshes the cards', async () => {
+    const requests: unknown[] = []
+    const fake = fakeDeps({ judge: () => ({ sections: [], contradicted: [] }), 'cards-write': laterCards })
+    fake.deps.tavily = { search: async request => (requests.push(request), { results: [], credits: 2 }) }
+    const result = await runResearchPass(later(), fake.deps)
+
+    expect(result).toMatchObject({ kind: 'later', status: 'completed', outcome: 'unchanged', version: null, record: { cards: 'written' } })
+    expect(requests).toEqual([expect.objectContaining({ startDate: '2026-11-15', endDate: '2026-11-20' })])
+    // Dawn, which the pool holds, is not read again: Reuters is the one new source, and the original is not extracted
+    expect(fake.calls.filter(c => c.step === 'extract').map(c => c.prompt.includes('reuters.com'))).toEqual([true])
+    const judge = fake.calls.find(c => c.step === 'judge')!.prompt
+    expect(judge.slice(judge.indexOf('<NEW_FACTS>'))).toContain('Reuters')
+    expect(result.record.update?.judgments.every(j => j.outcome === 'unchanged')).toBe(true)
+    expect(passCalls(result.record).map(c => c.step)).toContain('judge')
+  })
+
+  it('makes no card write when the pool gained no supported fact and lost none', async () => {
+    const fake = fakeDeps()
+    const result = await runResearchPass(later({ story }), fake.deps)
+    expect(result).toMatchObject({ outcome: 'unchanged', version: null, boxes: [], record: { cards: 'kept' } })
+    expect(fake.stepsCalled()).not.toContain('judge')
+    expect(fake.stepsCalled()).not.toContain('cards-write')
+  })
+
+  it('rewrites what new facts make substantially different as the next version, demotes the contradicted fact, and rewrites the cards', async () => {
+    const fake = fakeDeps({
+      judge: () => ({
+        sections: [{ label: 'Why This Matters 1', verdict: 'substantially_different', factIds: ['S2F2'], reason: 'The boom now cuts grid demand.' }],
+        contradicted: [{ factId: 'S1F1', byFactIds: ['S2F1'], reason: 'Imports did not double.' }],
+      }),
+      update: () => ({ items: [{ label: 'Why This Matters 1', text: 'Rooftop panels cut grid demand.', factIds: ['S2F2'] }], quote: '', quoteAttribution: '', quoteSourceId: '' }),
+      note: () => ({ text: 'Grid demand fell as rooftop panels spread, Reuters reported.', factIds: ['S2F2'] }),
+      'cards-write': laterCards,
+    })
+    const result = await runResearchPass(later(), fake.deps)
+
+    expect(result).toMatchObject({ kind: 'later', outcome: 'updated', record: { cards: 'written' } })
+    expect(result.version).toMatchObject({ number: 2, kind: 'update', passId: 'pass-2', relevanceReasons: '- Rooftop panels cut grid demand.' })
+    expect(result.version!.changes.map(c => c.section)).toEqual(['Why This Matters 1'])
+    expect(result.version!.research.paragraphs[0]).toEqual(v1.research.paragraphs[0])
+    expect(result.version!.note?.text).toBe('Grid demand fell as rooftop panels spread, Reuters reported.')
+    expect(result.pool.facts.find(f => f.ref === 'S1F1')).toMatchObject({ status: 'demoted', drop: { passId: 'pass-2', reason: 'contradicted', contradictedBy: ['S2F1'] } })
+    expect(result.changed).toContain('S1F1')
+    // The cards are written for the new version's places, from facts the demoted one is no longer among
+    const cards = fake.calls.find(c => c.step === 'cards-write')!.prompt
+    expect(cards).toContain('Rooftop panels cut grid demand.')
+    expect(cards).not.toContain('Imports of panels doubled.')
+  })
+
+  it('ends as a budget stop, with its demotions and no version or cards, when the budget stops the rewrite', async () => {
+    const fake = fakeDeps({
+      judge: () => ({ sections: [], contradicted: [{ factId: 'S1F1', byFactIds: ['S2F1'], reason: 'Imports did not double.' }] }),
+      update: () => SKIP,
+    })
+    const result = await runResearchPass(later(), fake.deps)
+    expect(result).toMatchObject({ outcome: 'budget', version: null, boxes: [] })
+    expect(result.pool.facts.find(f => f.ref === 'S1F1')?.status).toBe('demoted')
+    expect(fake.stepsCalled()).not.toContain('cards-write')
   })
 })

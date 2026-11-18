@@ -75,6 +75,7 @@ describeDb('loadPassInput', () => {
         antifactors: null,
         emotionTag: null,
         research,
+        article: null,
         changes: [],
         note: null,
       }),
@@ -97,7 +98,26 @@ describeDb('loadPassInput', () => {
   it('dates a selected story about to be published at the time given', async () => {
     const feedId = await feed()
     const story = await createStory({ feedId, status: 'selected', ...assessed })
-    expect((await loadPassInput(prisma, story.id, 'pass-3', NOW))?.storyDay).toBe('2026-11-16')
+    expect(await loadPassInput(prisma, story.id, 'pass-3', NOW)).toMatchObject({ storyDay: '2026-11-16', today: '2026-11-16', lastPassDay: null })
+  })
+
+  it("opens a later pass's window on the day its story's last completed pass or legacy research run started, never the running pass's", async () => {
+    const feedId = await feed()
+    const story = await createStory({ feedId, status: 'published', ...assessed, datePublished: ago(10) })
+    const at = (day: string) => new Date(`${day}T22:30:00Z`)
+    const pass = (number: number, status: 'completed' | 'failed' | 'running', day: string) =>
+      prisma.researchPass.create({
+        data: { storyId: story.id, number, trigger: 'editor', kind: 'later', status, outcome: status === 'running' ? null : 'unchanged', costUsd: 0, startedAt: at(day) },
+      })
+    await pass(1, 'completed', '2026-11-08')
+    await pass(2, 'failed', '2026-11-14')
+    const running = await pass(3, 'running', '2026-11-15')
+    await prisma.storyResearchRun.create({ data: { storyId: story.id, status: 'completed', costUsd: 0, startedAt: at('2026-11-11') } })
+    await prisma.storyResearchRun.create({ data: { storyId: story.id, status: 'failed', costUsd: 0, startedAt: at('2026-11-13') } })
+
+    expect((await loadPassInput(prisma, story.id, running.id, NOW))?.lastPassDay).toBe('2026-11-11')
+    await pass(4, 'completed', '2026-11-12')
+    expect((await loadPassInput(prisma, story.id, running.id, NOW))?.lastPassDay).toBe('2026-11-12')
   })
 
   it('loads nothing for a story research cannot run on', async () => {

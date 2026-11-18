@@ -30,8 +30,10 @@ import {
   type StepResult,
   type StoryResearch,
 } from './researchPipeline.js'
-import { coverageSearches, gapSearches, knownPages, readPages } from './researchPassPlan.js'
-import { articleOf } from './articleVersions.js'
+import { LATER_STEP_TIERS, LATER_STEPS, updateArticle, type LaterCall, type UpdateOutcome, type UpdateRecord } from './researchPassLater.js'
+import { coverageSearches, gapSearches, knownPages, laterStory, laterWindow, readPages } from './researchPassPlan.js'
+import { unescapeXmlDeep } from '../lib/xml.js'
+import { articleOf, nextVersion } from './articleVersions.js'
 import {
   asResearchEarlier,
   asResearchSource,
@@ -87,15 +89,17 @@ export const CARD_STEPS = {
 
 export type CardStep = keyof typeof CARD_STEPS
 
-export const PASS_STEPS = [...STEPS, ...(Object.keys(CARD_STEPS) as CardStep[])] as const
+/** Research's steps, context's under their pass names, and the later pass's judge, update and note. */
+export const PASS_STEPS = [...STEPS, ...(Object.keys(CARD_STEPS) as CardStep[]), ...LATER_STEPS] as const
 export type PassStep = (typeof PASS_STEPS)[number]
 
 const CARD_STEP_OF = Object.fromEntries(Object.entries(CARD_STEPS).map(([pass, step]) => [step, pass])) as Record<ContextStep, CardStep>
 
-/** The tier each step starts on: research's and context's as they are; the eval moves a step up. */
+/** The tier each step starts on: research's and context's as they are, the later pass's medium; the eval moves a step up. */
 export const PASS_STEP_TIERS: Record<PassStep, 'small' | 'medium'> = {
   ...STEP_TIERS,
   ...(Object.fromEntries(Object.entries(CARD_STEPS).map(([pass, step]) => [pass, CONTEXT_STEP_TIERS[step]])) as Record<CardStep, 'small' | 'medium'>),
+  ...LATER_STEP_TIERS,
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +137,10 @@ export interface PassInput {
   pool: Pool
   /** The story's current article version: none for a first pass. */
   version: ArticleVersionData | null
+  /** `YYYY-MM-DD`: the day of the story's last pass or legacy research run, where a later pass's coverage window opens; null for none. */
+  lastPassDay: string | null
+  /** `YYYY-MM-DD`: the pass's day, where a later pass's window ends. */
+  today: string
   /** The story as readers see it before the pass, which the gap list reads. */
   current: { title: string; summary: string; layout: StoryLayout }
   /** `YYYY-MM-DD`: facts are judged current on it. */
@@ -141,10 +149,11 @@ export interface PassInput {
   reusable: OfferedFact[]
 }
 
-/** What became of the cards: written, nothing kept, a technical failure, or the budget stopped them. */
-export type CardsOutcome = 'written' | 'none' | 'failed' | 'budget'
+/** What became of the cards: written, nothing kept, a technical failure, the budget stopped them, or kept as they were (a later pass whose pool gained no supported fact and lost none). */
+export type CardsOutcome = 'written' | 'none' | 'failed' | 'budget' | 'kept'
 
-export type PassOutcome = 'written' | 'stale' | 'contradicted' | 'research-rating' | 'fallback' | 'budget' | 'technical'
+/** A first pass's gate outcome; a later pass's `updated`, `unchanged` or `update_failed`; either's `budget` or `technical`. */
+export type PassOutcome = 'written' | 'stale' | 'contradicted' | 'research-rating' | 'fallback' | 'budget' | 'technical' | 'updated' | 'unchanged' | 'update_failed'
 
 /** Everything else the pass did, stored as `research_passes.record`. */
 export interface PassRecord {
@@ -157,6 +166,8 @@ export interface PassRecord {
   cardsError: string | null
   /** Coverage queries not searched: an earlier pass made them. */
   skippedQueries: string[]
+  /** A later pass's article step: the judgments, demotions, checks and note (`researchPassLater.ts`); null on a first pass. */
+  update: UpdateRecord | null
 }
 
 export interface PassResult {
@@ -169,7 +180,7 @@ export interface PassResult {
   pool: Pool
   /** Stored facts whose judgment this pass changed. */
   changed: string[]
-  /** Version 1 of a first pass whose draft was kept. */
+  /** Version 1 of a first pass whose draft was kept, or a later pass's update. */
   version: ArticleVersionData | null
   boxes: DraftBox[]
   boxFacts: Map<string, ContextFactData>
@@ -407,7 +418,7 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   const optOutChecked = deps.sourcePolicy !== undefined
   const r = emptyResearch(input.story.id, optOutChecked)
   const context = emptyContextRecord(optOutChecked)
-  const record: PassRecord = { research: r, context, cards: 'none', cardsError: null, skippedQueries: [] }
+  const record: PassRecord = { research: r, context, cards: 'none', cardsError: null, skippedQueries: [], update: null }
   const pool = new WorkingPool(input.pool, input.passId)
   const spent = { credits: 0 }
   let budget = false
@@ -433,10 +444,8 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
     }
   }
   let coverageWindow: Coverage['window'] | null = null
-  if (input.version) {
-    r.verdict = { kind: 'fallback', reason: 'later passes are not built yet', category: 'technical' }
-    return finish({ status: 'failed', error: 'later passes are not built yet' })
-  }
+  // A later pass searches what other outlets reported since the last pass, and links only our stories new since
+  const since = input.version ? laterWindow(input.lastPassDay ?? input.storyDay, input.today, deps.latestDate) : null
 
   const researchCall: ResearchCall = async (step, schema, prompt) => {
     const res = await deps.call(step, schema, prompt)
@@ -462,13 +471,14 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   let coverage: Coverage | null = null
   let stop: ReturnType<typeof fallbackOf> | null = null
   try {
-    coverage = await extractCoverage(input.story, deps, call, r, {
+    coverage = await extractCoverage(since ? laterStory(input.story, input.pool, since) : input.story, deps, call, r, {
       known: knownPages(input.pool),
       pickQueries: queries => {
         const picked = coverageSearches(queries, input.pool)
         record.skippedQueries = picked.skipped.map(q => q.query)
         return picked.search
       },
+      ...(since ? { since } : {}),
     })
     coverageWindow = coverage.window
   } catch (err) {
@@ -513,28 +523,65 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
     return finish({ status: 'failed', error: failure.error, transient: failure.transient })
   }
 
-  // Step 8: the article from the supported facts and our earlier stories' facts, checked against every source
   r.sources = pages().map(s => asResearchSource(s, pool.factsOf(s)))
   r.earlier = pool.sources.filter(s => s.origin === 'earlier').map(s => asResearchEarlier(s, pool.factsOf(s)))
-  if (coverage && !stop) {
-    const sources = pages().map(s => asResearchSource(s, pool.factsOf(s, usable)))
-    await runPassArticle({ story: input.story, coverage, sources, earlier: r.earlier }, deps.relevanceMin, call, r)
+  let version: ArticleVersionData | null = null
+  let outcome: PassOutcome | undefined
+  if (input.version) {
+    // Step 8, a later pass: the judge of each section against the facts found since, the demotions, the
+    // rewrite of what they make wrong or substantially different, and the note. A pass whose coverage
+    // stopped short goes on with what it found, the stop recorded
+    if (stop) r.verdict = decideGate(stop, deps.relevanceMin)
+    const laterCall: LaterCall = async (step, schema, prompt) => {
+      const res = await deps.call(step, schema, prompt)
+      if (res.outcome === 'skipped') budget = true
+      return { ...res, parsed: res.outcome === 'ok' ? unescapeXmlDeep(res.parsed) : null }
+    }
+    const fresh = new Set(pool.facts.filter(f => f.firstPassId === input.passId).map(f => f.ref))
+    const update = await updateArticle({ storyDay: input.storyDay, version: input.version, pool, fresh }, { call: laterCall, research: call })
+    record.update = update.record
+    for (const d of update.demoted) pool.update(d.ref, { status: 'demoted', drop: { passId: input.passId, reason: 'contradicted', contradictedBy: d.contradictedBy } })
+    if (update.outcome === 'budget') return budgetStop()
+    outcome = LATER_OUTCOMES[update.outcome]
+    version = update.next ? nextVersion(input.version, { passId: input.passId, ...update.next }) : null
+    // Step 9 is skipped when the pool gained no supported fact and lost none: the cards stay as they are
+    const gained = pool.facts.some(f => fresh.has(f.ref) && f.verdict === 'supported' && pool.sourceOf(f).origin !== 'earlier')
+    if (!gained && update.demoted.length === 0) {
+      record.cards = 'kept'
+      return finish({ outcome, version })
+    }
   } else {
-    r.verdict = decideGate(stop ?? { failed: 'no coverage', category: 'technical' }, deps.relevanceMin)
+    // Step 8: the article from the supported facts and our earlier stories' facts, checked against every source
+    if (coverage && !stop) {
+      const sources = pages().map(s => asResearchSource(s, pool.factsOf(s, usable)))
+      await runPassArticle({ story: input.story, coverage, sources, earlier: r.earlier }, deps.relevanceMin, call, r)
+    } else {
+      r.verdict = decideGate(stop ?? { failed: 'no coverage', category: 'technical' }, deps.relevanceMin)
+    }
+    if (isBudgetFallback(r.verdict)) return budgetStop()
+    version = r.verdict.kind === 'keep' ? firstVersion(r, input.passId) : null
   }
-  if (isBudgetFallback(r.verdict)) return budgetStop()
-  const version = r.verdict.kind === 'keep' ? firstVersion(r, input.passId) : null
 
-  // Step 9: the cards from the pool's supported facts, never our own stories'; they never fail the pass
+  // Step 9: the cards from the pool's supported facts, never our own stories', for the new version's
+  // places when the pass made one; they never fail the pass
+  const settled = { version, ...(outcome ? { outcome } : {}) }
   const cards = await writeCards(input, pool, gap, version, cardCall, context)
   if (cards.kind === 'error') {
     record.cards = isBudget(cards.err) ? 'budget' : 'failed'
     record.cardsError = record.cards === 'failed' ? contextFailure(cards.err, deps.transient).error : null
-    return finish({ version })
+    return finish(settled)
   }
-  if (cards.kind === 'skipped') return finish({ version })
+  if (cards.kind === 'skipped') return finish(settled)
   record.cards = cards.boxes.length > 0 ? 'written' : 'none'
-  return finish({ version, boxes: cards.boxes, boxFacts: cards.facts, writer: cards.writer })
+  return finish({ ...settled, boxes: cards.boxes, boxFacts: cards.facts, writer: cards.writer })
+}
+
+/** A later pass's outcome from its article step's (a budget stop ends the pass before this). */
+const LATER_OUTCOMES: Record<Exclude<UpdateOutcome, 'budget'>, PassOutcome> = {
+  updated: 'updated',
+  unchanged: 'unchanged',
+  update_failed: 'update_failed',
+  technical: 'technical',
 }
 
 interface GapStepInput {
@@ -688,7 +735,7 @@ export function cardFacts(pool: Pool): ContextFactData[] {
 
 /** Every call the pass made, research's steps first, each under its pass step's name. */
 export function passCalls(record: PassRecord): (Omit<StoryResearch['calls'][number], 'step'> & { step: PassStep })[] {
-  return [...record.research.calls, ...record.context.calls.map(c => ({ ...c, step: CARD_STEP_OF[c.step] }))]
+  return [...record.research.calls, ...(record.update?.calls ?? []), ...record.context.calls.map(c => ({ ...c, step: CARD_STEP_OF[c.step] }))]
 }
 
 type CardsResult =
