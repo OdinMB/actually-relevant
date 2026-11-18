@@ -24,11 +24,11 @@ export const NOTE_MAX_WORDS = 60
 // Demotions
 // ---------------------------------------------------------------------------
 
-/** A fact as the demotion rule reads it: what it measures, and its source's day. */
+/** A fact as the demotion rule reads it: what it measures, and the moment it gives a value for. */
 export interface RuleFact {
   measures: string
-  /** `YYYY-MM-DD`, or null when unknown. */
-  date: string | null
+  /** The structured as-of date (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`), or null when unknown. */
+  asOf: string | null
 }
 
 /** An old fact newer reporting shows was wrong about its own moment: demoted, with the facts that show it. */
@@ -49,12 +49,20 @@ const sameMeasure = (a: string, b: string) => {
   return norm(a) !== '' && norm(a) === norm(b)
 }
 
+/** Whether `later` names a later moment than `earlier`, at the precision both give (`2026-11` is not later than `2026-11-20`'s month). */
+const laterMoment = (later: string | null, earlier: string | null) => {
+  if (!later || !earlier) return false
+  const n = Math.min(later.length, earlier.length)
+  return later.slice(0, n) > earlier.slice(0, n)
+}
+
 /**
  * The judge's contradicted pairs as demotions: the old fact must be one the pool held before this pass
  * and still usable (`old`), and at least one of its contradicting facts one this pass found and its
  * check supported (`fresh`); the others count for nothing. A pair whose every newer fact measures the
- * same thing as the old one and comes from a later day is a newer value, not a contradiction: the old
- * fact is not demoted (the tile rule and validity already show the newest). One demotion per fact.
+ * same thing as the old one as of a later moment is a newer value, not a contradiction: the old fact
+ * is not demoted (the tile rule and validity already show the newest). A correction for the same
+ * moment, or one whose moment is unknown, stays the judge's. One demotion per fact.
  */
 export function demotions(contradicted: JudgeAnswer['contradicted'], facts: { old: ReadonlyMap<string, RuleFact>; fresh: ReadonlyMap<string, RuleFact> }): Demotions {
   const out: Demotions = { demoted: [], superseded: [] }
@@ -67,7 +75,7 @@ export function demotions(contradicted: JudgeAnswer['contradicted'], facts: { ol
     seen.add(pair.factId)
     const newer = by.every(id => {
       const f = facts.fresh.get(id)!
-      return sameMeasure(old.measures, f.measures) && old.date !== null && f.date !== null && f.date > old.date
+      return sameMeasure(old.measures, f.measures) && laterMoment(f.asOf, old.asOf)
     })
     if (newer) out.superseded.push({ ref: pair.factId, by })
     else out.demoted.push({ ref: pair.factId, contradictedBy: by, reason: pair.reason.trim() })

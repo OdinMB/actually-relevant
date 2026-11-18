@@ -41,23 +41,31 @@ const section = (label: string, verdict: JudgeAnswer['sections'][number]['verdic
 
 describe('demotions', () => {
   const old = new Map<string, RuleFact>([
-    ['S0F1', { measures: 'hectares burned in Sumatra', date: '2026-11-14' }],
-    ['S1F1', { measures: 'schools closed', date: '2026-11-14' }],
+    ['S0F1', { measures: 'hectares burned in Sumatra', asOf: '2026-11-14' }],
+    ['S1F1', { measures: 'schools closed', asOf: '2026-11-13' }],
   ])
   const fresh = new Map<string, RuleFact>([
-    ['S5F1', { measures: 'hectares burned in Sumatra', date: '2026-11-20' }],
-    ['S5F2', { measures: 'schools closed', date: '2026-11-14' }],
+    ['S5F1', { measures: 'Hectares  burned in Sumatra', asOf: '2026-11-20' }],
+    ['S5F2', { measures: 'schools closed', asOf: '2026-11-13' }],
+    ['S5F3', { measures: 'hectares burned in Sumatra', asOf: '2026-11' }],
   ])
 
-  it('demotes an old fact a fact found since contradicts, with the facts that do', () => {
+  it('demotes an old fact a fact found since contradicts, with the facts that do: a correction for the same moment', () => {
     const r = demotions([{ factId: 'S1F1', byFactIds: ['S5F2', 'S9F9'], reason: ' Only 12 schools closed. ' }], { old, fresh })
     expect(r.demoted).toEqual([{ ref: 'S1F1', contradictedBy: ['S5F2'], reason: 'Only 12 schools closed.' }])
   })
 
-  it('keeps a value a newer one of the same measure supersedes', () => {
+  it('keeps a value a newer one of the same measure, as of a later moment, supersedes', () => {
     const r = demotions([{ factId: 'S0F1', byFactIds: ['S5F1'], reason: 'The count rose.' }], { old, fresh })
     expect(r.demoted).toEqual([])
     expect(r.superseded).toEqual([{ ref: 'S0F1', by: ['S5F1'] }])
+  })
+
+  it('leaves the judge its contradiction when the newer moment is not later at the precision both give, or unknown', () => {
+    const vague = demotions([{ factId: 'S0F1', byFactIds: ['S5F3'], reason: 'Same month, other figure.' }], { old, fresh })
+    expect(vague.demoted.map(d => d.ref)).toEqual(['S0F1'])
+    const unknown = demotions([{ factId: 'S0F1', byFactIds: ['S5F1'], reason: 'r' }], { old: new Map([['S0F1', { measures: 'hectares burned in Sumatra', asOf: null }]]), fresh })
+    expect(unknown.demoted.map(d => d.ref)).toEqual(['S0F1'])
   })
 
   it('names no demotion without an old fact and a fact found since, and one per fact', () => {

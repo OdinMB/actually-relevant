@@ -18,7 +18,8 @@ export interface PoolFact {
   measures: string
 }
 
-export type DraftPart = 'title' | 'story' | 'whyThisMatters' | 'caveats' | 'summary' | 'marketingBlurb' | 'quote'
+/** `note`: a later research pass's Update note, which the fact check and the copying checks judge as a cited item. */
+export type DraftPart = 'title' | 'story' | 'whyThisMatters' | 'caveats' | 'summary' | 'marketingBlurb' | 'quote' | 'note'
 
 /**
  * One written field the checks read: a story paragraph, a bullet, the title, the summary or the
