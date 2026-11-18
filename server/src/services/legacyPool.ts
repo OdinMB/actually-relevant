@@ -299,6 +299,8 @@ export function legacyVersionOf(story: StoryColumns): ArticleVersionData | null 
     antifactors: story.antifactors,
     emotionTag: story.emotion_tag,
     research: research.data,
+    // Which facts each section cites beyond one per source was never stored: read from the citations
+    article: null,
     changes: [],
     note: null,
   }

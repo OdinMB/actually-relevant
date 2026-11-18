@@ -447,7 +447,9 @@ async function buildPool(
     candidates.length > 0 ? call('earlier', earlierSchema, earlierPrompt) : Promise.resolve<StepAnswer<Earlier>>({ parsed: null, outcome: 'ok' }),
   ])
   if ([...extractions, earlier].some(e => e.outcome === 'skipped')) throw new Stop('budget')
-  required(extractions[0]!, 'extract')
+  // A later pass reads no original (its pool holds it), and any number of new sources will do
+  const withOriginal = inputs[0]?.isOriginal === true
+  if (withOriginal) required(extractions[0]!, 'extract')
 
   const judged = inputs.flatMap((s, i) => {
     const extraction = extractions[i]?.parsed
@@ -462,14 +464,31 @@ async function buildPool(
   const facts = [...r.sources.flatMap(s => s.facts), ...r.earlier.flatMap(e => e.facts)]
   r.support = { facts: facts.length, found: facts.filter(f => f.found).length }
   // Other reports passed the filter; the extraction read and dropped them, unless every one of its calls failed
-  if (r.sources.length < 2) throw new Stop('no usable source', judged.length > 1 ? 'not_confirmed' : 'technical')
+  if (withOriginal && r.sources.length < 2) throw new Stop('no usable source', judged.length > 1 ? 'not_confirmed' : 'technical')
 }
 
 /** What step 8's checks read besides the draft. */
-interface CheckContext {
+export interface CheckContext {
   facts: ReadonlyMap<string, PoolFact>
   sources: ResearchSource[]
   call: Call
+}
+
+/** The fields the checks and repairs read: every published field of a draft (a later pass's article has no gate fields). */
+export type ArticleText = Pick<
+  Draft,
+  'titleLabel' | 'title' | 'story' | 'whyThisMatters' | 'caveats' | 'summary' | 'marketingBlurb' | 'quote' | 'quoteAttribution' | 'quoteSourceId'
+>
+
+/** What the checks and repairs record as they go: research's run, or a later pass's update. */
+export interface CheckState<D extends ArticleText> {
+  /** The last draft checked. */
+  draft: D | null
+  checks: CheckPass[]
+  /** What the checks found in each item as it stands. */
+  problems: CitationProblem[]
+  /** Whether a repair was asked for. */
+  rewritten: boolean
 }
 
 /**
@@ -483,9 +502,9 @@ interface CheckContext {
  * number the code does not find in an item's evidence, and a key quote whose words it does not find
  * in its source, are hints for that call, never problems by themselves. A problem only code finds is
  * never key. An item the answer leaves out is recorded as unjudged, and fails nothing. `skipped`
- * when the budget skipped the fact check.
+ * when the budget skipped the fact check. Exported for a later pass, which checks its rewritten sections alone.
  */
-async function check(draft: Draft, ctx: CheckContext, labels?: ReadonlySet<string>): Promise<CheckPass | 'skipped'> {
+export async function checkDraft(draft: ArticleText, ctx: CheckContext, labels?: ReadonlySet<string>): Promise<CheckPass | 'skipped'> {
   const lines = sourceLines(ctx.sources)
   const sourceIds = new Set(ctx.sources.map(s => s.id))
   const inScope = (label: string) => !labels || labels.has(label)
@@ -522,8 +541,8 @@ async function check(draft: Draft, ctx: CheckContext, labels?: ReadonlySet<strin
 }
 
 /** Keeps a rewritten draft once its `rewritten` items were checked again; false, keeping nothing, when the budget skipped that check. */
-async function recheck(draft: Draft, rewritten: string[], ctx: CheckContext, r: StoryResearch): Promise<boolean> {
-  const pass = await check(draft, ctx, new Set(rewritten))
+export async function recheck<D extends ArticleText>(draft: D, rewritten: string[], ctx: CheckContext, r: CheckState<D>): Promise<boolean> {
+  const pass = await checkDraft(draft, ctx, new Set(rewritten))
   if (pass === 'skipped') return false
   r.draft = draft
   r.checks.push(pass)
@@ -536,7 +555,7 @@ async function recheck(draft: Draft, rewritten: string[], ctx: CheckContext, r: 
  * kept story paragraphs alone, which hold no source's words, and checked once more; only when
  * nothing else ends the run. The draft as last checked.
  */
-async function deriveFields(draft: Draft, ctx: CheckContext, r: StoryResearch): Promise<Draft> {
+async function deriveFields<D extends ArticleText>(draft: D, ctx: CheckContext, r: CheckState<D>): Promise<D> {
   const labels = derivableLabels(r.problems)
   if (labels.length === 0) return draft
   const rest = dropFailing(
@@ -556,9 +575,15 @@ async function deriveFields(draft: Draft, ctx: CheckContext, r: StoryResearch): 
  * rounds, each rewriting only the items still failing, with their problems, and checking those
  * alone; an item that passed is frozen. A round whose answer changes nothing ends the rounds; a
  * call the budget skips ends the repair, and a repair it left unchecked is never kept. Then the
- * derived fields (`deriveFields`). The draft as last checked.
+ * derived fields (`deriveFields`). The draft as last checked. Exported for a later pass, whose
+ * rewritten sections take the same rounds.
  */
-async function repair(draft: Draft, input: WriteInput, ctx: CheckContext, r: StoryResearch): Promise<Draft> {
+export async function repairDraft<D extends ArticleText>(
+  draft: D,
+  input: Pick<WriteInput, 'sources' | 'earlier'>,
+  ctx: CheckContext,
+  r: CheckState<D>,
+): Promise<D> {
   let current = draft
   for (let round = 0; round < config.research.repairRounds && r.problems.length > 0; round++) {
     const targets = repairTargets(current, r.problems)
@@ -585,12 +610,12 @@ async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFa
   const ctx: CheckContext = { facts, sources: r.sources, call }
   const draft = withoutInlineIds(required(await call('write', writeSchema, buildWritePrompt(input)), 'write'))
   r.draft = draft
-  const first = await check(draft, ctx)
+  const first = await checkDraft(draft, ctx)
   if (first === 'skipped') throw new Stop('budget')
   r.checks.push(first)
   r.problems = first.problems
   // No repair gives a draft the part it has nothing in, and the run ends on it anyway
-  const repaired = 'failed' in dropFailing(draft, []) ? draft : await repair(draft, input, ctx, r)
+  const repaired = 'failed' in dropFailing(draft, []) ? draft : await repairDraft(draft, input, ctx, r)
   const kept = dropFailing(repaired, r.problems)
   if ('failed' in kept) {
     r.failedOn = kept.failedOn
@@ -606,6 +631,11 @@ export interface CoverageOptions {
   known?: ReadonlySet<string>
   /** The queries to search of those written, in order (a pass skips those made before). */
   pickQueries?: (queries: { query: string; language: string }[]) => { query: string; language: string }[]
+  /**
+   * A later pass's window, from the last pass's day to now: what other outlets reported since. The
+   * original article, which the pool holds, is not read again, and finding nothing new is no stop.
+   */
+  since?: SearchWindow
 }
 
 /** What the coverage steps settled, which the write reads. */
@@ -628,7 +658,7 @@ export async function extractCoverage(
 ): Promise<Coverage> {
   const o = story.original
   const articleDate = anchorDate(o.datePublished, o.dateCrawled).slice(0, 10)
-  const window = searchWindow(articleDate, deps.latestDate)
+  const window = options.since ?? searchWindow(articleDate, deps.latestDate)
   const own = await ownSources(story, call)
   const found = await searchCoverage(story, articleDate, window, call, deps, r, options.pickQueries)
 
@@ -641,23 +671,21 @@ export async function extractCoverage(
   const filtered = filterCandidates({ original: { url: o.url, text: o.content }, own: allowed.own, search: allowed.search, window })
   r.candidates = own.length + found.length
   for (const d of [...allowed.dropped, ...filtered.dropped]) r.drops[d.reason] = (r.drops[d.reason] ?? 0) + 1
-  if (filtered.selected.length === 0) throw new Stop('no usable source', 'no_other_coverage')
+  if (filtered.selected.length === 0 && !options.since) throw new Stop('no usable source', 'no_other_coverage')
 
-  const inputs: ExtractInput[] = [
-    {
-      origin: 'original',
-      isOriginal: true,
-      url: o.url,
-      title: o.title,
-      outlet: o.outlet,
-      // The anchored date, so S0 shows the same day the window and the old-news cutoff use.
-      date: articleDate,
-      favicon: null,
-      usedRawContent: false,
-      text: o.content,
-    },
-    ...filtered.selected.map(s => ({ ...s, isOriginal: false })),
-  ]
+  const original: ExtractInput = {
+    origin: 'original',
+    isOriginal: true,
+    url: o.url,
+    title: o.title,
+    outlet: o.outlet,
+    // The anchored date, so S0 shows the same day the window and the old-news cutoff use.
+    date: articleDate,
+    favicon: null,
+    usedRawContent: false,
+    text: o.content,
+  }
+  const inputs: ExtractInput[] = [...(options.since ? [] : [original]), ...filtered.selected.map(s => ({ ...s, isOriginal: false }))]
   const used = new Set([story.id, ...filtered.selected.flatMap(s => (s.storyId ? [s.storyId] : []))])
   await buildPool(story, inputs, used, call, deps, r)
   return { articleDate, window }

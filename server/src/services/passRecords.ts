@@ -12,6 +12,7 @@ import { dayStart, utcDay } from '../lib/days.js'
 import { APPROX, CREDITED_KINDS, VALIDITY, isContextSlot } from '../schemas/storyContext.js'
 import { researchedStorySchema, citedTextSchema } from './researchedStory.js'
 import type { ResearchDb } from './researchInput.js'
+import { appliedDraftSchema } from './researchSwap.js'
 import {
   poolFactKey,
   sourceKey,
@@ -232,6 +233,11 @@ const changesSchema = z
   .array(z.object({ section: z.string(), before: citedTextSchema.nullable().catch(null), after: citedTextSchema.nullable().catch(null) }))
   .catch([])
 
+const VERSION_COLUMNS = Prisma.sql`v.id, v.number, v.kind::text AS kind, v.status::text AS status, v.pass_id AS "passId", v.title,
+  v.title_label AS "titleLabel", v.summary, v.marketing_blurb AS "marketingBlurb", v.quote, v.quote_attribution AS "quoteAttribution",
+  v.relevance_reasons AS "relevanceReasons", v.antifactors, v.emotion_tag::text AS "emotionTag", v.research, v.draft, v.changes, v.note,
+  v.created_at AS "createdAt"`
+
 interface VersionRow {
   id: string
   number: number
@@ -248,25 +254,23 @@ interface VersionRow {
   antifactors: string | null
   emotionTag: string | null
   research: unknown
+  draft: unknown
   changes: unknown
   note: unknown
+  createdAt: Date
 }
 
-/** The story's current article version, or null: none, or one whose projection no longer reads. */
-export async function currentVersion(db: ResearchDb, storyId: string): Promise<ArticleVersionData | null> {
-  const [row] = await db.$queryRaw<VersionRow[]>`
-    SELECT v.id, v.number, v.kind::text AS kind, v.status::text AS status, v.pass_id AS "passId", v.title, v.title_label AS "titleLabel",
-           v.summary, v.marketing_blurb AS "marketingBlurb", v.quote, v.quote_attribution AS "quoteAttribution",
-           v.relevance_reasons AS "relevanceReasons", v.antifactors, v.emotion_tag::text AS "emotionTag", v.research, v.changes, v.note
-    FROM article_versions v WHERE v.story_id = ${storyId} AND v.status = 'current'`
-  const research = row ? researchedStorySchema.safeParse(row.research) : null
-  if (!row || !research?.success) return null
+/** A stored version read back; null for one whose projection no longer reads. Its article is null when none was stored or it no longer reads. */
+function versionFromRow(row: VersionRow): StoredVersion | null {
+  const research = researchedStorySchema.safeParse(row.research)
+  if (!research.success) return null
   const note = row.note === null ? null : citedTextSchema.safeParse(row.note)
+  const article = row.draft === null ? null : appliedDraftSchema.safeParse(row.draft)
   return {
     id: row.id,
     number: row.number,
     kind: oneOf(row.kind, ['first', 'update', 'legacy'], 'legacy'),
-    status: 'current',
+    status: oneOf(row.status, ['current', 'superseded', 'reverted'], 'superseded'),
     passId: row.passId,
     title: row.title,
     titleLabel: row.titleLabel,
@@ -278,9 +282,28 @@ export async function currentVersion(db: ResearchDb, storyId: string): Promise<A
     antifactors: row.antifactors,
     emotionTag: row.emotionTag,
     research: research.data,
+    article: article?.success ? article.data : null,
     changes: changesSchema.parse(row.changes) as VersionChange[],
     note: note?.success ? note.data : null,
+    createdAt: row.createdAt,
   }
+}
+
+/** A stored version, with the time it was made (the day its Update is dated). */
+export type StoredVersion = ArticleVersionData & { id: string; createdAt: Date }
+
+/** The story's current article version, or null: none, or one whose projection no longer reads. */
+export async function currentVersion(db: ResearchDb, storyId: string): Promise<StoredVersion | null> {
+  const [row] = await db.$queryRaw<VersionRow[]>`
+    SELECT ${VERSION_COLUMNS} FROM article_versions v WHERE v.story_id = ${storyId} AND v.status = 'current'`
+  return row ? versionFromRow(row) : null
+}
+
+/** Every version of the story that still reads, newest first: the history Updates and an undo are made from. */
+export async function storyVersions(db: ResearchDb, storyId: string): Promise<StoredVersion[]> {
+  const rows = await db.$queryRaw<VersionRow[]>`
+    SELECT ${VERSION_COLUMNS} FROM article_versions v WHERE v.story_id = ${storyId} ORDER BY v.number DESC`
+  return rows.flatMap(row => versionFromRow(row) ?? [])
 }
 
 /** The cards of the story's newest pass that wrote any, in order: the ones served once passes run. */
@@ -534,6 +557,7 @@ export async function insertVersion(tx: Prisma.TransactionClient, storyId: strin
       antifactors: v.antifactors,
       emotionTag: v.emotionTag as EmotionTag | null,
       research: v.research as unknown as Prisma.InputJsonObject,
+      draft: v.article === null ? Prisma.DbNull : (v.article as unknown as Prisma.InputJsonObject),
       changes: v.changes as unknown as Prisma.InputJsonArray,
       note: v.note === null ? Prisma.DbNull : (v.note as unknown as Prisma.InputJsonObject),
     },

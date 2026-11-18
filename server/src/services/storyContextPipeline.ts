@@ -7,12 +7,11 @@
  * of its own, as `researchStory` has none: model calls, search and the opt-out policy are injected
  * (`storyContextRuns.ts` in production, the eval's deps in eval:overviews). It writes nothing.
  */
-import { createHash } from 'node:crypto'
-import { toJsonSchema } from '@langchain/core/utils/json_schema'
 import type { z } from 'zod'
 import { config } from '../config.js'
 import type { LlmCallOutcome, LlmTokenUsage } from '../lib/llmUsage.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
+import { promptVersionOf as versionOf } from '../prompts/promptVersion.js'
 import { buildFactCheckPrompt } from '../prompts/research.js'
 import { buildBoxesPrompt, buildContextExtractionPrompt, buildGapListPrompt, buildStructurePrompt, type StoryText } from '../prompts/storyContext.js'
 import { factCheckSchema, type FactCheck } from '../schemas/research.js'
@@ -223,13 +222,6 @@ const CANONICAL_ITEM = {
   facts: [{ id: 'S1F1', statement: 'Fact.', supportingSentence: 'Sentence.', measures: '' }],
   numbersNotFound: [],
 }
-
-const versionOf = (prompt: string, schema: z.ZodType) =>
-  createHash('sha256')
-    .update(prompt)
-    .update(JSON.stringify(toJsonSchema(schema)))
-    .digest('hex')
-    .slice(0, 8)
 
 /** Computed once at load, so a changed template or `.describe()` changes the version with no hand-kept number. */
 export const CONTEXT_PROMPT_VERSIONS: Record<ContextStep, string> = {

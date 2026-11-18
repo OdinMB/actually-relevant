@@ -868,6 +868,8 @@ model ArticleVersion {
   emotionTag       EmotionTag?   @map("emotion_tag")
   /// The reader projection (researchedStorySchema)
   research         Json
+  /// The article with each section's cited pool facts (appliedDraftSchema), which a later pass judges and rewrites; null for a legacy version, whose sections take their facts from the projection's citations
+  draft            Json?
   /// [{ section, before: CitedText | null, after: CitedText | null }]
   changes          Json          @default("[]")
   /// The Update readers see, with its citations; null for a first or legacy version

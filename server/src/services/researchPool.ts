@@ -5,11 +5,14 @@
  * identity in the pool (`poolFactKey`), the story-level refs a new source or fact takes, and a pool
  * fact seen as research's and context's code reads a fact. No I/O: `passRecords.ts` maps the rows.
  */
+import type { Extraction } from '../schemas/research.js'
 import type { ResearchedStory, CitedText } from './researchedStory.js'
 import type { ContextSlot } from '../schemas/storyContext.js'
 import type { ContextFactData, FactVerdict } from './storyContextChecks.js'
 import { normalizedUrl } from './researchFilter.js'
-import { factKey } from './storyContextRecords.js'
+import type { ResearchEarlier, ResearchSource } from './researchPipeline.js'
+import type { AppliedDraft } from './researchSwap.js'
+import { factKey, oneOf } from './storyContextRecords.js'
 
 export type PoolOrigin = 'original' | 'cluster' | 'neighbour' | 'search' | 'earlier'
 
@@ -137,6 +140,12 @@ export interface VersionChange {
   after: CitedText | null
 }
 
+/**
+ * A version's article with each section's cited pool facts (the draft's fact ids, every one of them,
+ * where the reader projection keeps one per source): what a later pass judges and rewrites.
+ */
+export type Article = AppliedDraft
+
 export interface ArticleVersionData extends VersionFields {
   id: string | null
   number: number
@@ -144,6 +153,8 @@ export interface ArticleVersionData extends VersionFields {
   status: 'current' | 'superseded' | 'reverted'
   passId: string | null
   research: ResearchedStory
+  /** Null for a legacy version: its sections' facts are read from the projection's citations (`versionArticle`). */
+  article: Article | null
   changes: VersionChange[]
   note: CitedText | null
 }
@@ -175,3 +186,58 @@ export function nextFactRef(sourceRef: string, refs: readonly string[]): string 
 
 /** A fact that may be shown or offered: supported by its check and not demoted. */
 export const usable = (f: Pick<PoolFact, 'verdict' | 'status'>): boolean => f.verdict === 'supported' && f.status !== 'demoted'
+
+const RELATIONS = ['same-development', 'background', 'off-topic'] as const
+const KINDS = ['news-report', 'analysis', 'opinion', 'press-release', 'official-body', 'other'] as const
+
+const researchFact = (f: PoolFact) => ({
+  id: f.ref,
+  statement: f.statement,
+  supportingSentence: f.supportingSentence,
+  measures: f.measures,
+  found: f.supportFound,
+})
+
+/** A pool page with the facts given, as research's write, checks and projection read a source. */
+export function asResearchSource(s: PoolSource, facts: PoolFact[]): ResearchSource {
+  return {
+    id: s.ref,
+    origin: s.origin === 'earlier' ? 'search' : s.origin,
+    url: s.url,
+    title: s.title,
+    outlet: s.outlet,
+    date: s.date,
+    favicon: s.favicon,
+    usedRawContent: s.usedRawContent,
+    kind: oneOf<Extraction['kind']>(s.kind, KINDS, 'other'),
+    country: s.country,
+    relation: oneOf<Extraction['relation']>(s.relation, RELATIONS, 'background'),
+    facts: facts.map(researchFact),
+    voices: s.voices,
+  }
+}
+
+/** One of our earlier stories in the pool, with the facts given, as research's write reads it. */
+export function asResearchEarlier(s: PoolSource, facts: PoolFact[]): ResearchEarlier {
+  return {
+    id: s.ref,
+    storyId: s.earlierStoryId ?? '',
+    slug: null,
+    title: s.title,
+    date: s.date ?? '',
+    relation: 'background',
+    facts: facts.map(researchFact),
+  }
+}
+
+/** The pool's pages and earlier stories as research reads them, each with the facts `keep` lets through. */
+export function researchView(
+  pool: Pick<Pool, 'sources' | 'facts'>,
+  keep: (f: PoolFact) => boolean = () => true,
+): { sources: ResearchSource[]; earlier: ResearchEarlier[] } {
+  const factsOf = (s: PoolSource) => pool.facts.filter(f => f.sourceRef === s.ref && keep(f))
+  return {
+    sources: pool.sources.filter(s => s.origin !== 'earlier').map(s => asResearchSource(s, factsOf(s))),
+    earlier: pool.sources.filter(s => s.origin === 'earlier').map(s => asResearchEarlier(s, factsOf(s))),
+  }
+}

@@ -195,7 +195,8 @@ export interface WriteInput {
 const fact = (f: PoolFact) =>
   `<FACT id="${f.id}">${escapeXml(f.statement)}${f.measures ? `\n${tag('MEASURES', f.measures)}` : ''}\n${tag('SENTENCE', f.supportingSentence)}</FACT>`
 
-function factsBlock(sources: PoolSourceBrief[], earlier: PoolEarlierBrief[]): string {
+/** Exported, with the blocks below, for a research pass's later-pass prompts (`prompts/researchPass.ts`). */
+export function factsBlock(sources: PoolSourceBrief[], earlier: PoolEarlierBrief[]): string {
   const source = (s: PoolSourceBrief) =>
     [
       `<SOURCE id="${s.id}" outlet="${escapeXml(s.outlet)}" kind="${s.kind}" country="${escapeXml(s.country)}" date="${publishedDay(s.date) ?? 'unknown'}" relation="${s.relation}">`,
@@ -216,7 +217,7 @@ function factsBlock(sources: PoolSourceBrief[], earlier: PoolEarlierBrief[]): st
 }
 
 /** What <FACTS> holds, shared by the write and repair prompts: a source's date is what the newest-information rule reads. */
-const FACTS_INTRO = `Facts extracted from each source, with the sentence that states each, and the voices each source quotes. A SOURCE's or an EARLIER story's date is the day it was published ('unknown' when not known). ${UNTRUSTED}`
+export const FACTS_INTRO = `Facts extracted from each source, with the sentence that states each, and the voices each source quotes. A SOURCE's or an EARLIER story's date is the day it was published ('unknown' when not known). ${UNTRUSTED}`
 
 /**
  * A copy of the assess prompt's generic limiting factors (`prompts/assess.ts`; the write prompt's
@@ -238,7 +239,7 @@ Exception: if an early-stage technology, product, meeting, or call to action is 
 </GENERIC_LIMITING_FACTORS>`
 
 /** The own-words rules, shared by the write and repair prompts (`.context/story-research.md`, "Own words"). */
-const OWN_WORDS = `<OWN_WORDS>
+export const OWN_WORDS = `<OWN_WORDS>
 - The story is a short synthesis in our own words. Each paragraph combines facts from across the sources and compresses them into fewer, shorter sentences than the sources use.
 - It never translates or restates a source's sentences, nor a fact's statement, and never follows one source's order of points or its structure. The order is the story's own: what happened, then why and who is affected, then what comes next, as the Story block says.
 - No field but the key quote carries a run of a source's words, in any language, beyond names, titles, figures with their units and the scope a fact records.
@@ -249,7 +250,7 @@ const OWN_WORDS = `<OWN_WORDS>
 </OWN_WORDS>`
 
 /** The citation rules, shared by the write and repair prompts. */
-const CITATIONS = `Citations
+export const CITATIONS = `Citations
 - Every paragraph of the story cites, by id, every fact it uses, and says nothing its cited facts do not state: each number, name, date and place in it appears in one of them. A bullet that states a fact cites it; a bullet that only judges cites nothing. Ids go only in the fact ids, never in any text readers see.
 - A number keeps the scope its fact records ('22 GW of rooftop solar in two years', not '22 GW of solar'). Where sources count differently, the story gives each figure with its scope and cites each.
 - The title, the summary and the blurb cite nothing, yet state only what facts in <FACTS> state, with the scope and qualifiers those facts give: a fact's 'the first in 40 years' never becomes 'the first'.
@@ -272,7 +273,7 @@ const KEY_QUOTE = `Key quote
 - It keeps the source's words, their meaning and the speaker the source gives them to: nothing is added or changed but context in square brackets ('[the ministry]'), and an ellipsis marks words left out.`
 
 /** The rules for every published field, shared by the write, repair and derive prompts. */
-const WRITING_GUIDELINES = `<GUIDELINES>
+export const WRITING_GUIDELINES = `<GUIDELINES>
 - Write for a smart 16-year-old, not an expert. Avoid jargon, insider terms, and acronyms unless they're household names.
 - Each published field is read on its own, so the first time a field mentions a named agreement, program, law, system or acronym, say in a few words what it is.
 - Keep the impact analysis concrete: who is affected, how many, how soon, and what could stop or weaken it. Quantify affected people on a logarithmic scale: 'millions', 'tens of millions', 'hundreds of millions', 'billions'.
@@ -387,7 +388,7 @@ export interface RepairInput {
   repairs: RepairTarget[]
 }
 
-const repairItem = (t: RepairTarget) =>
+export const repairItem = (t: RepairTarget) =>
   [
     `<ITEM label="${escapeXml(t.label)}">`,
     tag('TEXT', t.text),

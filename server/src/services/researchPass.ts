@@ -27,13 +27,14 @@ import {
   type Coverage,
   type ResearchCall,
   type ResearchDeps,
-  type ResearchEarlier,
-  type ResearchSource,
   type StepResult,
   type StoryResearch,
 } from './researchPipeline.js'
 import { coverageSearches, gapSearches, knownPages, readPages } from './researchPassPlan.js'
+import { articleOf } from './articleVersions.js'
 import {
+  asResearchEarlier,
+  asResearchSource,
   nextFactRef,
   nextSourceRef,
   poolFactKey,
@@ -47,7 +48,6 @@ import {
 import { buildResearchedStory } from './researchedStory.js'
 import type { SourcePolicy } from './researchFilter.js'
 import { researchedValues } from './researchSwap.js'
-import type { Extraction } from '../schemas/research.js'
 import type { ContextFactData, DraftBox } from './storyContextChecks.js'
 import { storyLayout, type StoryLayout } from './storyContextLayout.js'
 import {
@@ -185,42 +185,6 @@ export interface PassResult {
 // ---------------------------------------------------------------------------
 // The pool as research's and context's steps read it
 // ---------------------------------------------------------------------------
-
-const RELATIONS = ['same-development', 'background', 'off-topic'] as const
-const KINDS = ['news-report', 'analysis', 'opinion', 'press-release', 'official-body', 'other'] as const
-const oneOf = <T extends string>(value: string, allowed: readonly T[], fallback: T): T =>
-  (allowed as readonly string[]).includes(value) ? (value as T) : fallback
-
-/** A pool source with the facts given, as research's write and checks read a source. */
-function researchSource(s: PoolSource, facts: PoolFact[]): ResearchSource {
-  return {
-    id: s.ref,
-    origin: s.origin === 'earlier' ? 'search' : s.origin,
-    url: s.url,
-    title: s.title,
-    outlet: s.outlet,
-    date: s.date,
-    favicon: s.favicon,
-    usedRawContent: s.usedRawContent,
-    kind: oneOf<Extraction['kind']>(s.kind, KINDS, 'other'),
-    country: s.country,
-    relation: oneOf<Extraction['relation']>(s.relation, RELATIONS, 'background'),
-    facts: facts.map(f => ({ id: f.ref, statement: f.statement, supportingSentence: f.supportingSentence, measures: f.measures, found: f.supportFound })),
-    voices: s.voices,
-  }
-}
-
-function researchEarlier(s: PoolSource, facts: PoolFact[]): ResearchEarlier {
-  return {
-    id: s.ref,
-    storyId: s.earlierStoryId ?? '',
-    slug: null,
-    title: s.title,
-    date: s.date ?? '',
-    relation: 'background',
-    facts: facts.map(f => ({ id: f.ref, statement: f.statement, supportingSentence: f.supportingSentence, measures: f.measures, found: f.supportFound })),
-  }
-}
 
 const UNSTRUCTURED = {
   value: null,
@@ -432,6 +396,7 @@ function firstVersion(r: StoryResearch, passId: string): ArticleVersionData | nu
     antifactors: values.antifactors,
     emotionTag: values.emotionTag ?? null,
     research: buildResearchedStory({ draft: r.draft, sources: r.sources, earlier: r.earlier }),
+    article: articleOf(r.draft),
     changes: [],
     note: null,
   }
@@ -549,10 +514,10 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   }
 
   // Step 8: the article from the supported facts and our earlier stories' facts, checked against every source
-  r.sources = pages().map(s => researchSource(s, pool.factsOf(s)))
-  r.earlier = pool.sources.filter(s => s.origin === 'earlier').map(s => researchEarlier(s, pool.factsOf(s)))
+  r.sources = pages().map(s => asResearchSource(s, pool.factsOf(s)))
+  r.earlier = pool.sources.filter(s => s.origin === 'earlier').map(s => asResearchEarlier(s, pool.factsOf(s)))
   if (coverage && !stop) {
-    const sources = pages().map(s => researchSource(s, pool.factsOf(s, usable)))
+    const sources = pages().map(s => asResearchSource(s, pool.factsOf(s, usable)))
     await runPassArticle({ story: input.story, coverage, sources, earlier: r.earlier }, deps.relevanceMin, call, r)
   } else {
     r.verdict = decideGate(stop ?? { failed: 'no coverage', category: 'technical' }, deps.relevanceMin)
