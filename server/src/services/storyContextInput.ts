@@ -81,8 +81,8 @@ interface StoryRow {
  * One story's input, or null when it is neither published nor selected, or has no completed research
  * run whose sources hold facts. A published story's day is its publishing day; a selected one's, about
  * to be published, is `now`'s (the step builds its cards before publishing). The run is the newest
- * such; the reusable facts are the supported, non-demoted context facts of the earlier stories it
- * linked, kept only while current on this story's day, newest first, at most `maxReusedFacts`.
+ * such; the reusable facts are the supported, non-demoted facts of the earlier stories it linked
+ * (`reusableFacts`), kept only while current on this story's day, newest first, at most `maxReusedFacts`.
  */
 export async function loadContextInput(db: ResearchDb, storyId: string, now: Date = new Date()): Promise<ContextInput | null> {
   const [story] = await db.$queryRaw<StoryRow[]>`
@@ -122,10 +122,25 @@ export async function loadContextInput(db: ResearchDb, storyId: string, now: Dat
 }
 
 /**
- * The supported, non-demoted context facts of these earlier stories, each with its story, kept only
- * while current on `storyDay`, newest first, each once (an earlier story's copy of a fact it reused
- * stands for the same fact: offered once, the newest), at most `limit` (`maxReusedFacts`; a pass
- * caps them once it knows which stories it links).
+ * A pool fact's columns (`f`, its source `s`) under a context fact's row field names, as
+ * `researchPool.ts`'s `contextFact` reads a pool fact: a fact with a passage is a search's, the
+ * structure call's model the fact's.
+ */
+const POOL_FACT_COLUMNS_SQL = Prisma.raw(`
+  f.id, f.ref, CASE WHEN f.passage IS NOT NULL THEN 'search' ELSE 'research' END AS origin, f.reused_from_id AS "reusedFromId",
+  s.url AS "sourceUrl", s.outlet AS "sourceOutlet", s.title AS "sourceTitle", s.published_date AS "sourceDate", s.kind AS "sourceKind",
+  f.supporting_sentence AS "supportingSentence", f.passage, f.support_found AS "supportFound", f.statement, f.value,
+  f.value_high AS "valueHigh", f.unit, f.approx, f.provisional, f.counted, f.place, f.as_of AS "asOf",
+  f.as_of_precision AS "asOfPrecision", f.credited, f.credited_kind AS "creditedKind", f.validity::text AS validity,
+  f.verdict::text AS verdict, f.verdict_problem AS "verdictProblem", f.structure_model AS model, f.structure_prompt_version AS "promptVersion"`)
+
+/**
+ * The supported, non-demoted facts of these earlier stories, each with its story, kept only while
+ * current on `storyDay`, newest first, each once (an earlier story's copy of a fact it reused stands
+ * for the same fact: offered once, the newest), at most `limit` (`maxReusedFacts`; a pass caps them
+ * once it knows which stories it links). An earlier story with a pool offers its pool's structured
+ * page facts, never its context facts (the pool holds those it kept since the legacy import, and a
+ * pass may have demoted one there); one without offers its context facts.
  */
 export async function reusableFacts(
   db: ResearchDb,
@@ -135,10 +150,18 @@ export async function reusableFacts(
 ): Promise<(ReusableFact & { storyId: string })[]> {
   if (earlierIds.length === 0) return []
   const rows = await db.$queryRaw<(FactColumns & { storyId: string })[]>`
-    SELECT ${FACT_COLUMNS_SQL}, f.story_id AS "storyId"
-    FROM context_facts f
-    WHERE f.story_id = ANY(${earlierIds}) AND f.verdict = 'supported' AND f.status <> 'demoted'
-    ORDER BY f.as_of DESC NULLS LAST, f.created_at DESC, f.id`
+    SELECT * FROM (
+      SELECT ${FACT_COLUMNS_SQL}, f.story_id AS "storyId", f.created_at AS "createdAt"
+      FROM context_facts f
+      WHERE f.story_id = ANY(${earlierIds}) AND f.verdict = 'supported' AND f.status <> 'demoted'
+        AND NOT EXISTS (SELECT 1 FROM evidence_sources e WHERE e.story_id = f.story_id)
+      UNION ALL
+      SELECT ${POOL_FACT_COLUMNS_SQL}, f.story_id AS "storyId", f.created_at AS "createdAt"
+      FROM pool_facts f JOIN evidence_sources s ON s.id = f.source_id
+      WHERE f.story_id = ANY(${earlierIds}) AND f.verdict = 'supported' AND f.status <> 'demoted'
+        AND f.structure_model IS NOT NULL AND s.ref IS NOT NULL AND s.origin <> 'earlier'
+    ) facts
+    ORDER BY "asOf" DESC NULLS LAST, "createdAt" DESC, id`
   const windows = { fastDays: config.storyContext.fastValidDays, slowDays: config.storyContext.slowValidDays }
   const offered = new Set<string>()
   return rows

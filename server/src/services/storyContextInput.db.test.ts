@@ -1,8 +1,9 @@
 import { it, expect } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
+import { createPoolFact, createPoolSource } from '../test/db/passes.js'
 import { createContextFact, createContextRun, createResearchRun } from '../test/db/storyContext.js'
-import { contextEligibility, loadContextInput, loadEarlierWork } from './storyContextInput.js'
+import { contextEligibility, loadContextInput, loadEarlierWork, reusableFacts } from './storyContextInput.js'
 import { RESPONSE_ANGLES } from './storyContextPipeline.js'
 import { factKey } from './storyContextRecords.js'
 
@@ -77,6 +78,52 @@ describeDb('story context input', () => {
 
     const input = await loadContextInput(prisma, story.id)
     expect(input!.reusable.map(f => f.id).sort()).toEqual([copy.id, other.id].sort())
+  })
+
+  it("offers an earlier story's pool facts once it has a pool, never its context facts then, and the context facts of one without", async () => {
+    const { published } = await setup()
+    const pooled = await published(10)
+    const unpooled = await published(5)
+    // The pooled story's legacy context facts: its pool holds them now, so they are never offered
+    const legacyRun = await createContextRun(pooled.id)
+    await createContextFact(pooled.id, legacyRun.id, { ref: 'S2F1', validity: 'fixed', asOf: new Date('2026-11-14'), asOfPrecision: 'day' })
+    const page = await createPoolSource(pooled.id, 'S2')
+    const kept = await createPoolFact(page, { ref: 'S2F1', validity: 'fixed', asOf: new Date('2026-11-14'), asOfPrecision: 'day' })
+    await createPoolFact(page, { ref: 'S2F2', validity: 'fixed', status: 'demoted', dropReason: 'contradicted' })
+    await createPoolFact(page, { ref: 'S2F3', validity: 'fixed', verdict: 'rejected' })
+    await createPoolFact(page, { ref: 'S2F4', validity: 'fixed', verdict: 'unjudged', structureModel: null, structurePromptVersion: null })
+    // Our own earlier story's text, as the pool holds it, is never a fact to offer
+    const ours = await createPoolSource(pooled.id, 'E1', { origin: 'earlier', earlierStoryId: unpooled.id, url: '', normalizedUrl: `story:${unpooled.id}` })
+    await createPoolFact(ours, { ref: 'E1F1', validity: 'fixed' })
+    const context = await createContextFact(unpooled.id, (await createContextRun(unpooled.id)).id, {
+      ref: 'S3F1',
+      validity: 'fixed',
+      asOf: new Date('2026-11-01'),
+      asOfPrecision: 'day',
+    })
+
+    const facts = await reusableFacts(prisma, [pooled.id, unpooled.id], '2026-11-15')
+    expect(facts.map(f => [f.storyId, f.id])).toEqual([
+      [pooled.id, kept.id],
+      [unpooled.id, context.id],
+    ])
+    expect(facts[0]).toMatchObject({
+      ref: 'S2F1',
+      origin: 'research',
+      reusedFromId: null,
+      source: { id: 'S2', url: page.url, outlet: 'Outlet S2', title: 'Title S2', date: '2026-11-12', kind: 'news-report' },
+      supportingSentence: 'Sentence of S2F1.',
+      statement: 'Statement of S2F1.',
+      value: 212,
+      unit: 'people',
+      counted: 'deaths',
+      place: 'Kenya',
+      asOf: '2026-11-14',
+      validity: 'fixed',
+      verdict: 'supported',
+      model: 'test-small',
+      promptVersion: 'str00001',
+    })
   })
 
   it('loads a selected story about to be published, its day the run’s', async () => {

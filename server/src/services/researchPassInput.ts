@@ -4,8 +4,7 @@
  * reusable facts of the earlier stories research may link, and whether an editor's pass may start.
  * SELECT only, through the client it is given, so the eval can pass its read-only session. The
  * legacy import is the claim's (`legacyPool.ts`, in the pass's transaction), never this module's.
- * The earlier stories' facts are context's (`context_facts`) until passes store them: reading
- * their pool facts too comes with the wiring.
+ * An earlier story's facts are its pool's once it has one, else its context facts (`reusableFacts`).
  */
 import { utcDay } from '../lib/days.js'
 import { currentVersion, loadPool } from './passRecords.js'
