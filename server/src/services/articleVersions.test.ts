@@ -200,7 +200,7 @@ describe('nextVersion', () => {
       passId: 'p4',
       article: changed,
       research: projection(),
-      changes: [{ section: 'Title', before: { text: 'Peat fires return', citations: [] }, after: { text: 'Peat fires spread', citations: [] } }],
+      changes: [{ section: 'Title', from: 'Title', before: { text: 'Peat fires return', citations: [] }, after: { text: 'Peat fires spread', citations: [] } }],
       note: cited('The area grew.', 'S5'),
     })
     expect(v).toMatchObject({ id: null, number: 4, kind: 'update', status: 'current', passId: 'p4', title: 'Peat fires spread', emotionTag: 'calm' })
@@ -217,7 +217,7 @@ describe('nextVersion', () => {
 
 describe('publicUpdates', () => {
   const at = (day: string) => new Date(`${day}T09:00:00Z`)
-  const change = (section: string) => ({ section, before: cited(`old ${section}`, 'S1'), after: cited(`new ${section}`, 'S5') })
+  const change = (section: string) => ({ section, from: section, before: cited(`old ${section}`, 'S1'), after: cited(`new ${section}`, 'S5') })
 
   it('lists the notes of versions not reverted, newest first, each dated by its day with the page sections it changed', () => {
     const updates = publicUpdates([
@@ -241,8 +241,32 @@ describe('publicUpdates', () => {
       },
     ])
     expect(updates).toEqual([
-      { date: '2026-11-20', note: cited('Second.', 'S7'), changes: [{ section: 'Caveat 1', before: cited('old Caveat 1', 'S1') }] },
-      { date: '2026-11-18', note: cited('First.', 'S5'), changes: [{ section: 'Story paragraph 2', before: cited('old Story paragraph 2', 'S1') }] },
+      { date: '2026-11-20', note: cited('Second.', 'S7'), changes: [{ section: 'Caveat 1', before: cited('old Caveat 1', 'S1'), removed: false }] },
+      {
+        date: '2026-11-18',
+        note: cited('First.', 'S5'),
+        changes: [{ section: 'Story paragraph 2', before: cited('old Story paragraph 2', 'S1'), removed: false }],
+      },
+    ])
+  })
+
+  it('labels each change by where it was in the version before, whose text it shows, so a rewrite after a dropped section is not named twice', () => {
+    const updates = publicUpdates([
+      {
+        number: 2,
+        kind: 'update',
+        status: 'current',
+        changes: [
+          { section: 'Story paragraph 2', from: 'Story paragraph 2', before: cited('Smoke closed 40 schools.', 'S1'), after: null },
+          { section: 'Story paragraph 2', from: 'Story paragraph 3', before: cited('Rain is forecast.', 'S2'), after: cited('No rain came.', 'S5') },
+        ],
+        note: cited('Rain did not come.', 'S5'),
+        createdAt: at('2026-11-18'),
+      },
+    ])
+    expect(updates[0]!.changes).toEqual([
+      { section: 'Story paragraph 2', before: cited('Smoke closed 40 schools.', 'S1'), removed: true },
+      { section: 'Story paragraph 3', before: cited('Rain is forecast.', 'S2'), removed: false },
     ])
   })
 

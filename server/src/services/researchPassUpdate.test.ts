@@ -132,7 +132,9 @@ describe('versionChanges', () => {
     const before = article()
     const after = { ...before, story: before.story.map((p, i) => (i === 2 ? { text: 'No rain came.', factIds: ['S5F1'] } : p)) }
     const { changes, frozen } = versionChanges({ article: before, research: projection(before) }, { article: after, research: projection(after) }, new Set())
-    expect(changes).toEqual([{ section: 'Story paragraph 3', before: cited('Rain is forecast.', 'S2'), after: cited('No rain came.', 'S5') }])
+    expect(changes).toEqual([
+      { section: 'Story paragraph 3', from: 'Story paragraph 3', before: cited('Rain is forecast.', 'S2'), after: cited('No rain came.', 'S5') },
+    ])
     expect(frozen).toEqual([
       { part: 'story', from: 0, to: 0 },
       { part: 'story', from: 1, to: 1 },
@@ -149,18 +151,33 @@ describe('versionChanges', () => {
       { article: after, research: projection(after) },
       new Set(['Story paragraph 2']),
     )
-    expect(changes).toEqual([{ section: 'Story paragraph 2', before: cited('Smoke closed 40 schools.', 'S1'), after: null }])
+    expect(changes).toEqual([{ section: 'Story paragraph 2', from: 'Story paragraph 2', before: cited('Smoke closed 40 schools.', 'S1'), after: null }])
     expect(frozen.filter(k => k.part === 'story')).toEqual([
       { part: 'story', from: 0, to: 0 },
       { part: 'story', from: 2, to: 1 },
     ])
   })
 
+  it('names a section rewritten after a dropped one where it now is, with where it was, so no two changes share the label it was', () => {
+    const before = article()
+    const after = { ...before, story: [before.story[0]!, { text: 'No rain came.', factIds: ['S5F1'] }] }
+    const { changes } = versionChanges(
+      { article: before, research: projection(before) },
+      { article: after, research: projection(after) },
+      new Set(['Story paragraph 2']),
+    )
+    expect(changes.map(c => [c.section, c.from, c.after?.text ?? null])).toEqual([
+      ['Story paragraph 2', 'Story paragraph 2', null],
+      ['Story paragraph 2', 'Story paragraph 3', 'No rain came.'],
+    ])
+    expect(new Set(changes.map(c => c.from)).size).toBe(changes.length)
+  })
+
   it('records the title, summary and blurb when their text changed, citing nothing', () => {
     const before = article()
     const after = { ...before, title: 'Peat fires spread across Sumatra', summary: before.summary }
     const { changes } = versionChanges({ article: before, research: projection(before) }, { article: after, research: projection(after) }, new Set())
-    expect(changes).toEqual([{ section: 'Title', before: { text: before.title, citations: [] }, after: { text: after.title, citations: [] } }])
+    expect(changes).toEqual([{ section: 'Title', from: 'Title', before: { text: before.title, citations: [] }, after: { text: after.title, citations: [] } }])
   })
 })
 
@@ -198,7 +215,12 @@ describe('checkNote', () => {
 })
 
 describe('fallbackNote', () => {
-  const c = (section: string, removed = false) => ({ section, before: { text: 'old', citations: [] }, after: removed ? null : { text: 'new', citations: [] } })
+  const c = (section: string, removed = false, from = section) => ({
+    section,
+    from,
+    before: { text: 'old', citations: [] },
+    after: removed ? null : { text: 'new', citations: [] },
+  })
 
   it('names the page sections rewritten and removed and the outlets, once each', () => {
     expect(fallbackNote([c('Story paragraph 2'), c('Caveat 1'), c('Summary'), c('Why This Matters 2', true)], ['Reuters', 'WHO', 'Reuters'])).toBe(
@@ -208,5 +230,11 @@ describe('fallbackNote', () => {
 
   it('names the summary and blurb only when nothing on the page changed, and no outlet when none is known', () => {
     expect(fallbackNote([c('Summary'), c('Blurb')], [])).toBe('Updated: Summary and Blurb rewritten after new reporting.')
+  })
+
+  it('names each section by where it was, so a rewrite after a dropped one is not named twice', () => {
+    expect(fallbackNote([c('Story paragraph 2', true), c('Story paragraph 2', false, 'Story paragraph 3')], ['Agency'])).toBe(
+      'Updated: Story paragraph 3 rewritten and Story paragraph 2 removed after new reporting from Agency.',
+    )
   })
 })

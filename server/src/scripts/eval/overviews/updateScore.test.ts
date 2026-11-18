@@ -135,7 +135,9 @@ function updated(over: { second?: unknown; note?: UpdateRecord['note']; checks?:
     next: {
       article: nextArticle,
       research: { ...built, paragraphs },
-      changes: [{ section: 'Story paragraph 1', before: research.paragraphs[0]!.sentences[0]!, after: built.paragraphs[0]!.sentences[0]! }],
+      changes: [
+        { section: 'Story paragraph 1', from: 'Story paragraph 1', before: research.paragraphs[0]!.sentences[0]!, after: built.paragraphs[0]!.sentences[0]! },
+      ],
       note: { text: 'Updated: the count is now 6,000.', citations: [] },
     },
     record: record({
@@ -181,6 +183,25 @@ describe('scoreUpdates', () => {
     const s = scoreUpdates([run(planted, updated({ second }), good)])
     // Of the title, the second paragraph, the summary and the blurb, one differs
     expect(bar(s, 'identical')).toMatchObject({ value: 0.75, met: false })
+  })
+
+  it('reads the sections no change names by where they were, so a rewrite after a dropped section is not counted as one kept', () => {
+    // The opening paragraph dropped, the second rewritten into its place: both changes are named "Story paragraph 1" now
+    const nextArticle: Article = { ...article, story: [{ text: 'Floods displaced 6,000.', factIds: ['S2F1'] }] }
+    const built = buildResearchedStory({ draft: nextArticle, ...researchView(pool) })
+    const result = updated()
+    result.next = {
+      ...result.next!,
+      article: nextArticle,
+      research: built,
+      changes: [
+        { section: 'Story paragraph 1', from: 'Story paragraph 1', before: research.paragraphs[0]!.sentences[0]!, after: null },
+        { section: 'Story paragraph 1', from: 'Story paragraph 2', before: research.paragraphs[1]!.sentences[0]!, after: built.paragraphs[0]!.sentences[0]! },
+      ],
+    }
+    const s = scoreUpdates([run(planted, result, good)])
+    // The title, the summary and the blurb, each as before
+    expect(s.runs[0]!.identical).toEqual({ hit: 3, of: 3, share: 1 })
   })
 
   it('counts a missed change, a false rewrite in a strict case only, and a false demotion, and lists each', () => {

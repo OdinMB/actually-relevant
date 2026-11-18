@@ -134,8 +134,14 @@ export interface VersionFields {
   emotionTag: string | null
 }
 
+/**
+ * One changed section: `section` is where it is now (a dropped one: where it was), `from` where it
+ * was in the version before, whose text `before` is. `from` is unique among a version's changes, where
+ * `section` is not: a section rewritten after a dropped one moves up into the dropped one's label.
+ */
 export interface VersionChange {
   section: string
+  from: string
   before: CitedText | null
   after: CitedText | null
 }

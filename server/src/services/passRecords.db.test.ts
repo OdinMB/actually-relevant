@@ -106,7 +106,10 @@ const version = (number: number, passId: string | null): ArticleVersionData => (
     marketingBlurb: 'Blurb.',
     emotionTag: 'calm',
   },
-  changes: number === 1 ? [] : [{ section: 'Story paragraph 1', before: { text: 'Old P.', citations: [] }, after: { text: 'P.', citations: [] } }],
+  changes:
+    number === 1
+      ? []
+      : [{ section: 'Story paragraph 1', from: 'Story paragraph 1', before: { text: 'Old P.', citations: [] }, after: { text: 'P.', citations: [] } }],
   note: number === 1 ? null : { text: 'Officials revised the count.', citations: [{ sourceId: 'S1', sentence: 'Sentence of S1F1.' }] },
 })
 
@@ -280,6 +283,22 @@ describeDb('passRecords', () => {
       changes: version(2, null).changes,
       createdAt: expect.any(Date),
     })
+  })
+
+  it('reads a change stored before changes carried where the section was as at its own place', async () => {
+    const s = await story()
+    const before = { text: 'Old P.', citations: [] }
+    await prisma.articleVersion.create({
+      data: {
+        storyId: s.id,
+        number: 1,
+        kind: 'update',
+        status: 'current',
+        research: version(1, null).research,
+        changes: [{ section: 'Caveat 2', before, after: null }],
+      },
+    })
+    expect((await storyVersions(prisma, s.id))[0]!.changes).toEqual([{ section: 'Caveat 2', from: 'Caveat 2', before, after: null }])
   })
 
   it('never holds two current versions of a story', async () => {

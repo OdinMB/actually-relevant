@@ -218,12 +218,16 @@ export function nextVersion(current: ArticleVersionData, next: NextVersion): Art
 /** The sections readers see on the story page: the headline, the paragraphs, the key quote and the bullets; the summary and the blurb stay in the admin. */
 export const isPageSection = (label: string): boolean => label !== 'Summary' && label !== 'Blurb'
 
-/** One Update as readers get it: its day, its note, and each changed section shown on the page with its earlier text. */
+/**
+ * One Update as readers get it: its day, its note, and each changed section shown on the page with
+ * its earlier text, labeled by where it was in the version before (unique among an Update's changes),
+ * and whether the update removed it.
+ */
 export interface PublicUpdate {
   /** `YYYY-MM-DD`, the day the version was made: code dates it, never the model. */
   date: string
   note: CitedText
-  changes: { section: string; before: CitedText | null }[]
+  changes: { section: string; before: CitedText | null; removed: boolean }[]
 }
 
 /**
@@ -238,7 +242,7 @@ export function publicUpdates(versions: (Pick<ArticleVersionData, 'number' | 'ki
     .map(v => ({
       date: utcDay(v.createdAt),
       note: v.note!,
-      changes: v.changes.filter(c => isPageSection(c.section)).map(c => ({ section: c.section, before: c.before })),
+      changes: v.changes.filter(c => isPageSection(c.section)).map(c => ({ section: c.from, before: c.before, removed: c.after === null })),
     }))
 }
 

@@ -65,7 +65,10 @@ const version = (number: number, status: ArticleVersionData['status']): ArticleV
   emotionTag: 'uplifting',
   research: projection(`Paragraph v${number}.`),
   article: null,
-  changes: number === 1 ? [] : [{ section: 'Story paragraph 1', before: projection('Paragraph v1.').paragraphs[0]!.sentences[0]!, after: null }],
+  changes:
+    number === 1
+      ? []
+      : [{ section: 'Story paragraph 1', from: 'Story paragraph 1', before: projection('Paragraph v1.').paragraphs[0]!.sentences[0]!, after: null }],
   note: number === 1 ? null : { text: `Update ${number}.`, citations: [] },
 })
 

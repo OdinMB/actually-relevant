@@ -183,6 +183,7 @@ describe('updateArticle', () => {
     expect(r.next!.changes).toEqual([
       {
         section: 'Story paragraph 2',
+        from: 'Story paragraph 2',
         before: old.research.paragraphs[1]!.sentences[0],
         after: { text: 'Smoke closed 12 schools.', citations: [{ sourceId: 'S5', sentence: 'Only 12 schools closed. (as reported)' }] },
       },
@@ -250,7 +251,9 @@ describe('updateArticle', () => {
     const r = await updateArticle(input(), fake.deps)
     expect(r.outcome).toBe('updated')
     expect(r.next!.article.story.map(p => p.text)).toEqual(['Fires burned 2.88 million hectares.'])
-    expect(r.next!.changes).toEqual([{ section: 'Story paragraph 2', before: version().research.paragraphs[1]!.sentences[0], after: null }])
+    expect(r.next!.changes).toEqual([
+      { section: 'Story paragraph 2', from: 'Story paragraph 2', before: version().research.paragraphs[1]!.sentences[0], after: null },
+    ])
     expect(r.next!.note).toEqual({
       text: 'Updated: Story paragraph 2 removed after new reporting from Agency.',
       citations: [{ sourceId: 'S1', sentence: 'Smoke closed 40 schools. (as reported)' }],

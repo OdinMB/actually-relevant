@@ -195,7 +195,8 @@ export interface VersionText {
  * readers saw them (`frozen`, for `withFrozen`). `after` is the article once the dropped sections
  * (`dropped`, by their labels before) left it; the rewrite moves no section, so the others keep their
  * order. A rewritten section is named by where it now is, a dropped one by where it was (`after:
- * null`); `before` is the section as readers saw it, its citations included.
+ * null`), and each carries where it was (`from`); `before` is the section as readers saw it, its
+ * citations included.
  */
 export function versionChanges(before: VersionText, after: VersionText, dropped: ReadonlySet<string>): { changes: VersionChange[]; frozen: Kept[] } {
   const was = sectionTexts(before.article, before.research)
@@ -204,7 +205,7 @@ export function versionChanges(before: VersionText, after: VersionText, dropped:
   const changes: VersionChange[] = []
   const frozen: Kept[] = []
   const field = (label: string, old: string, fresh: string) => {
-    if (old !== fresh) changes.push({ section: label, before: was.get(label) ?? uncited(old), after: now.get(label) ?? uncited(fresh) })
+    if (old !== fresh) changes.push({ section: label, from: label, before: was.get(label) ?? uncited(old), after: now.get(label) ?? uncited(fresh) })
   }
   field('Title', before.article.title, after.article.title)
   for (const part of Object.keys(LABELS) as (keyof typeof LABELS)[]) {
@@ -214,13 +215,15 @@ export function versionChanges(before: VersionText, after: VersionText, dropped:
     olds.forEach((old, from) => {
       const label = LABELS[part](from)
       if (dropped.has(label)) {
-        changes.push({ section: label, before: was.get(label) ?? uncited(old.text), after: null })
+        changes.push({ section: label, from: label, before: was.get(label) ?? uncited(old.text), after: null })
         return
       }
       const next = fresh[to]
       if (next && sameItem(old, next)) frozen.push({ part, from, to })
-      else if (next)
-        changes.push({ section: LABELS[part](to), before: was.get(label) ?? uncited(old.text), after: now.get(LABELS[part](to)) ?? uncited(next.text) })
+      else if (next) {
+        const at = LABELS[part](to)
+        changes.push({ section: at, from: label, before: was.get(label) ?? uncited(old.text), after: now.get(at) ?? uncited(next.text) })
+      }
       to++
     })
   }
@@ -267,13 +270,13 @@ const listed = (items: string[]) => (items.length <= 1 ? (items[0] ?? '') : `${i
  * The fixed line a note that still fails after its repair round falls back to, from the changes and
  * the outlets of the facts they rest on: "Updated: Story paragraph 2 rewritten after new reporting
  * from Reuters." Sections shown on the page are named, the summary and blurb only when nothing else
- * changed. No new text then needs approval.
+ * changed, each by where it was, as the Update's earlier texts are. No new text then needs approval.
  */
 export function fallbackNote(changes: VersionChange[], outlets: string[]): string {
   const shown = changes.filter(c => isPageSection(c.section))
   const named = shown.length > 0 ? shown : changes
-  const rewritten = named.filter(c => c.after !== null).map(c => c.section)
-  const removed = named.filter(c => c.after === null).map(c => c.section)
+  const rewritten = named.filter(c => c.after !== null).map(c => c.from)
+  const removed = named.filter(c => c.after === null).map(c => c.from)
   const what = [...(rewritten.length > 0 ? [`${listed(rewritten)} rewritten`] : []), ...(removed.length > 0 ? [`${listed(removed)} removed`] : [])].join(
     ' and ',
   )

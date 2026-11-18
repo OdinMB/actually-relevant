@@ -88,7 +88,8 @@ function identity(r: UpdateRun): { of: number; hit: number } {
   const { version, pool } = r.fixture.input
   const before = sectionTexts(versionArticle(version, pool), version.research)
   const after = [...sectionTexts(next.article, next.research)]
-  const named = new Set(next.changes.map(c => c.section))
+  // By where each changed section was: a rewrite after a dropped section moves up into its label
+  const named = new Set(next.changes.map(c => c.from))
   let of = 0
   let hit = 0
   for (const [label, text] of before) {

@@ -230,8 +230,18 @@ export async function loadPool(db: ResearchDb, storyId: string): Promise<Pool> {
   return { sources: used.map(sourceFromRow), facts: facts.map(factFromRow), searches: searches.map(searchFromRow), dropped }
 }
 
+// A change stored before changes carried `from` was at its own place: no section had moved yet
 const changesSchema = z
-  .array(z.object({ section: z.string(), before: citedTextSchema.nullable().catch(null), after: citedTextSchema.nullable().catch(null) }))
+  .array(
+    z
+      .object({
+        section: z.string(),
+        from: z.string().optional(),
+        before: citedTextSchema.nullable().catch(null),
+        after: citedTextSchema.nullable().catch(null),
+      })
+      .transform(({ from, ...c }) => ({ ...c, from: from ?? c.section })),
+  )
   .catch([])
 
 const VERSION_COLUMNS = Prisma.sql`v.id, v.number, v.kind::text AS kind, v.status::text AS status, v.pass_id AS "passId", v.title,
