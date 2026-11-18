@@ -667,7 +667,7 @@ enum VersionKind {
   legacy
 }
 
-/// At most one `current` version per story: the partial unique index `article_versions_one_current`, raw SQL in the 20261117230407_research_passes migration, which Prisma cannot model, so a generated migration proposes dropping it: delete that line (check:migrations fails on it)
+/// At most one `current` version per story: the partial unique index `article_versions_one_current`, raw SQL in the 20261117230407_research_passes migration. Prisma cannot model it and leaves it out of its diffs; check:migrations fails on a migration that drops it
 enum VersionStatus {
   current
   superseded

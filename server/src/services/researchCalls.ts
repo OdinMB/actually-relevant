@@ -19,7 +19,7 @@ import type { ContextSearchAnswer, ContextSearchRequest } from './storyContextSo
 import { structuredCall } from './structuredCall.js'
 
 /** Output tokens one call of each step is expected to bill, reasoning included (the design's desk estimate, per call). */
-const OUTPUT_ESTIMATE: Record<PassStep, number> = {
+const STEP_OUTPUT_TOKENS: Record<PassStep, number> = {
   confirm: 500,
   queries: 500,
   extract: 2000,
@@ -49,7 +49,7 @@ function inputTokens(text: string): number {
 const modelOf = (step: PassStep) => config.llm.models[PASS_STEP_TIERS[step]].name
 
 function estimateUsd(p: { step: PassStep; prompt: string }): number {
-  return callCostUsd(modelOf(p.step), { input: inputTokens(p.prompt), cached: 0, output: OUTPUT_ESTIMATE[p.step], reasoning: 0 })
+  return callCostUsd(modelOf(p.step), { input: inputTokens(p.prompt), cached: 0, output: STEP_OUTPUT_TOKENS[p.step], reasoning: 0 })
 }
 
 export interface RunMeterOptions {

@@ -6,7 +6,10 @@
  * an EXECUTE string is not caught, and a string literal that happens to read like one is.
  */
 
-/** An index Prisma cannot represent, so every generated migration proposes dropping it. */
+/**
+ * An index Prisma cannot represent, which no migration may drop: Prisma proposes dropping the
+ * embedding index in every generated migration, and leaves a partial index out of its diffs.
+ */
 export interface UnmodeledIndex {
   name: string
   /** The table it is on. */
