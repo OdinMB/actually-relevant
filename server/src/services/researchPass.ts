@@ -140,6 +140,11 @@ export interface PassInput {
   version: ArticleVersionData | null
   /** `YYYY-MM-DD`: the day of the story's last pass or legacy research run, where a later pass's coverage window opens; null for none. */
   lastPassDay: string | null
+  /**
+   * The earlier later passes whose facts the article never took a judgment on (`loadPassInput`): a
+   * later pass judges their facts as its own, beside the ones it finds.
+   */
+  carried: string[]
   /** `YYYY-MM-DD`: the pass's day, where a later pass's window ends. */
   today: string
   /** The story as readers see it before the pass, which the gap list reads. */
@@ -399,6 +404,13 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   const pool = new WorkingPool(input.pool, input.passId)
   const spent = { credits: 0 }
   let budget = false
+  // Whether the last call that failed may pass on a second attempt: a later pass's technical failure is that call's
+  const lastFailure = { transient: false }
+  const noted = <R extends { outcome: string; transient?: boolean }>(res: R): R => {
+    if (res.outcome === 'skipped') budget = true
+    else if (res.outcome !== 'ok') lastFailure.transient = res.transient === true
+    return res
+  }
   const finish = (over: Partial<PassResult>): PassResult => {
     const verdict = over.verdict ?? r.verdict
     return {
@@ -425,20 +437,9 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   // A later pass searches what other outlets reported since the last pass, and links only our stories new since
   const since = input.version ? laterWindow(input.lastPassDay ?? input.storyDay, input.today, deps.latestDate) : null
 
-  const researchCall: ResearchCall = async (step, schema, prompt) => {
-    const res = await deps.call(step, schema, prompt)
-    if (res.outcome === 'skipped') budget = true
-    return res
-  }
+  const researchCall: ResearchCall = async (step, schema, prompt) => noted(await deps.call(step, schema, prompt))
   const call = recordingCall(researchCall, r)
-  const cardCall = stepCaller(
-    (async (step, schema, prompt) => {
-      const res = await deps.call(CARD_STEP_OF[step], schema, prompt)
-      if (res.outcome === 'skipped') budget = true
-      return res
-    }) as ContextCall,
-    context.calls,
-  )
+  const cardCall = stepCaller((async (step, schema, prompt) => noted(await deps.call(CARD_STEP_OF[step], schema, prompt))) as ContextCall, context.calls)
   const budgetStop = (): PassResult => {
     r.verdict = decideGate({ failed: 'budget', category: 'technical' }, deps.relevanceMin)
     return finish({})
@@ -511,16 +512,24 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
     // stopped short goes on with what it found, the stop recorded
     if (stop) r.verdict = decideGate(stop, deps.relevanceMin)
     const laterCall: LaterCall = async (step, schema, prompt) => {
-      const res = await deps.call(step, schema, prompt)
-      if (res.outcome === 'skipped') budget = true
+      const { transient: _transient, ...res } = noted(await deps.call(step, schema, prompt))
       return { ...res, parsed: res.outcome === 'ok' ? unescapeXmlDeep(res.parsed) : null }
     }
-    const fresh = new Set(pool.facts.filter(f => f.firstPassId === input.passId).map(f => f.ref))
+    // The facts found since the article last took a judgment: this pass's, and those of the earlier passes it carries
+    const own = new Set([input.passId, ...input.carried])
+    const fresh = new Set(pool.facts.filter(f => f.firstPassId !== null && own.has(f.firstPassId)).map(f => f.ref))
+    lastFailure.transient = false
     const update = await updateArticle({ storyDay: input.storyDay, version: input.version, pool, fresh }, { call: laterCall, research: call })
     record.update = update.record
     for (const d of update.demoted)
       pool.update(d.ref, { status: 'demoted', drop: { passId: input.passId, reason: 'contradicted', contradictedBy: d.contradictedBy } })
     if (update.outcome === 'budget') return budgetStop()
+    // A failed call fails the pass, so it is tried again where the failure may pass and counts in the failure share;
+    // the cards stay as they are
+    if (update.outcome === 'technical') {
+      record.cards = 'kept'
+      return finish({ status: 'failed', outcome: 'technical', error: update.record.error, transient: lastFailure.transient })
+    }
     outcome = LATER_OUTCOMES[update.outcome]
     version = update.next ? nextVersion(input.version, { passId: input.passId, ...update.next }) : null
     // Step 9 is skipped when the pool gained no supported fact and lost none: the cards stay as they are
@@ -556,12 +565,11 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   return finish({ ...settled, boxes: cards.boxes, boxFacts: cards.facts, writer: cards.writer })
 }
 
-/** A later pass's outcome from its article step's (a budget stop ends the pass before this). */
-const LATER_OUTCOMES: Record<Exclude<UpdateOutcome, 'budget'>, PassOutcome> = {
+/** A later pass's outcome from its article step's (a budget stop and a technical failure end the pass before this). */
+const LATER_OUTCOMES: Record<Exclude<UpdateOutcome, 'budget' | 'technical'>, PassOutcome> = {
   updated: 'updated',
   unchanged: 'unchanged',
   update_failed: 'update_failed',
-  technical: 'technical',
 }
 
 interface GapStepInput {

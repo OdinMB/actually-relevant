@@ -71,6 +71,7 @@ export function passInput(story: ResearchStory = researchStory(), extra: Partial
     pool: EMPTY_POOL,
     version: null,
     lastPassDay: null,
+    carried: [],
     today: '2026-11-18',
     current: {
       title: p.title,

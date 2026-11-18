@@ -201,6 +201,7 @@ const input = (pool: Pool = EMPTY_POOL): PassInput => ({
   storyDay: '2026-11-13',
   reusable: [],
   lastPassDay: null,
+  carried: [],
   today: '2026-11-13',
 })
 
@@ -564,6 +565,62 @@ describe('runResearchPass, a later pass', () => {
     const cards = fake.calls.find(c => c.step === 'cards-write')!.prompt
     expect(cards).toContain('Rooftop panels cut grid demand.')
     expect(cards).not.toContain('Imports of panels doubled.')
+  })
+
+  it('fails a later pass whose judge or rewrite call failed, saying whether the failure may pass, with no version and the cards kept', async () => {
+    for (const failing of ['judge', 'update'] as const) {
+      for (const transient of [true, false]) {
+        const answers: Responder = {
+          judge: () => ({
+            sections: [{ label: 'Why This Matters 1', verdict: 'wrong', factIds: ['S2F2'], reason: 'The boom now cuts grid demand.' }],
+            contradicted: [],
+          }),
+          'cards-write': laterCards,
+        }
+        answers[failing] = () => null
+        const fake = fakeDeps(answers)
+        const call = fake.deps.call
+        fake.deps.call = async (step, schema, prompt) => {
+          const res = await call(step, schema, prompt)
+          return step === failing ? { ...res, transient } : res
+        }
+        const result = await runResearchPass(later(), fake.deps)
+
+        expect(result, `${failing}, transient ${transient}`).toMatchObject({
+          kind: 'later',
+          status: 'failed',
+          outcome: 'technical',
+          version: null,
+          boxes: [],
+          error: `${failing}: error`,
+          transient,
+          record: { cards: 'kept' },
+        })
+        expect(fake.stepsCalled()).not.toContain('cards-write')
+      }
+    }
+  })
+
+  it("judges the facts an earlier later pass found and never judged into the article as this pass's own", async () => {
+    // Pass 1 found a Reuters fact and failed before its judge; this pass finds nothing new
+    const reutersSource: PoolSource = { ...pageSource('S2', 'https://reuters.com/solar', 'Reuters', 'cluster'), firstPassId: 'pass-1' }
+    const found: PoolFact = {
+      ...poolFact('S2F1', 'Grid demand fell by a tenth.'),
+      firstPassId: 'pass-1',
+      checkedBy: { model: 'm', promptVersion: 'v', passId: 'pass-1' },
+    }
+    const carriedPool: Pool = { ...pool, sources: [...pool.sources, reutersSource], facts: [...pool.facts, found] }
+    const judge = () => ({ sections: [], contradicted: [] })
+
+    const judged = fakeDeps({ judge })
+    await runResearchPass(later({ story, pool: carriedPool, carried: ['pass-1'] }), judged.deps)
+    const prompt = judged.calls.find(c => c.step === 'judge')?.prompt ?? ''
+    expect(prompt.slice(prompt.indexOf('<NEW_FACTS>'))).toContain('Grid demand fell by a tenth.')
+
+    // Not carried, the fact counts as judged: nothing new, no judge
+    const skipped = fakeDeps({ judge })
+    await runResearchPass(later({ story, pool: carriedPool }), skipped.deps)
+    expect(skipped.stepsCalled()).not.toContain('judge')
   })
 
   it('ends as a budget stop, with its demotions and no version or cards, when the budget stops the rewrite', async () => {

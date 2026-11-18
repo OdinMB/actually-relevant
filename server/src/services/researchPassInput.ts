@@ -28,8 +28,13 @@ interface StoryRow {
  * uncapped: the pass offers those of the stories it links, at most `maxReusedFacts`.
  */
 export async function loadPassInput(db: ResearchDb, storyId: string, passId: string, now: Date = new Date()): Promise<PassInput | null> {
-  const [pool, version, lastPassDay] = await Promise.all([loadPool(db, storyId), currentVersion(db, storyId), lastPassDayOf(db, storyId, passId)])
-  return storyInput(db, storyId, passId, now, pool, version, lastPassDay)
+  const [pool, version, lastPassDay, carried] = await Promise.all([
+    loadPool(db, storyId),
+    currentVersion(db, storyId),
+    lastPassDayOf(db, storyId, passId),
+    carriedPasses(db, storyId, passId),
+  ])
+  return storyInput(db, storyId, passId, now, pool, version, { lastPassDay, carried })
 }
 
 /**
@@ -37,7 +42,7 @@ export async function loadPassInput(db: ResearchDb, storyId: string, passId: str
  * version and the story's own columns. The eval's replay of a first pass on a story of any history.
  */
 export async function loadFirstPassInput(db: ResearchDb, storyId: string, passId: string, now: Date = new Date()): Promise<PassInput | null> {
-  return storyInput(db, storyId, passId, now, EMPTY_POOL, null, null)
+  return storyInput(db, storyId, passId, now, EMPTY_POOL, null, { lastPassDay: null, carried: [] })
 }
 
 /**
@@ -53,6 +58,28 @@ async function lastPassDayOf(db: ResearchDb, storyId: string, passId: string): P
   return row?.last ? utcDay(row.last) : null
 }
 
+/**
+ * The later passes whose facts the article never took a judgment on, which the next later pass judges
+ * as its own: every later pass that ended (completed or failed) after the story's last pass whose
+ * judgment the article took. That is a first pass that made a version, a later pass whose update was
+ * applied, or one that found nothing to change. So a technical failure, a budget stop, an update not
+ * applied (the story changed, or the step went off) and one that failed its checks are carried until
+ * a pass settles them; a skipped pass stored no facts. The running pass itself never counts.
+ */
+async function carriedPasses(db: ResearchDb, storyId: string, passId: string): Promise<string[]> {
+  const rows = await db.$queryRaw<{ id: string }[]>`
+    SELECT p.id FROM research_passes p
+    WHERE p.story_id = ${storyId} AND p.id <> ${passId} AND p.kind = 'later' AND p.status IN ('completed', 'failed')
+      AND p.number > COALESCE((
+        SELECT max(q.number) FROM research_passes q
+        WHERE q.story_id = ${storyId} AND q.id <> ${passId}
+          AND ((q.kind = 'first' AND q.version_id IS NOT NULL)
+            OR (q.kind = 'later' AND q.status = 'completed' AND (q.outcome = 'unchanged' OR (q.outcome = 'updated' AND q.version_id IS NOT NULL))))
+      ), 0)
+    ORDER BY p.number`
+  return rows.map(r => r.id)
+}
+
 async function storyInput(
   db: ResearchDb,
   storyId: string,
@@ -60,7 +87,7 @@ async function storyInput(
   now: Date,
   pool: Pool,
   version: ArticleVersionData | null,
-  lastPassDay: string | null,
+  history: Pick<PassInput, 'lastPassDay' | 'carried'>,
 ): Promise<PassInput | null> {
   const [story] = await researchStoriesByIds(db, [storyId])
   if (!story) return null
@@ -86,7 +113,7 @@ async function storyInput(
     story,
     pool,
     version,
-    lastPassDay,
+    ...history,
     today: utcDay(now),
     current: {
       title: text.title ?? story.published.title,

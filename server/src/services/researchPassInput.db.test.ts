@@ -129,6 +129,57 @@ describeDb('loadPassInput', () => {
     expect((await loadPassInput(prisma, story.id, running.id, NOW))?.lastPassDay).toBe('2026-11-12')
   })
 
+  it('carries the later passes since the article last took a judgment, whose facts no judgment settled', async () => {
+    const feedId = await feed()
+    const story = await createStory({ feedId, status: 'published', ...assessed, datePublished: ago(10) })
+    const version = (number: number) =>
+      prisma.articleVersion.create({ data: { storyId: story.id, number, kind: number === 1 ? 'first' : 'update', status: 'superseded', research } })
+    const versionId = (await version(1)).id
+    await prisma.$transaction(tx =>
+      insertVersion(tx, story.id, {
+        id: null,
+        number: 9,
+        kind: 'update',
+        status: 'current',
+        passId: null,
+        title: 'Version title',
+        titleLabel: null,
+        summary: 'Version summary.',
+        marketingBlurb: null,
+        quote: null,
+        quoteAttribution: null,
+        relevanceReasons: null,
+        antifactors: null,
+        emotionTag: null,
+        research,
+        article: null,
+        changes: [],
+        note: null,
+      }),
+    )
+    const pass = (number: number, kind: 'first' | 'later', status: 'completed' | 'failed' | 'skipped' | 'running', outcome: string | null, made?: string) =>
+      prisma.researchPass.create({
+        data: { storyId: story.id, number, trigger: 'editor', kind, status, outcome, costUsd: 0, versionId: made ?? null },
+      })
+    // Pass 1 made the article; pass 2 judged against it and found nothing to change
+    await pass(1, 'first', 'completed', 'written', versionId)
+    await pass(2, 'later', 'completed', 'unchanged')
+    // Since then: a technical failure, a budget stop, an update not applied, one that failed, a skipped pass with no facts
+    const failed = await pass(3, 'later', 'failed', 'technical')
+    const budget = await pass(4, 'later', 'completed', 'budget')
+    const notApplied = await pass(5, 'later', 'completed', 'updated')
+    const updateFailed = await pass(6, 'later', 'completed', 'update_failed')
+    await pass(7, 'later', 'skipped', 'budget')
+    const running = await pass(8, 'later', 'running', null)
+
+    const carried = async () => ((await loadPassInput(prisma, story.id, running.id, NOW))?.carried ?? []).sort()
+    expect(await carried()).toEqual([failed.id, budget.id, notApplied.id, updateFailed.id].sort())
+
+    // An applied update settles everything before it
+    await prisma.researchPass.update({ where: { id: notApplied.id }, data: { versionId: (await version(5)).id } })
+    expect(await carried()).toEqual([updateFailed.id])
+  })
+
   it('loads nothing for a story research cannot run on', async () => {
     const feedId = await feed()
     const fetched = await createStory({ feedId, status: 'fetched', ...assessed })

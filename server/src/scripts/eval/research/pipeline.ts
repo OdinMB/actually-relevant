@@ -170,6 +170,7 @@ export function firstPassInput(story: ResearchStory): PassInput {
     pool: EMPTY_POOL,
     version: null,
     lastPassDay: null,
+    carried: [],
     // The story's own day: a first pass's window is research's, around the article
     today: story.datePublished.slice(0, 10),
     current: {
