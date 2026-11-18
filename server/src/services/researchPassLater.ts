@@ -11,6 +11,7 @@
 import type { z } from 'zod'
 import { config } from '../config.js'
 import type { Prompt } from '../lib/promptCache.js'
+import { sanitizedError } from '../lib/runErrors.js'
 import { buildFactCheckPromptParts } from '../prompts/research.js'
 import { buildJudgePromptParts, buildNotePrompt, buildUpdateRewritePromptParts, type NoteInput, type PassFactBrief } from '../prompts/researchPass.js'
 import { factCheckSchema, repairSchema } from '../schemas/research.js'
@@ -29,7 +30,17 @@ import {
 } from './researchChecks.js'
 import { checkCopying, sourceLines } from './researchCopying.js'
 import { buildResearchedStory, type CitedText, type ResearchedSource, type ResearchedStory } from './researchedStory.js'
-import { citableFacts, recheck, repairDraft, type CheckContext, type CheckPass, type CheckState, type StepCaller, type StepResult } from './researchPipeline.js'
+import {
+  citableFacts,
+  recheck,
+  repairDraft,
+  stopReason,
+  type CheckContext,
+  type CheckPass,
+  type CheckState,
+  type StepCaller,
+  type StepResult,
+} from './researchPipeline.js'
 import { researchView, usable, type Article, type ArticleVersionData, type Pool, type PoolFact, type VersionChange } from './researchPool.js'
 import {
   checkNote,
@@ -59,6 +70,8 @@ export interface UpdateDeps {
   call: LaterCall
   /** Research's recorded call for the checks and repair rounds of the rewritten sections and the note's fact check. */
   research: StepCaller
+  /** Whether an error thrown in the rewrite or its checks may pass on a second attempt (`transientFailure` in production); none, it never does. */
+  transient?(err: unknown): boolean
 }
 
 export interface UpdateInput {
@@ -107,9 +120,13 @@ export interface UpdateResult {
   /** The new version's article, projection, changes and note, when `updated`. */
   next: { article: Article; research: ResearchedStory; changes: VersionChange[]; note: CitedText } | null
   record: UpdateRecord
+  /**
+   * For a `technical` outcome on an error thrown in the rewrite or its checks: whether it may pass
+   * (`UpdateDeps.transient`). Absent where a call answered with the failure, which the caller's
+   * metered call notes.
+   */
+  transient?: boolean
 }
-
-const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 /** An earlier pass's demotion as a problem line: who it was contradicted by, or that an editor dropped it. */
 const earlierReason = (f: PoolFact) =>
@@ -203,8 +220,11 @@ export async function updateArticle(input: UpdateInput, deps: UpdateDeps): Promi
     repaired = await repairDraft(current, writable, ctx, state)
     if (skipped) return done('budget')
   } catch (err) {
-    record.error = messageOf(err)
-    return done(skipped ? 'budget' : 'technical')
+    // A check's stop is a call that answered with its failure; any other error was thrown, and is stored by name
+    const stop = stopReason(err)
+    record.error = stop ?? sanitizedError(err)
+    if (skipped) return done('budget')
+    return stop === null ? { ...done('technical'), transient: deps.transient?.(err) ?? false } : done('technical')
   } finally {
     record.checks = state.checks
     record.problems = state.problems

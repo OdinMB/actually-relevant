@@ -336,7 +336,32 @@ describe('updateArticle', () => {
       expect(r.outcome, Object.keys(over)[0]).toBe('budget')
       expect(r.next).toBeNull()
     }
-    const r = await updateArticle(input(), fakeDeps({ ...defaults, judge: () => null }).deps)
-    expect(r).toMatchObject({ outcome: 'technical', record: { error: 'judge: error' } })
+    for (const over of [{ judge: () => null }, { 'fact-check': () => null }]) {
+      const r = await updateArticle(input(), { ...fakeDeps({ ...defaults, ...over }).deps, transient: () => true })
+      // The metered call that answered with the failure says whether it may pass
+      expect(r, Object.keys(over)[0]).toMatchObject({ outcome: 'technical', record: { error: `${Object.keys(over)[0]}: error` } })
+      expect(r.transient).toBeUndefined()
+    }
+  })
+
+  it('ends as a technical failure when the rewrite or its checks throw, stored by name and saying whether it may pass', async () => {
+    const timeout = Object.assign(new Error('timed out reading https://example.com/?q=secret'), { name: 'TimeoutError' })
+    for (const step of ['update', 'fact-check'] as const) {
+      for (const transient of [true, false]) {
+        const fake = fakeDeps({
+          ...defaults,
+          [step]: () => {
+            throw timeout
+          },
+        })
+        const r = await updateArticle(input(), { ...fake.deps, transient: err => err === timeout && transient })
+        expect(r, `${step}, transient ${transient}`).toMatchObject({
+          outcome: 'technical',
+          next: null,
+          transient,
+          record: { error: 'unexpected error (TimeoutError)' },
+        })
+      }
+    }
   })
 })

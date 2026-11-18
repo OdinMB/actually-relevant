@@ -667,6 +667,40 @@ describe('runResearchPass, a later pass', () => {
     }
   })
 
+  it('fails a later pass whose rewrite checks threw, saying whether the thrown error may pass', async () => {
+    for (const transient of [true, false]) {
+      const thrown = new Error('socket hang up')
+      const fake = fakeDeps({
+        judge: () => ({
+          sections: [{ label: 'Why This Matters 1', verdict: 'wrong', factIds: ['S2F2'], reason: 'The boom now cuts grid demand.' }],
+          contradicted: [],
+        }),
+        update: () => ({
+          items: [{ label: 'Why This Matters 1', text: 'Rooftop panels cut grid demand.', factIds: ['S2F2'] }],
+          quote: '',
+          quoteAttribution: '',
+          quoteSourceId: '',
+        }),
+        'fact-check': () => {
+          throw thrown
+        },
+        'cards-write': laterCards,
+      })
+      fake.deps.transient = err => err === thrown && transient
+      const result = await runResearchPass(later(), fake.deps)
+
+      expect(result, `transient ${transient}`).toMatchObject({
+        kind: 'later',
+        status: 'failed',
+        outcome: 'technical',
+        version: null,
+        error: 'unexpected error (Error)',
+        transient,
+        record: { cards: 'kept' },
+      })
+    }
+  })
+
   it("judges the facts an earlier later pass found and never judged into the article as this pass's own", async () => {
     // Pass 1 found a Reuters fact and failed before its judge; this pass finds nothing new
     const reutersSource: PoolSource = { ...pageSource('S2', 'https://reuters.com/solar', 'Reuters', 'cluster'), firstPassId: 'pass-1' }

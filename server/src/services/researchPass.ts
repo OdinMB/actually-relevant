@@ -282,7 +282,7 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   if (input.version) {
     // Step 8, a later pass. A pass whose coverage stopped short goes on with what it found, the stop recorded
     if (stop) r.verdict = decideGate(stop, deps.relevanceMin)
-    const later = await laterArticle({ ...input, version: input.version }, pool, caller, call, record)
+    const later = await laterArticle({ ...input, version: input.version }, pool, { caller, call, transient: deps.transient }, record)
     if (later.ends === 'budget') return budgetStop()
     // The cards stay as they are
     if (later.ends === 'failed') {
@@ -345,21 +345,24 @@ type LaterArticle =
 async function laterArticle(
   input: PassInput & { version: ArticleVersionData },
   pool: WorkingPool,
-  caller: PassCaller,
-  call: StepCaller,
+  calls: { caller: PassCaller; call: StepCaller; transient: PassDeps['transient'] },
   record: PassRecord,
 ): Promise<LaterArticle> {
+  const { caller } = calls
   const own = new Set([input.passId, ...input.carried])
   const fresh = new Set(pool.facts.filter(f => f.firstPassId !== null && own.has(f.firstPassId)).map(f => f.ref))
-  // A technical failure is that of a call the article step makes
+  // A technical failure is that of a call the article step makes, or an error thrown in its rewrite
   caller.forgetFailure()
-  const update = await updateArticle({ storyDay: input.storyDay, version: input.version, pool, fresh }, { call: caller.later, research: call })
+  const update = await updateArticle(
+    { storyDay: input.storyDay, version: input.version, pool, fresh },
+    { call: caller.later, research: calls.call, ...(calls.transient ? { transient: calls.transient } : {}) },
+  )
   record.update = update.record
   for (const d of update.demoted)
     pool.update(d.ref, { status: 'demoted', drop: { passId: input.passId, reason: 'contradicted', contradictedBy: d.contradictedBy } })
   if (update.outcome === 'budget') return { ends: 'budget' }
   // A failed call fails the pass, so it is tried again where the failure may pass and counts in the failure share
-  if (update.outcome === 'technical') return { ends: 'failed', error: update.record.error, transient: caller.lastTransient }
+  if (update.outcome === 'technical') return { ends: 'failed', error: update.record.error, transient: update.transient ?? caller.lastTransient }
   const version = update.next ? nextVersion(input.version, { passId: input.passId, ...update.next }) : null
   const gained = pool.facts.some(f => fresh.has(f.ref) && f.verdict === 'supported' && pool.sourceOf(f).origin !== 'earlier')
   return { ends: 'settled', outcome: LATER_OUTCOMES[update.outcome], version, cards: gained || update.demoted.length > 0 }

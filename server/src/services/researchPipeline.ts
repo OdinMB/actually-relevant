@@ -794,6 +794,9 @@ export function fallbackOf(err: unknown): { failed: string; category: FallbackCa
   return err instanceof Stop ? { failed: err.message, category: err.category } : { failed: `error: ${messageOf(err)}`, category: 'technical' }
 }
 
+/** A stop's reason, in our own words (a call that failed or that the budget skipped); null for an error thrown from outside the steps. */
+export const stopReason = (err: unknown): string | null => (err instanceof Stop ? err.message : null)
+
 /** A step call as the steps make it: recorded in `r.calls`, its answer unescaped. */
 export type StepCaller = Call
 
