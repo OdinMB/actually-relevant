@@ -32,8 +32,11 @@ export default defineConfig({
       // measured 83.09, 79.47, 80.93, 83.73 (functions kept at 79, as above). Raised 2026-11-17 with
       // story context's eval: measured 83.49, 79.68, 81.99, 84.03 (functions raised to 80, as above;
       // lines kept at 83, since 84 would leave no margin). Raised 2026-11-17 with story context's
-      // cleanup: measured 83.64, 79.94, 82.19, 84.16 (functions raised to 81; the rest kept, as above)
-      thresholds: { statements: 83, branches: 79, functions: 81, lines: 83 },
+      // cleanup: measured 83.64, 79.94, 82.19, 84.16 (functions raised to 81; the rest kept, as above).
+      // Raised 2026-11-18 with the research passes' records and first pass: measured 84.03, 80.38,
+      // 82.84, 84.60 (branches raised to 80, lines to 84; statements kept at 83 and functions at 81,
+      // since 84 and 82 would leave no margin, as above)
+      thresholds: { statements: 83, branches: 80, functions: 81, lines: 84 },
     },
     projects: [
       {
