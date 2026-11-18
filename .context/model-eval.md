@@ -135,7 +135,7 @@ npm run eval:research --prefix server -- --out ../DOCS/2026-11-12_research-eval 
 
 ## Overview evals (`eval:overviews`)
 
-The evals for story overviews (`.plans/2026-11-16_story-overviews.md`, decision D8: every model step of that feature has an eval, and a replay of past developments gates each launch; ADR-0066). The first increment ran three steps that need no production change: the answer keys against the database, production's research fact check under planted errors, and research's real cost per run. Story context (module 1, `.context/story-context.md`) adds its gate: gap keys of one-off stories, drafted (`gap-draft`) and checked (`gap-keys`), production's first research pass replayed on their stories and its cards held against the bars (`context`), and the fact check on its facts (`--facts context`). It is its own CLI, not an `eval:models` suite, for the reasons `eval:research` gave: its steps are not arm comparisons on fixed prompts, and its fixtures are its own. The suites of the later modules (linking, founding, roles, figures, closure, reviews) come with the plans that create those steps.
+The evals for story overviews (`.plans/2026-11-16_story-overviews.md`, decision D8: every model step of that feature has an eval, and a replay of past developments gates each launch; ADR-0066). The first increment ran three steps that need no production change: the answer keys against the database, production's research fact check under planted errors, and research's real cost per run. Story context (module 1, `.context/story-context.md`) adds its gate: gap keys of one-off stories, drafted (`gap-draft`) and checked (`gap-keys`), production's first research pass replayed on their stories and its cards held against the bars (`context`), and the fact check on its facts (`--facts context`). Research passes add a later pass's article step replayed on the development keys' researched stories (`update`). It is its own CLI, not an `eval:models` suite, for the reasons `eval:research` gave: its steps are not arm comparisons on fixed prompts, and its fixtures are its own. The suites of the later modules (linking, founding, roles, figures, closure, reviews) come with the plans that create those steps.
 
 ```bash
 npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run                    # sample facts, print the estimate; no API calls
@@ -158,11 +158,11 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context
 
 | Flag | Meaning |
 |------|---------|
-| `--steps` | Comma list of `keys`, `gap-keys`, `gap-draft`, `context`, `fact-check`, `baseline`, run in that order (default: `keys`, `fact-check`, `baseline`; story context's steps run only when named) |
+| `--steps` | Comma list of `keys`, `gap-keys`, `gap-draft`, `context`, `update`, `fact-check`, `baseline`, run in that order (default: `keys`, `fact-check`, `baseline`; story context's and the research passes' steps run only when named) |
 | `--facts` | `research` (default): the fact check samples research's extracted facts. `context`: the facts the `context` step's run 1 kept, so it needs `context` and `fact-check` in the same run (their calls and searches are cached) |
-| `--half` | `tune`, `judge` or `all` (default): the gap keys the `context` step runs on. Prompts are tuned on `tune` only; the gate is read on `judge` |
+| `--half` | `tune`, `judge` or `all` (default): the gap keys the `context` step runs on, and the development keys' stories the `update` step runs on. Prompts are tuned on `tune` only; the gate is read on `judge` |
 | `--budget` | USD cap on the folder's model ledger plus its Tavily credits at $0.008 (default 3; the $20 cap applies) |
-| `--repeat N` | The fact check's arms and the `context` step's pipeline, 1 to 10, with `repeats.ts`'s per-run cache keys (labels and the strong judge run once) |
+| `--repeat N` | The fact check's arms, the `context` step's pipeline and the `update` step's replay, 1 to 10, with `repeats.ts`'s per-run cache keys (labels and the context step's strong judge run once) |
 | `--size N` | Facts to sample (default 300, at most 600) |
 | `--limit N` | Each step's first N: facts labeled and judged, stories drafted, gap keys run. A smoke run, marked "not evidence" in the report |
 | `--arms` | Comma list of `model@effort` from `MODELS` (default production's research fact-check arm, gpt-6-luna@low) |
@@ -208,6 +208,38 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context
 - **Replay hindsight:** the end date filters only dated results, and a page updated after the story can keep its first date. Each search's result dates are logged, and the report counts the undated ones and those dated after the story's day: the share by which the replay can flatter production. The smoke run (`--limit 3`) is where to read them first.
 - **Cost:** about $1–2 to draft the keys; a full gate run (3 repeats on the judged half, with the fact check on its facts) about $3–6, mostly the strong judge; Tavily is paid once per query and then cached. `--budget` is a cap on the folder, not a spend.
 
+### `update`: a later pass's updates against the bars
+
+A research pass's later-pass article step (`.context/research-passes.md`, "The later pass"; ADR-0068) replayed on past stories:
+
+```bash
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval --steps update --half judge --repeat 3 --dry-run
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval --steps update --half tune --limit 3   # smoke run
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval --steps update --half judge --repeat 3   # the gate
+```
+
+- **The stories** (`updateFixtures.ts`): every `must` entry of the development keys in `--half` (by its slug's half, as the gap keys), the first `--limit`, that is published and researched. Each is read as the legacy import would make it (`readLegacyImport`: its newest research run with facts as the pool, its columns and projection as version 1), SELECT only and never written, cached by slug in `.cache/update-inputs.json`. The facts the version cites count as supported, as a later pass's own fact check would have judged them; the eval measures the article step, not the check. A story without a researched version is left out and listed.
+- **Four cases a story**, each a later pass's input with the new facts on sources of their own:
+  - `key`: the later `must` entries within 14 days (at most 4) give their figure values (those that match the figure's definition, with `asOf` and the key's quote as the sentence) and their turning points (the title) as new facts. A section stating a figure value of the story's own entry (found by the key's quote) that a later value of the same figure changes is expected flagged; each turning point is expected to found some section's rewrite. Without a turning point every other section is expected unchanged, so a routine window expects nothing. A changed value whose quote no section holds is counted and left out.
+  - `wrong-number`, `wrong-year`: a correction of the first cited fact `plant.ts` can change (×1.5 or ×2; the year back one), for the same measure and moment, from a wire report two days after the story: every section citing the old fact is expected flagged, and the old fact demoted.
+  - `benign`: the key's first near miss as a new fact on another subject: nothing expected.
+- **The replay** (`update.ts`): production's `updateArticle` on each case, `--repeat` times, with eval:research's step caller (`research/pipeline.ts`: each step's tier on a constant arm, `pass-judge`, `pass-update` and `pass-note` beside research's schema names, run k ≥ 2 under its own key). No search: the new facts are the fixtures'. A case starts only while the budget covers $0.10 (`runStories`); the dry run's desk estimate is $0.12 a case and run (that and the note judge). Needs `OPENAI_API_KEY` outside a dry run.
+- **The strong judge** (the fact check's label arm, eval-only prompt in `prompts.ts`) reads each served Update note with the changes (each section's text before and after) and the facts they rest on, and answers whether it is accurate (states nothing they do not) and complete (says what changed and why). It runs only when its planned calls fit what is left of the budget.
+- **Scores and bars** (`updateScore.ts`), per run and as the mean over the runs with its spread; a case the budget or a failed call stopped is counted, not measured:
+
+  | Measure | Bar |
+  |---|---|
+  | Expected changes flagged on the right section (a turning point: some rewrite rests on it) | at least 90% |
+  | Sections a strict case expects unchanged that were rewritten | at most 10% |
+  | Sections no change names, byte-identical in the new version (a code assertion) | 100% |
+  | Planted contradictions whose old fact was demoted | at least 90% |
+  | Cases demoting a fact they do not expect | at most 5% |
+  | Served notes the strong judge finds accurate and complete | at least 90% |
+  | Served notes production's checks did not pass (the fixed line aside) | none |
+  | Notes' copying-flag share (of the notes the checks ran on) against the rewritten sections' | no higher |
+
+  The report lists up to 30 missed changes, false rewrites, false demotions and notes judged short. The gate is the judged half, means over 3 runs (ADR-0066), beside the `context` step's bars.
+
 ### `fact-check`: planted errors
 
 Decision D4 of the overview plan makes the fact-check call the only defense against a wrong number (ADR-0057's rule, extended), so this measures its leniency on production's own prompt.
@@ -233,8 +265,8 @@ The runs of the 30 days up to the newest run: counts by trigger and by verdict; 
 
 ### Outputs and safety
 
-- `overview-eval.md` in `--out`: a section per step that ran (answer keys, gap keys, gap-key drafts, story context against the bars, the fact check, the baseline), what was skipped, the spend and the fixtures' anchor. Every departure from the default run tags the name (`-steps-…`, `-facts-context`, `-half-<half>`, `-arms-…`, `-size-N`, `-repeat-N`, `-limit-N`), so a trial never overwrites the report of record. The drafts go to `gap-drafts/`. Caches: `.cache/calls.jsonl`, `.cache/tavily.jsonl`, `.cache/fact-fixtures.json`, `.cache/gap-sample.json`, `.cache/context-inputs.json`, `.cache/pass-inputs.json`.
-- The read-only session, SELECT only (`SelectDb` in `readOnlyDb.ts`), opened only when a step needs it; the only HTTP is OpenAI, and Tavily for the `context` step through production's `lib/tavily.ts`; no `withRetry` (`imports.test.ts`); production's story context modules and the pass's (`researchPass.ts`, `researchPool.ts`) are imported whole only while they do no I/O of their own, `loadContextInput` only while it runs SELECTs on the client it is given, and `loadFirstPassInput` only while it does too and reads no pass table (`imports.test.ts`); `OPENAI_API_KEY` and `TAVILY_API_KEY` printed only as present or missing, the database only as local or remote; each pass that calls a model is skipped, and listed under Skipped, when its uncached calls exceed what is left of the budget or the key is missing.
+- `overview-eval.md` in `--out`: a section per step that ran (answer keys, gap keys, gap-key drafts, story context against the bars, a later pass's updates against the bars, the fact check, the baseline), what was skipped, the spend and the fixtures' anchor. Every departure from the default run tags the name (`-steps-…`, `-facts-context`, `-half-<half>`, `-arms-…`, `-size-N`, `-repeat-N`, `-limit-N`), so a trial never overwrites the report of record. The drafts go to `gap-drafts/`. Caches: `.cache/calls.jsonl`, `.cache/tavily.jsonl`, `.cache/fact-fixtures.json`, `.cache/gap-sample.json`, `.cache/context-inputs.json`, `.cache/pass-inputs.json`, `.cache/update-inputs.json`.
+- The read-only session, SELECT only (`SelectDb` in `readOnlyDb.ts`), opened only when a step needs it; the only HTTP is OpenAI, and Tavily for the `context` step through production's `lib/tavily.ts`; no `withRetry` (`imports.test.ts`); production's story context modules and the pass's (`researchPass.ts`, `researchPool.ts`, `researchPassLater.ts`) are imported whole only while they do no I/O of their own, `loadContextInput` only while it runs SELECTs on the client it is given, `loadFirstPassInput` only while it does too and reads no pass table, and `readLegacyImport` only while it runs SELECTs and writes nothing (`imports.test.ts`); `OPENAI_API_KEY` and `TAVILY_API_KEY` printed only as present or missing, the database only as local or remote; each pass that calls a model is skipped, and listed under Skipped, when its uncached calls exceed what is left of the budget or the key is missing.
 - **First run on a database:** `--dry-run`, then `--steps fact-check --limit 5`. The SQL was written against `prisma/schema.prisma` without a database at hand; story context's SELECTs are covered by `*.db.test.ts` against the test database.
 
 ## Adding a suite or arm
@@ -267,7 +299,7 @@ The runs of the 30 days up to the newest run: counts by trigger and by verdict; 
 | `server/src/scripts/eval/research.ts` | `eval:research` CLI orchestration |
 | `server/src/scripts/eval/research/` | The research measurement's eval-only parts: sampling (`fixtures`, loading through production's `researchStoriesByIds`), the Tavily response cache around production's client (`tavily`), the adapter to production's pipeline with the constant arms (`pipeline`), estimates and totals (`costs`), the budget-gated story queue (`storyQueue`), the two reports (`report`). The prompts, schemas, filter, checks and step sequence are production's (`.context/story-research.md`, "Key files") |
 | `server/src/scripts/eval/overviews.ts` | `eval:overviews` CLI orchestration |
-| `server/src/scripts/eval/overviews/` | The overview evals: the answer-key format and checks (`keySchema`, `keyFiles`, `keyCheck`, which also loads the gap keys' stories, the committed `keys/`), the fact sample (`factFixtures`), the variant rules (`plant`), the fact-check calls, their per-pass budget and their scores (`factCheck`, `callBudget`, `factCheckScore`), research's cost baseline (`baseline`); story context's gate: the gap-key format and its database check (`gapKeySchema`, `gapKeyCheck`, the committed `gapKeys/`), the sample and drafts (`gapDraft`), the stories' inputs (`contextInputs`), the replay (`context`), the strong judge and its eval-only prompts (`contextJudge`, `prompts`), the scores, bars and halves (`contextScore`), module-1 facts for the fact check (`contextFacts`); and the report (`report`, `contextReport`, `reportText`) |
+| `server/src/scripts/eval/overviews/` | The overview evals: the answer-key format and checks (`keySchema`, `keyFiles`, `keyCheck`, which also loads the gap keys' stories, the committed `keys/`), the fact sample (`factFixtures`), the variant rules (`plant`), the fact-check calls, their per-pass budget and their scores (`factCheck`, `callBudget`, `factCheckScore`), research's cost baseline (`baseline`); story context's gate: the gap-key format and its database check (`gapKeySchema`, `gapKeyCheck`, the committed `gapKeys/`), the sample and drafts (`gapDraft`), the stories' inputs (`contextInputs`), the replay (`context`), the strong judge and its eval-only prompts (`contextJudge`, `prompts`), the scores, bars and halves (`contextScore`), module-1 facts for the fact check (`contextFacts`); research passes' `update` step: its fixtures, replay and note judge, scores and bars (`updateFixtures`, `update`, `updateScore`); and the report (`report`, `contextReport`, `updateReport`, `reportText`) |
 | `server/src/scripts/eval/recalibration.ts` | Owner's acceptance rules, phase-1 reference numbers, the calibration/holdout sample |
 | `server/src/scripts/eval/recalibrationChecks.ts` | The recalibration steps (pre-assess, assess, dedup, rating set) |
 | `server/src/scripts/eval/recalibrationReport.ts` | `recalibration-<half>[-tags].md` and its name |
