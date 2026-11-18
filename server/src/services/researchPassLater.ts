@@ -11,8 +11,8 @@
 import type { z } from 'zod'
 import { config } from '../config.js'
 import type { Prompt } from '../lib/promptCache.js'
-import { buildFactCheckPrompt } from '../prompts/research.js'
-import { buildJudgePrompt, buildNotePrompt, buildUpdateRewritePrompt, type NoteInput, type PassFactBrief } from '../prompts/researchPass.js'
+import { buildFactCheckPromptParts } from '../prompts/research.js'
+import { buildJudgePromptParts, buildNotePrompt, buildUpdateRewritePromptParts, type NoteInput, type PassFactBrief } from '../prompts/researchPass.js'
 import { factCheckSchema, repairSchema } from '../schemas/research.js'
 import { judgeSchema, noteSchema, type JudgeAnswer } from '../schemas/researchPass.js'
 import { renameCited, sourceRenames, versionArticle, withFrozen } from './articleVersions.js'
@@ -150,7 +150,7 @@ export async function updateArticle(input: UpdateInput, deps: UpdateDeps): Promi
     const res = await call(
       'judge',
       judgeSchema,
-      buildJudgePrompt({
+      buildJudgePromptParts({
         storyDay: input.storyDay,
         sections: items.map(i => ({ label: i.label, text: i.text, factIds: i.cited ? i.factIds : null })),
         cited: input.pool.facts.filter(f => citedIds.has(f.ref)).map(brief),
@@ -186,7 +186,7 @@ export async function updateArticle(input: UpdateInput, deps: UpdateDeps): Promi
     const res = await call(
       'update',
       repairSchema,
-      buildUpdateRewritePrompt({ sources: writable.sources, earlier: writable.earlier, story: storyItems(article), repairs: targets }),
+      buildUpdateRewritePromptParts({ sources: writable.sources, earlier: writable.earlier, story: storyItems(article), repairs: targets }),
     )
     if (res.outcome === 'skipped') return done('budget')
     if (res.parsed === null) {
@@ -354,7 +354,7 @@ async function checkedNote(
   const res = await call(
     'fact-check',
     factCheckSchema,
-    buildFactCheckPrompt([{ label: NOTE_LABEL, text: note.text, facts: evidence, numbersNotFound: hints }], lines, [...facts.values()]),
+    buildFactCheckPromptParts([{ label: NOTE_LABEL, text: note.text, facts: evidence, numbersNotFound: hints }], lines, [...facts.values()]),
   )
   if (res.outcome === 'skipped') return 'skipped'
   if (res.parsed === null) return { problems: [...copying.problems, { problem: `fact-check: ${res.outcome}`, kind: 'fact' }], unsupported: false }

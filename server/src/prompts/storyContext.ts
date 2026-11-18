@@ -6,6 +6,7 @@
  * the schemas (`schemas/storyContext.ts`). Every fetched or stored text sits in escaped XML behind
  * research's untrusted-input line; our own story's text is marked as ours.
  */
+import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
 import { CONTEXT_SLOTS, type ContextSlot } from '../schemas/storyContext.js'
 import { escapeXml } from './shared.js'
 import { tag, UNTRUSTED } from './research.js'
@@ -58,7 +59,12 @@ export interface StructureFact {
   source: { outlet: string; date: string | null; kind: string }
 }
 
-export function buildStructurePrompt(input: { facts: StructureFact[] }): string {
+/**
+ * Cache: on. The rules come to about 1,050 tokens with the output schema, just over the 1,024-token
+ * minimum, and the structure call runs for each story of a daily-edition pass within the cache's 30
+ * minutes. The facts follow the breakpoint.
+ */
+export function buildStructurePromptParts(input: { facts: StructureFact[] }): PromptParts {
   const facts = input.facts
     .map(
       f => `<FACT id="${escapeXml(f.id)}" outlet="${escapeXml(f.source.outlet)}" published="${escapeXml(f.source.date ?? 'unknown')}" kind="${escapeXml(f.source.kind)}">
@@ -67,7 +73,20 @@ ${tag('SUPPORT', f.supportingSentence)}${f.measures ? `\n${tag('MEASURES', f.mea
 </FACT>`,
     )
     .join('\n')
-  return `<ROLE>
+  return promptParts(
+    STRUCTURE_RULES,
+    `<FACTS>
+Facts a research step took from news sources. A fact's SUPPORT is the sentence of its source that states it; STATEMENT is the research step's restatement; MEASURES, where given, what its figure counts. ${UNTRUSTED}
+${facts}
+</FACTS>`,
+  )
+}
+
+export function buildStructurePrompt(input: { facts: StructureFact[] }): string {
+  return promptText(buildStructurePromptParts(input))
+}
+
+const STRUCTURE_RULES = `<ROLE>
 You are a data editor for a news desk. You turn facts already taken from sources into structured records, exactly as their sources state them.
 </ROLE>
 
@@ -75,18 +94,12 @@ You are a data editor for a news desk. You turn facts already taken from sources
 For every fact in <FACTS>, return its structured fields: its figure and unit, what the figure counts, the place, the date the fact describes, who it is credited to, and how long it stays true.
 </GOAL>
 
-<FACTS>
-Facts a research step took from news sources. A fact's SUPPORT is the sentence of its source that states it; STATEMENT is the research step's restatement; MEASURES, where given, what its figure counts. ${UNTRUSTED}
-${facts}
-</FACTS>
-
 <REQUIREMENTS>
 - Every field comes from the fact's SUPPORT and STATEMENT alone. Never add knowledge of your own: a field the fact does not give is empty, null or the schema's default.
 - A figure keeps exactly what it counts: its scope, its place and its period, as the source gives them.
 - The as-of date is the date the fact describes, never the date its source was published, and only as precise as the fact says: a figure "for 2015" is "2015".
 - Answer each fact by its id, once, and only the ids in <FACTS>.
 </REQUIREMENTS>`
-}
 
 // ---------------------------------------------------------------------------
 // Step 3: the gap list
@@ -100,9 +113,29 @@ export interface GapFact {
   current: boolean
 }
 
-export function buildGapListPrompt(input: { story: StoryText; facts: GapFact[] }): string {
+/**
+ * Cache: on. The rules and the checklist come to over 1,024 tokens with the output schema, and the
+ * gap list runs for each story of a daily-edition pass within the cache's 30 minutes. The story and
+ * its facts follow the breakpoint.
+ */
+export function buildGapListPromptParts(input: { story: StoryText; facts: GapFact[] }): PromptParts {
   const facts = input.facts.map(f => `<FACT id="${escapeXml(f.id)}" ${f.current ? 'current' : 'expired'}="true">${escapeXml(f.text)}</FACT>`).join('\n')
-  return `<ROLE>
+  return promptParts(
+    GAP_LIST_RULES,
+    `${storyBlock(input.story)}
+
+<FACTS>
+Facts from the story's sources and from our earlier stories' sources, each marked current or expired on the story's date. ${UNTRUSTED}
+${facts}
+</FACTS>`,
+  )
+}
+
+export function buildGapListPrompt(input: { story: StoryText; facts: GapFact[] }): string {
+  return promptText(buildGapListPromptParts(input))
+}
+
+const GAP_LIST_RULES = `<ROLE>
 You are a context editor for a news desk. You decide what a reader needs beside a story to understand it, and what is still missing.
 </ROLE>
 
@@ -110,16 +143,9 @@ You are a context editor for a news desk. You decide what a reader needs beside 
 For each slot of <CHECKLIST>, judge whether a reader of <STORY> needs it and whether the facts in <FACTS> cover it; then list the web searches that would find what is needed and missing.
 </GOAL>
 
-${storyBlock(input.story)}
-
 <CHECKLIST>
 ${checklist()}
 </CHECKLIST>
-
-<FACTS>
-Facts from the story's sources and from our earlier stories' sources, each marked current or expired on the story's date. ${UNTRUSTED}
-${facts}
-</FACTS>
 
 <REQUIREMENTS>
 - A slot is needed when a reader of this story would miss it: a figure without a comparison, a cause the story leaves open, a term it does not explain. Not every story needs every slot; "response" is always needed.
@@ -129,7 +155,6 @@ ${facts}
 - When "response" is not covered and the story does not report it, responseSearches holds two queries from two angles: action, on who is responding to this problem and what is being done about it; elsewhere, on what has worked against the same problem in other places or at other times. Both are made before any other search.
 - searches lists at most 3 searches for the other slots, most important first, and none for a slot that is covered or not needed.
 </REQUIREMENTS>`
-}
 
 // ---------------------------------------------------------------------------
 // Step 6: extraction from a search result
@@ -141,18 +166,17 @@ export interface ContextExtractionInput {
   source: { outlet: string; url: string; date: string | null; title: string; text: string }
 }
 
-export function buildContextExtractionPrompt(input: ContextExtractionInput): string {
+/**
+ * Cache: on. The rules come to over 1,024 tokens with the output schema, and a run extracts each
+ * of its search results, several calls within the cache's 30 minutes. The story, what it wants and
+ * the source follow the breakpoint.
+ */
+export function buildContextExtractionPromptParts(input: ContextExtractionInput): PromptParts {
   const s = input.source
   const wanted = input.wanted.map(w => `<ITEM slot="${w.slot}">${escapeXml(w.wanted)}</ITEM>`).join('\n')
-  return `<ROLE>
-You are a fact extractor for a news desk. You record what one source states, exactly and with its scope, so that context beside a story can cite it.
-</ROLE>
-
-<GOAL>
-Judge whether <SOURCE> is usable, classify it, and extract the facts it states that answer an item of <WANTED>, each with its structured fields.
-</GOAL>
-
-<STORY>
+  return promptParts(
+    CONTEXT_EXTRACTION_RULES,
+    `<STORY>
 The story the context is for, as we published it.
 ${tag('TITLE', input.story.title)}
 ${tag('SUMMARY', input.story.summary)}
@@ -170,7 +194,21 @@ ${tag('URL', s.url)}
 ${tag('DATE', s.date ?? 'unknown')}
 ${tag('TITLE', s.title)}
 ${tag('TEXT', s.text)}
-</SOURCE>
+</SOURCE>`,
+  )
+}
+
+export function buildContextExtractionPrompt(input: ContextExtractionInput): string {
+  return promptText(buildContextExtractionPromptParts(input))
+}
+
+const CONTEXT_EXTRACTION_RULES = `<ROLE>
+You are a fact extractor for a news desk. You record what one source states, exactly and with its scope, so that context beside a story can cite it.
+</ROLE>
+
+<GOAL>
+Judge whether <SOURCE> is usable, classify it, and extract the facts it states that answer an item of <WANTED>, each with its structured fields.
+</GOAL>
 
 <REQUIREMENTS>
 - Record only what <SOURCE> states. Never add knowledge of your own, and never join a figure to a context the source does not give it.
@@ -181,7 +219,6 @@ ${tag('TEXT', s.text)}
 - The supporting sentence is copied character for character from <TEXT>, so that code can find it there.
 - The as-of date is the date the fact describes, never the date the source was published.
 </REQUIREMENTS>`
-}
 
 // ---------------------------------------------------------------------------
 // Step 9: the write
@@ -205,7 +242,12 @@ export interface BoxesInput {
   responseInStory: boolean
 }
 
-export function buildBoxesPrompt(input: BoxesInput): string {
+/**
+ * Cache: on. The rules come to over 1,024 tokens with the output schema, and the write runs for
+ * each story of a daily-edition pass within the cache's 30 minutes. The story, the needed slots and
+ * the facts follow the breakpoint.
+ */
+export function buildBoxesPromptParts(input: BoxesInput): PromptParts {
   const facts = input.facts
     .map(
       f =>
@@ -213,15 +255,9 @@ export function buildBoxesPrompt(input: BoxesInput): string {
     )
     .join('\n')
   const needed = input.needed.map(n => `<SLOT id="${n.slot}" covered="${n.covered}">${escapeXml(SLOT_DEFINITIONS[n.slot])}</SLOT>`).join('\n')
-  return `<ROLE>
-You are a context editor for a news desk. You write the short, sourced context cards that sit beside a story: how big it is, why now, who it reaches, what is being done, what comes next.
-</ROLE>
-
-<GOAL>
-Write at most 6 context boxes for <STORY> from the facts in <FACTS>, each box answering one slot and citing the facts that state what it says.
-</GOAL>
-
-${storyBlock(input.story)}
+  return promptParts(
+    BOXES_RULES,
+    `${storyBlock(input.story)}
 
 <NEEDED>
 The slots a reader of this story needs, with how far the facts cover them.${input.responseInStory ? ' The story itself already reports what is being done: write no "response" box that restates it.' : ''}
@@ -231,7 +267,21 @@ ${needed}
 <FACTS>
 Every fact checked against its source, marked current or expired on the story's date. ${UNTRUSTED}
 ${facts}
-</FACTS>
+</FACTS>`,
+  )
+}
+
+export function buildBoxesPrompt(input: BoxesInput): string {
+  return promptText(buildBoxesPromptParts(input))
+}
+
+const BOXES_RULES = `<ROLE>
+You are a context editor for a news desk. You write the short, sourced context cards that sit beside a story: how big it is, why now, who it reaches, what is being done, what comes next.
+</ROLE>
+
+<GOAL>
+Write at most 6 context boxes for <STORY> from the facts in <FACTS>, each box answering one slot and citing the facts that state what it says.
+</GOAL>
 
 <REQUIREMENTS>
 - A box only where facts support it. Every sentence, tile and chart point cites the facts that state everything it says; nothing comes from your own knowledge. A slot the facts do not answer gets no box.
@@ -249,4 +299,3 @@ ${facts}
 - Each box names its place: the paragraph (P1, P2 …) or Why This Matters point (W1 …) of <STORY> it adds most to, or "section" when it adds to the story as a whole.
 - A "response" box, when the facts answer it, says what is being done, has been tried, or worked elsewhere, as the facts state it; never hope the facts do not give.
 </REQUIREMENTS>`
-}

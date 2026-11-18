@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
+import { promptText } from '../lib/promptCache.js'
 import { TavilyError } from '../lib/tavily.js'
 import type { BoxesAnswer, ContextExtraction, GapList } from '../schemas/storyContext.js'
 import { contextFact } from '../test/contextFixtures.js'
@@ -115,7 +116,8 @@ function fakeDeps(f: Fakes = {}) {
   const prompts: Partial<Record<ContextStep, string[]>> = {}
   const requests: ContextSearchRequest[] = []
   const deps: ContextDeps = {
-    async call(step, _schema, prompt) {
+    async call(step, _schema, sent) {
+      const prompt = promptText(sent)
       prompts[step] = [...(prompts[step] ?? []), prompt]
       let parsed: unknown
       if (step === 'structure') parsed = { facts: [...prompt.matchAll(/<FACT id="([^"]+)"/g)].map(m => ({ id: m[1], ...fields })) }

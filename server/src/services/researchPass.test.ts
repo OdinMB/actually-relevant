@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
+import { promptText } from '../lib/promptCache.js'
 import type { Draft, Extraction, FactCheck } from '../schemas/research.js'
 import type { GapList } from '../schemas/storyContext.js'
 import { articleOf } from './articleVersions.js'
@@ -169,7 +170,8 @@ function fakeDeps(over: Responder = {}, search: ResearchSearchAnswer = { results
   const calls: { step: PassStep; prompt: string }[] = []
   const answers = responders(over)
   const deps: PassDeps = {
-    async call(step, _schema, prompt) {
+    async call(step, _schema, sent) {
+      const prompt = promptText(sent)
       calls.push({ step, prompt })
       const answer = answers[step]?.(prompt) ?? null
       const outcome = answer === SKIP ? 'skipped' : answer === null ? 'error' : 'ok'

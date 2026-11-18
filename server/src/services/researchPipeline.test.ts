@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { promptText, type Prompt } from '../lib/promptCache.js'
 import type { TavilySearch } from '../lib/tavily.js'
 import { EMOTION_TAGS_PROMPT_BLOCK } from '../prompts/shared.js'
 import type { Draft, Earlier, Extraction, FactCheck, Queries, Repair } from '../schemas/research.js'
@@ -140,9 +141,9 @@ const SKIPPED = Symbol('skipped')
 /** A step caller that answers each step from `responders` and records the steps called. */
 function fakeCall(responders: Responder, outcome: StepOutcome = 'ok'): { call: ResearchCall; steps: StepName[] } {
   const steps: StepName[] = []
-  const call: ResearchCall = async <T>(step: StepName, _schema: unknown, prompt: string) => {
+  const call: ResearchCall = async <T>(step: StepName, _schema: unknown, sent: Prompt) => {
     steps.push(step)
-    const answer = outcome === 'ok' ? responders[step]?.(prompt) : null
+    const answer = outcome === 'ok' ? responders[step]?.(promptText(sent)) : null
     const skipped = outcome === 'skipped' || answer === SKIPPED
     const parsed = skipped ? null : ((answer ?? null) as T | null)
     return {
@@ -280,7 +281,9 @@ describe('researchStory', () => {
     expect(r.verdict).toEqual({ kind: 'fallback', reason: 'budget', category: 'technical' })
     expect(batches).toHaveLength(1)
     expect(batches[0]?.map(b => b.step)).toEqual(['extract', 'extract', 'earlier'])
-    expect(batches[0]?.[0]?.prompt).toContain('Pakistan has added 22GW')
+    // The extraction is cached: the source is in the data after the rules
+    expect(promptText(batches[0]![0]!.prompt)).toContain('Pakistan has added 22GW')
+    expect(batches[0]?.[0]?.prompt).toMatchObject({ data: expect.stringContaining('Pakistan has added 22GW') })
     expect(fake.steps).not.toContain('extract')
     expect(fake.steps).not.toContain('earlier')
   })
@@ -421,9 +424,12 @@ describe('researchStory', () => {
     expect(r.draft).toEqual({ ...twoParagraphs(), story: [twoParagraphs().story[0], { text: 'Grid demand fell as homes went solar.', factIds: ['S1F2'] }] })
     expect(asked(repairs[0]!)).toEqual(['Story paragraph 2'])
     expect(judgedLabels(checks[1]!)).toEqual(['Story paragraph 2'])
-    // No item of the recheck is judged against every fact, so the facts are not shown again
-    expect(checks[0]).toContain('</POOL>')
-    expect(checks[1]).not.toContain('</POOL>')
+    // No item of the recheck is judged against every fact, so its facts are only its item's evidence
+    expect(checks[0]).toContain('<AGAINST_POOL/>')
+    expect(checks[0]).toContain('<FACT id="S0F1">')
+    expect(checks[1]).not.toContain('<AGAINST_POOL/>')
+    expect(checks[1]).not.toContain('<FACT id="S0F1">')
+    expect(checks[1]).toContain('<FACT id="S1F2">')
     expect(r.checks.map(c => c.rechecked)).toEqual([undefined, ['Story paragraph 2']])
     expect(r.problems).toEqual([])
     expect(fake.steps.filter(c => c === 'rewrite')).toHaveLength(1)
@@ -527,7 +533,8 @@ describe('researchStory', () => {
       expect(asked(repairs[0]!)).toEqual(['Title'])
       // The recheck judges the title against every fact again
       expect(judgedLabels(checks[1]!)).toEqual(['Title'])
-      expect(checks[1]).toContain('</POOL>')
+      expect(checks[1]).toContain('<AGAINST_POOL/>')
+      expect(checks[1]).toContain('<FACT id="S0F1">')
       expect(fake.steps).not.toContain('derive')
       expect(r.verdict).toEqual({ kind: 'keep' })
       expect(r.draft?.title).toBe(kept)
@@ -790,7 +797,7 @@ describe('researchStory', () => {
     const items = [...prompts[0]!.matchAll(/<ITEM number="(\d+)" label="([^"]+)">([\s\S]*?)<\/ITEM>/g)].map(m => [
       Number(m[1]),
       m[2],
-      m[3]!.includes('<CITED_FACTS>'),
+      m[3]!.includes('<EVIDENCE>'),
       m[3]!.includes('<AGAINST_POOL/>'),
     ])
     // The title, summary and blurb cite nothing, and are judged against every fact of the research
@@ -805,8 +812,9 @@ describe('researchStory', () => {
       [8, 'Key quote', false, false],
     ])
     // Every fact once, in one block: each source's, our earlier story's and each one's date
-    const pool = prompts[0]!.match(/<POOL>[\s\S]*?<\/POOL>/g) ?? []
+    const pool = prompts[0]!.match(/\n<FACTS>\n[\s\S]*?\n<\/FACTS>\n/g) ?? []
     expect(pool).toHaveLength(1)
+    expect(prompts[0]).not.toContain('<CITED_FACTS>')
     expect([...pool[0]!.matchAll(/<FACT id="([^"]+)">/g)].map(m => m[1]).sort()).toEqual(['E1F0', 'E1F1', 'S0F0', 'S0F1', 'S0F2', 'S1F0', 'S1F1', 'S1F2'])
     const wording = /<SOURCE_WORDING>([\s\S]*?)<\/SOURCE_WORDING>/.exec(prompts[0]!)?.[1] ?? ''
     expect([...wording.matchAll(/id="([^"]+)"/g)].map(m => m[1])).toEqual(['S0', 'S0T', 'S0F1', 'S0F2', 'S0Q1', 'S1', 'S1T', 'S1F1', 'S1F2', 'S1Q1'])

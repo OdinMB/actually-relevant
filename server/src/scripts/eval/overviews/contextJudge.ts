@@ -10,7 +10,8 @@
  */
 import type { z } from 'zod'
 import { config } from '../../../config.js'
-import { buildFactCheckPrompt } from '../../../prompts/research.js'
+import type { Prompt } from '../../../lib/promptCache.js'
+import { buildFactCheckPromptParts } from '../../../prompts/research.js'
 import { factCheckSchema, type FactCheck } from '../../../schemas/research.js'
 import { boxCheckItems, promptItems, renderFact, type BoxItem, type ContextFactData } from '../../../services/storyContextChecks.js'
 import type { ContextInput, StoryContextResult } from '../../../services/storyContextPipeline.js'
@@ -62,7 +63,8 @@ export interface JudgedRun {
 interface JudgeCall<T> {
   schemaName: string
   schema: z.ZodType<T>
-  prompt: string
+  /** The box check's judge sends production's fact-check prompt with its split. */
+  prompt: Prompt
   /** Billed output expected at medium effort: the estimate only. */
   outputTokens: number
 }
@@ -111,7 +113,7 @@ const batches = <T>(list: T[], size: number): T[][] => Array.from({ length: Math
 const boxCall = (batch: BoxItem[]): JudgeCall<FactCheck> => ({
   schemaName: BOX_SUPPORT_SCHEMA,
   schema: factCheckSchema,
-  prompt: buildFactCheckPrompt(promptItems(batch.map(b => b.checked)), [], []),
+  prompt: buildFactCheckPromptParts(promptItems(batch.map(b => b.checked)), [], []),
   outputTokens: 150 * batch.length,
 })
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
+import { promptText } from '../lib/promptCache.js'
 import type { FactCheck, Repair } from '../schemas/research.js'
 import type { JudgeAnswer, NoteAnswer } from '../schemas/researchPass.js'
 import { buildResearchedStory } from './researchedStory.js'
@@ -157,8 +158,8 @@ function fakeDeps(answers: Partial<Record<LaterStep | StepName, Answer>>) {
     }
   }
   const deps: UpdateDeps = {
-    call: async (step, _schema, prompt) => ({ ...answer(step, prompt), usage: ZERO_USAGE, costUsd: 0.001, model: `model-${step}` }),
-    research: async (step, _schema, prompt) => answer(step, prompt),
+    call: async (step, _schema, prompt) => ({ ...answer(step, promptText(prompt)), usage: ZERO_USAGE, costUsd: 0.001, model: `model-${step}` }),
+    research: async (step, _schema, prompt) => answer(step, promptText(prompt)),
   }
   return { deps, calls, steps: () => calls.map(c => c.step) }
 }

@@ -9,7 +9,8 @@
  * arms on the accepted facts' variants, runs only when its own uncached calls fit the budget
  * (`callBudget.ts`). Calls go through the eval context (cache, ledger, budget), never wrapped in a retry.
  */
-import { buildFactCheckPrompt, type CheckedItem } from '../../../prompts/research.js'
+import type { PromptParts } from '../../../lib/promptCache.js'
+import { buildFactCheckPromptParts, type CheckedItem } from '../../../prompts/research.js'
 import { factCheckSchema, type FactCheck } from '../../../schemas/research.js'
 import { checkedItems, publishedFact, type PoolFact } from '../../../services/researchChecks.js'
 import type { ContextFactData } from '../../../services/storyContextChecks.js'
@@ -89,9 +90,9 @@ export function batchesOf(items: CheckItem[]): CheckItem[][] {
   return Array.from({ length: Math.ceil(shuffled.length / ITEMS_PER_CALL) }, (_, i) => shuffled.slice(i * ITEMS_PER_CALL, (i + 1) * ITEMS_PER_CALL))
 }
 
-/** No source wording and no pool: each item carries its own evidence. */
-export const batchPrompt = (batch: CheckItem[]): string =>
-  buildFactCheckPrompt(
+/** No source wording and no pool: the facts are the items' own evidence. Production's split, so the eval sends what production sends. */
+export const batchPrompt = (batch: CheckItem[]): PromptParts =>
+  buildFactCheckPromptParts(
     batch.map((item, i) => checkedItem(item, i + 1)),
     [],
     [],

@@ -8,6 +8,7 @@
  * guidance in the schemas (`schemas/researchPass.ts`), every fetched or stored text escaped behind
  * the untrusted-input line. Each prompt's version is a hash of it on a fixed input and of its schema.
  */
+import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
 import { repairSchema } from '../schemas/research.js'
 import { judgeSchema, noteSchema } from '../schemas/researchPass.js'
 import { promptVersionOf } from './promptVersion.js'
@@ -48,17 +49,17 @@ const section = (s: JudgeInput['sections'][number]) =>
     '\n',
   )
 
-export function buildJudgePrompt(input: JudgeInput): string {
-  return `<ROLE>
-You are a corrections editor at a news desk. You decide whether newer reporting makes any part of a published story wrong or out of date, and you leave every other part alone.
-</ROLE>
-
-<GOAL>
-For each section in <STORY>, judge whether the facts in <NEW_FACTS> make it wrong or substantially different, naming the new facts that do; and name each fact in <CITED_FACTS> that a new fact shows was wrong about its own moment.
-</GOAL>
-
-<STORY>
-The story as readers see it, published on ${escapeXml(input.storyDay)}, section by section. A story paragraph or bullet comes with the ids of the facts it CITES; the title, the summary and the blurb cite none and rest on the story as a whole. ${UNTRUSTED}
+/**
+ * Cache: on. The rules come to about 1,050 tokens with the output schema, just over the 1,024-token
+ * minimum, and the judge runs for each story of a daily-edition later pass within the cache's 30
+ * minutes. The story, its facts, the
+ * new facts and the story's day follow the breakpoint.
+ */
+export function buildJudgePromptParts(input: JudgeInput): PromptParts {
+  return promptParts(
+    JUDGE_RULES,
+    `<STORY>
+The story as readers see it, published on the day <REQUEST> gives, section by section. A story paragraph or bullet comes with the ids of the facts it CITES; the title, the summary and the blurb cite none and rest on the story as a whole. ${UNTRUSTED}
 ${input.sections.map(section).join('\n')}
 </STORY>
 
@@ -72,6 +73,24 @@ Facts found since the story was written, each checked against the sentence of it
 ${input.fresh.map(f => fact(f)).join('\n')}
 </NEW_FACTS>
 
+<REQUEST>
+Story published: ${escapeXml(input.storyDay)}
+</REQUEST>`,
+  )
+}
+
+export function buildJudgePrompt(input: JudgeInput): string {
+  return promptText(buildJudgePromptParts(input))
+}
+
+const JUDGE_RULES = `<ROLE>
+You are a corrections editor at a news desk. You decide whether newer reporting makes any part of a published story wrong or out of date, and you leave every other part alone.
+</ROLE>
+
+<GOAL>
+For each section in <STORY>, judge whether the facts in <NEW_FACTS> make it wrong or substantially different, naming the new facts that do; and name each fact in <CITED_FACTS> that a new fact shows was wrong about its own moment.
+</GOAL>
+
 <RULES>
 <SUBSTANTIALLY_DIFFERENT>
 A section is substantially different when a reader who read it would now hold a materially false or outdated belief about the development: a figure revised beyond rounding, a decision taken or reversed, a plan dropped or narrowed, an outcome now known, the main claim now disputed by a later credible report. This holds for a figure the section dates too ('180 deaths by November 10'), since the story gives the development's latest state.
@@ -83,9 +102,8 @@ A section that new facts only add to is unchanged: more detail, context, a react
 <CONTRADICTED>
 A fact in <CITED_FACTS> is contradicted when a fact in <NEW_FACTS> states the opposite about the same moment or event: a corrected figure for the same date, a denial of what it reports, a disproof. A newer value for a later moment, such as a death toll that has risen since, supersedes it without contradicting it, and is not listed. A section citing a contradicted fact is wrong.
 </CONTRADICTED>
-- Each section is judged on its own text, against the facts above alone; what you know from elsewhere does not count.
+- Each section is judged on its own text, against the facts in <CITED_FACTS> and <NEW_FACTS> alone; what you know from elsewhere does not count.
 </RULES>`
-}
 
 // ---------------------------------------------------------------------------
 // The rewrite: research's repair prompt in an update's framing
@@ -96,30 +114,42 @@ A fact in <CITED_FACTS> is contradicted when a fact in <NEW_FACTS> states the op
  * contradicted fact it cites as its problem, the whole story for context and every usable fact of the
  * pool, so a rewritten section stays coherent with its neighbours and every other section stays as it
  * is (`withRepairs` keeps them so whatever the answer). Answered in research's repair shape.
+ *
+ * Cache: on. The rules come to over 1,024 tokens with the output schema, and the rewrite and its
+ * repair rounds come one after another, for each story of a daily-edition later pass. The facts, the
+ * story and the items to rewrite follow the breakpoint.
  */
-export function buildUpdateRewritePrompt(input: RepairInput): string {
-  return `<ROLE>
-You are a news writer who updates a published story for newer reporting.
-</ROLE>
-
-<GOAL>
-Write each item in <REPAIRS> again so that it gives what the facts in <FACTS> now show, with the smallest change that does it: what its problems do not touch stays as it is. Every other item of <STORY> stays as it is too, so each new text keeps its item's place and job in the story and about its length, and adds nothing another item already says.
-</GOAL>
+export function buildUpdateRewritePromptParts(input: RepairInput): PromptParts {
+  return promptParts(
+    UPDATE_RULES,
+    `<FACTS>
+${FACTS_INTRO}
+${factsBlock(input.sources, input.earlier)}
+</FACTS>
 
 <STORY>
 The story as it stands, item by item. ${UNTRUSTED}
 ${input.story.map(i => `<ITEM label="${escapeXml(i.label)}">${escapeXml(i.text)}</ITEM>`).join('\n')}
 </STORY>
 
-<FACTS>
-${FACTS_INTRO}
-${factsBlock(input.sources, input.earlier)}
-</FACTS>
-
 <REPAIRS>
 The items to write again, each with its TEXT, the ids it CITES (none for an item that carries no citations), and each PROBLEM: what newer reporting changes in it, with the ids of the facts that show it. ${UNTRUSTED}
 ${input.repairs.map(repairItem).join('\n')}
-</REPAIRS>
+</REPAIRS>`,
+  )
+}
+
+export function buildUpdateRewritePrompt(input: RepairInput): string {
+  return promptText(buildUpdateRewritePromptParts(input))
+}
+
+const UPDATE_RULES = `<ROLE>
+You are a news writer who updates a published story for newer reporting.
+</ROLE>
+
+<GOAL>
+Write each item in <REPAIRS> again so that it gives what the facts in <FACTS> now show, with the smallest change that does it: what its problems do not touch stays as it is. Every other item of <STORY> stays as it is too, so each new text keeps its item's place and job in the story and about its length, and adds nothing another item already says.
+</GOAL>
 
 <REQUIREMENTS>
 <UPDATE>
@@ -137,9 +167,7 @@ ${CITATIONS}
 ${LATEST_STATE}
 </REQUIREMENTS>
 
-${WRITING_GUIDELINES}
-`
-}
+${WRITING_GUIDELINES}`
 
 // ---------------------------------------------------------------------------
 // The Update note
@@ -168,6 +196,11 @@ ${p.problems.map(problem => tag('PROBLEM', problem)).join('\n')}
 </PREVIOUS>`
     : ''
 
+/**
+ * Cache: off. The rules stay under the 1,024-token minimum.
+ * House order (`.context/prompting.md`): the rules first, the changes, their facts and a repair
+ * round's previous Update last.
+ */
 export function buildNotePrompt(input: NoteInput): string {
   return `<ROLE>
 You are a news editor who writes the short Update shown on a story that changed for newer reporting.
@@ -177,6 +210,15 @@ You are a news editor who writes the short Update shown on a story that changed 
 Write the Update for the changes in <CHANGES>: what is different now and what newer reporting showed, in one or two sentences of at most 60 words, citing the facts in <FACTS> that the changed sections rest on.
 </GOAL>
 
+<REQUIREMENTS>
+- The Update says what changed in the development and who reported it, naming the outlet or body: 'The death toll was revised to 212 from 180, according to the WHO's situation report of November 18.'
+- It is published as written beside the story, so it is about the development, never about the story, its sources or its versions: it does not mention the article, the story, the sources, the facts or an earlier version.
+  Bad: 'This story was updated because new sources were found.' Good: 'Officials raised the count of displaced people to 40,000 from 25,000 on November 18, according to OCHA.'
+- It states only what its cited facts state, with their scope and qualifiers, and cites every fact it states.
+- No quotation marks and at most one em dash. The date of the update is added beside it, so the text gives none of its own; the date of a report it names is fine.
+- American spelling ('program', 'analyze').
+</REQUIREMENTS>
+
 <CHANGES>
 Each section that changed, as it read BEFORE and as it reads AFTER; REMOVED marks a section taken out. ${UNTRUSTED}
 ${input.changes.map(change).join('\n')}
@@ -185,16 +227,7 @@ ${input.changes.map(change).join('\n')}
 <FACTS>
 The facts the changes rest on, each with the outlet that states it, the day that outlet published it, and the sentence that states it; CONTRADICTED marks an earlier fact that newer reporting showed was wrong. ${UNTRUSTED}
 ${input.facts.map(f => fact(f, f.contradicted ? ' status="CONTRADICTED"' : '')).join('\n')}
-</FACTS>${problemsBlock(input.problems)}
-
-<REQUIREMENTS>
-- The Update says what changed in the development and who reported it, naming the outlet or body: 'The death toll was revised to 212 from 180, according to the WHO's situation report of November 18.'
-- It is published as written beside the story, so it is about the development, never about the story, its sources or its versions: it does not mention the article, the story, the sources, the facts or an earlier version.
-  Bad: 'This story was updated because new sources were found.' Good: 'Officials raised the count of displaced people to 40,000 from 25,000 on November 18, according to OCHA.'
-- It states only what its cited facts state, with their scope and qualifiers, and cites every fact it states.
-- No quotation marks and at most one em dash. The date of the update is added beside it, so the text gives none of its own; the date of a report it names is fine.
-- American spelling ('program', 'analyze').
-</REQUIREMENTS>`
+</FACTS>${problemsBlock(input.problems)}`
 }
 
 // ---------------------------------------------------------------------------

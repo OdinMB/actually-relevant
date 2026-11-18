@@ -16,11 +16,11 @@ import { buildDedupPrompt } from '../prompts/dedup.js'
 import {
   buildDerivePrompt,
   buildEarlierPrompt,
-  buildExtractionPrompt,
-  buildFactCheckPrompt,
+  buildExtractionPromptParts,
+  buildFactCheckPromptParts,
   buildQueriesPrompt,
-  buildRepairPrompt,
-  buildWritePrompt,
+  buildRepairPromptParts,
+  buildWritePromptParts,
   queryCount,
   type CheckedItem,
   type WriteInput,
@@ -437,7 +437,7 @@ async function buildPool(
     story: { ...brief, date: story.datePublished.slice(0, 10) },
     candidates: candidates.map(c => ({ ...c, date: c.datePublished.slice(0, 10) })),
   })
-  const extractPrompts = inputs.map(s => buildExtractionPrompt({ story: brief, source: s }))
+  const extractPrompts = inputs.map(s => buildExtractionPromptParts({ story: brief, source: s }))
   const batch: PlannedStep[] = [
     ...extractPrompts.map(prompt => ({ step: 'extract' as const, prompt })),
     ...(candidates.length > 0 ? [{ step: 'earlier' as const, prompt: earlierPrompt }] : []),
@@ -517,7 +517,7 @@ export async function checkDraft(draft: ArticleText, ctx: CheckContext, labels?:
     config.research.copiedRunWords,
   )
   const prompt = () =>
-    buildFactCheckPrompt(
+    buildFactCheckPromptParts(
       items.map(({ item, evidence, againstPool, numberHints, quote }): CheckedItem => ({
         label: item.label,
         text: item.text,
@@ -588,7 +588,7 @@ export async function repairDraft<D extends ArticleText>(
   let current = draft
   for (let round = 0; round < config.research.repairRounds && r.problems.length > 0; round++) {
     const targets = repairTargets(current, r.problems)
-    const prompt = buildRepairPrompt({ sources: input.sources, earlier: input.earlier, story: storyItems(current), repairs: targets })
+    const prompt = buildRepairPromptParts({ sources: input.sources, earlier: input.earlier, story: storyItems(current), repairs: targets })
     const res = await ctx.call('rewrite', repairSchema, prompt)
     if (res.outcome === 'skipped') return current
     // Asked for once the call ran, whatever its answer: empty, unchanged or unparseable
@@ -609,7 +609,7 @@ export async function repairDraft<D extends ArticleText>(
  */
 async function writeChecked(input: WriteInput, facts: ReadonlyMap<string, PoolFact>, call: Call, r: StoryResearch): Promise<Draft> {
   const ctx: CheckContext = { facts, sources: r.sources, call }
-  const draft = withoutInlineIds(required(await call('write', writeSchema, buildWritePrompt(input)), 'write'))
+  const draft = withoutInlineIds(required(await call('write', writeSchema, buildWritePromptParts(input)), 'write'))
   r.draft = draft
   const first = await checkDraft(draft, ctx)
   if (first === 'skipped') throw new Stop('budget')

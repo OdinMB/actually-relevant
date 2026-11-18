@@ -167,7 +167,7 @@ export const writeSchema = z.object({
     isOld: z
       .boolean()
       .describe(
-        'True when the main development first happened before the date given in <OLD_NEWS> and no fact reports a new development about it on or after that date, as <OLD_NEWS> defines it. False when one does: the story is written around that development.',
+        'True when the main development first happened before the old-news date <REQUEST> gives and no fact reports a new development about it on or after that date, as <OLD_NEWS> defines it. False when one does: the story is written around that development.',
       ),
     firstHappened: z
       .string()
@@ -193,7 +193,7 @@ export const factCheckSchema = z.object({
         supported: z
           .boolean()
           .describe(
-            'True when every factual claim of the item (each number, name, date, place and event) is stated by a fact of its evidence (its cited facts, or every fact in <POOL> for an item marked AGAINST_POOL), with the same scope and the qualifiers that fact gives; a number also when it is given in other words, rounded or in another unit. True for an item with neither cited facts nor AGAINST_POOL, unless it states one of its NUMBERS_NOT_FOUND as a fact. For the key quote: true when a quote or sentence of its QUOTED_SOURCE says it, with the speaker its ATTRIBUTION names.',
+            'True when every factual claim of the item (each number, name, date, place and event) is stated by a fact of its evidence (the facts in <FACTS> its EVIDENCE lists, or every fact in <FACTS> for an item marked AGAINST_POOL), with the same scope and the qualifiers that fact gives; a number also when it is given in other words, rounded or in another unit. True for an item with neither EVIDENCE nor AGAINST_POOL, unless it states one of its NUMBERS_NOT_FOUND as a fact. For the key quote: true when a quote or sentence of its QUOTED_SOURCE says it, with the speaker its ATTRIBUTION names.',
           ),
         problem: z
           .string()

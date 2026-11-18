@@ -9,6 +9,7 @@
 import type { Prisma } from '@prisma/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
+import { promptText } from '../lib/promptCache.js'
 import prisma from '../lib/prisma.js'
 import { axisVector, createCluster, createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createResearchRun } from '../test/db/storyContext.js'
@@ -145,7 +146,7 @@ function fakeDeps() {
   const deps: PassDeps = {
     async call(step, _schema, prompt) {
       steps.push(step)
-      const answer = answers[step]?.(prompt) ?? null
+      const answer = answers[step]?.(promptText(prompt)) ?? null
       return { parsed: answer as never, outcome: answer === null ? 'error' : 'ok', usage: ZERO_USAGE, costUsd: 0.001, model: `model-${step}` }
     },
     tavily: { search: async () => ({ results: [], credits: 2 }) },

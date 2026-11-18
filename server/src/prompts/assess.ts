@@ -171,7 +171,7 @@ Some variation of "[Publisher] reports [key point]. [Relevance summary]."
 /**
  * One story's full assessment.
  *
- * Cache: on. The rules come to about 3,500 tokens with the output schema, and an analysis run
+ * Cache: on. The rules come to about 4,300 tokens with the output schema, and an analysis run
  * assesses many stories within the cache's 30 minutes. The issue's guidelines, the article and the
  * tone block are the call's data, after the breakpoint.
  */

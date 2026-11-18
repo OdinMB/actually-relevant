@@ -31,7 +31,7 @@ ${EMOTION_TAGS_PROMPT_BLOCK}`
 /**
  * One batch's screen: issue, rating and emotion tag for each article.
  *
- * Cache: on. The rules and the run's issues come to about 1,100 tokens with the output schema, and a
+ * Cache: on. The rules and the run's issues come to about 1,400 tokens with the output schema, and a
  * pre-assessment run sends a batch of up to `config.preassess.batchSize` articles at a time, several
  * batches within the cache's 30 minutes. The issues are fixed for the run, so they close the cached
  * part; the articles are the call's data.

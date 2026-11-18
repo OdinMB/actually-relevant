@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { buildDerivePrompt, buildRepairPrompt, buildWritePrompt, LATEST_STATE, type PoolSourceBrief, type RepairInput, type WriteInput } from './research.js'
+import type { PoolFact } from '../services/researchChecks.js'
+import {
+  buildDerivePrompt,
+  buildFactCheckPrompt,
+  buildRepairPrompt,
+  buildWritePrompt,
+  factsOfItems,
+  LATEST_STATE,
+  type CheckedItem,
+  type PoolSourceBrief,
+  type RepairInput,
+  type WriteInput,
+} from './research.js'
 
 const source = (id: string, date: string | null): PoolSourceBrief => ({
   id,
@@ -69,9 +81,54 @@ describe('old news narrows', () => {
   it('is old only with no new development since the cutoff, and a fresh development about an old event leads the story', () => {
     const prompt = buildWritePrompt(write)
     const rule = block(prompt, 'OLD_NEWS')
-    expect(rule).toContain(write.oldBefore)
+    // The cutoff is the call's own value: the rule names it, the closing request gives it
+    expect(rule).not.toContain(write.oldBefore)
+    expect(rule).toContain('the old-news date <REQUEST> gives')
+    expect(block(prompt, 'REQUEST')).toContain(`Old-news date: ${write.oldBefore}`)
     expect(rule).toMatch(/no fact reports a new development/)
     expect(rule).toMatch(/written around that development/)
     expect(prompt).toMatch(/Every field is about one development: [^\n]*<OLD_NEWS>/)
+  })
+})
+
+describe('the fact check shows each fact once', () => {
+  const f = (id: string, statement = `Fact ${id}.`): PoolFact => ({ id, statement, supportingSentence: `Sentence of ${id}.`, measures: '' })
+  const pool = [f('S1F1'), f('S1F2'), f('S2F1')]
+  const items: CheckedItem[] = [
+    { label: 'Story paragraph 1', text: 'One.', facts: [f('S1F1'), f('S1F2')], numbersNotFound: [] },
+    { label: 'Story paragraph 2', text: 'Two.', facts: [f('S2F1'), f('S1F1')], numbersNotFound: [] },
+    { label: 'Title', text: 'Head', facts: 'pool', numbersNotFound: [] },
+  ]
+  const evidenceIds = (prompt: string) =>
+    [...prompt.matchAll(/<ITEM number="\d+" label="([^"]+)">[\s\S]*?(?:<EVIDENCE>([^<]*)<\/EVIDENCE>|(<AGAINST_POOL\/>))?\n<\/ITEM>/g)].map(m => [
+      m[1],
+      m[3] ? 'pool' : (m[2] ?? ''),
+    ])
+
+  it('in one FACTS block, each item listing its evidence by id in the order it had', () => {
+    const prompt = buildFactCheckPrompt(items, [], pool)
+    for (const fact of pool) expect(prompt.split(`<FACT id="${fact.id}">`)).toHaveLength(2)
+    expect(prompt).not.toContain('<CITED_FACTS>')
+    expect(prompt).not.toContain('<POOL>')
+    expect(evidenceIds(prompt)).toEqual([
+      ['Story paragraph 1', 'S1F1, S1F2'],
+      ['Story paragraph 2', 'S2F1, S1F1'],
+      ['Title', 'pool'],
+    ])
+  })
+
+  it('holds the pool when an item is judged against it, and only the cited facts when none is', () => {
+    expect(factsOfItems(items, pool).map(x => x.id)).toEqual(['S1F1', 'S1F2', 'S2F1'])
+    expect(factsOfItems(items.slice(1, 2), pool).map(x => x.id)).toEqual(['S2F1', 'S1F1'])
+    expect(factsOfItems([{ label: 'Key quote', text: 'Q', facts: [], numbersNotFound: [] }], pool)).toEqual([])
+  })
+
+  it('refuses two different facts under one id, or a cited fact outside the pool beside an item judged against it', () => {
+    expect(() => factsOfItems([items[0]!, { label: 'Story paragraph 2', text: 'Two.', facts: [f('S1F1', 'Other.')], numbersNotFound: [] }], pool)).toThrow(
+      /share the id S1F1/,
+    )
+    expect(() => factsOfItems([{ label: 'Story paragraph 1', text: 'One.', facts: [f('S9F1')], numbersNotFound: [] }, items[2]!], pool)).toThrow(
+      /not in the pool/,
+    )
   })
 })

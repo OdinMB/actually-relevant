@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { Prompt } from '../../../lib/promptCache.js'
 import { contextFact, contextInput, contextResult, gapKey, sentenceBox } from '../../../test/contextFixtures.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
 import { figureFacts, judgeContext, keptItems, notesToJudge, plannedJudgeCalls, type JudgedRun } from './contextJudge.js'
@@ -157,7 +158,8 @@ describe('judgeContext', () => {
     const runs = [run(), run({ slug: 'story-b' }), run({ run: 2, result: contextResult() })]
     const ctx = fakeEvalContext(answers)
     await judgeContext(ctx, runs)
-    const key = (c: { schemaName: string; prompt: string }) => `${c.schemaName}\n${c.prompt}`
-    expect(plannedJudgeCalls(runs).map(key).sort()).toEqual(ctx.calls.map(key).sort())
+    // As sent: the box check's judge keeps the fact check's split
+    const key = (c: { schemaName: string; prompt: Prompt }) => `${c.schemaName}\n${JSON.stringify(c.prompt)}`
+    expect(plannedJudgeCalls(runs).map(key).sort()).toEqual(ctx.calls.map(c => key({ schemaName: c.schemaName, prompt: c.sent })).sort())
   })
 })

@@ -13,8 +13,18 @@ import type { LlmCallOutcome, LlmTokenUsage } from '../lib/llmUsage.js'
 import type { Prompt } from '../lib/promptCache.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
 import { promptVersionOf as versionOf } from '../prompts/promptVersion.js'
-import { buildFactCheckPrompt } from '../prompts/research.js'
-import { buildBoxesPrompt, buildContextExtractionPrompt, buildGapListPrompt, buildStructurePrompt, type StoryText } from '../prompts/storyContext.js'
+import { buildFactCheckPrompt, buildFactCheckPromptParts } from '../prompts/research.js'
+import {
+  buildBoxesPrompt,
+  buildBoxesPromptParts,
+  buildContextExtractionPrompt,
+  buildContextExtractionPromptParts,
+  buildGapListPrompt,
+  buildGapListPromptParts,
+  buildStructurePrompt,
+  buildStructurePromptParts,
+  type StoryText,
+} from '../prompts/storyContext.js'
 import { factCheckSchema, type FactCheck } from '../schemas/research.js'
 import {
   boxesSchema,
@@ -472,7 +482,7 @@ export async function structureFacts(
   const answers = new Map<string, ReturnType<typeof structured>>()
   if (facts.length === 0) return { answers, model: '' }
   const asked = new Set(facts.map(f => f.id))
-  const res = await call('structure', structureSchema, buildStructurePrompt({ facts }))
+  const res = await call('structure', structureSchema, buildStructurePromptParts({ facts }))
   for (const a of required(res, 'structure').facts) if (asked.has(a.id) && !answers.has(a.id)) answers.set(a.id, structured(a))
   return { answers, model: res.model }
 }
@@ -515,7 +525,7 @@ export async function gapStage(
 ): Promise<GapStageResult> {
   const windows = WINDOWS()
   const gapFacts = input.facts.map(f => ({ id: f.ref, text: renderFact(f), current: isCurrent({ ...f, sourceDate: f.source.date }, input.storyDay, windows) }))
-  const gap = required(await call('gap-list', gapListSchema, buildGapListPrompt({ story: input.story, facts: gapFacts })), 'gap-list')
+  const gap = required(await call('gap-list', gapListSchema, buildGapListPromptParts({ story: input.story, facts: gapFacts })), 'gap-list')
   record.slots = gap.slots
   const plan = input.plan(gap, { title: input.title, text: input.storyText })
   record.responseInStory = plan.storyReports
@@ -558,7 +568,7 @@ export async function gapStage(
       const res = await call(
         'extract',
         contextExtractionSchema,
-        buildContextExtractionPrompt({
+        buildContextExtractionPromptParts({
           story: { title: input.title, summary: input.summary },
           wanted,
           source: { outlet: domainOf(p.result.url), url: p.result.url, date: publishedDay(p.result.date), title: p.result.title, text: p.result.text },
@@ -621,7 +631,7 @@ export async function checkFacts(toCheck: ContextFactData[], call: ContextStepCa
       checkedTexts.set(it.item.factIds[0]!, it.item.text)
       if (it.numberHints.length > 0) record.numberHints.push({ label: it.item.label, numbers: it.numberHints })
     }
-    const answer: FactCheck = required(await call('fact-check', factCheckSchema, buildFactCheckPrompt(promptItems(items), [], [])), 'fact-check')
+    const answer: FactCheck = required(await call('fact-check', factCheckSchema, buildFactCheckPromptParts(promptItems(items), [], [])), 'fact-check')
     for (const [ref, v] of factVerdicts(answer, items)) verdictOf.set(ref, v)
   }
   const facts: ContextFactData[] = toCheck.map(f => {
@@ -664,7 +674,7 @@ export async function writeBoxes(input: BoxStageInput, call: ContextStepCall, re
   const write = await call(
     'write',
     boxesSchema,
-    buildBoxesPrompt({
+    buildBoxesPromptParts({
       story: input.story,
       facts: input.supported.map(f => ({
         id: f.ref,
@@ -687,7 +697,7 @@ export async function writeBoxes(input: BoxStageInput, call: ContextStepCall, re
   const lines = sourceLines(wording)
   const answers: { answer: FactCheck; items: BoxItem[] }[] = []
   for (const batch of chunks(items, config.storyContext.checkBatchSize)) {
-    const answer = required(await call('box-check', factCheckSchema, buildFactCheckPrompt(promptItems(batch.map(b => b.checked)), lines, [])), 'box-check')
+    const answer = required(await call('box-check', factCheckSchema, buildFactCheckPromptParts(promptItems(batch.map(b => b.checked)), lines, [])), 'box-check')
     answers.push({ answer, items: batch })
   }
   const verdicts = applyBoxVerdicts(resolved.boxes, items, answers, lines, boxCopying(resolved.boxes, wording, config.research.copiedRunWords))

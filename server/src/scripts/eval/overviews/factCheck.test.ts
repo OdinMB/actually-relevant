@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { promptText, type Prompt } from '../../../lib/promptCache.js'
 import type { FactCheck } from '../../../schemas/research.js'
 import { publishedFact } from '../../../services/researchChecks.js'
 import { arm } from '../models.js'
@@ -43,7 +44,8 @@ const item = (f: FactFixture, text = f.statement): CheckItem => ({ id: `${f.key}
 interface FakeCall {
   arm: Arm
   schemaName: string
-  prompt: string
+  /** As sent: the fact check keeps its split. */
+  prompt: Prompt
 }
 
 interface FakeLedger {
@@ -59,9 +61,12 @@ function fakeContext(judge: (text: string) => boolean | 'fail', ledger: FakeLedg
     calls,
     isCached: ledger.cached ?? (() => false),
     spentUsd: () => ledger.spentUsd ?? 0,
-    async call<T>(a: Arm, schemaName: string, _schema: unknown, prompt: string): Promise<CallRecord<T>> {
+    async call<T>(a: Arm, schemaName: string, _schema: unknown, prompt: Prompt): Promise<CallRecord<T>> {
       calls.push({ arm: a, schemaName, prompt })
-      const texts = [...prompt.matchAll(/<ITEM number="(\d+)"[^>]*>\n<TEXT>([^<]*)<\/TEXT>/g)].map(m => ({ number: Number(m[1]), text: m[2] ?? '' }))
+      const texts = [...promptText(prompt).matchAll(/<ITEM number="(\d+)"[^>]*>\n<TEXT>([^<]*)<\/TEXT>/g)].map(m => ({
+        number: Number(m[1]),
+        text: m[2] ?? '',
+      }))
       const verdicts = texts.map(t => ({ ...t, verdict: judge(t.text) }))
       const failed = verdicts.some(v => v.verdict === 'fail')
       const parsed: FactCheck = {
@@ -116,7 +121,7 @@ describe('checkedItem', () => {
 
   it("keeps the extraction's statement out of the prompt when the item is a variant of it", () => {
     const f = fact(4)
-    const prompt = batchPrompt([item(f, 'Congo reported 7,331 deaths.')])
+    const prompt = promptText(batchPrompt([item(f, 'Congo reported 7,331 deaths.')]))
     expect(prompt).toContain('Congo reported 7,331 deaths.')
     expect(prompt).toContain(f.sentence)
     expect(prompt).not.toContain(f.statement)
@@ -209,7 +214,7 @@ describe('plannedLabelCalls and plannedArmCalls', () => {
     await labelFacts(ctx, facts)
     const variants = variantItems(facts)
     await runArms(ctx, variants, arms, 2)
-    const key = (c: { arm: Arm; schemaName: string; prompt: string }) => `${c.arm.model}@${c.arm.effort}|${c.schemaName}|${c.prompt}`
+    const key = (c: { arm: Arm; schemaName: string; prompt: Prompt }) => `${c.arm.model}@${c.arm.effort}|${c.schemaName}|${JSON.stringify(c.prompt)}`
     const planned = [...plannedLabelCalls(facts), ...plannedArmCalls(variants, arms, 2)]
     expect(new Set(planned.map(key))).toEqual(new Set(ctx.calls.map(key)))
     expect(planned).toHaveLength(ctx.calls.length)
