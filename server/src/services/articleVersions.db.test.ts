@@ -7,9 +7,10 @@ import { randomUUID } from 'node:crypto'
 import { it, expect, vi, beforeEach } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { axisVector, createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-import { publicUpdates } from './articleVersions.js'
-import { insertVersion, storyVersions } from './passRecords.js'
-import type { ArticleVersionData } from './researchPool.js'
+import { publicUpdates, versionArticle } from './articleVersions.js'
+import { currentVersion, insertPoolRows, insertVersion, loadPool, storyVersions } from './passRecords.js'
+import { rewriteTargets } from './researchPassUpdate.js'
+import type { Article, ArticleVersionData, PoolFact, PoolSource } from './researchPool.js'
 import type { ResearchedStory } from './researchedStory.js'
 
 const mockGenerate = vi.hoisted(() => vi.fn())
@@ -66,6 +67,62 @@ const version = (number: number, status: ArticleVersionData['status']): ArticleV
   article: null,
   changes: number === 1 ? [] : [{ section: 'Story paragraph 1', before: projection('Paragraph v1.').paragraphs[0]!.sentences[0]!, after: null }],
   note: number === 1 ? null : { text: `Update ${number}.`, citations: [] },
+})
+
+/** An article whose one paragraph cites `factIds`. */
+const citing = (factIds: string[]): Article => ({
+  titleLabel: 'Label',
+  title: 'Headline v1',
+  story: [{ text: 'Paragraph v1.', factIds }],
+  summary: 'Summary v1.',
+  whyThisMatters: [{ text: 'Point v1.', factIds: [] }],
+  caveats: [{ text: 'Caveat.', factIds: [] }],
+  quote: '',
+  quoteAttribution: '',
+  quoteSourceId: '',
+  marketingBlurb: 'Blurb v1.',
+  emotionTag: 'uplifting',
+})
+
+const poolSource = (ref: string): PoolSource => ({
+  id: null,
+  ref,
+  origin: 'search',
+  earlierStoryId: null,
+  url: `https://${ref.toLowerCase()}.example/story`,
+  outlet: `Outlet ${ref}`,
+  title: `Title ${ref}`,
+  date: '2026-11-12',
+  kind: 'news-report',
+  country: '',
+  relation: 'same-development',
+  favicon: null,
+  usedRawContent: false,
+  voices: [],
+  optOutChecked: true,
+  firstPassId: null,
+})
+
+const poolFact = (ref: string, extra: Partial<PoolFact>): PoolFact => ({
+  id: null,
+  ref,
+  sourceRef: ref.replace(/F\d+$/, ''),
+  reusedFromId: null,
+  supportingSentence: `Sentence of ${ref}.`,
+  passage: null,
+  supportFound: true,
+  statement: `Statement of ${ref}.`,
+  measures: '',
+  slot: null,
+  structured: null,
+  extractedBy: { model: 'test-small', promptVersion: 'ext00001' },
+  verdict: 'supported',
+  verdictProblem: null,
+  checkedBy: null,
+  status: 'unreviewed',
+  firstPassId: null,
+  drop: null,
+  ...extra,
 })
 
 let feedId = ''
@@ -135,6 +192,34 @@ describeDb('article versions (PostgreSQL)', () => {
     expect(await statuses(s.id)).toEqual(['current', 'reverted', 'reverted'])
     expect(publicUpdates(await storyVersions(prisma, s.id))).toEqual([])
     await expect(undoUpdate(s.id)).rejects.toMatchObject({ status: 409 })
+  })
+
+  it("restores the facts the undone update demoted, so a later pass with no fresh facts rewrites nothing; another pass's demotions stay", async () => {
+    const s = await researched([{ ...version(1, 'superseded'), article: citing(['S1F1']) }, version(2, 'current')])
+    const [p1, p2] = await Promise.all(
+      [1, 2].map(n => prisma.researchPass.create({ data: { storyId: s.id, number: n, trigger: 'editor', kind: n === 1 ? 'first' : 'later', costUsd: 0.4 } })),
+    )
+    await prisma.articleVersion.updateMany({ where: { storyId: s.id, number: 1 }, data: { passId: p1!.id } })
+    await prisma.articleVersion.updateMany({ where: { storyId: s.id, number: 2 }, data: { passId: p2!.id } })
+    const demotedBy = (passId: string) => ({ status: 'demoted' as const, drop: { passId, reason: 'contradicted' as const, contradictedBy: ['S2F1'] } })
+    await prisma.$transaction(tx =>
+      insertPoolRows(tx, s.id, {
+        searches: [],
+        dropped: [],
+        sources: [poolSource('S1')],
+        facts: [poolFact('S1F1', demotedBy(p2!.id)), poolFact('S1F2', demotedBy(p1!.id))],
+      }),
+    )
+
+    await undoUpdate(s.id)
+
+    const pool = await loadPool(prisma, s.id)
+    expect(pool.facts.find(f => f.ref === 'S1F1')).toMatchObject({ status: 'unreviewed', drop: null })
+    expect(pool.facts.find(f => f.ref === 'S1F2')).toMatchObject({ status: 'demoted', drop: { passId: p1!.id } })
+    // The restored version's paragraph cites the restored fact: with nothing found since, no section is a target
+    const restored = (await currentVersion(prisma, s.id))!
+    const demoted = new Map(pool.facts.filter(f => f.status === 'demoted').map(f => [f.ref, 'contradicted']))
+    expect(rewriteTargets(versionArticle(restored, pool), [], { fresh: new Set(), demoted }).targets).toEqual([])
   })
 
   it('refuses an undo with no update to undo, changing nothing', async () => {

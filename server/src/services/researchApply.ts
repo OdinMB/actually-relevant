@@ -283,7 +283,7 @@ export async function revertResearch(storyId: string): Promise<void> {
  * An editor undoes the current update ("Undo this update", the newest version only): the version
  * before it goes back on the story's columns and projection through the same fenced write as an
  * apply, the single-source snapshot kept, and the update is reverted, which takes its Update off the
- * page. 404 for an unknown story; 409 for a status that takes no research write, when there is no
+ * page; the facts its pass demoted are back in use (`swapForUndo`). 404 for an unknown story; 409 for a status that takes no research write, when there is no
  * update to undo (`undoPlan`), and when the story or its versions changed before the write.
  */
 export async function undoUpdate(storyId: string): Promise<void> {
@@ -295,7 +295,7 @@ export async function undoUpdate(storyId: string): Promise<void> {
   const { current, previous } = plan
 
   const read = { status: story.status, updatedAt: story.updatedAt }
-  const swap = (tx: Prisma.TransactionClient) => swapForUndo(tx, storyId, { current: current.id, previous: previous.id })
+  const swap = (tx: Prisma.TransactionClient) => swapForUndo(tx, storyId, { current: current.id, previous: previous.id, passId: current.passId })
   if (!(await write(storyId, 'editor', read, versionValues(previous), { research: asJson(previous.research) }, swap))) throw new ConflictError(STORY_CHANGED)
   log.info({ storyId, undone: current.number, restored: previous.number }, 'research update undone')
 }
