@@ -28,7 +28,8 @@ import {
   RESEARCH_PASS_JOB,
   type PassStepState,
 } from '../services/researchPassQueue.js'
-import { markInterruptedPasses, recordSkippedPass, runPipelinePass, type PassEnd } from '../services/researchPassRuns.js'
+import { markInterruptedPasses, recordSkippedPass } from '../services/researchPassLifecycle.js'
+import { runPipelinePass, type PassEnd } from '../services/researchPassRuns.js'
 import { jobDisplayName } from './jobDisplayName.js'
 
 export { RESEARCH_PASS_JOB }

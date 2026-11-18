@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, setEmbedding, useTestDatabase } from '../test/db/harness.js'
 import { createContextFact, createContextRun } from '../test/db/storyContext.js'
-import { insertVersion } from './passRecords.js'
+import { insertVersion } from './passWrites.js'
 import { loadFirstPassInput, loadPassInput, passEligibility } from './researchPassInput.js'
 
 // The loader's guarantees live in its SQL and in the reads it composes, so they are tested against

@@ -17,7 +17,7 @@ A story's pool (`services/researchPool.ts`, the in-memory types; `services/passR
 - **`research_passes`**: one row per pass, numbered per story, with its trigger, kind (`first`, `later`), status (`running`, `completed`, `skipped`, `failed`), outcome, research's gate verdict on a first pass, costs (`cost_usd`, `model_usd`, `tavily_credits`), `record` (research's run record, context's run record, what became of the cards, the coverage queries skipped as made before, the coverage plan the pass used and why each step of it was reused or asked, `plan`), a sanitized error and the version it made. `story_id` is SET NULL on delete, as for research runs.
 - **`article_versions`**: a story's article as each pass left it: number (one more than the story's highest, so an undone version's number is never reused), kind (`first`, `update`, `legacy`), status (`current`, `superseded`, `reverted`), the text columns an apply writes, the reader projection (`research`), the article with every fact id each section cites (`draft`, added by `20261118120000_article_version_draft`, nullable; null on a legacy version, whose facts are read from its citations, `versionArticle`), the changes (section, text before, text after or null when removed) and the Update note. **At most one `current` version per story**, by the partial unique index `article_versions_one_current` (raw SQL in the migration; Prisma cannot model it, and `check:migrations` fails on a migration that drops it, `.context/database-migrations.md`).
 - **`pass_boxes`**: the cards a pass wrote, `context_boxes`' columns with the pass. Each takes over the editor's choices (hidden, moved) on the card of its type shown before: the newest earlier pass's cards, else the story's legacy context cards.
-- **Writing a pass** (`storePassResult`, in the caller's transaction): fenced on the pass still `running` (nothing is written once a restart marked it cut off), then the pass row, its new searches, the pages it left out, its new sources and facts, the judgments it changed on stored facts, its version (the current one superseded) and its cards. **Reading** (`loadPool`, `currentVersion`, `storyVersions`, `newestPassBoxes`) is SELECT only, through the client given. The public reads take only what they serve: a story page's Updates read `publicVersions` (the versions not reverted, without drafts or story columns), and its cards `loadCitedFacts` (the pool facts the cards cite and their sources), never the whole pool.
+- **Writing a pass** (`storePassResult`, `researchPassLifecycle.ts`, in the caller's transaction): fenced on the pass still `running` (nothing is written once a restart marked it cut off), the pass row, then its rows (`storePassRows`, `passWrites.ts`): its new searches, the pages it left out, its new sources and facts, the judgments it changed on stored facts, its version (the current one superseded) and its cards. **Reading** (`loadPool`, `currentVersion`, `storyVersions`, `newestPassBoxes`) is SELECT only, through the client given. The public reads take only what they serve: a story page's Updates read `publicVersions` (the versions not reverted, without drafts or story columns), and its cards `loadCitedFacts` (the pool facts the cards cite and their sources), never the whole pool.
 - **The old tables stay read-only history**: `story_research_runs`, `story_context_runs`, `context_facts` and `context_boxes` are never written by a pass.
 
 ## Legacy import
@@ -78,7 +78,7 @@ One meter for the whole pass: research's `createRunMeter` (`services/researchCal
 
 ## Running a pass
 
-`services/researchPassRuns.ts`:
+`services/researchPassLifecycle.ts` claims, settles and marks the pass row, and **is the only writer of `research_passes`** (a fence test holds it, `test/passWriters.test.ts`, as `storyLifecycle.ts`'s and `newsletterLifecycle.ts`'s do); `services/researchPassRuns.ts` runs a claimed pass (the deps, the execution, the step's and editors' passes):
 
 - **The claim** (`claimPass`), one transaction under research's reservation lock: the passes a restart cut off are marked first; refused while a pass of the story runs (one at a time); the story's legacy runs are imported once (`importLegacyPool`); the kind is decided (`later` when the story has a current version, the import's included, else `first`); refused when the month's spend plus that kind's ceiling would pass the cap; then the pass row is written `running` at its ceiling, numbered one more than the story's highest. Concurrent claims (the step's, an editor's, a research run's) never pass the cap or run one story twice.
 - **Execution** (`executePass`): the input (`loadPassInput`; a story the loader cannot research ends the pass `skipped` at $0), the pass over production's deps (`productionPassDeps`: the metered calls and searches, the gap search with its 7-day cache and opt-out check, the opt-out policy, `transientFailure`), **a second attempt in the same pass** when it failed on a problem that may pass, then the apply. It never throws: an error outside the pipeline fails the pass at its reservation.
@@ -164,7 +164,10 @@ A researched story's page shows its Updates (ADR-0068, "Where Updates show"; `.c
 | File | Role |
 |------|------|
 | `server/src/services/researchPool.ts` | The pool's and versions' in-memory types; source and fact keys, ref numbering, `usable` |
-| `server/src/services/passRecords.ts` | The pool and versions read back (SELECT only) and one pass's result written in the caller's transaction |
+| `server/src/services/passRecords.ts` | The pool, versions and cards read back (SELECT only) |
+| `server/src/services/passWrites.ts` | One pass's rows written in the caller's transaction (pool rows, judgments, version, cards), and the inserts the legacy import shares |
+| `server/src/services/researchPassLifecycle.ts` | The pass row, its only writer: the claim and its reservation, skipped and failed passes, the settle with its rows (`storePassResult`), cut-off passes |
+| `server/src/test/passWriters.test.ts` | The fence that keeps every write of `research_passes` in the lifecycle module |
 | `server/src/services/legacyPool.ts` | The legacy research and context runs imported once, version 1 included |
 | `server/src/services/researchPass.ts` | One pass over injected deps, first and later: its input, deps and result, the steps in order, the later pass's article step (`laterArticle`) |
 | `server/src/services/researchPassSteps.ts` | The pass's step names, tiers and efforts, and its one metered caller (`passCaller`) |
@@ -180,7 +183,7 @@ A researched story's page shows its Updates (ADR-0068, "Where Updates show"; `.c
 | `server/src/services/researchPassInput.ts` | One story's pass input, a first pass's input for the eval, and `passEligibility` |
 | `server/src/services/researchCalls.ts` | The run meter, shared with research runs |
 | `server/src/services/researchSpend.ts` | The one monthly cap's sum over runs and passes, and the reservation lock |
-| `server/src/services/researchPassRuns.ts` | A pass's lifecycle: claim and reservation, production deps, execution, interrupted and skipped passes, editors' passes |
+| `server/src/services/researchPassRuns.ts` | Running a claimed pass: production deps, execution with its second attempt, the step's pass, editors' passes and their tasks |
 | `server/src/services/researchPassApply.ts` | A pass's result put into the story's state, fenced; the first-pass Update; the `update_failed` notice |
 | `server/src/services/researchPassQueue.ts` | The step's state (`passStepOn`, and the refusal of the tools it replaces), the stories it owes, the pass's stale rule and the publish gate (SELECT only) |
 | `server/src/lib/runCutOff.ts` | The restart rule context runs and passes share, each with its own limit |

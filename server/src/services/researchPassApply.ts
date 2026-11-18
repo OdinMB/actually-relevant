@@ -1,8 +1,8 @@
 /**
  * A research pass's result put into the story's state (`.context/research-passes.md`, "Applying a
  * pass"): the pass applies itself, the nightly pass and an editor's alike (plan, For Odin 3). One
- * transaction writes the pass's rows (`storePassResult`: the pass row, its searches, sources, facts,
- * judgments, version and cards) and, when the pass made a version, the story's columns and projection
+ * transaction settles the pass with its rows (`storePassResult`: the pass row, its searches, sources,
+ * facts, judgments, version and cards) and, when the pass made a version, the story's columns and projection
  * through research's fenced write (`researchWrites.ts`'s `fencedWrite`), so neither lands without the
  * other. Every story write is fenced on the story as read before the pass: an editor's move or edit
  * during the pass wins, and the pass's rows are then stored without its version. A pipeline pass's
@@ -21,8 +21,9 @@ import { createLogger } from '../lib/logger.js'
 import { notify } from '../lib/notify.js'
 import prisma from '../lib/prisma.js'
 import { firstPassUpdate, versionForReaders, versionValues } from './articleVersions.js'
-import { storePassResult, type PassRowResult, type PassWrite } from './passRecords.js'
+import type { PassRowResult, PassWrite } from './passWrites.js'
 import type { PassResult } from './researchPass.js'
+import { storePassResult } from './researchPassLifecycle.js'
 import { snapshotForApply } from './researchSwap.js'
 import { fencedWrite, fetchCitedFavicons, REJECTED_FOR, rejectForVerdict, rejects, storyColumns, whyChanged, type ReadState } from './researchWrites.js'
 import type { Actor } from './storyLifecycle.js'

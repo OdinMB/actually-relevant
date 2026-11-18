@@ -31,7 +31,8 @@ vi.mock('./sourceFavicons.js', async importOriginal => ({
 }))
 vi.mock('./relatedStories.js', async importOriginal => ({ ...(await importOriginal<typeof import('./relatedStories.js')>()), forgetRelatedStories: vi.fn() }))
 
-const { claimPass, executePass } = await import('./researchPassRuns.js')
+const { claimPass } = await import('./researchPassLifecycle.js')
+const { executePass } = await import('./researchPassRuns.js')
 const { undoUpdate } = await import('./researchWrites.js')
 const { getPublishedStoryBySlug } = await import('./publicStories.js')
 const { loadPool, storyVersions } = await import('./passRecords.js')

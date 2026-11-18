@@ -1,12 +1,12 @@
 /**
- * A research pass's lifecycle on PostgreSQL (`researchPassRuns.ts`, `researchPassApply.ts`,
- * `researchPassViews.ts`): the claim and its reservation under the one cap, the month's sum,
- * interrupted and skipped passes, the fenced apply of a pass's result, an editor's pass and its spend.
+ * Running research passes on PostgreSQL (`researchPassRuns.ts`, `researchPassApply.ts`,
+ * `researchPassViews.ts`): the month's sum, the fenced apply of a pass's result, a pass a restart cut
+ * off, an editor's pass and its spend (the claim and the pass row's own moves are
+ * researchPassLifecycle.db.test.ts's).
  * The pass pipeline is a fake whose result each test gives (`researchPass.test.ts` tests the real
  * one), and so is its input; the embedding call and the favicon fetch are mocked. The eval gate is
  * open in these tests unless one closes it.
  */
-import type { Prisma } from '@prisma/client'
 import { it, expect, vi, beforeEach, afterEach } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
@@ -53,8 +53,8 @@ vi.mock('../lib/runUsage.js', async importOriginal => {
   }
 })
 
-const { claimPass, markInterruptedPasses, PASS_INTERRUPTED, recordSkippedPass, runPipelinePass, startEditorPass, startEditorPassBatch } =
-  await import('./researchPassRuns.js')
+const { runPipelinePass, startEditorPass, startEditorPassBatch } = await import('./researchPassRuns.js')
+const { PASS_INTERRUPTED } = await import('./researchPassLifecycle.js')
 const { monthToDateUsd } = await import('./researchSpend.js')
 const { passUsage, storyPasses } = await import('./researchPassViews.js')
 const { getPublishedStoryBySlug } = await import('./publicStories.js')
@@ -210,57 +210,6 @@ describeDb('research passes (PostgreSQL)', () => {
     taskRegistry.clear()
   })
 
-  it('claims a first pass at its ceiling, and a later one for a story with a current version', async () => {
-    const story = await researchable()
-    const first = await claimPass(story.id, 'pipeline')
-    expect(first).toMatchObject({ kind: 'first', ceilingUsd: FIRST })
-    if (!('passId' in first)) throw new Error('refused')
-    expect(await passOf(first.passId)).toMatchObject({ storyId: story.id, number: 1, trigger: 'pipeline', kind: 'first', status: 'running', costUsd: FIRST })
-
-    expect(await claimPass(story.id, 'editor')).toEqual({ refused: 'in-progress' })
-
-    // A first pass that kept no article leaves nothing to judge: the next is a first pass again
-    await prisma.researchPass.update({ where: { id: first.passId }, data: { status: 'completed' } })
-    const again = await claimPass(story.id, 'editor')
-    expect(again).toMatchObject({ kind: 'first', ceilingUsd: FIRST })
-    if (!('passId' in again)) throw new Error('refused')
-    await prisma.researchPass.update({ where: { id: again.passId }, data: { status: 'completed' } })
-
-    const v = firstVersion()
-    await prisma.articleVersion.create({ data: { storyId: story.id, number: 1, kind: 'first', status: 'current', research: v.research } })
-    const later = await claimPass(story.id, 'editor')
-    expect(later).toMatchObject({ kind: 'later', ceilingUsd: LATER })
-    if (!('passId' in later)) throw new Error('refused')
-    expect(await passOf(later.passId)).toMatchObject({ number: 3, trigger: 'editor', kind: 'later', costUsd: LATER })
-  })
-
-  it('claims a later pass for a story research already researched: the claim imports its legacy runs as version 1, once', async () => {
-    const story = await researchable('published')
-    const v = firstVersion()
-    await prisma.story.update({ where: { id: story.id }, data: { research: v.research as unknown as Prisma.InputJsonObject } })
-    const claim = await claimPass(story.id, 'editor')
-    expect(claim).toMatchObject({ kind: 'later', ceilingUsd: LATER })
-    expect(await prisma.articleVersion.findMany({ where: { storyId: story.id }, select: { number: true, kind: true, status: true } })).toEqual([
-      { number: 1, kind: 'legacy', status: 'current' },
-    ])
-    if (!('passId' in claim)) throw new Error('refused')
-    await prisma.researchPass.update({ where: { id: claim.passId }, data: { status: 'completed' } })
-    expect(await claimPass(story.id, 'editor')).toMatchObject({ kind: 'later' })
-    expect(await prisma.articleVersion.count({ where: { storyId: story.id } })).toBe(1)
-  })
-
-  it('never passes the cap, however many claims start at once, research runs counted in the same month', async () => {
-    // Room for exactly two first passes beside this month's research run
-    await spentThisMonth(CAP - 2 * FIRST - 0.001)
-    const stories = await Promise.all([1, 2, 3, 4].map(() => researchable()))
-
-    const claims = await Promise.all(stories.map(s => claimPass(s.id, 'pipeline')))
-
-    expect(claims.filter(c => 'passId' in c)).toHaveLength(2)
-    expect(claims.filter(c => 'refused' in c && c.refused === 'cap')).toHaveLength(2)
-    expect(await monthToDateUsd(prisma, new Date())).toBeLessThanOrEqual(CAP)
-  })
-
   it("sums this month's research runs and passes once each, deleted stories' included, leaving out the run or pass a meter counts itself", async () => {
     const lastMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1) - 2 * 24 * 60 * MINUTE_MS)
     await prisma.storyResearchRun.create({ data: { status: 'completed', trigger: 'pipeline', costUsd: 1, startedAt: new Date() } })
@@ -283,59 +232,6 @@ describeDb('research passes (PostgreSQL)', () => {
       laterPassUsd: LATER,
       refusal: null,
       on: true,
-    })
-  })
-
-  it("marks a pass a restart cut off failed, keeping its reservation, and leaves a live one running, a slow one past context's limit included", async () => {
-    const story = await researchable()
-    const cutOff = await prisma.researchPass.create({
-      data: {
-        storyId: story.id,
-        number: 1,
-        trigger: 'pipeline',
-        kind: 'first',
-        status: 'running',
-        costUsd: FIRST,
-        startedAt: ago(config.research.pass.staleRunMinutes + 5),
-      },
-    })
-    const live = await prisma.researchPass.create({
-      data: { storyId: story.id, number: 2, trigger: 'editor', kind: 'first', status: 'running', costUsd: FIRST, startedAt: ago(1) },
-    })
-    // A pass is research's and context's calls in turn, with a second attempt: it outlives a context run's limit
-    const slow = await prisma.researchPass.create({
-      data: {
-        storyId: (await researchable()).id,
-        number: 1,
-        trigger: 'pipeline',
-        kind: 'first',
-        status: 'running',
-        costUsd: FIRST,
-        startedAt: ago(config.storyContext.staleRunMinutes + 5),
-      },
-    })
-
-    expect(await markInterruptedPasses()).toBe(1)
-
-    expect(await passOf(cutOff.id)).toMatchObject({ status: 'failed', outcome: 'technical', error: PASS_INTERRUPTED, costUsd: FIRST })
-    expect((await passOf(cutOff.id)).finishedAt).not.toBeNull()
-    expect(await passOf(live.id)).toMatchObject({ status: 'running' })
-    expect(await passOf(slow.id)).toMatchObject({ status: 'running' })
-  })
-
-  it('records a skipped pass at $0 with its reason, numbered after the story’s others', async () => {
-    const story = await researchable()
-    await prisma.researchPass.create({ data: { storyId: story.id, number: 1, trigger: 'editor', kind: 'first', status: 'completed', costUsd: 0.2 } })
-
-    const id = await recordSkippedPass(story.id, 'monthly cap reached')
-
-    expect(await passOf(id)).toMatchObject({
-      number: 2,
-      trigger: 'pipeline',
-      status: 'skipped',
-      outcome: 'budget',
-      costUsd: 0,
-      error: 'skipped: monthly cap reached',
     })
   })
 

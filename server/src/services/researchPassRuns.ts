@@ -1,16 +1,13 @@
 /**
- * A research pass's lifecycle in production (`.context/research-passes.md`, "Running a pass"): the
- * claim, which under research's reservation lock marks cut-off passes, imports the story's legacy runs
- * into its pool once (`importLegacyPool`), decides the pass's kind and reserves its ceiling against the
- * one monthly cap (`researchSpend.ts`); the production deps (the metered calls and searches, the
- * opt-out policy, `transientFailure`); the execution, with one second attempt for a failure that may
- * pass; and the apply (`researchPassApply.ts`). The research pass step (`jobs/researchPass.ts`) runs
- * passes on selected stories (`runPipelinePass`); an editor's "Research again" runs one as a one-story
- * `research` task, or a batch in one task, in a run scope of the step's job, so its spend is added to
- * `research_pass`'s month and checked against that warning level. Nothing here runs while the step's
- * switch is closed (`passSwitchRefusal`). Refusals are ServiceErrors.
+ * Running research passes in production (`.context/research-passes.md`, "Running a pass"): the
+ * production deps (the metered calls and searches, the opt-out policy, `transientFailure`); the
+ * execution of a claimed pass (`researchPassLifecycle.ts` claims and settles its row), with one second
+ * attempt for a failure that may pass; and the apply (`researchPassApply.ts`). The research pass step
+ * (`jobs/researchPass.ts`) runs passes on selected stories (`runPipelinePass`); an editor's "Research
+ * again" runs one as a one-story `research` task, or a batch in one task, in a run scope of the step's
+ * job, so its spend is added to `research_pass`'s month and checked against that warning level.
+ * Nothing here runs while the step's switch is closed (`passSwitchRefusal`). Refusals are ServiceErrors.
  */
-import type { Prisma, ResearchRunTrigger } from '@prisma/client'
 import { config } from '../config.js'
 import { addMonthSpend } from '../jobs/jobLease.js'
 import { createLogger } from '../lib/logger.js'
@@ -20,16 +17,16 @@ import { createRunScope, runInScope, settleRun, type RunScope } from '../lib/run
 import { Semaphore } from '../lib/semaphore.js'
 import { taskRegistry } from '../lib/taskRegistry.js'
 import { ConflictError, NotFoundError, ServiceError } from '../utils/errors.js'
-import { importLegacyPool, legacyPoolPresent, readLegacyImport } from './legacyPool.js'
 import { researchSourcePolicy } from './publisherOptOut.js'
 import { createRunMeter, type RunMeter } from './researchCalls.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds } from './researchInput.js'
 import { runResearchPass, type PassDeps } from './researchPass.js'
 import { applyPass, type PassApplied } from './researchPassApply.js'
 import { loadPassInput, passEligibility } from './researchPassInput.js'
-import { PASS_JOB_DISABLED, passStaleBefore, passStepState, passSwitchRefusal, RESEARCH_PASS_JOB } from './researchPassQueue.js'
+import { claimPass, failPass, recordSkippedPass, skipClaimedPass, type PassClaim } from './researchPassLifecycle.js'
+import { PASS_JOB_DISABLED, passStepState, passSwitchRefusal, RESEARCH_PASS_JOB } from './researchPassQueue.js'
 import { passItemTally, type PassOutcome } from './researchPassRecord.js'
-import { monthToDateUsd, RESEARCH_RESERVATION_LOCK } from './researchSpend.js'
+import { monthToDateUsd } from './researchSpend.js'
 import type { ReadState } from './researchWrites.js'
 import { checkSpendWarnings } from './spending.js'
 import { contextSearch } from './storyContextSearch.js'
@@ -37,107 +34,12 @@ import type { Actor } from './storyLifecycle.js'
 
 const log = createLogger('research_pass')
 
-export const PASS_INTERRUPTED = 'interrupted: the server restarted during the pass'
 const BUSY = 'A research pass of this story is already running'
-
-type Db = Parameters<typeof monthToDateUsd>[0]
 
 const usd = (v: number) => `$${v.toFixed(2)}`
 
 const capRefusal = (spentUsd: number, ceilingUsd: number) =>
   `This month's research cap is reached: ${usd(spentUsd)} of ${usd(config.research.monthlyCapUsd)} spent, and a pass reserves ${usd(ceilingUsd)}`
-
-/** What a pass of each kind reserves when it starts: its ceiling (`config.research.pass`). */
-export const passCeilingUsd = (kind: 'first' | 'later') => (kind === 'first' ? config.research.pass.firstPassUsd : config.research.pass.laterPassUsd)
-
-/** A `running` pass a restart cut off (`passStaleBefore`): failed, `technical`, keeping its cost (its reservation). Each settles its story. */
-export async function markInterruptedPasses(db: Db = prisma, now: Date = new Date()): Promise<number> {
-  const { count } = await db.researchPass.updateMany({
-    where: { status: 'running', startedAt: { lt: passStaleBefore(now) } },
-    data: { status: 'failed', outcome: 'technical', error: PASS_INTERRUPTED, finishedAt: now },
-  })
-  return count
-}
-
-export interface PassClaim {
-  passId: string
-  kind: 'first' | 'later'
-  ceilingUsd: number
-}
-
-type Claim = PassClaim | { refused: 'in-progress' } | { refused: 'cap'; spentUsd: number; ceilingUsd: number }
-
-/**
- * The kind of pass the story gets: `later` while it has a current version to judge, else `first`
- * (a story whose first passes kept no article gets a first pass again). The one rule a claim and a
- * skipped pass record.
- */
-async function passKindOf(tx: Pick<Prisma.TransactionClient, 'articleVersion'>, storyId: string): Promise<'first' | 'later'> {
-  return (await tx.articleVersion.count({ where: { storyId, status: 'current' } })) > 0 ? 'later' : 'first'
-}
-
-/**
- * Claim a pass of the story, under research's reservation lock, so concurrent starts (the step's, an
- * editor's, a research run's) never pass the cap or run one story twice: cut-off passes marked first,
- * the legacy runs imported into the pool once (read before the lock, written under it), then the pass
- * row written `running` at its ceiling. Its kind is `passKindOf`'s once the import ran, so a story
- * researched before passes gets a later pass against version 1.
- */
-export async function claimPass(storyId: string, trigger: ResearchRunTrigger, now: Date = new Date()): Promise<Claim> {
-  // The import's reads before the lock every claim and research start waits on; it checks again under it
-  const legacy = (await legacyPoolPresent(prisma, storyId)) ? undefined : await readLegacyImport(prisma, storyId)
-  return prisma.$transaction(
-    async tx => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RESEARCH_RESERVATION_LOCK}::bigint)`
-      await markInterruptedPasses(tx, now)
-      if ((await tx.researchPass.count({ where: { storyId, status: 'running' } })) > 0) return { refused: 'in-progress' as const }
-      await importLegacyPool(tx, storyId, legacy)
-      const kind = await passKindOf(tx, storyId)
-      const ceilingUsd = passCeilingUsd(kind)
-      const spentUsd = await monthToDateUsd(tx, now)
-      if (spentUsd + ceilingUsd > config.research.monthlyCapUsd) return { refused: 'cap' as const, spentUsd, ceilingUsd }
-      const top = await tx.researchPass.aggregate({ where: { storyId }, _max: { number: true } })
-      const pass = await tx.researchPass.create({
-        data: { storyId, number: (top._max.number ?? 0) + 1, trigger, kind, status: 'running', costUsd: ceilingUsd, startedAt: now },
-        select: { id: true },
-      })
-      return { passId: pass.id, kind, ceilingUsd }
-    },
-    { timeout: 30_000 },
-  )
-}
-
-/**
- * A pipeline pass that never started (the cap reached, a story the loader cannot research): `skipped`
- * at $0 with its reason, so it settles the story without counting against the cap. Returns its id.
- */
-export async function recordSkippedPass(storyId: string, reason: string, now: Date = new Date()): Promise<string> {
-  return prisma.$transaction(
-    async tx => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RESEARCH_RESERVATION_LOCK}::bigint)`
-      const top = await tx.researchPass.aggregate({ where: { storyId }, _max: { number: true } })
-      const kind = await passKindOf(tx, storyId)
-      const pass = await tx.researchPass.create({
-        data: {
-          storyId,
-          number: (top._max.number ?? 0) + 1,
-          trigger: 'pipeline',
-          kind,
-          status: 'skipped',
-          outcome: 'budget',
-          costUsd: 0,
-          error: `skipped: ${reason}`,
-          startedAt: now,
-          finishedAt: now,
-        },
-        select: { id: true },
-      })
-      log.info({ passId: pass.id, storyId, reason }, 'research pass step skipped a story')
-      return pass.id
-    },
-    { timeout: config.database.transactionTimeoutMs },
-  )
-}
 
 /** Production's deps over the pass's meter: its calls and searches, the gap search with its cache and opt-out check, the opt-out policy. */
 export function productionPassDeps(meter: RunMeter): PassDeps {
@@ -193,13 +95,6 @@ export interface ExecuteOptions {
   deps?: (meter: RunMeter) => PassDeps
 }
 
-/** Fail a claimed pass outside its run, keeping its reservation as its cost; never throws. */
-async function failPass(passId: string, error: string): Promise<void> {
-  await prisma.researchPass
-    .updateMany({ where: { id: passId, status: 'running' }, data: { status: 'failed', outcome: 'technical', error, finishedAt: new Date() } })
-    .catch((e: unknown) => log.error({ passId, error: sanitizedError(e) }, 'could not mark the research pass failed'))
-}
-
 /**
  * Run the claimed pass and apply it; never throws. A failure that may pass (`transient`) is tried once
  * more in the same pass. A story the loader cannot research ends the pass `skipped` at $0. An error
@@ -210,10 +105,7 @@ export async function executePass(storyId: string, claim: PassClaim, options: Ex
     const now = new Date()
     const input = await loadPassInput(prisma, storyId, claim.passId, now)
     if (!input) {
-      await prisma.researchPass.updateMany({
-        where: { id: claim.passId, status: 'running' },
-        data: { status: 'skipped', outcome: 'fallback', costUsd: 0, error: `skipped: ${UNREADABLE}`, finishedAt: now },
-      })
+      await skipClaimedPass(claim.passId, UNREADABLE, now)
       return { ended: 'skipped', reason: UNREADABLE }
     }
     const meter = passMeter(claim)

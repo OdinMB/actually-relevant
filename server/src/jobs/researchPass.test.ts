@@ -15,7 +15,11 @@ vi.mock('../services/researchPassQueue.js', async importOriginal => {
   return { ...actual, ...mockQueue, passStepState: vi.fn(actual.passStepState) }
 })
 const mockRuns = vi.hoisted(() => ({ markInterruptedPasses: vi.fn(), runPipelinePass: vi.fn(), recordSkippedPass: vi.fn() }))
-vi.mock('../services/researchPassRuns.js', () => mockRuns)
+vi.mock('../services/researchPassRuns.js', () => ({ runPipelinePass: mockRuns.runPipelinePass }))
+vi.mock('../services/researchPassLifecycle.js', () => ({
+  markInterruptedPasses: mockRuns.markInterruptedPasses,
+  recordSkippedPass: mockRuns.recordSkippedPass,
+}))
 const mockNotify = vi.hoisted(() => vi.fn())
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
 // How many stories run at once is a constant, so the tests that need another set it here

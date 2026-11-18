@@ -10,7 +10,7 @@
  */
 import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
-import { insertPoolRows, insertVersion } from './passRecords.js'
+import { insertPoolRows, insertVersion } from './passWrites.js'
 import { publishedDay } from './researchChecks.js'
 import { researchedStorySchema } from './researchedStory.js'
 import {

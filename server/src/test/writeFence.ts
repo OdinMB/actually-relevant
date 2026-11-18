@@ -1,5 +1,5 @@
 /**
- * The source scanner behind the write fences (`statusWriters.test.ts`, `newsletterWriters.test.ts`):
+ * The source scanner behind the write fences (`statusWriters.test.ts`, `newsletterWriters.test.ts`, `passWriters.test.ts`):
  * tests that keep one module the only writer of some fields by reading every other source file.
  *
  * The match is textual: a Prisma call's `data` passed as a variable, or a key spread in from
