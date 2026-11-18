@@ -30,7 +30,8 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
   const story = (id: string) => sandbox.stories.get(id)!
 
   const state = (o: SandboxOverview): OverviewState => {
-    const since = now().getTime() - config.overviews.nightHours * HOUR_MS
+    // Joins within the night and after the last freeze or review, as production counts them
+    const since = Math.max(now().getTime() - config.overviews.nightHours * HOUR_MS, o.burstAt?.getTime() ?? 0, o.reviewedAt?.getTime() ?? 0)
     const byDay = new Map<string, number>()
     for (const e of activeEntries(o)) if (e.joinedAt.getTime() > since) byDay.set(e.date, (byDay.get(e.date) ?? 0) + 1)
     return {
@@ -42,6 +43,7 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
       hidden: false,
       lastEntryAt: o.lastEntryAt,
       closingSince: o.closingSince,
+      closingStoryId: o.status === 'closing' ? o.closingStoryId : null,
       activeEntries: activeEntries(o).length,
       unpublished: [],
       entriesAtLastReview: o.entriesAtLastReview,
@@ -124,6 +126,7 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
       for (const m of moves) {
         if (m.kind === 'detach') sandbox.detach(m.storyId)
         else if (m.kind === 'scope' && o.scope === m.from) o.scope = m.to
+        else if (m.kind === 'cancel_closing' && o.status === 'closing') Object.assign(o, { status: 'open', closingSince: null })
         else if (m.kind === 'status' && o.status === m.from && !o.frozen) {
           if (m.reason === 'closing_cancelled') fired('closing cancelled by a new entry')
           if (m.to === 'closed') Object.assign(o, { status: 'closed', closedAt: clock, closedReason: m.reason })

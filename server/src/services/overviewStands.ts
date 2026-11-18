@@ -197,7 +197,11 @@ export interface StandsResult {
   doing: StandsLine[]
   offered: OfferedFact[]
   drops: StandsDrop[]
-  /** Lines the model's check was asked about, and those dropped by any check. */
+  /**
+   * Lines the write gave within `maxStandsSentences` and `maxDoingSentences`, and those of them any
+   * check dropped (code, copying, the model's), so `failed` never exceeds `checked`. Lines over the
+   * limits are dropped and counted in neither.
+   */
   checked: number
   failed: number
   costUsd: number
@@ -286,7 +290,9 @@ export async function refreshStands(
     kept.filter(l => l.part === part).map(l => ({ text: l.text, facts: l.refs.map(r => byRef.get(r)!.id) }))
   const sentences = stored('sentence')
   const allDrops = [...drops, ...failing.values()]
-  const over = { costUsd, model, drops: allDrops, checked: toCheck.length, failed: drops.length + failing.size }
+  // Checked: every line written within the limits; failed: those any check dropped, so never more than checked
+  const written = Math.min(write.parsed.sentences.length, options.maxStandsSentences) + Math.min(write.parsed.doing.length, options.maxDoingSentences)
+  const over = { costUsd, model, drops: allDrops, checked: written, failed: written - kept.length }
   return sentences.length > 0 ? result('written', { ...over, sentences, doing: stored('doing') }) : result('none_kept', over)
 }
 

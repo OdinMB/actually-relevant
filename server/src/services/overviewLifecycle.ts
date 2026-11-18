@@ -286,7 +286,8 @@ export async function applyClosing(c: CloseCase, result: CloseResult, db: typeof
  *   locked), and the story's link decisions undone, so a story published again is linked afresh;
  * - a scope or status moved only from the one it was computed from; closing records the day in
  *   development time (`clock`), and an overview that opens again (a faded one reopened, a closing
- *   cancelled) loses its closing and closure.
+ *   cancelled) loses its closing and closure;
+ * - a closing whose end-event story was just detached as unpublished is cancelled, frozen or not.
  */
 export async function applyStatus(state: OverviewState, moves: readonly StatusMove[], clock: Date, db: typeof prisma = prisma): Promise<void> {
   const now = new Date()
@@ -305,6 +306,11 @@ export async function applyStatus(state: OverviewState, moves: readonly StatusMo
       } else if (m.kind === 'scope') {
         const done = await tx.overview.updateMany({ where: { id: state.id, scope: m.from }, data: { scope: m.to } })
         if (done.count > 0) await statusDecision(tx, state.id, null, m.to, { from: m.from, to: m.to })
+      } else if (m.kind === 'cancel_closing') {
+        // Frozen or not: the unpublished-member rule
+        const done = await tx.overview.updateMany({ where: { id: state.id, status: 'closing' }, data: { status: 'open', closingSince: null } })
+        if (done.count > 0)
+          await statusDecision(tx, state.id, m.storyId, 'open', { from: 'closing', to: 'open', reason: 'closing_cancelled', by: 'unpublished' })
       } else {
         const data: Prisma.OverviewUpdateManyMutationInput =
           m.to === 'closed'

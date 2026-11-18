@@ -74,7 +74,7 @@ export interface UpkeepTally {
   /** Stands refreshes attempted, and new versions written. */
   standsRefreshes: number
   standsWritten: number
-  /** Stands lines the model's check was asked about, and lines any check dropped. */
+  /** Stands lines written (within the limits), and those of them any check dropped: never more than the lines written. */
   standsChecked: number
   standsDropped: number
   /** Items whose call gave nothing or that threw: the next run tries them again. */

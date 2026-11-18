@@ -16,6 +16,7 @@ const state = (over: Partial<OverviewState> = {}): OverviewState => ({
   hidden: false,
   lastEntryAt: daysAgo(1),
   closingSince: null,
+  closingStoryId: null,
   activeEntries: 4,
   unpublished: [],
   entriesAtLastReview: 4,
@@ -65,6 +66,29 @@ describe('nextState', () => {
     expect(nextState(frozen, CLOCK, OPTIONS)).toEqual([
       { kind: 'detach', entryId: 'e1', storyId: 's1' },
       { kind: 'scope', from: 'ongoing', to: 'single' },
+    ])
+  })
+
+  it('cancels a closing whose end-event story is no longer published, frozen or not, instead of closing it', () => {
+    const closing = state({
+      status: 'closing',
+      closingSince: daysAgo(8),
+      closingStoryId: 's1',
+      lastEntryAt: daysAgo(8),
+      closureReviewed: true,
+      unpublished: [{ entryId: 'e1', storyId: 's1' }],
+      activeEntries: 3,
+    })
+    const cancel = [
+      { kind: 'detach', entryId: 'e1', storyId: 's1' },
+      { kind: 'cancel_closing', storyId: 's1' },
+    ]
+    expect(nextState(closing, CLOCK, OPTIONS)).toEqual(cancel)
+    expect(nextState({ ...closing, frozen: true }, CLOCK, OPTIONS)).toEqual(cancel)
+    // Another member's unpublishing leaves the closing as it was
+    expect(nextState({ ...closing, unpublished: [{ entryId: 'e2', storyId: 's2' }] }, CLOCK, OPTIONS)).toEqual([
+      { kind: 'detach', entryId: 'e2', storyId: 's2' },
+      { kind: 'status', from: 'closing', to: 'closed', reason: 'end_event' },
     ])
   })
 

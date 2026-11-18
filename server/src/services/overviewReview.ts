@@ -71,14 +71,16 @@ const sameRole = (a: Role, b: Role) => a.role === b.role && a.roleKind === b.rol
  * - the charter is narrowed only by the OUT entries it adds, onto the current charter, so a rewritten
  *   IN or END_EVENT and a dropped OUT entry are refused and never applied;
  * - a new title differing from the current one retitles;
- * - a freeze is cleared only on a frozen overview, and only when the answer judges every entry to belong.
+ * - a freeze is cleared only on a frozen overview, and only when the answer judges every active entry,
+ *   each by its own id and first judgment, to belong (an entry left unjudged keeps the freeze).
  * `kept` is the active entries left after the detaches.
  */
 export function allowedActions(c: ReviewCase, answer: ReviewAnswer): { actions: ReviewAction[]; refusals: ReviewRefusal[]; kept: number } {
   const actions: ReviewAction[] = []
   const refusals: ReviewRefusal[] = []
   const byRef = new Map(c.entries.map((e, i) => [ref(i), e]))
-  const judged = new Set<string>()
+  /** Each shown entry's first judgment: the one that counts. */
+  const judged = new Map<string, ReviewAnswer['entries'][number]['belongs']>()
   for (const a of answer.entries) {
     const id = a.id.trim()
     const entry = byRef.get(id)
@@ -90,7 +92,7 @@ export function allowedActions(c: ReviewCase, answer: ReviewAnswer): { actions: 
       refusals.push({ what: id, reason: 'judged twice' })
       continue
     }
-    judged.add(id)
+    judged.set(id, a.belongs)
     const role = roleOf(a)
     if (a.belongs === 'no') {
       if (entry.locked) refusals.push({ what: id, reason: 'an editor attached it' })
@@ -114,8 +116,9 @@ export function allowedActions(c: ReviewCase, answer: ReviewAnswer): { actions: 
   if (title && !same(title, c.title)) actions.push({ kind: 'retitle', from: c.title, to: title })
 
   if (answer.clearFreeze && c.frozen) {
-    if (answer.entries.some(a => judged.has(a.id.trim()) && a.belongs === 'no')) refusals.push({ what: 'freeze', reason: 'not every entry belongs' })
-    else actions.push({ kind: 'unfreeze' })
+    // Every active entry judged, and judged to belong: one left unjudged keeps the freeze
+    if (c.entries.every((_, i) => judged.get(ref(i)) === 'yes')) actions.push({ kind: 'unfreeze' })
+    else refusals.push({ what: 'freeze', reason: 'not every entry was judged to belong' })
   }
   return { actions, refusals, kept: c.entries.length - actions.filter(a => a.kind === 'detach').length }
 }

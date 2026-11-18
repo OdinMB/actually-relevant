@@ -290,7 +290,27 @@ describe('a refresh', () => {
       ['Sentence 2', 'unjudged'],
     ])
     expect(d.checks).toEqual([2])
+    // Every line written counts as checked, the copying one too, so the share failed never exceeds 1
+    expect(result.checked).toBe(3)
     expect(result.failed).toBe(3)
+  })
+
+  it('counts every line the write gave within the limits as checked, code drops as failed, lines over the limit as neither', async () => {
+    const many: StandsAnswer = {
+      sentences: [
+        { text: 'Cases rose to 120.', factIds: ['S1F1'] },
+        { text: 'Uncited.', factIds: [] },
+        { text: 'Vaccination began in Bunia.', factIds: ['S1F2'] },
+        { text: 'Cases rose to 120.', factIds: ['S1F1'] },
+        { text: 'Over the limit.', factIds: ['S1F1'] },
+      ],
+      doing: [],
+    }
+    const result = await refreshStands({ title: 'Ebola', entries: [] }, offer(), TODAY, deps(many), OPTIONS)
+    expect(result.outcome).toBe('written')
+    expect(result.checked).toBe(4)
+    expect(result.failed).toBe(1)
+    expect(result.drops.map(x => x.label)).toEqual(['Sentence 2', 'Sentence 5'])
   })
 
   it('fails when a call gives nothing', async () => {

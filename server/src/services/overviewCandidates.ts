@@ -136,8 +136,9 @@ interface MembershipRow {
 
 /**
  * The stories' active overviews, and the overviews an editor detached each from (`locked`). With
- * `asOf` (the story being linked's date), an overview's last entry is its newest active entry
- * published on or before it, as linking a story sees the development on its own day; without, the
+ * `asOf` (the story being linked's date), an overview's last entry is its newest active entry of a
+ * story still published, published on or before it, as linking a story sees the development on its
+ * own day (a member unpublished before the job detached it keeps nothing alive); without, the
  * overview's `last_entry_at`.
  */
 export async function membershipsOf(db: OverviewDb, storyIds: readonly string[], asOf?: Date): Promise<Memberships> {
@@ -147,7 +148,7 @@ export async function membershipsOf(db: OverviewDb, storyIds: readonly string[],
     ? await db.$queryRaw<MembershipRow[]>`
         SELECT e.story_id, o.id AS overview_id, o.scope::text AS scope, o.status::text AS status, o.closed_reason, o.frozen,
                (SELECT max(s.date_published) FROM overview_entries m JOIN stories s ON s.id = m.story_id
-                WHERE m.overview_id = o.id AND m.status = 'active' AND s.date_published <= ${asOf}) AS last_entry_at
+                WHERE m.overview_id = o.id AND m.status = 'active' AND s.status = 'published' AND s.date_published <= ${asOf}) AS last_entry_at
         FROM overview_entries e
         JOIN overviews o ON o.id = e.overview_id
         WHERE e.status = 'active' AND e.story_id = ANY(${ids}::text[])

@@ -86,11 +86,16 @@ interface StateRow {
   reviewed_at: Date | null
 }
 
+/** The newest of some dates, or null. */
+const newest = (dates: readonly Date[]): Date | null => (dates.length === 0 ? null : new Date(Math.max(...dates.map(d => d.getTime()))))
+
 /**
  * Every overview with an active entry, oldest founding first, as the status machine reads it
  * (`OverviewState`): its active entries of published stories counted, and those of stories no longer
  * published listed; the most stories of one publication day the pipeline joined to it within
- * `nightHours` of `now`; when a burst froze it, while no review has run since; and whether a closure
+ * `nightHours` of `now` and after its last freeze or review (so the joins one freeze answered, its
+ * review having cleared it, never freeze it again the next run); when a burst froze it, while no review
+ * has run since; while closing, the story whose end-event report began it; and whether a closure
  * review ran for its current closing.
  */
 export async function overviewStates(
@@ -109,28 +114,32 @@ export async function overviewStates(
   const ids = rows.map(r => r.id)
   const since = new Date(now.getTime() - options.nightHours * 3_600_000)
   const [entries, decisions] = await Promise.all([
-    db.$queryRaw<{ id: string; overview_id: string; story_id: string; published: boolean; date_published: Date | null; recent_join: boolean }[]>`
+    db.$queryRaw<{ id: string; overview_id: string; story_id: string; published: boolean; date_published: Date | null; pipeline_join: Date | null }[]>`
       SELECT e.id, e.overview_id, e.story_id, (s.status = 'published') AS published, s.date_published,
-             (e.joined_by = 'pipeline' AND e.joined_at > ${since}) AS recent_join
+             CASE WHEN e.joined_by = 'pipeline' THEN e.joined_at END AS pipeline_join
       FROM overview_entries e JOIN stories s ON s.id = e.story_id
       WHERE e.status = 'active' AND e.overview_id = ANY(${ids}::text[])
     `,
-    db.$queryRaw<{ overview_id: string; kind: string; trigger: string | null; closing_since: string | null; created_at: Date }[]>`
-      SELECT d.overview_id, d.kind::text AS kind, d.inputs->>'trigger' AS trigger, d.inputs->>'closingSince' AS closing_since, d.created_at
+    db.$queryRaw<{ overview_id: string; kind: string; story_id: string | null; trigger: string | null; closing_since: string | null; created_at: Date }[]>`
+      SELECT d.overview_id, d.kind::text AS kind, d.story_id, d.inputs->>'trigger' AS trigger, d.inputs->>'closingSince' AS closing_since, d.created_at
       FROM overview_decisions d
       WHERE d.overview_id = ANY(${ids}::text[])
-        AND ((d.kind = 'status' AND d.outcome = 'frozen') OR (d.kind = 'review' AND d.outcome = 'reviewed'))
-      ORDER BY d.created_at
+        AND ((d.kind = 'status' AND d.outcome = 'frozen') OR (d.kind = 'review' AND d.outcome = 'reviewed')
+             OR (d.kind = 'close' AND d.outcome = 'closing' AND d.undone_at IS NULL))
+      ORDER BY d.created_at, d.id
     `,
   ])
   return rows.map(r => {
     const own = entries.filter(e => e.overview_id === r.id)
-    const joinsByDay = new Map<string, number>()
-    for (const e of own)
-      if (e.recent_join && e.published && e.date_published) joinsByDay.set(utcDay(e.date_published), (joinsByDay.get(utcDay(e.date_published)) ?? 0) + 1)
     const log = decisions.filter(d => d.overview_id === r.id)
     const frozenAt = log.filter(d => d.kind === 'status').at(-1)?.created_at ?? null
     const reviewedSince = frozenAt !== null && log.some(d => d.kind === 'review' && d.created_at.getTime() > frozenAt.getTime())
+    // Joins a freeze or a review already answered count no more
+    const countFrom = newest([since, ...log.filter(d => d.kind === 'status' || d.kind === 'review').map(d => d.created_at)])!
+    const joinsByDay = new Map<string, number>()
+    for (const e of own)
+      if (e.pipeline_join && e.pipeline_join.getTime() > countFrom.getTime() && e.published && e.date_published)
+        joinsByDay.set(utcDay(e.date_published), (joinsByDay.get(utcDay(e.date_published)) ?? 0) + 1)
     const closing = r.closing_since?.toISOString() ?? null
     return {
       id: r.id,
@@ -141,6 +150,7 @@ export async function overviewStates(
       hidden: r.hidden,
       lastEntryAt: r.last_entry_at,
       closingSince: r.closing_since,
+      closingStoryId: r.status === 'closing' ? (log.filter(d => d.kind === 'close').at(-1)?.story_id ?? null) : null,
       activeEntries: own.filter(e => e.published).length,
       unpublished: own.filter(e => !e.published).map(e => ({ entryId: e.id, storyId: e.story_id })),
       entriesAtLastReview: r.entries_at_last_review,

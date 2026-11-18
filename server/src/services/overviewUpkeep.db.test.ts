@@ -130,8 +130,29 @@ describeDb('the overview upkeep records', () => {
     expect(frozen.burstAt).not.toBeNull()
 
     const c = (await reviewCase(prisma, o.id))!
-    await applyReview(c, review({ trigger: 'burst', scope: 'forming', kept: 3 }), wall)
-    expect((await overviewStates(prisma, wall))[0]!.burstAt).toBeNull()
+    await applyReview(c, review({ trigger: 'burst', scope: 'forming', kept: 3, actions: [{ kind: 'unfreeze' }] }), wall)
+    const cleared = (await overviewStates(prisma, wall))[0]!
+    expect(cleared.burstAt).toBeNull()
+    // The joins the freeze answered never freeze it again at a run less than a day later
+    expect(cleared.burstJoins).toBe(0)
+  })
+
+  it('cancels a closing when its end-event story is unpublished, frozen or not', async () => {
+    const [a, b, end] = await stories([-12, -11, -10])
+    const o = await overview([a!.id, b!.id, end!.id], { scope: 'ongoing', status: 'closing', closingSince: end!.datePublished!, frozen: true })
+    await prisma.overviewDecision.create({ data: { kind: 'close', overviewId: o.id, storyId: end!.id, outcome: 'closing', actor: 'pipeline' } })
+    expect((await overviewStates(prisma, NOW))[0]!.closingStoryId).toBe(end!.id)
+    await prisma.story.update({ where: { id: end!.id }, data: { status: 'rejected' } })
+
+    const [state] = await overviewStates(prisma, NOW)
+    const moves = nextState(state!, NOW)
+    expect(moves.map(m => m.kind)).toEqual(['detach', 'cancel_closing'])
+    await applyStatus(state!, moves, NOW)
+    expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ status: 'open', closingSince: null, closedAt: null })
+    const cancelled = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'status', outcome: 'open' } })
+    expect(cancelled).toMatchObject({ storyId: end!.id, inputs: { from: 'closing', to: 'open', reason: 'closing_cancelled', by: 'unpublished' } })
+    // Nothing left to close at the next run
+    expect(nextState((await overviewStates(prisma, NOW))[0]!, NOW).filter(m => m.kind === 'status')).toEqual([])
   })
 
   it("applies a review's actions, makes the overview public with its slug, and leaves an editor's entry alone", async () => {

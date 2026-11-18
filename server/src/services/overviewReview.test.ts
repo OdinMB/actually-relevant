@@ -120,7 +120,18 @@ describe('what a review may do', () => {
     expect(allowedActions(base(), answer({ clearFreeze: true })).actions).toEqual([])
     const wrong = allowedActions(base({ frozen: true }), answer({ clearFreeze: true, entries: [judged('E1'), judged('E2', 'no'), judged('E3')] }))
     expect(wrong.actions.map(a => a.kind)).toEqual(['detach'])
-    expect(wrong.refusals).toEqual([{ what: 'freeze', reason: 'not every entry belongs' }])
+    expect(wrong.refusals).toEqual([{ what: 'freeze', reason: 'not every entry was judged to belong' }])
+  })
+
+  it('keeps the freeze while an entry is left unjudged, or judged only by an id that names no entry', () => {
+    const unjudged = allowedActions(base({ frozen: true }), answer({ clearFreeze: true, entries: [judged('E1'), judged('E3')] }))
+    expect(unjudged.actions).toEqual([])
+    expect(unjudged.refusals).toEqual([{ what: 'freeze', reason: 'not every entry was judged to belong' }])
+    const stray = allowedActions(base({ frozen: true }), answer({ clearFreeze: true, entries: [judged('E1'), judged('E3'), judged('E9')] }))
+    expect(stray.actions).toEqual([])
+    // Judged yes, then no under the same id: the first judgment stands, the second is refused
+    const twice = allowedActions(base({ frozen: true }), answer({ clearFreeze: true, entries: [judged('E1'), judged('E2'), judged('E3'), judged('E2', 'no')] }))
+    expect(twice.actions).toEqual([{ kind: 'unfreeze' }])
   })
 })
 

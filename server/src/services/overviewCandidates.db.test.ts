@@ -146,4 +146,18 @@ describeDb('overview candidates', () => {
     // Without a date, the overview's own last entry
     expect((await membershipsOf(prisma, [before.id])).active.get(before.id)!.lastEntryAt).toEqual(daysFrom(3))
   })
+
+  it("counts only published members toward an overview's last entry as of the story's date", async () => {
+    const feed = await createFeed((await createIssue()).id)
+    const old = await published(feed.id, -200, 0.1)
+    const unpublished = await published(feed.id, -2, 0.1)
+    const charter = { in: 'In.', out: [], endEvent: 'End.' }
+    const a = await prisma.overview.create({
+      data: { title: 'A', charter, charterModel: 'm', charterPromptVersion: 'v', foundedAt: daysFrom(-200), lastEntryAt: daysFrom(-200) },
+    })
+    for (const s of [old, unpublished]) await prisma.overviewEntry.create({ data: { overviewId: a.id, storyId: s.id, role: 'routine', joinedBy: 'pipeline' } })
+    // Rejected before the job detached it: it must not keep the development alive
+    await prisma.story.update({ where: { id: unpublished.id }, data: { status: 'rejected' } })
+    expect((await membershipsOf(prisma, [old.id], AS_OF)).active.get(old.id)!.lastEntryAt).toEqual(daysFrom(-200))
+  })
 })

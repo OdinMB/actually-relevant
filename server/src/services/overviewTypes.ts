@@ -114,6 +114,8 @@ export interface OverviewState {
   lastEntryAt: Date | null
   /** The publication date of the story that reported the end event, while closing. */
   closingSince: Date | null
+  /** While closing, the story whose end-event report began it (the newest live `closing` decision's); null otherwise. */
+  closingStoryId: string | null
   /** Active entries whose story is published. */
   activeEntries: number
   /** Active entries whose story is no longer published: the job detaches them, frozen or not. */
@@ -121,7 +123,10 @@ export interface OverviewState {
   /** Active entries the last review kept (0 before the first), and when it ran. */
   entriesAtLastReview: number
   reviewedAt: Date | null
-  /** The most stories of one publication day the pipeline joined to it in the last `nightHours`. */
+  /**
+   * The most stories of one publication day the pipeline joined to it in the last `nightHours`, counting
+   * only joins after its last freeze or review, so joins a freeze already answered never freeze it again.
+   */
   burstJoins: number
   /** When a burst froze it, while no review has run since. */
   burstAt: Date | null

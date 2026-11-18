@@ -17,10 +17,15 @@ export type StatusOptions = Pick<typeof config.overviews, 'quietAfterDays' | 'fa
 /** Why a status moved. */
 export type StatusReason = 'quiet' | 'active' | 'faded' | 'end_event' | 'closing_cancelled'
 
-/** One move the lifecycle applies (`applyStatus`), each logged as a `status` decision. */
+/**
+ * One move the lifecycle applies (`applyStatus`), each logged as a `status` decision. `cancel_closing`:
+ * the story whose end-event report began the closing is no longer published, so the closing ends and
+ * the overview is open again (part of the unpublished-member rule, so frozen or not).
+ */
 export type StatusMove =
   | { kind: 'detach'; entryId: string; storyId: string }
   | { kind: 'scope'; from: OverviewScope; to: OverviewScope }
+  | { kind: 'cancel_closing'; storyId: string }
   | { kind: 'status'; from: OverviewStatus; to: OverviewStatus; reason: StatusReason }
 
 /**
@@ -63,13 +68,20 @@ function statusAfter(s: OverviewState, clock: Date, options: StatusOptions): { t
  * unless frozen, its status: open to quiet after `quietAfterDays` without a new entry and back on one,
  * closed as faded after `fadeAfterDays` and a faded one reopened by a new entry, a closing cancelled by
  * an entry after the end-event story, or closed at its end event once `closingDays` have passed and
- * its review has run. An end-event closure itself begins only on the two calls' agreement
- * (`overviewClose.ts`), never here; an editor's closure never moves.
+ * its review has run. A closing whose end-event story is no longer published is cancelled instead,
+ * frozen or not, since what began it is gone (the closure review cannot see that story to detach it).
+ * An end-event closure itself begins only on the two calls' agreement (`overviewClose.ts`), never
+ * here; an editor's closure never moves.
  */
 export function nextState(state: OverviewState, clock: Date, options: StatusOptions = config.overviews): StatusMove[] {
   const moves: StatusMove[] = state.unpublished.map(u => ({ kind: 'detach', entryId: u.entryId, storyId: u.storyId }))
   const scope = scopeAfter(state.scope, state.activeEntries)
   if (scope !== state.scope) moves.push({ kind: 'scope', from: state.scope, to: scope })
+  const closingStory = state.status === 'closing' ? state.closingStoryId : null
+  if (closingStory !== null && state.unpublished.some(u => u.storyId === closingStory)) {
+    moves.push({ kind: 'cancel_closing', storyId: closingStory })
+    return moves
+  }
   if (state.frozen) return moves
   const status = statusAfter(state, clock, options)
   if (status) moves.push({ kind: 'status', from: state.status, ...status })

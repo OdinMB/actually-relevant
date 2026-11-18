@@ -10,7 +10,7 @@
  * closing checks, the status machine in development time (`upkeepClock`), the reviews due and the
  * monthly audit, the stands refreshes due. Stories and overviews that fail go on to the next run; a
  * failure of the job as a whole never stops its chain (`GOES_ON_PAST_FAILURE`). The item tally (joins
- * proposed and stands lines checked; the yeses code refused and the lines dropped) goes into the run's
+ * proposed and stands lines written; the yeses code refused and the lines dropped) goes into the run's
  * usage (`recordItems`) for the failure-share notice.
  */
 import { config } from '../config.js'
@@ -189,7 +189,7 @@ export async function runLinkOverviewsJob(now: Date = new Date()): Promise<void>
       log.error({ part: e.part, overviewId: e.id, error: sanitizedError(e.error) }, 'overview upkeep failed for an overview; it is tried again next run')
     log.info({ ...upkeep, errors: upkeep.errors.length, clock }, 'overview upkeep finished')
   }
-  // Checked: joins proposed and stands lines checked; failed: yeses code refused and stands lines dropped
+  // Checked: joins proposed and stands lines written; failed: yeses code refused and stands lines dropped (each part never more than its checked)
   recordItems(proposed + (upkeep?.standsChecked ?? 0), refused + (upkeep?.standsDropped ?? 0))
   if (storiesFailing(run.outcomes.size, failed)) await notifyFailedStories(run.outcomes.size, failed).catch(() => {})
   const left = stories.length - run.outcomes.size
