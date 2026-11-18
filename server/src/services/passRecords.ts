@@ -1,8 +1,9 @@
 /**
  * The research passes' records (`.context/research-passes.md`, "Records"), both ways: a story's pool
- * (sources, facts, searches, the pages left out) and its current article version read back as the
- * pass pipeline's types (`researchPool.ts`), the cards of its newest pass that wrote any, and one
- * pass's result written in the caller's transaction. Reads are SELECT-only tagged `$queryRaw`
+ * (sources, facts, searches, the pages left out), its current article version and every version
+ * (each with its article and the time it was made) read back as the pass pipeline's types
+ * (`researchPool.ts`), the cards of its newest pass that wrote any, and one pass's result written in
+ * the caller's transaction. Reads are SELECT-only tagged `$queryRaw`
  * templates through the client given, so the eval's read-only session can read a pool too; the
  * write takes a transaction, so the pass lifecycle puts the story's own write beside it.
  */
@@ -447,7 +448,9 @@ export async function storePassResult(tx: Prisma.TransactionClient, w: PassWrite
 
   if (w.version) {
     await tx.articleVersion.updateMany({ where: { storyId, status: 'current' }, data: { status: 'superseded' } })
-    const versionId = await insertVersion(tx, storyId, { ...w.version, passId })
+    // The next free number: an undone update keeps its number, so the one after the current may be taken
+    const top = await tx.articleVersion.aggregate({ where: { storyId }, _max: { number: true } })
+    const versionId = await insertVersion(tx, storyId, { ...w.version, passId, number: (top._max.number ?? 0) + 1 })
     await tx.researchPass.update({ where: { id: passId }, data: { versionId } })
   }
 

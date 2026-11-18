@@ -398,7 +398,12 @@ describe('revertResearch', () => {
       data: { ...singleSource, research: Prisma.DbNull, preResearch: Prisma.DbNull },
       where: { updatedAt: READ_AT },
       embedding: EMBEDDING,
+      also: expect.any(Function),
     })
+    // In the same transaction, every article version is reverted
+    const updateMany = vi.fn().mockResolvedValue({ count: 2 })
+    await row.also!({ articleVersion: { updateMany } } as never)
+    expect(updateMany).toHaveBeenCalledWith({ where: { storyId: STORY, status: { not: 'reverted' } }, data: { status: 'reverted' } })
     expect(mockEmbed).toHaveBeenCalledWith({
       title: singleSource.title,
       titleLabel: singleSource.titleLabel,

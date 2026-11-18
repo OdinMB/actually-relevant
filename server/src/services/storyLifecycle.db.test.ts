@@ -301,15 +301,20 @@ describeDb('story lifecycle (PostgreSQL)', () => {
     expect((await prisma.story.findUniqueOrThrow({ where: { id: unchanged.id } })).title).toBe('Researched')
   })
 
-  it('re-assessing a researched story replaces its researched version with the fresh analysis', async () => {
+  it('re-assessing a researched story replaces its researched version with the fresh analysis, and reverts every article version', async () => {
     const s = await story({ status: 'published', slug: 'researched', datePublished: new Date() })
     await prisma.story.update({ where: { id: s.id }, data: { research: { paragraphs: [] }, preResearch: { title: 'single-source' } } })
+    const version = { storyId: s.id, research: {} }
+    await prisma.articleVersion.create({ data: { ...version, number: 1, kind: 'first', status: 'superseded' } })
+    await prisma.articleVersion.create({ data: { ...version, number: 2, kind: 'update', status: 'current' } })
     mockInvoke.mockResolvedValue(assessAnswer())
 
     await assessStory(s.id, 'editor')
 
     const after = await prisma.story.findUniqueOrThrow({ where: { id: s.id } })
     expect(after).toMatchObject({ title: 'New title', research: null, preResearch: null })
+    const statuses = await prisma.articleVersion.findMany({ where: { storyId: s.id }, orderBy: { number: 'asc' }, select: { status: true } })
+    expect(statuses.map(v => v.status)).toEqual(['reverted', 'reverted'])
   })
 
   it("a re-assess that a first apply overtakes during its model call is skipped: research's version, tag and snapshot stay", async () => {

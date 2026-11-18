@@ -10,7 +10,9 @@
  * (`applyRefusal`); reverting never is. An editor applies a completed run (`applyResearchRun`); the
  * research step applies its run's verdict once the run's result is stored and before the run is
  * finished (`applyVerdict`), fenced on the story as read before the run started, rejecting through
- * `transition`. An editor's refusals are ServiceErrors; the research step's are outcomes.
+ * `transition`. An editor's refusals are ServiceErrors; the research step's are outcomes. A revert
+ * marks every article version reverted in the same write; an undo puts the version before the
+ * current update back on the story (`undoUpdate`).
  */
 import { Prisma, type RejectionReason, type StoryStatus } from '@prisma/client'
 import { config } from '../config.js'
@@ -32,7 +34,10 @@ import {
   type SwappedValues,
 } from './researchSwap.js'
 import { fetchSourceFaviconsInBackground, type SourceIconHint } from './sourceFavicons.js'
-import { analysisFrom, recordAnalysis, transition, type Actor } from './storyLifecycle.js'
+import { analysisFrom, recordAnalysis, transition, type Actor, type AnalysisRow } from './storyLifecycle.js'
+import { undoPlan, versionValues } from './articleVersions.js'
+import { revertAllVersions, swapForUndo } from './articleVersionWrites.js'
+import { storyVersions } from './passRecords.js'
 
 const log = createLogger('research-apply')
 
@@ -113,6 +118,7 @@ async function write(
   read: ReadState,
   values: SwappedValues,
   versions: Pick<Prisma.StoryUncheckedUpdateManyInput, 'research' | 'preResearch'>,
+  also?: AnalysisRow['also'],
 ): Promise<boolean> {
   // A slow external call, before the transaction; it throws on failure, and nothing is written
   const embedding = await generateEmbeddingForContent({
@@ -121,7 +127,7 @@ async function write(
     summary: values.summary,
     embeddingContentHash: null,
   })
-  const row = { id: storyId, data: { ...values, ...versions }, where: { updatedAt: read.updatedAt }, embedding }
+  const row: AnalysisRow = { id: storyId, data: { ...values, ...versions }, where: { updatedAt: read.updatedAt }, embedding, ...(also ? { also } : {}) }
   const outcomes = await recordAnalysis('research', actor, [row], new Map([[storyId, read.status]]))
   return outcomes.get(storyId) !== 'skipped'
 }
@@ -267,6 +273,29 @@ export async function revertResearch(storyId: string): Promise<void> {
   }
 
   const read = { status: story.status, updatedAt: story.updatedAt }
-  if (!(await write(storyId, 'editor', read, restored, { research: Prisma.DbNull, preResearch: Prisma.DbNull }))) throw new ConflictError(STORY_CHANGED)
+  // Every article version is reverted in the same write: none is current, and no Update is shown
+  const reverted = await write(storyId, 'editor', read, restored, { research: Prisma.DbNull, preResearch: Prisma.DbNull }, tx => revertAllVersions(tx, storyId))
+  if (!reverted) throw new ConflictError(STORY_CHANGED)
   log.info({ storyId }, 'research reverted')
+}
+
+/**
+ * An editor undoes the current update ("Undo this update", the newest version only): the version
+ * before it goes back on the story's columns and projection through the same fenced write as an
+ * apply, the single-source snapshot kept, and the update is reverted, which takes its Update off the
+ * page. 404 for an unknown story; 409 for a status that takes no research write, when there is no
+ * update to undo (`undoPlan`), and when the story or its versions changed before the write.
+ */
+export async function undoUpdate(storyId: string): Promise<void> {
+  const story = await loadStory(storyId)
+  const refusal = statusRefusal(story.status, 'take a researched version')
+  if (refusal) throw new ConflictError(refusal)
+  const plan = undoPlan(await storyVersions(prisma, storyId))
+  if ('refused' in plan) throw new ConflictError(plan.refused)
+  const { current, previous } = plan
+
+  const read = { status: story.status, updatedAt: story.updatedAt }
+  const swap = (tx: Prisma.TransactionClient) => swapForUndo(tx, storyId, { current: current.id, previous: previous.id })
+  if (!(await write(storyId, 'editor', read, versionValues(previous), { research: asJson(previous.research) }, swap))) throw new ConflictError(STORY_CHANGED)
+  log.info({ storyId, undone: current.number, restored: previous.number }, 'research update undone')
 }

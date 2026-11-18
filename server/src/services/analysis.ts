@@ -16,6 +16,7 @@ import { detectAndCluster } from './dedup.js'
 import { generateEmbeddingForContent } from './embedding.js'
 import { assessPromptInput, selectCount, selectPromptStory } from './promptInputs.js'
 import { classifiedTag, sameSnapshot, snapshotEmotionTag } from './researchSwap.js'
+import { revertAllVersions } from './articleVersionWrites.js'
 import { NotFoundError } from '../utils/errors.js'
 import { analysisFrom, partition, recordAnalysis, transition, type Actor, type AnalysisOutcome, type AnalysisRow, type MoveResult } from './storyLifecycle.js'
 
@@ -339,11 +340,20 @@ export async function assessStory(storyId: string, actor: Actor = 'pipeline'): P
 
   // Save analysis + embedding atomically, against the status and the research snapshot read before
   // the model call: a move made meanwhile wins, and so does an apply or a revert, whose snapshot this
-  // write would otherwise clear without the single-source tag it holds
+  // write would otherwise clear without the single-source tag it holds. A researched story's article
+  // versions are all reverted in the same write: the researched text they hold is gone
   const outcomes = await recordAnalysis(
     'assess',
     actor,
-    [{ id: storyId, data: analysisData, where: sameSnapshot(story.preResearch), embedding: embeddingData }],
+    [
+      {
+        id: storyId,
+        data: analysisData,
+        where: sameSnapshot(story.preResearch),
+        embedding: embeddingData,
+        ...(story.preResearch ? { also: (tx: Prisma.TransactionClient) => revertAllVersions(tx, storyId) } : {}),
+      },
+    ],
     new Map([[storyId, story.status]]),
   )
   const outcome = outcomes.get(storyId) ?? 'skipped'

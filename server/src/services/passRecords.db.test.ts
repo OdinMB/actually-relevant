@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-import { currentVersion, loadPool, newestPassBoxes, storePassResult, type PassWrite } from './passRecords.js'
+import { currentVersion, loadPool, newestPassBoxes, storePassResult, storyVersions, type PassWrite } from './passRecords.js'
 import type { ArticleVersionData, Pool, PoolFact, PoolSource } from './researchPool.js'
 import type { DraftBox } from './storyContextChecks.js'
 
@@ -93,8 +93,21 @@ const version = (number: number, passId: string | null): ArticleVersionData => (
     quoteSourceId: null,
     sources: [],
   },
-  changes: [],
-  note: null,
+  article: {
+    titleLabel: 'Label',
+    title: `Title v${number}`,
+    story: [{ text: 'P.', factIds: ['S1F1', 'S1F2'] }],
+    summary: 'Summary.',
+    whyThisMatters: [{ text: 'Point.', factIds: [] }],
+    caveats: [{ text: 'Caveat.', factIds: [] }],
+    quote: '',
+    quoteAttribution: '',
+    quoteSourceId: '',
+    marketingBlurb: 'Blurb.',
+    emotionTag: 'calm',
+  },
+  changes: number === 1 ? [] : [{ section: 'Story paragraph 1', before: { text: 'Old P.', citations: [] }, after: { text: 'P.', citations: [] } }],
+  note: number === 1 ? null : { text: 'Officials revised the count.', citations: [{ sourceId: 'S1', sentence: 'Sentence of S1F1.' }] },
 })
 
 const box: DraftBox = {
@@ -243,6 +256,30 @@ describeDb('passRecords', () => {
     expect(await currentVersion(prisma, s.id)).toMatchObject({ number: 2, passId: second.id })
     const statuses = await prisma.articleVersion.findMany({ where: { storyId: s.id }, orderBy: { number: 'asc' }, select: { status: true } })
     expect(statuses.map(v => v.status)).toEqual(['superseded', 'current'])
+  })
+
+  it('numbers a new version after every earlier one, an undone update included, and reads every version back newest first', async () => {
+    const s = await story()
+    const passes = [await createPass(s.id, 1), await createPass(s.id, 2), await createPass(s.id, 3)]
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, passes[0]!.id, emptyWith(source('S0')), { version: version(1, passes[0]!.id) })))
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, passes[1]!.id, emptyWith(), { version: version(2, passes[1]!.id) })))
+    // Version 2 undone: version 1 is current again, so the next pass's version follows it as number 2
+    await prisma.articleVersion.updateMany({ where: { storyId: s.id, number: 2 }, data: { status: 'reverted' } })
+    await prisma.articleVersion.updateMany({ where: { storyId: s.id, number: 1 }, data: { status: 'current' } })
+    await prisma.$transaction(tx => storePassResult(tx, write(s.id, passes[2]!.id, emptyWith(), { version: version(2, passes[2]!.id) })))
+
+    const versions = await storyVersions(prisma, s.id)
+    expect(versions.map(v => [v.number, v.status, v.passId])).toEqual([
+      [3, 'current', passes[2]!.id],
+      [2, 'reverted', passes[1]!.id],
+      [1, 'superseded', passes[0]!.id],
+    ])
+    expect(versions[0]).toMatchObject({
+      article: version(2, null).article,
+      note: version(2, null).note,
+      changes: version(2, null).changes,
+      createdAt: expect.any(Date),
+    })
   })
 
   it('never holds two current versions of a story', async () => {

@@ -64,7 +64,13 @@ vi.mock('./storyLifecycle.js', async importOriginal => ({
 }))
 /** The rows the last recordAnalysis call wrote. */
 const recordedRows = () =>
-  mockRecordAnalysis.mock.calls.at(-1)?.[2] as { id: string; data: Record<string, unknown>; where?: Prisma.StoryWhereInput; embedding?: unknown }[]
+  mockRecordAnalysis.mock.calls.at(-1)?.[2] as {
+    id: string
+    data: Record<string, unknown>
+    where?: Prisma.StoryWhereInput
+    embedding?: unknown
+    also?: (tx: Prisma.TransactionClient) => Promise<void>
+  }[]
 
 /** A row's fence while the story had no research snapshot when it was read. */
 const NO_SNAPSHOT = { preResearch: { equals: Prisma.AnyNull } }
@@ -332,6 +338,37 @@ describe('assessStory', () => {
     )
     // Written against the status read before the model call
     expect([...mockRecordAnalysis.mock.calls.at(-1)![3]]).toEqual([['story-1', expect.any(String)]])
+  })
+
+  it("reverts a researched story's article versions in the same write, and only a researched story's", async () => {
+    mockGenerateEmbeddingForContent.mockResolvedValue({ embedding: [0.1], hash: 'h1' })
+    mockGetMediumLLM.mockReturnValue({
+      withStructuredOutput: () => ({
+        invoke: vi.fn().mockResolvedValue({
+          publicationDate: '',
+          quote: '',
+          quoteAttribution: '',
+          summary: 'Summary',
+          factors: ['Factor'],
+          limitingFactors: [],
+          relevanceCalculation: ['calc'],
+          conservativeRating: 5,
+          relevanceSummary: 'Rel',
+          titleLabel: 'Topic',
+          relevanceTitle: 'Title',
+          marketingBlurb: 'Blurb',
+        }),
+      }),
+    })
+    mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1', status: 'published', preResearch: { title: 'Single-source headline' } }))
+    await assessStory('story-1', 'editor')
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 })
+    await recordedRows()[0]!.also!({ articleVersion: { updateMany } } as never)
+    expect(updateMany).toHaveBeenCalledWith({ where: { storyId: 'story-1', status: { not: 'reverted' } }, data: { status: 'reverted' } })
+
+    mockPrisma.story.findUnique.mockResolvedValue(storyWithRelations({ id: 'story-1', status: 'published', preResearch: null }))
+    await assessStory('story-1', 'editor')
+    expect(recordedRows()[0]!.also).toBeUndefined()
   })
 
   it('clears a researched version: the fresh analysis is single-source', async () => {

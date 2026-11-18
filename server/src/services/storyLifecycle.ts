@@ -145,6 +145,12 @@ export interface AnalysisRow {
    */
   where?: Prisma.StoryWhereInput
   embedding?: { embedding: number[]; hash: string } | null
+  /**
+   * Writes that belong with this row's, in its transaction, once the row was written: a research
+   * write's article versions (`articleVersionWrites.ts`). Never a story's status or columns. A throw
+   * rolls the whole write back.
+   */
+  also?: (tx: Prisma.TransactionClient) => Promise<void>
 }
 
 /**
@@ -186,6 +192,7 @@ export async function recordAnalysis(
             continue
           }
           if (row.embedding) await saveEmbeddingTx(tx, row.id, row.embedding.embedding, row.embedding.hash)
+          if (row.also) await row.also(tx)
         }
       },
       { timeout: config.database.transactionTimeoutMs },
