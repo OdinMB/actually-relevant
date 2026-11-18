@@ -13,6 +13,17 @@ export function invalidateStoryQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['storyStats'] })
 }
 
+/**
+ * After a write of one story whose answer is the story's own fields (a save, a status move): the
+ * answer goes over the story's cached detail, which keeps the feed, issue, cluster and post counts
+ * only a read joins in, so its page shows the change at once without losing them; then the story
+ * queries are read again (`invalidateStoryQueries`), the detail in full.
+ */
+function storeWrittenStory(queryClient: QueryClient, story: Story) {
+  queryClient.setQueryData<Story>(['story', story.id], cached => cached && { ...cached, ...story })
+  invalidateStoryQueries(queryClient)
+}
+
 export function useStories(filters: StoryFilters) {
   return useQuery({
     queryKey: ['stories', filters],
@@ -44,10 +55,7 @@ export function useUpdateStory() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Story> }) => adminApi.stories.update(id, data),
-    onSuccess: story => {
-      queryClient.setQueryData(['story', story.id], story)
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-    },
+    onSuccess: story => storeWrittenStory(queryClient, story),
   })
 }
 
@@ -55,11 +63,7 @@ export function useUpdateStoryStatus() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: StoryStatus }) => adminApi.stories.updateStatus(id, status),
-    onSuccess: story => {
-      queryClient.setQueryData(['story', story.id], story)
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['storyStats'] })
-    },
+    onSuccess: story => storeWrittenStory(queryClient, story),
   })
 }
 

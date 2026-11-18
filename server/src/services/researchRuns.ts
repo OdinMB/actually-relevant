@@ -23,6 +23,7 @@ import { FALLBACK_CATEGORIES, type FallbackCategory, type GateVerdict } from './
 import { hasPrice, summarizeRunCost, type RunCostSummary } from './researchCost.js'
 import { RESEARCHABLE_STATUSES, researchStoriesByIds, type ResearchStory } from './researchInput.js'
 import { researchStory, STEP_TIERS, STEPS, type StepName, type StoryResearch } from './researchPipeline.js'
+import { checkSpendWarnings, EDITOR_RESEARCH } from './spending.js'
 
 const log = createLogger('research')
 
@@ -75,7 +76,7 @@ export interface ResearchUsageView {
   /**
    * This UTC month's runs that fell back to today's format, editors' and the research step's, by
    * the category stored with each (`FallbackCategory`); `unrecorded` for a run stored before
-   * categories were (2026-11-12). For the owner's count over the shadow period; nothing reads it.
+   * categories were (2026-11-12). For the owner's count; nothing reads it.
    */
   fallbacksThisMonth: Record<FallbackCategory | 'unrecorded', number>
 }
@@ -94,12 +95,22 @@ function currentPrices(models: string[]): ResearchPrices {
   }
 }
 
-/** Why no run can start now, whatever the story: switched off, or a step's model without a price. */
-export function switchRefusal(): string | null {
-  if (!config.research.tavilyApiKey) return 'Research is switched off: TAVILY_API_KEY is not set'
+/** Why research is off: no key, or step models without a price. */
+export type ResearchSwitchOff = { cause: 'no-key' } | { cause: 'unpriced'; models: string[] }
+
+/** Why no run can start now, whatever the story; null while research is on. `switchRefusal` words it for editors. */
+export function researchSwitchOff(): ResearchSwitchOff | null {
+  if (!config.research.tavilyApiKey) return { cause: 'no-key' }
   const unpriced = [...new Set(Object.values(stepModels()))].filter(m => !hasPrice(m))
-  if (unpriced.length > 0) return `Research is refused: ${unpriced.join(', ')} has no price in config.research.modelPrices, so its cost could not be counted`
-  return null
+  return unpriced.length > 0 ? { cause: 'unpriced', models: unpriced } : null
+}
+
+/** `researchSwitchOff` in the words editors see on a refused run, or null while research is on. */
+export function switchRefusal(): string | null {
+  const off = researchSwitchOff()
+  if (!off) return null
+  if (off.cause === 'no-key') return 'Research is switched off: TAVILY_API_KEY is not set'
+  return `Research is refused: ${off.models.join(', ')} has no price in config.research.modelPrices, so its cost could not be counted`
 }
 
 const usd = (v: number) => `$${v.toFixed(2)}`
@@ -234,12 +245,17 @@ async function executeRun(runId: string, story: ResearchStory, beforeFinish?: Be
 
 /**
  * An editor's reserved run, counted in its task: any verdict completes it there; a dropped or failed
- * run fails it. Never throws (`executeRun`); the caller completes the task.
+ * run fails it. It runs outside any job, so its spend is checked against the spending warning levels
+ * here (`editor_research`, services/spending.ts). Never throws (`executeRun`; a failed check is
+ * logged); the caller completes the task.
  */
 export async function runInTask(taskId: string, runId: string, story: ResearchStory): Promise<void> {
   const end = await executeRun(runId, story)
   if (end.ended === 'completed') taskRegistry.increment(taskId, 'completed')
   else taskRegistry.increment(taskId, 'failed', end.ended === 'failed' ? end.error : 'The run was marked interrupted before it finished')
+  await checkSpendWarnings(EDITOR_RESEARCH).catch((err: unknown) =>
+    log.error({ runId, error: sanitizedError(err) }, 'could not check the spending warning levels'),
+  )
 }
 
 /**

@@ -1,14 +1,14 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Helmet } from 'react-helmet-async'
 import type { StoryStatus, StoryFilters, StorySort } from '@shared/types'
-import { useStories, useBulkUpdateStatus, useDeleteStory, useUpdateStoryStatus, invalidateStoryQueries } from '../../hooks/useStories'
+import { useStories, useBulkUpdateStatus, useDeleteStory, invalidateStoryQueries } from '../../hooks/useStories'
 import { useFeeds } from '../../hooks/useFeeds'
 import { useIssues } from '../../hooks/useIssues'
 import { useBackgroundTasks } from '../../hooks/useBackgroundTasks'
 import { useBulkApplyResearch, useBulkResearch, useResearchUsage } from '../../hooks/useResearch'
-import { adminApi } from '../../lib/admin-api'
+import { useStoryActions } from '../../hooks/useStoryActions'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
@@ -21,13 +21,10 @@ import { StoryTable } from '../../components/admin/StoryTable'
 import { BulkActionsBar, type BulkAction } from '../../components/admin/BulkActionsBar'
 import { bulkApplyRefusal, bulkResearchRefusal } from '../../components/admin/bulkResearch'
 import { storyBulkActions, type ConfirmAction } from '../../components/admin/storyBulkActions'
-import { StoryDetail } from '../../components/admin/StoryDetail'
+import { returnState, STORIES_LIST, storyPath } from '../../components/admin/storyReturn'
+import { useSocialDrafts } from '../../components/admin/social/useSocialDrafts'
 import { CrawlUrlForm } from '../../components/admin/CrawlUrlForm'
 import { CreateClusterDialog } from '../../components/admin/CreateClusterDialog'
-import { BlueskyDraftPanel } from '../../components/admin/BlueskyDraftPanel'
-import type { BlueskyDraft } from '../../components/admin/BlueskyDraftPanel'
-import { MastodonDraftPanel } from '../../components/admin/MastodonDraftPanel'
-import type { MastodonDraft } from '../../components/admin/MastodonDraftPanel'
 import { useToast } from '../../components/ui/Toast'
 
 const DEFAULT_PAGE_SIZE = 25
@@ -48,7 +45,25 @@ function useFiltersFromParams(): StoryFilters {
   }
 }
 
+/**
+ * The stories list. A story opens on its own page (`StoryDetailPage`); a link to the list with
+ * `?open=<id>`, the address pattern of the admin's side panels, goes to that story's page in place
+ * of the list's entry, its other parameters kept as the page's way back.
+ */
 export default function StoriesPage() {
+  const [searchParams] = useSearchParams()
+  const openId = searchParams.get('open')
+  if (openId) {
+    const rest = new URLSearchParams(searchParams)
+    rest.delete('open')
+    const query = rest.toString()
+    // No history entry to restore the scroll of: this one is replaced
+    return <Navigate replace to={storyPath(openId)} state={returnState({ pathname: STORIES_LIST, search: query ? `?${query}` : '' })} />
+  }
+  return <StoriesList />
+}
+
+function StoriesList() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   // Default to "published" filter on first visit (no status param in URL)
@@ -68,26 +83,20 @@ export default function StoriesPage() {
   const feedsQuery = useFeeds()
   const issuesQuery = useIssues()
   const { toast } = useToast()
-  const { launchTask, launchPolledTask, processingIds } = useBackgroundTasks()
+  const { launchPolledTask, processingIds } = useBackgroundTasks()
+  const rowActions = useStoryActions()
   const researchUsage = useResearchUsage()
   const startBulkResearch = useBulkResearch()
   const applyBulkResearch = useBulkApplyResearch()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [detailId, setDetailId] = useState<string | null>(null)
   const [crawlOpen, setCrawlOpen] = useState(false)
   const [clusterDialogOpen, setClusterDialogOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
-  const [blueskyDraft, setBlueskyDraft] = useState<BlueskyDraft | null>(null)
-  const [blueskyPanelOpen, setBlueskyPanelOpen] = useState(false)
-  const [blueskyPublishing, setBlueskyPublishing] = useState(false)
-  const [mastodonDraft, setMastodonDraft] = useState<MastodonDraft | null>(null)
-  const [mastodonPanelOpen, setMastodonPanelOpen] = useState(false)
-  const [mastodonPublishing, setMastodonPublishing] = useState(false)
+  const social = useSocialDrafts({ onPublished: () => setSelectedIds(new Set()) })
 
   const bulkUpdate = useBulkUpdateStatus()
   const deleteStory = useDeleteStory()
-  const updateStatus = useUpdateStoryStatus()
 
   const invalidateStories = useCallback(() => invalidateStoryQueries(queryClient), [queryClient])
 
@@ -137,24 +146,7 @@ export default function StoriesPage() {
       const story = stories.find(s => s.id === id)
       return story ? (story.title ?? story.sourceTitle) : id
     },
-    drafts: {
-      bluesky: {
-        open: () => {
-          setBlueskyPanelOpen(true)
-          setBlueskyDraft(null)
-        },
-        show: draft => setBlueskyDraft(draft as BlueskyDraft),
-        close: () => setBlueskyPanelOpen(false),
-      },
-      mastodon: {
-        open: () => {
-          setMastodonPanelOpen(true)
-          setMastodonDraft(null)
-        },
-        show: draft => setMastodonDraft(draft as MastodonDraft),
-        close: () => setMastodonPanelOpen(false),
-      },
-    },
+    drafts: social.drafts,
     openClusterDialog: () => setClusterDialogOpen(true),
     setStatus: async (ids, status) => {
       await bulkUpdate.mutateAsync({ ids, status })
@@ -167,55 +159,6 @@ export default function StoriesPage() {
     bulkActions[action](ids)
   }
 
-  const handleSingleStatusChange = (id: string, status: StoryStatus) => {
-    updateStatus.mutate(
-      { id, status },
-      {
-        onSuccess: () => toast('success', 'Status updated'),
-        onError: () => toast('error', 'Failed to update status'),
-      },
-    )
-  }
-
-  const handlePreassess = (id: string) => {
-    launchTask({
-      id: `preassess-${id}-${Date.now()}`,
-      label: 'Pre-assessing story',
-      executor: async () => {
-        await adminApi.stories.preassess([id])
-        return { succeeded: 1, failed: 0 }
-      },
-      onComplete: invalidateStories,
-      storyIds: [id],
-    })
-  }
-
-  const handleAssess = (id: string) => {
-    launchTask({
-      id: `assess-${id}-${Date.now()}`,
-      label: 'Assessing story',
-      executor: async () => {
-        await adminApi.stories.assess(id)
-        return { succeeded: 1, failed: 0 }
-      },
-      onComplete: invalidateStories,
-      storyIds: [id],
-    })
-  }
-
-  const handlePublish = (id: string) => {
-    launchTask({
-      id: `publish-${id}-${Date.now()}`,
-      label: 'Publishing story',
-      executor: async () => {
-        await adminApi.stories.publish(id)
-        return { succeeded: 1, failed: 0 }
-      },
-      onComplete: invalidateStories,
-      storyIds: [id],
-    })
-  }
-
   const handleDelete = (id: string) => {
     setConfirmAction({
       title: 'Delete story?',
@@ -223,79 +166,8 @@ export default function StoriesPage() {
       action: async () => {
         await deleteStory.mutateAsync(id)
         toast('success', 'Story deleted')
-        setDetailId(null)
       },
     })
-  }
-
-  const handleBlueskyPublish = async (postId: string) => {
-    setBlueskyPublishing(true)
-    try {
-      await adminApi.bluesky.publishPost(postId)
-      toast('success', 'Posted to Bluesky')
-      setBlueskyPanelOpen(false)
-      setBlueskyDraft(null)
-      setSelectedIds(new Set())
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['story'] })
-    } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to publish')
-    } finally {
-      setBlueskyPublishing(false)
-    }
-  }
-
-  const handleBlueskyUpdate = async (postId: string, text: string) => {
-    try {
-      await adminApi.bluesky.updateDraft(postId, text)
-    } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to save draft')
-      throw err
-    }
-  }
-
-  const handleBlueskyDelete = async (postId: string) => {
-    try {
-      await adminApi.bluesky.deletePost(postId)
-    } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to delete draft')
-      throw err
-    }
-  }
-
-  const handleMastodonPublish = async (postId: string) => {
-    setMastodonPublishing(true)
-    try {
-      await adminApi.mastodon.publishPost(postId)
-      toast('success', 'Posted to Mastodon')
-      setMastodonPanelOpen(false)
-      setMastodonDraft(null)
-      setSelectedIds(new Set())
-      queryClient.invalidateQueries({ queryKey: ['stories'] })
-      queryClient.invalidateQueries({ queryKey: ['story'] })
-    } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to publish')
-    } finally {
-      setMastodonPublishing(false)
-    }
-  }
-
-  const handleMastodonUpdate = async (postId: string, text: string) => {
-    try {
-      await adminApi.mastodon.updateDraft(postId, text)
-    } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to save draft')
-      throw err
-    }
-  }
-
-  const handleMastodonDelete = async (postId: string) => {
-    try {
-      await adminApi.mastodon.deletePost(postId)
-    } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to delete draft')
-      throw err
-    }
   }
 
   const confirmLoading = bulkUpdate.isPending || deleteStory.isPending
@@ -337,12 +209,11 @@ export default function StoriesPage() {
             onToggleSelect={toggleSelect}
             onToggleSelectAll={toggleSelectAll}
             allSelected={stories.length > 0 && stories.every(s => selectedIds.has(s.id))}
-            onView={setDetailId}
-            onStatusChange={handleSingleStatusChange}
+            onStatusChange={rowActions.setStatus}
             onDelete={handleDelete}
-            onPreassess={handlePreassess}
-            onAssess={handleAssess}
-            onPublish={handlePublish}
+            onPreassess={rowActions.preassess}
+            onAssess={rowActions.assess}
+            onPublish={rowActions.publish}
           />
 
           <Pagination
@@ -367,34 +238,6 @@ export default function StoriesPage() {
         singleHasMastodonPost={selectedIds.size === 1 && stories.some(s => selectedIds.has(s.id) && (s._count?.mastodonPosts ?? 0) > 0)}
       />
 
-      <StoryDetail
-        storyId={detailId}
-        issues={issuesQuery.data || []}
-        onClose={() => setDetailId(null)}
-        onBlueskyGenerate={storyId => {
-          setBlueskyPanelOpen(true)
-          setBlueskyDraft(null)
-          adminApi.bluesky
-            .generateDraft(storyId)
-            .then(draft => setBlueskyDraft(draft as BlueskyDraft))
-            .catch(err => {
-              toast('error', err instanceof Error ? err.message : 'Failed to generate draft')
-              setBlueskyPanelOpen(false)
-            })
-        }}
-        onMastodonGenerate={storyId => {
-          setMastodonPanelOpen(true)
-          setMastodonDraft(null)
-          adminApi.mastodon
-            .generateDraft(storyId)
-            .then(draft => setMastodonDraft(draft as MastodonDraft))
-            .catch(err => {
-              toast('error', err instanceof Error ? err.message : 'Failed to generate draft')
-              setMastodonPanelOpen(false)
-            })
-        }}
-      />
-
       <CrawlUrlForm open={crawlOpen} onClose={() => setCrawlOpen(false)} />
 
       <CreateClusterDialog
@@ -404,31 +247,7 @@ export default function StoriesPage() {
         onSuccess={() => setSelectedIds(new Set())}
       />
 
-      <BlueskyDraftPanel
-        open={blueskyPanelOpen}
-        onClose={() => {
-          setBlueskyPanelOpen(false)
-          setBlueskyDraft(null)
-        }}
-        draft={blueskyDraft}
-        onPublish={handleBlueskyPublish}
-        onUpdate={handleBlueskyUpdate}
-        onDelete={handleBlueskyDelete}
-        publishing={blueskyPublishing}
-      />
-
-      <MastodonDraftPanel
-        open={mastodonPanelOpen}
-        onClose={() => {
-          setMastodonPanelOpen(false)
-          setMastodonDraft(null)
-        }}
-        draft={mastodonDraft}
-        onPublish={handleMastodonPublish}
-        onUpdate={handleMastodonUpdate}
-        onDelete={handleMastodonDelete}
-        publishing={mastodonPublishing}
-      />
+      {social.panels}
 
       <ConfirmDialog
         open={!!confirmAction}

@@ -3,14 +3,16 @@ import OpenAI from 'openai'
 import { TTLCache, cached } from '../lib/cache.js'
 import { createLogger } from '../lib/logger.js'
 import { config } from '../config.js'
+import { openAiFetch } from './openaiFetch.js'
 import { fetchStoryForEmbedding, fetchStoriesForEmbedding, saveEmbedding, type StoryEmbeddingRow } from '../lib/vectors.js'
 
 const log = createLogger('embedding')
 
 // The SDK retries 408/409/429/5xx and connection errors with backoff, honoring Retry-After; the
 // same 3 retries as the chat models (createChatModel). Never wrap these calls in withRetry() as
-// well: the layers multiply (`.context/llm-analysis.md`, "Retries").
-const openai = new OpenAI({ maxRetries: 3 })
+// well: the layers multiply (`.context/llm-analysis.md`, "Retries"). Inside a job run its tokens
+// count toward the run's cost (services/openaiFetch.ts); embeddings never go at flex.
+const openai = new OpenAI({ maxRetries: 3, fetch: openAiFetch })
 
 export type StoryForEmbedding = StoryEmbeddingRow
 

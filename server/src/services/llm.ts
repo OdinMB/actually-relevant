@@ -1,5 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai'
 import { config, type ReasoningEffort } from '../config.js'
+import { openAiFetch } from './openaiFetch.js'
 
 export interface ChatModelSpec {
   name: string
@@ -31,6 +32,10 @@ export function createChatModel(spec: ChatModelSpec): ChatOpenAI {
     model: spec.name,
     modelKwargs: { reasoning_effort: spec.reasoningEffort },
     maxRetries: 3,
+    // Flex answers can be slow: every call waits as long as a flex call may need
+    timeout: config.llm.flex.timeoutMs,
+    // Flex processing and usage recording inside a job run (services/openaiFetch.ts)
+    configuration: { fetch: openAiFetch },
   })
 }
 

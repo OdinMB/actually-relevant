@@ -1,8 +1,8 @@
 /**
  * The research step's loop, with the queue's reads, the runs and the apply's writes mocked, and the
- * real mode decision (`researchStepState`, `pipelineMode`) on a mocked job row and config: what it
- * researches, in which order, whether it applies, when it stops, and that one story's failure does
- * not end the run. The queue's rule is researchQueue.db.test.ts's, a run's row and its hook
+ * real state read (`researchStepState`) on a mocked job row and the real config: what it researches,
+ * in which order, whether it applies, when it stops, and that one story's failure does not end the
+ * run. The queue's rule is researchQueue.db.test.ts's, a run's row and its hook
  * researchRuns.db.test.ts's, each verdict's effect researchApply's tests'.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -19,14 +19,12 @@ vi.mock('../services/researchApply.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../services/researchApply.js')>()),
   applyVerdict: mockApplyVerdict,
 }))
-// The research step's mode, the owner's gate and how many stories run at once are read at startup,
-// so the tests set them through the config (concurrency: the config's own value unless a test sets one)
-const switches = vi.hoisted(() => ({ mode: 'apply' as 'shadow' | 'apply', applyEnabled: true, concurrency: undefined as number | undefined }))
+// How many stories run at once is a constant, so the tests that need another set it through the
+// config (the config's own value unless a test sets one); nothing else in the config is replaced
+const switches = vi.hoisted(() => ({ concurrency: undefined as number | undefined }))
 vi.mock('../config.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../config.js')>()
   const { concurrency } = actual.config.research.pipeline
-  Object.defineProperty(actual.config.research, 'applyEnabled', { get: () => switches.applyEnabled })
-  Object.defineProperty(actual.config.research.pipeline, 'mode', { get: () => switches.mode })
   Object.defineProperty(actual.config.research.pipeline, 'concurrency', { get: () => switches.concurrency ?? concurrency })
   return actual
 })
@@ -50,8 +48,6 @@ const jobEnabled = (enabled: boolean) => ({ enabled })
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
-  switches.mode = 'apply'
-  switches.applyEnabled = true
   switches.concurrency = undefined
   mockPrisma.jobRun.findUnique.mockResolvedValue(jobEnabled(true))
   mockQueue.owedStory.mockImplementation(async (id: string) => ({ updatedAt: readAt(id) }))
@@ -75,7 +71,7 @@ describe('runResearchStories', () => {
     expect(researchedIds()).toEqual(['a', 'b', 'c'])
   })
 
-  it("in apply mode with the job enabled, applies each verdict from the run's hook, fenced on the story as read before its run", async () => {
+  it("with the job enabled and only the key set, applies each verdict from the run's hook, fenced on the story as read before its run", async () => {
     await runResearchStories()
 
     expect(mockApplyVerdict.mock.calls).toEqual(
@@ -86,36 +82,38 @@ describe('runResearchStories', () => {
   })
 
   it.each([
-    ['in shadow mode', () => (switches.mode = 'shadow')],
-    ['in apply mode while the owner’s gate is closed', () => (switches.applyEnabled = false)],
-  ])('researches every story %s and applies no verdict', async (_name, arrange) => {
-    arrange()
-    await runResearchStories()
-    expect(researchedIds()).toEqual(['a', 'b', 'c'])
-    expect(mockApplyVerdict).not.toHaveBeenCalled()
-  })
-
-  it.each([
     ['disabled', jobEnabled(false)],
     ['without a row', null],
-  ])('run by hand while the job is %s, researches as a trial in shadow and never applies, even in apply mode', async (_name, row) => {
+  ])('run by hand while the job is %s, researches and applies each verdict as a scheduled run does', async (_name, row) => {
     mockPrisma.jobRun.findUnique.mockResolvedValue(row)
     await runResearchStories()
     expect(researchedIds()).toEqual(['a', 'b', 'c'])
-    expect(mockApplyVerdict).not.toHaveBeenCalled()
+    expect(mockApplyVerdict.mock.calls.map(c => c[0])).toEqual(['a', 'b', 'c'])
   })
 
-  it('never applies in a trial run, even once the job is enabled during it', async () => {
+  it('run by hand while the job is disabled, goes on when the job is enabled during it', async () => {
     mockPrisma.jobRun.findUnique.mockResolvedValueOnce(jobEnabled(false)).mockResolvedValue(jobEnabled(true))
     await runResearchStories()
     expect(researchedIds()).toEqual(['a', 'b', 'c'])
-    expect(mockApplyVerdict).not.toHaveBeenCalled()
+    expect(mockApplyVerdict).toHaveBeenCalledTimes(3)
   })
 
   it('applies nothing for a story whose run outlasts the job being disabled, and stops before the next one', async () => {
     // One at a time: enabled at the start and before the first story; disabled by the time its hook runs
     switches.concurrency = 1
     mockPrisma.jobRun.findUnique.mockResolvedValueOnce(jobEnabled(true)).mockResolvedValueOnce(jobEnabled(true)).mockResolvedValue(jobEnabled(false))
+    await runResearchStories()
+    expect(researchedIds()).toEqual(['a'])
+    expect(mockApplyVerdict).not.toHaveBeenCalled()
+  })
+
+  it('stops a run by hand of the disabled job, and applies nothing, once research is switched off', async () => {
+    switches.concurrency = 1
+    mockPrisma.jobRun.findUnique.mockResolvedValue(jobEnabled(false))
+    mockRuns.runPipelineResearch.mockImplementation(async (id: string, hook: Parameters<typeof researchedRun>[1]) => {
+      vi.stubEnv('TAVILY_API_KEY', '')
+      return researchedRun(id, hook)
+    })
     await runResearchStories()
     expect(researchedIds()).toEqual(['a'])
     expect(mockApplyVerdict).not.toHaveBeenCalled()

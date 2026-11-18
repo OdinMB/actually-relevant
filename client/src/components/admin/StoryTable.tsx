@@ -11,11 +11,12 @@ import {
   ArrowPathIcon,
   ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { Story, StoryStatus } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { ActionIconButton } from '../ui/ActionIconButton'
 import { STATUS_VARIANTS, EMOTION_VARIANTS, formatStatus, formatShortDate } from '../../lib/constants'
+import { returnState, storyPath } from './storyReturn'
 
 function ClusterBadge({ story }: { story: Story }) {
   if (!story.clusterId) return null
@@ -66,7 +67,6 @@ interface StoryTableProps {
   onToggleSelect: (id: string) => void
   onToggleSelectAll: () => void
   allSelected: boolean
-  onView: (id: string) => void
   onStatusChange: (id: string, status: StoryStatus) => void
   onDelete: (id: string) => void
   onPreassess?: (id: string) => void
@@ -118,7 +118,6 @@ export function StoryTable({
   onToggleSelect,
   onToggleSelectAll,
   allSelected,
-  onView,
   onStatusChange,
   onDelete,
   onPreassess,
@@ -130,6 +129,11 @@ export function StoryTable({
     assess: onAssess,
     publish: onPublish,
   }
+  // A story opens on its own page, which goes back to this list with its filters and scroll
+  const location = useLocation()
+  const navigate = useNavigate()
+  const openState = returnState(location)
+  const openStory = (id: string) => navigate(storyPath(id), { state: openState })
 
   return (
     <div className="overflow-x-auto bg-white rounded-lg border border-neutral-200 shadow-sm">
@@ -185,12 +189,13 @@ export function StoryTable({
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-1.5">
                     {isProcessing && <ArrowPathIcon className="h-4 w-4 shrink-0 animate-spin text-brand-600" aria-label="Processing" />}
-                    <button
-                      onClick={() => onView(story.id)}
+                    <Link
+                      to={storyPath(story.id)}
+                      state={openState}
                       className="text-left font-medium text-neutral-900 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                     >
                       {story.title || story.sourceTitle}
-                    </button>
+                    </Link>
                     <ClusterBadge story={story} />
                     <PaywallBadge story={story} />
                     <ResearchRejectionBadge story={story} />
@@ -237,7 +242,7 @@ export function StoryTable({
                           ) : null
                         })}
                         {hasJobActions && <span className="mx-0.5 h-4 w-px bg-neutral-200" aria-hidden="true" />}
-                        <ActionIconButton icon={PencilSquareIcon} label="Edit" onClick={() => onView(story.id)} />
+                        <ActionIconButton icon={PencilSquareIcon} label="Edit" onClick={() => openStory(story.id)} />
                         <ActionIconButton icon={TrashIcon} label="Delete" variant="danger" onClick={() => onDelete(story.id)} />
                       </div>
 
@@ -254,7 +259,7 @@ export function StoryTable({
                                 <MenuItemWithIcon key={action.handler} icon={action.icon} label={action.label} onClick={() => handler(story.id)} />
                               ) : null
                             })}
-                            <MenuItemWithIcon icon={PencilSquareIcon} label="Edit" onClick={() => onView(story.id)} />
+                            <MenuItemWithIcon icon={PencilSquareIcon} label="Edit" onClick={() => openStory(story.id)} />
                             {story.status !== 'published' && (
                               <MenuItemWithIcon icon={GlobeAltIcon} label="Publish" onClick={() => onStatusChange(story.id, 'published')} />
                             )}

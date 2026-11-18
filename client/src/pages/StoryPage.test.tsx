@@ -14,6 +14,7 @@ import { TEXT_LINK } from '../lib/control-classes'
 import { focusRingProblems, sizeByBreakpoint } from '../test/classes'
 import { contrastRatio } from '../test/contrast'
 import { announcedText } from '../test/stories'
+import { contextBox, contextSource, storyContext } from '../test/context'
 
 const mockApi = vi.hoisted(() => ({ submitFeedback: vi.fn(), getFeedbackToken: vi.fn(), getSubscribeToken: vi.fn() }))
 vi.mock('../lib/api', async importOriginal => ({
@@ -57,11 +58,15 @@ const mockAppearances = vi.hoisted(() => ({ current: undefined as unknown }))
 /** What useClusterMembers answers ("Also covered by"). */
 const mockCluster = vi.hoisted(() => ({ current: null as unknown }))
 
+/** What useStoryContext answers: the context in `current` (undefined while it loads or when it failed). */
+const mockContext = vi.hoisted(() => ({ current: undefined as unknown, isLoading: false, error: null as Error | null }))
+
 vi.mock('../hooks/usePublicStories', () => ({
   usePublicStory: () => ({ data: mockStory.current, isLoading: mockStory.isLoading, error: mockStory.error }),
   useRelatedStories: () => ({ data: mockRelated.current, isLoading: false }),
   useClusterMembers: () => ({ data: mockCluster.current }),
   useStoryAppearances: () => ({ data: mockAppearances.current }),
+  useStoryContext: () => ({ data: mockContext.current, isLoading: mockContext.isLoading, error: mockContext.error }),
 }))
 
 // jsdom has no modal dialog support: opening and closing only toggle the `open` attribute here.
@@ -86,6 +91,9 @@ beforeEach(() => {
   mockRelated.current = []
   mockAppearances.current = undefined
   mockCluster.current = null
+  mockContext.current = undefined
+  mockContext.isLoading = false
+  mockContext.error = null
 })
 
 afterEach(() => {
@@ -562,8 +570,8 @@ describe('StoryPage researched format', () => {
     renderStory(researched)
     const row = screen.getByRole('heading', { level: 1 }).nextElementSibling as HTMLElement
     const link = within(row).getByRole('link', { name: 'Sources: 3, see the list' })
-    // The visible label is the name's start (WCAG 2.5.3); no count in the text
-    expect(link).toHaveTextContent(/^Sources:$/)
+    // The visible label is the name's start (WCAG 2.5.3); no count in the text, and the icons' hover names are hidden from screen readers
+    expect(announcedText(link)).toBe('Sources:')
     const icons = [...link.querySelectorAll('img')]
     expect(icons.map(img => img.getAttribute('src'))).toEqual([
       '/api/source-favicons/example.com',
@@ -571,7 +579,8 @@ describe('StoryPage researched format', () => {
       '/favicon-32x32.png',
     ])
     // Side by side, not overlapping; an outlet's favicon framed, our own icon in its brand ring
-    expect(icons[0]!.parentElement).toHaveClass('gap-1')
+    const iconRow = icons[0]!.closest('.gap-1')
+    for (const img of icons) expect(iconRow).toContainElement(img)
     for (const img of icons) expect(img.className).not.toMatch(/-ml-/)
     expect(icons[0]).toHaveClass('ring-1', 'ring-neutral-300')
     expect(icons[2]).toHaveClass('ring-1', 'ring-brand-500')
@@ -580,6 +589,26 @@ describe('StoryPage researched format', () => {
     fireEvent.error(link.querySelector('img')!)
     const fallback = within(row).getByRole('link', { name: 'Sources: 3, see the list' })
     expect(within(fallback).getByText('E')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('names each outlet in a tooltip while the pointer is over its icon, inside the one link, whose name stays the count', async () => {
+    renderStory(researched)
+    const row = screen.getByRole('heading', { level: 1 }).nextElementSibling as HTMLElement
+    const link = within(row).getByRole('link', { name: 'Sources: 3, see the list' })
+    const icons = [...link.querySelectorAll('img')]
+    const tipOf = (icon: Element) => icon.parentElement!.querySelector('[role="tooltip"]')!
+    // Our earlier stories go by the name the sources list gives them
+    expect(icons.map(icon => tipOf(icon).textContent)).toEqual(['Example Feed', 'Coverage Outlet', 'Earlier on Actually Relevant'])
+    for (const icon of icons) expect(tipOf(icon).parentElement).toHaveClass('hidden')
+    await userEvent.hover(icons[1]!)
+    expect(tipOf(icons[1]!).parentElement).not.toHaveClass('hidden')
+    expect(tipOf(icons[0]!).parentElement).toHaveClass('hidden')
+    await userEvent.unhover(icons[1]!)
+    expect(tipOf(icons[1]!).parentElement).toHaveClass('hidden')
+    // No icon is a stop of its own, and the names stay out of what a screen reader hears
+    expect(link.querySelectorAll('a, button, [tabindex]')).toHaveLength(0)
+    expect(announcedText(link)).toBe('Sources:')
+    expect(within(row).getByRole('link', { name: 'Sources: 3, see the list' })).toBe(link)
   })
 
   it('tells the story in cited paragraphs, in place of the summary, and the analysis as cited bullets', () => {
@@ -659,6 +688,78 @@ describe('StoryPage researched format', () => {
     const citation = screen.queryAllByRole('button', { name: /^Sources?: / })[0]
     if (citation) await userEvent.click(citation)
     expect(await axe(container)).toHaveNoViolations()
+  })
+
+  describe('with story context', () => {
+    const contextSources = [contextSource('C1', 'Budget Office'), { ...contextSource('C2', 'Plains Ledger'), host: 'plains.example.net' }]
+    const withNotes = storyContext(
+      [
+        contextBox('note-p', { place: 'P1' }),
+        contextBox('note-w', { type: 'response', place: 'W1' }),
+        contextBox('figures', {
+          type: 'figures',
+          visual: { kind: 'tiles', tiles: [{ label: 'pupils', values: [{ text: '600,000', estimate: false, sourceId: 'C2' }] }] },
+          sentences: [],
+          sourceIds: ['C2'],
+        }),
+      ],
+      contextSources,
+    )
+    const column = () => screen.getByText('Researched first sentence.').closest('.page-section')!
+    const header = () => screen.getByRole('heading', { level: 1 }).closest('.page-section')!
+
+    it('keeps the skeleton until the context has settled too', () => {
+      mockContext.isLoading = true
+      renderStory(researched)
+      expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+      expect(document.querySelector('article.animate-pulse')).not.toBeNull()
+    })
+
+    it('renders the page without context, and no error, when the context request fails', () => {
+      mockContext.error = new Error('Failed to fetch')
+      renderStory(researched)
+      expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'More context' })).toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(column()).not.toHaveClass('story-column-noted')
+    })
+
+    it('renders a story without boxes as before: no section, no notes, the column where it was', () => {
+      mockContext.current = storyContext([])
+      renderStory(researched)
+      expect(screen.queryByRole('region', { name: 'More context' })).toBeNull()
+      expect(screen.queryByRole('note')).toBeNull()
+      expect(column()).not.toHaveClass('story-column-noted')
+      expect(header()).not.toHaveClass('story-column-noted')
+    })
+
+    it('puts More context after Caveats and before Sources, and the notes beside their paragraph and point', () => {
+      mockContext.current = withNotes
+      renderStory(researched)
+      const section = screen.getByRole('region', { name: 'More context' })
+      const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+      expect(follows(screen.getByRole('heading', { name: 'Caveats' }), section)).toBe(true)
+      expect(follows(section, screen.getByRole('heading', { name: 'Sources' }))).toBe(true)
+      expect(within(section).getByRole('list', { name: 'Context cards' })).toHaveTextContent('600,000')
+      expect(screen.getAllByRole('note')).toHaveLength(2)
+      // The header and the body move together, so the headline stays over the text
+      expect(column()).toHaveClass('story-column-noted')
+      expect(header()).toHaveClass('story-column-noted')
+    })
+
+    it("loads the context sources' icons only from our own API, never from the outlets", () => {
+      mockContext.current = withNotes
+      renderStory(researched)
+      const images = [...document.querySelectorAll('article img')].map(img => img.getAttribute('src')!)
+      expect(images).toContain('/api/source-favicons/plains.example.net')
+      for (const src of images) expect(src.startsWith('/'), src).toBe(true)
+    })
+
+    it('passes axe with notes and the section', async () => {
+      mockContext.current = withNotes
+      const { container } = renderStory(researched)
+      expect(await axe(container)).toHaveNoViolations()
+    })
   })
 })
 

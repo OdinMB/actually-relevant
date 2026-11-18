@@ -12,7 +12,7 @@
  * Code inside these modules imports its siblings directly, never this barrel, so a test that
  * mocks `services/story.js` replaces what its caller sees and nothing inside the service.
  */
-export { publishedStoryWhere, getStories, getStoriesByIds, getStoryById, getExistingUrls, getStoryStats, getStoryIdsByStatus } from './storyQueries.js'
+export { publishedStoryWhere, getStories, getStoriesByIds, getStoryById, getExistingUrls, getRecentStoryStats, getStoryIdsByStatus } from './storyQueries.js'
 export {
   createStory,
   type StoryUpdate,

@@ -62,6 +62,7 @@ const MastodonPage = lazy(() => import('./pages/admin/MastodonPage'))
 const FeedbackPage = lazy(() => import('./pages/admin/FeedbackPage'))
 const NoticesPage = lazy(() => import('./pages/admin/NoticesPage'))
 const StatsPage = lazy(() => import('./pages/admin/StatsPage'))
+const SpendingPage = lazy(() => import('./pages/admin/SpendingPage'))
 
 /** Preload the admin layout and dashboard chunks (call from LoginPage). */
 export function preloadAdminChunks() {
@@ -397,6 +398,7 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
       <Route path="feedback" element={<FeedbackPage />} />
       <Route path="notices" element={<NoticesPage />} />
       <Route path="stats" element={<StatsPage />} />
+      <Route path="spending" element={<SpendingPage />} />
     </Route>
 
     {/* Catch-all */}

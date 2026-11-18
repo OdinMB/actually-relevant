@@ -4,24 +4,9 @@ import { axe } from 'vitest-axe'
 import type { JobRun } from '@shared/types'
 import { formatDateWithTime } from '../../lib/constants'
 import { JobStatusBadge } from './JobStatusBadge'
+import { makeJobRun } from '../../test/jobs'
 
-function makeJob(overrides: Partial<JobRun> = {}): JobRun {
-  return {
-    id: '1',
-    jobName: 'crawl_feeds',
-    lastStartedAt: null,
-    lastCompletedAt: null,
-    lastSucceededAt: null,
-    lastError: null,
-    enabled: true,
-    running: false,
-    cronExpression: '0 1 * * *',
-    timeZone: null,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  }
-}
+const makeJob = (overrides: Partial<JobRun> = {}): JobRun => makeJobRun('crawl_feeds', overrides)
 
 describe('JobStatusBadge', () => {
   it('shows OK when the last run completed after it started', () => {

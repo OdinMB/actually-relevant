@@ -261,6 +261,30 @@ export const config = {
       },
     },
     delayMs: parseWholeNumber(process.env.LLM_DELAY_MS, 500, 'LLM_DELAY_MS', 0),
+    /**
+     * USD per 1M tokens at standard pricing, from the eval's verified table (scripts/eval/models.ts).
+     * A job's cost on the Jobs page (lib/runUsage.ts) and story research's cost both read it; a model
+     * without a row is counted as an unpriced call. Check the live pricing page before budgeting.
+     */
+    modelPrices: {
+      'gpt-6-luna': { input: 0.1, cached: 0.01, output: 0.5 },
+      'gpt-6-sol': { input: 2.0, cached: 0.2, output: 10.0 },
+      'gpt-6.1-sol': { input: 2.0, cached: 0.2, output: 10.0 },
+      'text-embedding-3-small': { input: 0.02, cached: 0.02, output: 0 },
+    } as Record<string, { input: number; cached: number; output: number } | undefined>,
+    /**
+     * OpenAI flex processing (.context/llm-analysis.md, "Flex processing"), used by a job whose Flex
+     * switch is on: half the token price, slower answers, and calls OpenAI may refuse with 429 when
+     * busy (not charged). A refused call is tried at flex `attempts` times in all, waiting
+     * `retryDelaysMs` between tries, then sent at standard price. Every model call waits up to
+     * `timeoutMs` for its answer, the 15 minutes OpenAI's flex guide uses.
+     */
+    flex: {
+      priceFactor: 0.5,
+      attempts: 3,
+      retryDelaysMs: [5_000, 30_000],
+      timeoutMs: 15 * 60_000,
+    },
   },
   preassess: {
     batchSize: 10,
@@ -286,16 +310,14 @@ export const config = {
   },
   /** Story research: the admin action and the pipeline step (.context/story-research.md). */
   research: {
-    /** Tavily's key, and the switch: research is off while it is empty. Read at call time. */
+    /**
+     * Tavily's key, and the switch: research is off while it is empty. Read at call time. It is the
+     * only switch: with it set, runs may be applied and the research step applies its verdicts
+     * (owner decision 2026-11-14: no apply gate and no shadow mode).
+     */
     get tavilyApiKey(): string {
       return process.env.TAVILY_API_KEY || ''
     },
-    /**
-     * The owner's gate on applying a run, "Use this version" (services/researchApply.ts): closed
-     * until he has had the press-publisher-right question checked. "true" opens; unset or "false"
-     * keeps it closed; reverting works either way. A Render restart picks up a change.
-     */
-    applyEnabled: parseOneOf(process.env.RESEARCH_APPLY_ENABLED, 'false', ['true', 'false'] as const, 'RESEARCH_APPLY_ENABLED') === 'true',
     /** USD all runs started in a UTC month may cost together (runs of deleted stories included). */
     monthlyCapUsd: parseWholeNumber(process.env.RESEARCH_MONTHLY_CAP_USD, 30, 'RESEARCH_MONTHLY_CAP_USD'),
     /** A run's ceiling, reserved against the cap when it starts (about five times the expected cost). */
@@ -315,22 +337,21 @@ export const config = {
     /** Pay-as-you-go price per credit; Tavily's free credits are counted as paid. */
     tavilyUsdPerCredit: 0.008,
     /**
-     * USD per 1M tokens, copied from the eval's verified table (scripts/eval/models.ts). A step whose
-     * model has no row here is refused before the run starts, so a tier override never runs uncounted.
+     * USD per 1M tokens: `config.llm.modelPrices`, at standard pricing even for a call made at flex, so
+     * the research cost stays an upper bound. A step whose model has no row is refused before the run
+     * starts, so a tier override never runs uncounted.
      */
-    modelPrices: {
-      'gpt-6-luna': { input: 0.1, cached: 0.01, output: 0.5 },
-      'gpt-6-sol': { input: 2.0, cached: 0.2, output: 10.0 },
-      'gpt-6.1-sol': { input: 2.0, cached: 0.2, output: 10.0 },
-    } as Record<string, { input: number; cached: number; output: number } | undefined>,
+    get modelPrices(): Record<string, { input: number; cached: number; output: number } | undefined> {
+      return config.llm.modelPrices
+    },
     /** Uncached input is billed at this factor: Chat Completions reports no cache writes, so it is an upper bound. */
     cacheWriteFactor: 1.25,
     /**
      * A `running` run older than this was cut off by a restart, and is marked failed. Above a live run's
-     * worst case (model calls with the SDK's default timeout and retries, Tavily with its retries), so a
-     * slow run is never marked interrupted while it still works.
+     * worst case (model calls at flex, which may wait up to `config.llm.flex.timeoutMs` each and are
+     * retried, Tavily with its retries), so a slow run is never marked interrupted while it still works.
      */
-    staleRunMinutes: 60,
+    staleRunMinutes: 120,
     /** Runs the admin lists per story, newest first. */
     runsListed: 10,
     /**
@@ -342,13 +363,6 @@ export const config = {
     bulkMaxStories: 50,
     /** The research step, the `research_stories` job (jobs/researchStories.ts; .context/story-research.md, "The pipeline step"). */
     pipeline: {
-      /**
-       * `shadow` (default): runs are stored, no verdict is applied, and publishing does not wait for
-       * them (owner decision 2026-11-12). `apply`: verdicts are applied and the publish gate holds,
-       * only while the owner's gate (`applyEnabled`) is open too and the job is enabled; with the gate
-       * closed the step runs as shadow and says so. A Render restart picks up a change.
-       */
-      mode: parseOneOf(process.env.RESEARCH_PIPELINE_MODE, 'shadow', ['shadow', 'apply'] as const, 'RESEARCH_PIPELINE_MODE'),
       /** Selected stories one run of the job researches. */
       perRun: parseWholeNumber(process.env.RESEARCH_PIPELINE_PER_RUN, 20, 'RESEARCH_PIPELINE_PER_RUN'),
       /**
@@ -358,13 +372,71 @@ export const config = {
        */
       concurrency: 4,
       /**
-       * In apply mode, the publish gate's longest hold: it holds a selected story for its research
+       * While the job is enabled, the publish gate's longest hold: it holds a selected story for its research
        * only this long after the story entered `selected` (`selectedAt`); after that the next publish
        * run takes it single-source. With both jobs daily, a story the 02:45 publish holds goes out at
-       * the next day's run, researched or not: a hold lasts one publish cycle at most.
+       * the next day's run, researched or not: a hold lasts one publish cycle at most. The gate's hold
+       * for context cards (`awaitingContext`, while `build_story_context` is enabled) has the same bound,
+       * in a publish run on its own only.
        */
       maxWaitMinutes: 120,
     },
+  },
+  /**
+   * Story context, the `build_story_context` step between research and publishing
+   * (jobs/buildStoryContext.ts; .context/story-context.md). Web search goes through research's Tavily
+   * key and price. A run takes every story it owes, with no limit: the night's stories bound it; the
+   * publish gate holds a story for its cards at most `research.pipeline.maxWaitMinutes`.
+   */
+  storyContext: {
+    /** Stories published this many days back or fewer, without a context run, are filled in after publishing (the step's second part). */
+    lookbackDays: 3,
+    /** Stories one run builds at once. */
+    concurrency: 3,
+    /** Searches one story's second pass makes at most, in the gap list's order. */
+    maxSearches: 3,
+    searchDepth: 'basic' as const,
+    resultsPerSearch: 5,
+    /** Sources one query adds at most, and one story at most in all. */
+    perQuerySources: 2,
+    maxNewSources: 5,
+    /** A query asked this many days ago or fewer is answered from `context_search_cache`, at no credit cost. */
+    searchReuseDays: 7,
+    /** A search that wants recent data starts this many days before the story's day. */
+    recentDays: 30,
+    /** How long a `fast` and a `slow` fact stay current from their as-of date (a `fixed` one always does). */
+    fastValidDays: 14,
+    slowValidDays: 365,
+    /**
+     * A `running` run older than this was cut off by a restart, and is marked failed, as research's are;
+     * in the scheduling process, so is one started before the process did (`storyContextStale.ts`).
+     */
+    staleRunMinutes: 120,
+    /**
+     * The step records the failed-stories notice when more than `jobs.failureShare.share` of the
+     * stories a run took failed technically, from this many stories on (`jobs/buildStoryContext.ts`).
+     */
+    failedStoriesMin: 5,
+    /** Fact-check items per call. */
+    checkBatchSize: 25,
+    /**
+     * What the write may return, held in code as its prompt states it (`structuralBoxes`): boxes
+     * beside the figures box, one per slot; sentences a box; tiles a box, the figures box's included.
+     */
+    maxBoxes: 6,
+    maxSentences: 3,
+    maxTiles: 4,
+    /** Earlier stories' facts offered again at most, newest first, so the prompts stay their size. */
+    maxReusedFacts: 30,
+    /**
+     * Where a box without an editor's place goes when a page is served (`placeBoxes`): `model`, the
+     * place the write call chose; `random`, a seeded draw among the paragraphs and points citing one of
+     * its sources; `section`, all in More context. Read when served, so a change reaches every story.
+     */
+    placement: parseOneOf(process.env.STORY_CONTEXT_PLACEMENT, 'model', ['model', 'random', 'section'] as const, 'STORY_CONTEXT_PLACEMENT'),
+    /** Notes beside story paragraphs and beside Why This Matters points at most, one per paragraph or point. */
+    notesInText: 2,
+    notesByPoints: 2,
   },
   embedding: {
     model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
@@ -389,6 +461,10 @@ export const config = {
     // page can OOM the crawl regardless of concurrency. The HTTP fetch is separately
     // capped at 5 MB; this bounds what we hand to the parser. Default 2 MB.
     maxParseBytes: parseWholeNumber(process.env.MAX_PARSE_BYTES, 2 * 1024 * 1024, 'MAX_PARSE_BYTES'),
+    // A feed counts as due this long before its interval is up: a crawl ends a few seconds after the
+    // run started, so without it a daily feed would miss the next day's run by those seconds, wait
+    // for the run after, and drift through the day (crawled every ~30 hours instead of 24)
+    dueGraceMinutes: 30,
     staleAfterEmptyCrawls: parseWholeNumber(process.env.STALE_AFTER_EMPTY_CRAWLS, 5, 'STALE_AFTER_EMPTY_CRAWLS'),
     extractionApi: parseOneOf(process.env.EXTRACTION_API, 'diffbot', ['diffbot', 'pipfeed'] as const, 'EXTRACTION_API'),
     diffbotTimeoutMs: parseWholeNumber(process.env.DIFFBOT_TIMEOUT_MS, 15_000, 'DIFFBOT_TIMEOUT_MS'),
@@ -558,9 +634,13 @@ export const config = {
     // generate_podcast's window (UTC): Friday from 00:00 until this hour. Outside it the job does
     // nothing, so a boot catch-up on another day never starts an episode (ADR-0013).
     generateWindowEndHourUtc: 20,
-    // From this UTC hour on Friday (the last generation slot), an interactive episode still
-    // waiting for its person gets the one reminder.
-    reminderFromHourUtc: 18,
+    // The UTC hour of Friday's last scheduled generation run (the podcast chain's one run since
+    // 2026-11-16, 02:00): from it an interactive episode still waiting for its person gets the one
+    // reminder, a short Actually Uplifting week is noted, and the Podcasts page stops promising a run.
+    reminderFromHourUtc: 2,
+    // Friday's run tries a failed episode again after this pause, until it is ready or blocked at
+    // maxAttemptsPerWeek (jobs/generatePodcast.ts)
+    retryDelayMs: 10 * 60_000,
     // The second show, Actually Uplifting (services/podcastEdition.ts, .context/podcast.md). Built and
     // closed: it opens only when `enabled` is on, the owner has confirmed its show description
     // (PODCAST_UPLIFTING_COPY_CONFIRMED in lib/aiLabelCopy.ts) and `artworkUrl` is set.
@@ -615,6 +695,26 @@ export const config = {
     // The second interrupted-run sweep comes this long after a lease live at the scheduler's start
     // would have run out (leaseSeconds), so a holder that died has stopped renewing by then.
     interruptedRecheckSlackMs: 30_000,
+  },
+  /** Chains: jobs run as ordered steps from one start time (jobs/chains.ts, .context/scheduler.md, "Chains"). */
+  chains: {
+    // A step already running when its chain reaches it (a run by hand) is waited for this long,
+    // checking every stepWaitPollMs, before the chain stops at that step.
+    stepWaitMinutes: 120,
+    stepWaitPollMs: 15_000,
+  },
+  /** A job run's own checks (lib/runUsage.ts `recordItems`, .context/scheduler.md, "Spending"). */
+  jobs: {
+    // The Jobs page warns under a job whose last run checked at least minItems items and saw more
+    // than this share of them fail, and the run's finish records a notice (jobs/failureShare.ts).
+    // Story context's failed-stories notice uses the same share. Nothing pauses on either.
+    failureShare: { share: 0.2, minItems: 20 },
+  },
+  /** The Dashboard's monthly spending overview and its warning levels (services/spending.ts). */
+  spending: {
+    // From this day of the UTC month on, a month heading past a warning level at its pace records
+    // its notice; before it, only a level already passed does (a few days' pace says little).
+    paceFromDay: 8,
   },
   feed: {
     size: parseWholeNumber(process.env.RSS_FEED_SIZE, 50, 'RSS_FEED_SIZE'),
@@ -683,8 +783,8 @@ export const config = {
   storyRetention: {
     // The cleanup_old_stories job (.context/story-retention.md): stories crawled longer ago than this
     // are deleted (unkept statuses only) or lose their embedding (every other unpublished story).
-    // Shown on the admin Jobs page (jobs/jobSettings.ts). Owner-set (ADR-0042), so deliberately no env
-    // override: what the site deletes is a reviewed decision, not a deploy setting.
+    // Named in the job's note on the admin Jobs page (jobs/jobNotes.ts). Owner-set (ADR-0042), so
+    // deliberately no env override: what the site deletes is a reviewed decision, not a deploy setting.
     maxAgeMonths: 6,
     // Rows per statement; each delete batch and its roll-up commit together.
     batchSize: 500,

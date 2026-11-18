@@ -53,6 +53,21 @@ export function useStoryAppearances(slug: string | undefined) {
   })
 }
 
+/**
+ * The story's context cards (`.context/public-website.md`, "Story context"), asked for by the
+ * address's slug alongside the story; the page keeps its skeleton until this settles. Never retried:
+ * a failed request leaves the page without context rather than holding it back.
+ */
+export function useStoryContext(slug: string | undefined) {
+  return useQuery({
+    queryKey: ['story-context', slug],
+    queryFn: () => publicApi.stories.context(slug!),
+    enabled: !!slug,
+    staleTime: 60 * 1000,
+    retry: false,
+  })
+}
+
 export function useClusterMembers(slug: string | undefined) {
   return useQuery({
     queryKey: ['cluster-members', slug],

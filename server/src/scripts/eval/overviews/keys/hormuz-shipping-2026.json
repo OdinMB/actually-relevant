@@ -1,0 +1,1856 @@
+{
+  "schemaVersion": 1,
+  "id": "hormuz-shipping-2026",
+  "title": "Disruption of shipping through the Strait of Hormuz",
+  "charter": {
+    "in": "The disruption of commercial shipping through the Strait of Hormuz that began when Iran's Revolutionary Guards declared the strait closed after the US-Israeli strikes on Iran of 28 February 2026. Stories belong when they report on passage through the strait itself: traffic levels, closures and reopenings, attacks on or seizures of merchant ships in and near the strait, stranded ships and crews, insurance, escorts, US and Iranian blockades of the strait's traffic, tolls and permit rules, and deals, talks or decisions about passage.",
+    "out": [
+      "The wider US/Israel–Iran war: air and missile strikes, battles and casualties that do not concern shipping",
+      "US–Iran ceasefire and peace talks, except where the story is about terms for passage through the strait",
+      "Iran's nuclear program, enrichment and inspections",
+      "Oil, gas and fuel prices and markets, IEA reserve releases, OPEC+ output",
+      "Energy and fertilizer security and shortages in importing countries",
+      "Lebanon and the Israel–Hezbollah fighting",
+      "Houthi threats and shipping in the Red Sea and Bab el-Mandeb",
+      "US sanctions on Iran's oil revenue and finance, and the US land blockade ('Iron Gate')",
+      "Pre-war naval drills and the military standoff around the strait in February 2026"
+    ],
+    "endEvent": "Commercial traffic through the Strait of Hormuz returns to roughly pre-war levels, with Iran's closure, permit and toll regime and the US naval blockade lifted (a lasting reopening, not a truce-day pause)."
+  },
+  "closed": null,
+  "figures": [
+    {
+      "key": "traffic_drop",
+      "name": "Traffic below pre-war normal",
+      "unit": "percent",
+      "definition": "How far commercial vessel transits through the Strait of Hormuz (all ship types) are below pre-war levels, as a percentage. A level at the time stated, not cumulative. A value stated as a share of normal (e.g. \"fallen to roughly 5%\") is recorded as the drop (95).",
+      "cumulative": false,
+      "variants": ["tanker traffic only", "oil shipments through the strait (e.g. \"under 10 percent of pre-war levels\")"]
+    },
+    {
+      "key": "stranded_ships",
+      "name": "Ships stranded",
+      "unit": "ships",
+      "definition": "Merchant ships trapped in the Gulf or otherwise unable to transit the Strait of Hormuz because of the closure, at the time stated. A stock, not cumulative. Seafarer counts (20,000; 11,000) are people, not this figure, and are not recorded.",
+      "cumulative": false,
+      "variants": ["tankers only (e.g. \"over 400 tankers\", \"500 tankers stuck\")"]
+    },
+    {
+      "key": "daily_transits",
+      "name": "Daily transits",
+      "unit": "ships per day",
+      "definition": "Commercial vessels crossing the Strait of Hormuz in a single day, from ship tracking. Our stories give the pre-war baseline as 100+ to about 130–140 a day; baselines are not recorded as values.",
+      "cumulative": false,
+      "variants": ["ships counted crossing over several days (e.g. \"nine since Monday\")", "vessels allowed through in one batch (e.g. \"about two dozen\")"]
+    }
+  ],
+  "entries": [
+    {
+      "slug": "iran-signals-plan-to-close-parts-of-hormuz",
+      "date": "2026-02-23",
+      "title": "Iran signals plan to close parts of Hormuz",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Precursor: explainer after Iran held drills and temporarily closed parts of the strait in February, before the war-time closure began."
+    },
+    {
+      "slug": "iran-s-revolutionary-guards-say-vital-strait-is-de-facto-closed",
+      "date": "2026-03-01",
+      "title": "Iran's Revolutionary Guards say vital strait is 'de facto closed'",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Strait of Hormuz",
+          "status": "declared 'de facto closed' by Iran's Revolutionary Guards",
+          "asOf": "2026-03-01"
+        }
+      ],
+      "why": "Start of the disruption: the IRGC declares the strait de facto closed and the US warns commercial ships to avoid the Gulf."
+    },
+    {
+      "slug": "iran-israel-attacks-disrupt-hormuz-shipments-prices-surge",
+      "date": "2026-03-02",
+      "title": "Iran–Israel attacks disrupt Hormuz shipments, prices surge",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Reports tankers damaged and traders and majors suspending shipments through the strait."
+    },
+    {
+      "slug": "two-ships-struck-near-key-oil-route-maersk-suspends-crossings",
+      "date": "2026-03-02",
+      "title": "Two ships struck near key oil route; Maersk suspends crossings",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Maersk",
+          "status": "paused transits through the strait",
+          "asOf": "2026-03-02"
+        }
+      ],
+      "why": "First reported attacks on ships in the strait; major carriers pause crossings."
+    },
+    {
+      "slug": "iran-s-guards-warn-they-ll-burn-ships-as-insurers-stop-coverage",
+      "date": "2026-03-03",
+      "title": "Iran's guards warn they'll burn ships as insurers stop coverage",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "War-risk insurance",
+          "status": "major insurers withholding cover for vessels in the Persian Gulf",
+          "asOf": "2026-03-03"
+        }
+      ],
+      "why": "Insurers withdraw war-risk cover and the IRGC threatens to burn ships in the strait."
+    },
+    {
+      "slug": "markets-tumble-as-shipments-through-hormuz-stop",
+      "date": "2026-03-04",
+      "title": "Markets tumble as shipments through Hormuz stop",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mainly a markets story, but headlined on shipments through Hormuz stopping and reports insurers refusing war-risk cover."
+    },
+    {
+      "slug": "strait-attacks-cut-major-oil-and-gas-exports",
+      "date": "2026-03-04",
+      "title": "Strait attacks cut major oil and gas exports",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Energy-price story with a substantive passage on attacks around the strait and hundreds of stranded tankers."
+    },
+    {
+      "slug": "us-to-provide-insurance-and-escort-gulf-tankers",
+      "date": "2026-03-04",
+      "title": "US to provide insurance and escort Gulf tankers",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "response",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "United States",
+          "status": "offers discounted political-risk insurance and possible Navy escorts for Gulf tankers",
+          "asOf": "2026-03-04"
+        }
+      ],
+      "why": "First government response aimed at passage: insurance and possible escorts for tankers."
+    },
+    {
+      "slug": "gulf-states-halt-exports-as-strait-of-hormuz-closes",
+      "date": "2026-03-07",
+      "title": "Gulf states halt exports as Strait of Hormuz closes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "daily_transits",
+          "value": 9,
+          "approx": "exact",
+          "asOf": "2026-03-07",
+          "matches": false,
+          "countedAs": "vessels crossing over several days since Monday 2 March, not one day",
+          "quote": "only nine vessels crossed the strait since Monday"
+        }
+      ],
+      "statuses": [],
+      "why": "Mainly about Gulf producers halting exports and prices, with the strait traffic count and tanker attacks as support."
+    },
+    {
+      "slug": "ship-attacks-sharply-cut-gulf-oil-and-gas-traffic",
+      "date": "2026-03-07",
+      "title": "Ship attacks sharply cut Gulf oil and gas traffic",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [
+        {
+          "figure": "daily_transits",
+          "value": 9,
+          "approx": "exact",
+          "asOf": "2026-03-07",
+          "matches": false,
+          "countedAs": "ships detected crossing over several days since Monday 2 March, not one day",
+          "quote": "only nine commercial ships detected crossing the Strait of Hormuz since Monday"
+        }
+      ],
+      "statuses": [],
+      "why": "First tracking data confirming the collapse of traffic through the strait."
+    },
+    {
+      "slug": "brent-tops-100-after-tanker-attacks",
+      "date": "2026-03-10",
+      "title": "Brent tops $100 after tanker attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 90,
+          "approx": "about",
+          "asOf": "2026-03-10",
+          "matches": false,
+          "countedAs": "tanker traffic only",
+          "quote": "cut regional tanker traffic by about 90%"
+        }
+      ],
+      "statuses": [],
+      "why": "Oil-price story driven by tanker attacks near the strait; states the tanker-traffic collapse."
+    },
+    {
+      "slug": "middle-east-fighting-stops-20-of-daily-oil-shipments",
+      "date": "2026-03-10",
+      "title": "Middle East fighting stops 20% of daily oil shipments",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mainly oil supply and production cuts, but reports tanker traffic through the strait all but stopped."
+    },
+    {
+      "slug": "trump-calls-oil-spike-a-small-price-for-iran-action",
+      "date": "2026-03-10",
+      "title": "Trump calls oil spike a small price for Iran action",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mainly oil prices and Trump; mentions halted traffic and a $20 billion reinsurance plan for Gulf shipping."
+    },
+    {
+      "slug": "us-navy-refuses-to-escort-ships-after-strait-attacks",
+      "date": "2026-03-11",
+      "title": "US navy refuses to escort ships after Strait attacks",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "US Navy escorts",
+          "status": "declined; Navy says attack risk too high",
+          "asOf": "2026-03-11"
+        }
+      ],
+      "why": "Reverses the escort expectation: the Navy declines industry requests to escort ships through the strait."
+    },
+    {
+      "slug": "us-weighs-tanker-escorts-risking-clashes-with-iran",
+      "date": "2026-03-11",
+      "title": "US weighs tanker escorts, risking clashes with Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "About escort options through the strait and the threats escorts would face."
+    },
+    {
+      "slug": "attacks-shut-major-oil-route-raise-global-energy-risk",
+      "date": "2026-03-12",
+      "title": "Attacks shut major oil route, raise global energy risk",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Tally of attacks on commercial vessels in and near the strait."
+    },
+    {
+      "slug": "shadow-tankers-keep-oil-moving-despite-blockade",
+      "date": "2026-03-12",
+      "title": "Shadow tankers keep oil moving despite blockade",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 90,
+          "approx": "at_least",
+          "asOf": "2026-03-12",
+          "matches": false,
+          "countedAs": "tanker traffic only",
+          "quote": "collapsed tanker traffic through the Strait of Hormuz by over 90 percent"
+        },
+        {
+          "figure": "stranded_ships",
+          "value": 400,
+          "approx": "at_least",
+          "asOf": "2026-03-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "stranding more than 400 vessels"
+        },
+        {
+          "figure": "stranded_ships",
+          "value": 400,
+          "approx": "at_least",
+          "asOf": "2026-03-12",
+          "matches": false,
+          "countedAs": "tankers only",
+          "quote": "over 400 tankers are stranded in the Persian Gulf"
+        }
+      ],
+      "statuses": [],
+      "why": "About which tankers still transit the strait and how many are stranded."
+    },
+    {
+      "slug": "iran-attacks-tankers-as-oil-tops-100",
+      "date": "2026-03-13",
+      "title": "Iran attacks tankers as oil tops $100",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Iran",
+          "status": "says it will block oil through the strait until US and Israeli attacks stop",
+          "asOf": "2026-03-13"
+        }
+      ],
+      "why": "Tanker attacks in the Gulf and Iran formally vows to block oil through the strait."
+    },
+    {
+      "slug": "us-sends-thousands-of-marines-to-middle-east-after-attacks",
+      "date": "2026-03-14",
+      "title": "US sends thousands of Marines to Middle East after attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Military deployment triggered by attacks on ships near the strait; mostly about force posture and Kharg Island options."
+    },
+    {
+      "slug": "un-urges-sea-access-for-humanitarian-aid-amid-gulf-war",
+      "date": "2026-03-14",
+      "title": "UN urges sea access for humanitarian aid amid Gulf war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "UN appeal for safe passage of humanitarian cargo through the strait; mines and near-halted traffic."
+    },
+    {
+      "slug": "trump-urges-allies-to-keep-strait-open-amid-strikes",
+      "date": "2026-03-15",
+      "title": "Trump urges allies to keep Strait open amid strikes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mostly strikes in Isfahan; carries Trump’s call on allies to help keep the strait open."
+    },
+    {
+      "slug": "iea-releases-400-million-barrels-but-prices-stay-above-100",
+      "date": "2026-03-16",
+      "title": "IEA releases 400 million barrels but prices stay above $100",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 90,
+          "approx": "at_least",
+          "asOf": "2026-03-16",
+          "matches": false,
+          "countedAs": "oil shipments, stated as under 10% of pre-war (so more than 90% below)",
+          "quote": "shipments down to under 10 percent of pre-war levels"
+        }
+      ],
+      "statuses": [],
+      "why": "Mainly the IEA reserve release, with a substantive passage on halted tanker traffic and idling tankers."
+    },
+    {
+      "slug": "iran-linked-attacks-push-major-oil-route-to-standstill",
+      "date": "2026-03-16",
+      "title": "Iran-linked attacks push major oil route to standstill",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Attacks and mine threats bring commercial traffic through the strait to a standstill."
+    },
+    {
+      "slug": "iran-blockade-halts-a-quarter-of-seaborne-oil",
+      "date": "2026-03-18",
+      "title": "Iran blockade halts a quarter of seaborne oil",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "stranded_ships",
+          "value": 500,
+          "approx": "about",
+          "asOf": "2026-03-18",
+          "matches": false,
+          "countedAs": "tankers only",
+          "quote": "roughly 500 tankers were reported stuck"
+        }
+      ],
+      "statuses": [],
+      "why": "Opinion on the blockade itself: trapped tankers, Iran’s demand that ships seek permission, restoring navigation."
+    },
+    {
+      "slug": "u-s-weighs-thousands-of-troops-for-strait-and-oil-missions",
+      "date": "2026-03-19",
+      "title": "U.S. weighs thousands of troops for Strait and oil missions",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Ground-deployment options, one of which is securing the strait."
+    },
+    {
+      "slug": "iran-links-tanker-passage-to-yuan-payments",
+      "date": "2026-03-21",
+      "title": "Iran links tanker passage to yuan payments",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Iran",
+          "status": "reportedly lets tankers pass only if oil is paid in yuan",
+          "asOf": "2026-03-21"
+        }
+      ],
+      "why": "A condition on passage through the strait."
+    },
+    {
+      "slug": "trump-threatens-to-obliterate-iran-power-plants",
+      "date": "2026-03-22",
+      "title": "Trump threatens to obliterate Iran power plants",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "War escalation whose trigger is a 48-hour ultimatum to reopen the strait."
+    },
+    {
+      "slug": "us-issues-48-hour-ultimatum-to-iran-over-hormuz",
+      "date": "2026-03-23",
+      "title": "US issues 48-hour ultimatum to Iran over Hormuz",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Headlined on the ultimatum to reopen the strait, but the body is a regional war roundup."
+    },
+    {
+      "slug": "us-threatens-iran-power-plants-after-waterway-blockade",
+      "date": "2026-03-23",
+      "title": "US threatens Iran power plants after waterway blockade",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Threats over the strait blockade; NATO allies condemn the closure; mostly war escalation."
+    },
+    {
+      "slug": "un-names-envoy-and-task-force-to-protect-fertilizer-flows",
+      "date": "2026-03-29",
+      "title": "UN names envoy and task force to protect fertilizer flows",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "response",
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 90,
+          "approx": "at_least",
+          "asOf": "2026-03-29",
+          "matches": false,
+          "countedAs": "tanker traffic only",
+          "quote": "tanker traffic fell over 90%"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "UN Task Force",
+          "status": "created with a personal envoy to keep the strait open for humanitarian and fertiliser shipments",
+          "asOf": "2026-03-29"
+        }
+      ],
+      "why": "First multilateral mechanism for passage through the strait."
+    },
+    {
+      "slug": "trump-warns-of-destroying-iran-s-energy-infrastructure",
+      "date": "2026-03-31",
+      "title": "Trump warns of destroying Iran’s energy infrastructure",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Threat tied to the strait staying closed, inside a war roundup."
+    },
+    {
+      "slug": "supply-chains-to-suffer-months-after-hormuz-reopens",
+      "date": "2026-04-01",
+      "title": "Supply chains to suffer months after Hormuz reopens",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "stranded_ships",
+          "value": 2000,
+          "approx": "about",
+          "asOf": "2026-04-01",
+          "matches": true,
+          "countedAs": null,
+          "quote": "stranded roughly 2,000 ships"
+        }
+      ],
+      "statuses": [],
+      "why": "Stranded ships and the backlog that would follow a reopening."
+    },
+    {
+      "slug": "iran-strikes-tanker-near-dubai-after-trump-threats",
+      "date": "2026-04-01",
+      "title": "Iran strikes tanker near Dubai after Trump threats",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A tanker attack in Gulf waters off Dubai, not in the strait itself, framed by the wider war."
+    },
+    {
+      "slug": "diplomacy-stalls-as-strikes-and-tanker-attack-disrupt-oil-flows",
+      "date": "2026-04-02",
+      "title": "Diplomacy stalls as strikes and tanker attack disrupt oil flows",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 90,
+          "approx": "at_least",
+          "asOf": "2026-04-02",
+          "matches": true,
+          "countedAs": null,
+          "quote": "Traffic through the Strait of Hormuz is reported more than 90% below normal"
+        }
+      ],
+      "statuses": [],
+      "why": "War and diplomacy roundup with a substantive passage on strait traffic and possible tolling."
+    },
+    {
+      "slug": "40-countries-press-iran-to-reopen-shipping-route",
+      "date": "2026-04-03",
+      "title": "40 countries press Iran to reopen shipping route",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "response",
+      "values": [
+        {
+          "figure": "stranded_ships",
+          "value": 2000,
+          "approx": "about",
+          "asOf": "2026-04-03",
+          "matches": true,
+          "countedAs": null,
+          "quote": "roughly 2,000 trapped ships"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "40+ countries",
+          "status": "diplomatic talks to reopen the strait; the US skipped the meeting",
+          "asOf": "2026-04-03"
+        }
+      ],
+      "why": "Multilateral push to reopen the strait for trapped ships."
+    },
+    {
+      "slug": "trump-and-israel-threaten-attacks-on-iran-s-energy-sites",
+      "date": "2026-04-05",
+      "title": "Trump and Israel threaten attacks on Iran's energy sites",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Pressure on Iran to reopen the strait, mixed with war events (downed warplanes)."
+    },
+    {
+      "slug": "trump-sets-final-deadline-threatens-strikes-on-iran",
+      "date": "2026-04-07",
+      "title": "Trump sets final deadline, threatens strikes on Iran",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Final deadline to reopen the strait, mostly about strikes and ceasefire offers."
+    },
+    {
+      "slug": "us-and-iran-meet-as-oil-disruption-roils-markets",
+      "date": "2026-04-11",
+      "title": "US and Iran meet as oil disruption roils markets",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Talks and markets story; says the truce did not lift Iran’s blockade and Iran wants control over transit fees."
+    },
+    {
+      "slug": "iran-proposes-paid-passage-for-oil-and-gas-ships",
+      "date": "2026-04-11",
+      "title": "Iran proposes paid passage for oil and gas ships",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Strait of Hormuz",
+          "status": "reopened under a fragile two-week truce, with Iran's approval regime still in place",
+          "asOf": "2026-04-11"
+        },
+        {
+          "subject": "Transit tolls",
+          "status": "proposed by Iran",
+          "asOf": "2026-04-11"
+        }
+      ],
+      "why": "Truce reopening and Iran’s proposal to charge ships for passage."
+    },
+    {
+      "slug": "us-orders-total-blockade-of-key-oil-route",
+      "date": "2026-04-13",
+      "title": "US orders total blockade of key oil route",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "stranded_ships",
+          "value": 600,
+          "approx": "at_least",
+          "asOf": "2026-04-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 600 ships and some 20,000 mariners are stranded"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "US naval blockade",
+          "status": "ordered on all maritime traffic entering or leaving the strait",
+          "asOf": "2026-04-13"
+        }
+      ],
+      "why": "The US orders its own blockade of the strait and interception of toll-paying ships."
+    },
+    {
+      "slug": "trump-orders-blockade-warns-china-and-iran",
+      "date": "2026-04-14",
+      "title": "Trump orders blockade, warns China and Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Same blockade order, reported a day later with the China tariff threat."
+    },
+    {
+      "slug": "iran-re-closes-shipping-lane-after-us-threatens-blockade",
+      "date": "2026-04-19",
+      "title": "Iran re-closes shipping lane after US threatens blockade",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Strait of Hormuz",
+          "status": "re-closed by Iran after a brief ceasefire reopening",
+          "asOf": "2026-04-19"
+        }
+      ],
+      "why": "Iran re-closes the strait after the brief truce reopening."
+    },
+    {
+      "slug": "u-s-iran-talks-progress-as-oil-route-stays-closed",
+      "date": "2026-04-20",
+      "title": "U.S.-Iran talks progress as oil route stays closed",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Talks story in which control of the strait is a sticking point; Iran reasserted control."
+    },
+    {
+      "slug": "us-seizes-iranian-ship-as-ceasefire-talks-falter",
+      "date": "2026-04-21",
+      "title": "US seizes Iranian ship as ceasefire talks falter",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US blockade enforcement: an Iranian-flagged cargo ship fired on and seized."
+    },
+    {
+      "slug": "trump-extends-ceasefire-while-keeping-iranian-ports-blockaded",
+      "date": "2026-04-22",
+      "title": "Trump extends ceasefire while keeping Iranian ports blockaded",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Ceasefire extension story; keeps the naval blockade and notes 25 vessels altering course."
+    },
+    {
+      "slug": "u-s-iran-clash-cuts-global-oil-lng-flows",
+      "date": "2026-04-26",
+      "title": "U.S.-Iran clash cuts global oil, LNG flows",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of the confrontation over the strait: tanker traffic, insurance, maritime order."
+    },
+    {
+      "slug": "un-warns-shipping-restrictions-could-trigger-global-recession",
+      "date": "2026-05-01",
+      "title": "UN warns shipping restrictions could trigger global recession",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "UN Secretary-General on restrictions on passage and restoring navigational rights."
+    },
+    {
+      "slug": "trump-unveils-us-ship-escort-plan-amid-talks-with-iran",
+      "date": "2026-05-04",
+      "title": "Trump unveils US ship escort plan amid talks with Iran",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "response",
+      "values": [
+        {
+          "figure": "stranded_ships",
+          "value": 900,
+          "approx": "at_least",
+          "asOf": "2026-05-04",
+          "matches": true,
+          "countedAs": null,
+          "quote": "leaving 900+ commercial vessels stalled"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Project Freedom (US escorts)",
+          "status": "launched",
+          "asOf": "2026-05-04"
+        }
+      ],
+      "why": "The US launches escorts through the blocked strait."
+    },
+    {
+      "slug": "us-and-iran-clash-over-gulf-oil-route",
+      "date": "2026-05-05",
+      "title": "US and Iran clash over Gulf oil route",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Escorted tankers, Iranian reprisals, shippers avoiding the route."
+    },
+    {
+      "slug": "u-s-sinks-iranian-boats-opens-shipping-route",
+      "date": "2026-05-05",
+      "title": "U.S. sinks Iranian boats, opens shipping route",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Project Freedom combat in the strait."
+    },
+    {
+      "slug": "iran-says-it-repelled-us-warship-us-denies-strike",
+      "date": "2026-05-06",
+      "title": "Iran says it repelled US warship; US denies strike",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Naval incident near the strait during the escort plan; stranded ships and seafarers."
+    },
+    {
+      "slug": "trump-pauses-ship-escorts-after-reported-iran-deal-progress",
+      "date": "2026-05-07",
+      "title": "Trump pauses ship escorts after reported Iran deal progress",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Project Freedom (US escorts)",
+          "status": "paused",
+          "asOf": "2026-05-07"
+        }
+      ],
+      "why": "The escort operation is paused."
+    },
+    {
+      "slug": "us-jets-disable-tankers-as-naval-clashes-widen",
+      "date": "2026-05-09",
+      "title": "US jets disable tankers as naval clashes widen",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Blockade enforcement and naval clashes in the strait."
+    },
+    {
+      "slug": "us-hits-iranian-military-sites-after-attacks",
+      "date": "2026-05-10",
+      "title": "US hits Iranian military sites after attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Retaliatory strikes after attacks on US destroyers transiting the strait; mostly a military exchange."
+    },
+    {
+      "slug": "us-rejects-iran-peace-offer-as-tensions-rise",
+      "date": "2026-05-11",
+      "title": "US rejects Iran peace offer as tensions rise",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Diplomacy roundup with multinational naval planning for the strait and drone attacks on ships."
+    },
+    {
+      "slug": "iran-tactics-paralyze-asian-oil-and-gas-flows",
+      "date": "2026-05-12",
+      "title": "Iran tactics paralyze Asian oil and gas flows",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 95,
+          "approx": "about",
+          "asOf": "2026-05-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "The crisis halted about 95% of transit within weeks"
+        }
+      ],
+      "statuses": [],
+      "why": "Analysis of how Iran made transit through the strait unsafe."
+    },
+    {
+      "slug": "iran-rejects-us-terms-hormuz-shipping-nearly-halted",
+      "date": "2026-05-14",
+      "title": "Iran rejects US terms, Hormuz shipping nearly halted",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Ceasefire-talks story headlined on near-halted Hormuz shipping; allies refuse to reopen Hormuz without a deal."
+    },
+    {
+      "slug": "iran-strikes-oil-and-lng-transit-deals-with-iraq-pakistan",
+      "date": "2026-05-14",
+      "title": "Iran strikes oil and LNG transit deals with Iraq, Pakistan",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 95,
+          "approx": "about",
+          "asOf": "2026-05-14",
+          "matches": true,
+          "countedAs": null,
+          "quote": "pre-war traffic of ~3,000 vessels monthly has fallen to roughly 5% now"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Iraq",
+          "status": "bilateral transit deal with Iran for oil tankers",
+          "asOf": "2026-05-14"
+        },
+        {
+          "subject": "Pakistan",
+          "status": "bilateral transit deal with Iran for LNG tankers",
+          "asOf": "2026-05-14"
+        }
+      ],
+      "why": "Bilateral passage deals show Iran deciding who may transit."
+    },
+    {
+      "slug": "ships-allowed-through-key-gulf-as-food-and-war-risks-grow",
+      "date": "2026-05-21",
+      "title": "Ships allowed through key gulf as food and war risks grow",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [
+        {
+          "figure": "daily_transits",
+          "value": 24,
+          "approx": "about",
+          "asOf": "2026-05-21",
+          "matches": false,
+          "countedAs": "vessels Iran let through in one batch, not a one-day count",
+          "quote": "Iran allowed about two dozen vessels to transit the Strait of Hormuz"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Strait of Hormuz",
+          "status": "Iran lets about two dozen vessels transit",
+          "asOf": "2026-05-21"
+        }
+      ],
+      "why": "First sizeable group of ships allowed through."
+    },
+    {
+      "slug": "shipping-cuts-push-fuel-prices-and-food-costs-higher",
+      "date": "2026-05-21",
+      "title": "Shipping cuts push fuel prices and food costs higher",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "daily_transits",
+          "value": 16,
+          "approx": "under",
+          "asOf": "2026-05-21",
+          "matches": true,
+          "countedAs": null,
+          "quote": "daily transits dropped from 100+ ships to as few as two to 16"
+        }
+      ],
+      "statuses": [],
+      "why": "Mainly UN economic outlook, with a substantive passage on daily transits through the strait."
+    },
+    {
+      "slug": "us-and-iran-report-progress-toward-ending-gulf-war",
+      "date": "2026-05-24",
+      "title": "US and Iran report progress toward ending Gulf war",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "stranded_ships",
+          "value": 2000,
+          "approx": "about",
+          "asOf": "2026-05-24",
+          "matches": true,
+          "countedAs": null,
+          "quote": "trapping about 20,000 sailors on roughly 2,000 vessels"
+        }
+      ],
+      "statuses": [],
+      "why": "Peace-talks story whose stated aim is reopening the strait; counts trapped ships and sailors."
+    },
+    {
+      "slug": "u-s-strikes-iranian-radar-after-drones-threatened-shipping",
+      "date": "2026-06-06",
+      "title": "U.S. strikes Iranian radar after drones threatened shipping",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US strikes after drones launched toward shipping in the strait; mostly a military exchange."
+    },
+    {
+      "slug": "ceasefire-ends-strikes-and-reopens-key-shipping-lane",
+      "date": "2026-06-18",
+      "title": "Ceasefire ends strikes and reopens key shipping lane",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Strait of Hormuz",
+          "status": "to reopen under the US–Iran peace agreement",
+          "asOf": "2026-06-18"
+        }
+      ],
+      "why": "First report of the deal that reopens the strait."
+    },
+    {
+      "slug": "us-iran-reach-provisional-deal-to-reopen-strait-of-hormuz",
+      "date": "2026-06-18",
+      "title": "US, Iran reach provisional deal to reopen Strait of Hormuz",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Same deal: provisional memorandum to reopen the strait."
+    },
+    {
+      "slug": "us-and-iran-agree-to-end-war-and-reopen-hormuz",
+      "date": "2026-06-18",
+      "title": "US and Iran agree to end war and reopen Hormuz",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "US naval blockade",
+          "status": "to end under the deal (reported)",
+          "asOf": "2026-06-18"
+        }
+      ],
+      "why": "Same deal, reporting reopening and the end of the US naval blockade."
+    },
+    {
+      "slug": "iran-plans-postwar-fees-that-could-choke-global-oil-shipments",
+      "date": "2026-06-20",
+      "title": "Iran plans postwar fees that could choke global oil shipments",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran claims lasting control and plans fees and rules for shipping."
+    },
+    {
+      "slug": "iran-says-strategic-waterway-closed-global-shipping-and-oil-hit",
+      "date": "2026-06-22",
+      "title": "Iran says strategic waterway closed; global shipping and oil hit",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Strait of Hormuz",
+          "status": "closed again by Iran days after the deal reopened it",
+          "asOf": "2026-06-22"
+        }
+      ],
+      "why": "Iran re-closes the strait after the deal."
+    },
+    {
+      "slug": "u-s-and-iran-agree-60-day-roadmap-open-shipping-lane",
+      "date": "2026-06-23",
+      "title": "U.S. and Iran agree 60-day roadmap, open shipping lane",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "US–Iran communications line",
+          "status": "opened to help reopen the strait",
+          "asOf": "2026-06-23"
+        }
+      ],
+      "why": "Roadmap and a communications line to reopen the strait; Iran’s return to shipping conditional."
+    },
+    {
+      "slug": "us-and-iran-clash-over-strait-tolls-and-inspections",
+      "date": "2026-06-24",
+      "title": "US and Iran clash over Strait tolls and inspections",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Tolls and control of the strait as sticking points; UN evacuates stranded sailors."
+    },
+    {
+      "slug": "u-s-hits-iranian-missile-and-drone-sites-after-tanker-attack",
+      "date": "2026-06-27",
+      "title": "U.S. hits Iranian missile and drone sites after tanker attack",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US retaliation for an attack on a commercial ship in the strait; mostly about the strikes."
+    },
+    {
+      "slug": "us-launches-second-night-of-strikes-on-iran",
+      "date": "2026-06-29",
+      "title": "US launches second night of strikes on Iran",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Second night of US strikes after a tanker was hit in the strait."
+    },
+    {
+      "slug": "us-and-iran-pause-strikes-and-agree-to-doha-talks",
+      "date": "2026-06-30",
+      "title": "US and Iran pause strikes and agree to Doha talks",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "US and Iran",
+          "status": "pause mutual attacks; Doha talks on shipping security in the strait",
+          "asOf": "2026-06-30"
+        }
+      ],
+      "why": "Talks move to shipping security; both sides agree vessels can move freely."
+    },
+    {
+      "slug": "pakistan-brokers-iran-u-s-roadmap-to-reopen-strait",
+      "date": "2026-07-02",
+      "title": "Pakistan brokers Iran–U.S. roadmap to reopen Strait",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of Pakistan’s mediation; the roadmap’s aim is reopening the strait."
+    },
+    {
+      "slug": "us-strikes-iranian-air-defenses-after-tanker-attacks",
+      "date": "2026-07-08",
+      "title": "US strikes Iranian air defenses after tanker attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US punitive strikes after tanker attacks near the strait."
+    },
+    {
+      "slug": "iran-and-us-clash-over-shipping-rules-sparking-strikes",
+      "date": "2026-07-10",
+      "title": "Iran and US clash over shipping rules, sparking strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The disputed navigation clause of the memorandum and the attacks it led to."
+    },
+    {
+      "slug": "iran-closes-key-sea-lane-after-ship-was-struck",
+      "date": "2026-07-12",
+      "title": "Iran closes key sea lane after ship was struck",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Strait of Hormuz",
+          "status": "closed by Iran after a vessel on an unapproved route was struck",
+          "asOf": "2026-07-12"
+        }
+      ],
+      "why": "Iran closes the strait again."
+    },
+    {
+      "slug": "iran-expands-strikes-across-gulf-as-u-s-launches-counterattacks",
+      "date": "2026-07-13",
+      "title": "Iran expands strikes across Gulf as U.S. launches counterattacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "War roundup in which Tehran says it closed the strait."
+    },
+    {
+      "slug": "un-imo-call-for-diplomacy-after-attacks-raise-oil-prices",
+      "date": "2026-07-14",
+      "title": "UN, IMO call for diplomacy after attacks raise oil prices",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "UN and IMO condemn attacks on vessels in the strait and defend transit passage."
+    },
+    {
+      "slug": "us-to-enforce-blockade-on-iran-s-ports-tuesday",
+      "date": "2026-07-14",
+      "title": "US to enforce blockade on Iran's ports Tuesday",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "US naval blockade",
+          "status": "enforced on all Iranian ports, oil terminals and coasts; neutral transit through the strait allowed",
+          "asOf": "2026-07-14"
+        }
+      ],
+      "why": "The US reimposes a blockade, now of Iranian ports."
+    },
+    {
+      "slug": "us-hits-iran-warns-of-future-power-plant-and-bridge-attacks",
+      "date": "2026-07-15",
+      "title": "US hits Iran, warns of future power-plant and bridge attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Strikes aimed at capabilities used to attack shipping in the strait; reimposed blockade."
+    },
+    {
+      "slug": "us-strikes-iranian-coastal-defenses-after-naval-blockade-resumed",
+      "date": "2026-07-16",
+      "title": "US strikes Iranian coastal defenses after naval blockade resumed",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Strikes on coastal defenses amid the blockade and Iran’s closure of the strait."
+    },
+    {
+      "slug": "us-strikes-iran-after-hormuz-blockade-us-bases-targeted-abroad",
+      "date": "2026-07-16",
+      "title": "US strikes Iran after Hormuz blockade; US bases targeted abroad",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Trump announces a 20% fee on Strait of Hormuz cargo; IRGC says it struck ships in the strait."
+    },
+    {
+      "slug": "trump-expands-strikes-risks-wider-middle-east-war",
+      "date": "2026-07-17",
+      "title": "Trump expands strikes, risks wider Middle East war",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of strikes whose aim is to force Iran to reopen the strait."
+    },
+    {
+      "slug": "us-strikes-iranian-bases-hormuz-shipping-halts",
+      "date": "2026-07-19",
+      "title": "US strikes Iranian bases, Hormuz shipping halts",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Strike roundup headlined on Hormuz shipping halting."
+    },
+    {
+      "slug": "mediators-deliver-proposals-as-strikes-stall-hormuz-shipping",
+      "date": "2026-07-22",
+      "title": "Mediators deliver proposals as strikes stall Hormuz shipping",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mediation and strikes roundup; reports shipping through the strait largely stalled."
+    },
+    {
+      "slug": "u-s-bombs-iranian-military-sites-after-repeated-ship-attacks",
+      "date": "2026-07-23",
+      "title": "U.S. bombs Iranian military sites after repeated ship attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US strikes after attacks on over 30 commercial ships in the strait."
+    },
+    {
+      "slug": "strait-of-hormuz-closures-threaten-20-of-global-oil",
+      "date": "2026-07-24",
+      "title": "Strait of Hormuz closures threaten 20% of global oil",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of possible closures or transit fees, mixed with bypass pipelines and Bab el-Mandeb."
+    },
+    {
+      "slug": "trump-faces-choice-over-shipping-route-before-midterms",
+      "date": "2026-08-08",
+      "title": "Trump faces choice over shipping route before midterms",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The US options over the strait: accept Iranian control, escalate, or keep the blockade."
+    },
+    {
+      "slug": "iran-won-t-reopen-key-gulf-passage-until-us-meets-demands",
+      "date": "2026-08-10",
+      "title": "Iran won't reopen key Gulf passage until US meets demands",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Iran (IRGC)",
+          "status": "will keep the strait closed until the US meets its demands",
+          "asOf": "2026-08-10"
+        }
+      ],
+      "why": "Iran ties reopening to a list of demands."
+    },
+    {
+      "slug": "u-s-will-keep-ships-to-halt-iran-oil-transit",
+      "date": "2026-08-14",
+      "title": "U.S. will keep ships to halt Iran oil transit",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US says it could keep an indefinite blockade; transits fell to single digits."
+    },
+    {
+      "slug": "u-s-threatens-indefinite-blockade-as-ship-attacks-rise",
+      "date": "2026-08-15",
+      "title": "U.S. threatens indefinite blockade as ship attacks rise",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "daily_transits",
+          "value": 2,
+          "approx": "exact",
+          "asOf": "2026-08-15",
+          "matches": true,
+          "countedAs": null,
+          "quote": "only two transits were visible on the day of reporting"
+        }
+      ],
+      "statuses": [],
+      "why": "Transit through the strait near zero amid ship attacks and blockade threats."
+    },
+    {
+      "slug": "iran-enforces-blockade-while-u-s-warns-of-higher-fuel-costs",
+      "date": "2026-08-16",
+      "title": "Iran enforces blockade while U.S. warns of higher fuel costs",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "daily_transits",
+          "value": 2,
+          "approx": "exact",
+          "asOf": "2026-08-16",
+          "matches": true,
+          "countedAs": null,
+          "quote": "only two vessels transited on a recent day"
+        }
+      ],
+      "statuses": [],
+      "why": "Iran says it is enforcing a blockade of the strait."
+    },
+    {
+      "slug": "us-launches-global-sanctions-over-missing-60-enriched-uranium",
+      "date": "2026-09-01",
+      "title": "US launches global sanctions over missing 60% enriched uranium",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 90,
+          "approx": "about",
+          "asOf": "2026-09-01",
+          "matches": true,
+          "countedAs": null,
+          "quote": "slashed Strait transit by about 90%"
+        }
+      ],
+      "statuses": [],
+      "why": "Mainly US sanctions and missing uranium, with a passage on strait transits and war-risk insurance."
+    },
+    {
+      "slug": "us-destroys-three-iran-linked-oil-ships-after-attacks",
+      "date": "2026-09-06",
+      "title": "US destroys three Iran-linked oil ships after attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US destroys Iran-linked tankers in the Gulf; part of the fight over Iranian shipping, framed as naval escalation."
+    },
+    {
+      "slug": "iran-to-meet-gulf-states-in-oman-over-shipping-control",
+      "date": "2026-09-12",
+      "title": "Iran to meet Gulf states in Oman over shipping control",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "response",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Iran and Gulf states",
+          "status": "to meet in Oman on 14 September over control of the strait",
+          "asOf": "2026-09-12"
+        }
+      ],
+      "why": "Talks on control of the strait; ships must seek Iranian permission."
+    },
+    {
+      "slug": "us-and-iran-weigh-reopening-a-key-oil-route",
+      "date": "2026-09-25",
+      "title": "US and Iran weigh reopening a key oil route",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A phased reopening of the strait in exchange for lifting the US blockade is under discussion."
+    },
+    {
+      "slug": "tehran-rejects-uranium-concessions-in-ceasefire-talks",
+      "date": "2026-09-26",
+      "title": "Tehran rejects uranium concessions in ceasefire talks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Nuclear-talks story that opens with Iran keeping the strait closed until its demands are met."
+    },
+    {
+      "slug": "iran-offers-seven-day-plan-to-reopen-shipping",
+      "date": "2026-09-26",
+      "title": "Iran offers seven-day plan to reopen shipping",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Iran",
+          "status": "offers a seven-day plan to reopen the strait",
+          "asOf": "2026-09-26"
+        }
+      ],
+      "why": "Concrete Iranian offer to reopen the strait."
+    },
+    {
+      "slug": "trump-rejects-iran-s-plan-to-reopen-vital-oil-route",
+      "date": "2026-09-27",
+      "title": "Trump rejects Iran's plan to reopen vital oil route",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "United States",
+          "status": "rejects Iran's plan to reopen the strait",
+          "asOf": "2026-09-27"
+        }
+      ],
+      "why": "The US rejects the reopening plan."
+    },
+    {
+      "slug": "iran-vows-to-fight-if-the-us-attacks-again",
+      "date": "2026-09-28",
+      "title": "Iran vows to fight if the US attacks again",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Military threats, with a recap of the rejected reopening plan and sharply reduced shipping."
+    },
+    {
+      "slug": "guterres-urges-washington-and-tehran-to-resume-talks",
+      "date": "2026-10-07",
+      "title": "Guterres urges Washington and Tehran to resume talks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "UN appeal and Pakistan’s diplomacy; leads with ships and crews stranded in the strait."
+    },
+    {
+      "slug": "iran-says-us-offer-fails-to-reopen-key-sea-route",
+      "date": "2026-10-12",
+      "title": "Iran says US offer fails to reopen key sea route",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Iran",
+          "status": "says the US reply is insufficient; the strait will not reopen",
+          "asOf": "2026-10-12"
+        }
+      ],
+      "why": "Talks on reopening stall."
+    },
+    {
+      "slug": "iran-changes-tactics-to-target-more-ships",
+      "date": "2026-10-14",
+      "title": "Iran changes tactics to target more ships",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "Iran changes tactics to attack more ships in and around the strait."
+    },
+    {
+      "slug": "two-ships-sink-as-iran-conflict-disrupts-shipping",
+      "date": "2026-10-15",
+      "title": "Two ships sink as Iran conflict disrupts shipping",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Two ships sink near the strait after attacks; traffic slowing."
+    },
+    {
+      "slug": "iran-threatens-us-bases-as-tankers-burn",
+      "date": "2026-10-23",
+      "title": "Iran threatens US bases as tankers burn",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Leads with seven tankers attacked near the strait."
+    },
+    {
+      "slug": "us-and-israel-prepare-for-renewed-strikes",
+      "date": "2026-10-25",
+      "title": "US and Israel prepare for renewed strikes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "About renewed strikes; counts at least 27 ships attacked this month."
+    },
+    {
+      "slug": "iran-says-four-tankers-exploded-in-hormuz",
+      "date": "2026-10-31",
+      "title": "Iran says four tankers exploded in Hormuz",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Four tankers explode in the strait after using routes the IRGC calls unauthorized."
+    },
+    {
+      "slug": "washington-used-pause-to-secure-oil-shipping-lanes",
+      "date": "2026-11-02",
+      "title": "Washington used pause to secure oil shipping lanes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The US guided tankers through a route near Oman outside Iran’s control during the pause."
+    },
+    {
+      "slug": "us-and-iran-signal-talks-to-end-eight-month-war",
+      "date": "2026-11-03",
+      "title": "US and Iran signal talks to end eight-month war",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Talks story; Iran says it could reopen the strait within two days."
+    },
+    {
+      "slug": "iranian-attacks-threaten-a-fifth-of-global-energy-trade",
+      "date": "2026-11-04",
+      "title": "Iranian attacks threaten a fifth of global energy trade",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Stepped-up attacks, mines and underwater drones threaten shipping in the strait."
+    },
+    {
+      "slug": "us-strikes-iran-as-shipping-falls-by-90",
+      "date": "2026-11-06",
+      "title": "US strikes Iran as shipping falls by 90%",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 90,
+          "approx": "exact",
+          "asOf": "2026-11-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "shipping falls by 90%"
+        }
+      ],
+      "statuses": [],
+      "why": "States the transit collapse through the strait alongside the 2 November strikes."
+    },
+    {
+      "slug": "iran-charges-ships-to-cross-the-world-s-key-oil-route",
+      "date": "2026-11-07",
+      "title": "Iran charges ships to cross the world's key oil route",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Transit tolls",
+          "status": "Iran charging paid permits, up to $2 million per trip, with exemptions for selected countries",
+          "asOf": "2026-11-07"
+        }
+      ],
+      "why": "First report that Iran’s paid-permit toll system is in use."
+    },
+    {
+      "slug": "iran-says-its-military-has-grown-stronger-during-war",
+      "date": "2026-11-08",
+      "title": "Iran says its military has grown stronger during war",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran’s military claims; notes Iran restricting traffic and a tanker hitting a mine."
+    },
+    {
+      "slug": "rubio-says-us-does-not-need-new-iran-strikes",
+      "date": "2026-11-11",
+      "title": "Rubio says US does not need new Iran strikes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US strikes policy and diplomacy; Iran’s conditions for reopening; attacks on ships continue."
+    },
+    {
+      "slug": "iran-conflict-leaves-a-vital-sea-passage-unsafe",
+      "date": "2026-11-12",
+      "title": "Iran conflict leaves a vital sea passage unsafe",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 65,
+          "approx": "about",
+          "asOf": "2026-11-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "ship traffic is about 65% below prewar levels"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "UN Security Council",
+          "status": "China and Russia vetoed a proposal to secure passage; a mine-clearing plan kept from a vote",
+          "asOf": "2026-11-12"
+        }
+      ],
+      "why": "Security Council action on passage blocked; traffic about 65% below prewar."
+    },
+    {
+      "slug": "iran-keeps-strait-of-hormuz-traffic-65-below-normal",
+      "date": "2026-11-14",
+      "title": "Hormuz disruption keeps global trade under pressure",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "traffic_drop",
+          "value": 65,
+          "approx": "exact",
+          "asOf": "2026-11-14",
+          "matches": true,
+          "countedAs": null,
+          "quote": "traffic remaining 65 percent below pre-conflict levels"
+        }
+      ],
+      "statuses": [],
+      "why": "Security Council review of shipping threats; UKMTO-based traffic level."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "iran-us-and-allies-mass-ships-near-vital-oil-route",
+      "date": "2026-02-20",
+      "title": "Iran, US and allies mass ships near vital oil route",
+      "why": "Labelled \"Hormuz standoff\" and about naval drills around the strait, but it is the pre-war military standoff around the Geneva talks, before shipping was disrupted."
+    },
+    {
+      "slug": "israel-strikes-tehran-after-khamenei-killing-iran-retaliates",
+      "date": "2026-03-02",
+      "title": "Israel strikes Tehran after Khamenei killing; Iran retaliates",
+      "why": "Summary says the strait was closed, but the story is the war’s opening strikes and Khamenei’s killing."
+    },
+    {
+      "slug": "war-closes-key-shipping-lane-threatening-spring-harvests",
+      "date": "2026-03-12",
+      "title": "War closes key shipping lane, threatening spring harvests",
+      "why": "Headline is about the closed shipping lane, but the story is the fertilizer and food-price fallout in importing countries."
+    },
+    {
+      "slug": "us-israel-strikes-trigger-historic-fuel-disruption-through-hormuz",
+      "date": "2026-03-13",
+      "title": "US-Israel strikes trigger historic fuel disruption through Hormuz",
+      "why": "\"Hormuz\" in the title, but it reports the IEA’s oil-supply verdict and reserve release: an energy-market story."
+    },
+    {
+      "slug": "strait-of-hormuz-closure-risks-global-recession",
+      "date": "2026-03-19",
+      "title": "Strait of Hormuz closure risks global recession",
+      "why": "Title names the closure, but the content is the macroeconomic and recession outlook."
+    },
+    {
+      "slug": "ormuz-blockade-cuts-11-million-barrels-a-day",
+      "date": "2026-03-24",
+      "title": "Ormuz blockade cuts 11 million barrels a day",
+      "why": "\"Ormuz blockade\" title, but it is about IEA estimates of lost oil supply and damaged infrastructure."
+    },
+    {
+      "slug": "us-vows-heavier-strikes-threatens-bridges-and-power-plants",
+      "date": "2026-04-04",
+      "title": "US vows heavier strikes, threatens bridges and power plants",
+      "why": "Labelled \"Hormuz blockade\", but it is about US threats to Iranian infrastructure, war-crime warnings and UN diplomacy."
+    },
+    {
+      "slug": "mediators-pursue-ceasefire-while-iran-nuclear-dispute-persists",
+      "date": "2026-04-17",
+      "title": "Mediators pursue ceasefire while Iran nuclear dispute persists",
+      "why": "Labelled \"Strait access\", but the story is ceasefire mediation stuck on nuclear suspension terms."
+    },
+    {
+      "slug": "oil-tops-100-as-gulf-shipping-stalls",
+      "date": "2026-04-29",
+      "title": "Oil tops $100 as Gulf shipping stalls",
+      "why": "Labelled \"Hormuz blockade\" with \"Gulf shipping stalls\" in the title, but it reports oil and petrol prices, inflation and the UAE leaving OPEC."
+    },
+    {
+      "slug": "us-strikes-iran-after-trump-declares-ceasefire-over",
+      "date": "2026-07-09",
+      "title": "US strikes Iran after Trump declares ceasefire over",
+      "why": "Labelled \"Hormuz\" and set near the strait, but it reports the end of the ceasefire and US strikes; the closure itself is reported on 12 July."
+    },
+    {
+      "slug": "iran-asks-houthis-to-close-route-if-us-hits-power",
+      "date": "2026-07-17",
+      "title": "Iran asks Houthis to close route if US hits power",
+      "why": "Shipping-chokepoint vocabulary, but the threat concerns the Bab el-Mandeb and the Red Sea, a separate route."
+    },
+    {
+      "slug": "us-hits-airport-bridges-and-railway-in-southern-iran",
+      "date": "2026-07-17",
+      "title": "US hits airport, bridges and railway in southern Iran",
+      "why": "Labelled \"Strait of Hormuz\", but it reports US strikes on an airport, bridges and a railway; the blockade is background."
+    },
+    {
+      "slug": "iran-controls-hormuz-and-holds-enriched-uranium-stockpile",
+      "date": "2026-08-05",
+      "title": "Iran controls Hormuz and holds enriched uranium stockpile",
+      "why": "\"Iran controls Hormuz\" in the title, but it is an analysis of Iran’s nuclear intentions and uranium stockpile."
+    },
+    {
+      "slug": "hormuz-crisis-exposes-weak-links-in-global-supply",
+      "date": "2026-10-01",
+      "title": "Hormuz crisis exposes weak links in global supply",
+      "why": "\"Hormuz crisis\" in the title, but it is about fuel reserves, shortages and energy security in importing countries."
+    },
+    {
+      "slug": "trump-puts-land-blockade-on-iran-in-effect",
+      "date": "2026-11-09",
+      "title": "Trump puts land blockade on Iran in effect",
+      "why": "Blockade vocabulary and a mention of reopening the strait, but \"Iron Gate\" blockades Iran’s land supply routes."
+    }
+  ],
+  "notes": "Boundary: entries report on passage through the strait itself. Optional entries are mainly about something else (war strikes, ultimatums, ceasefire talks, oil markets) but carry a substantive passage on the strait: a traffic figure, stranded ships, insurance, or a threat or strike whose stated purpose is reopening the strait or protecting ships in it. War, nuclear, price and Lebanon stories that only recap the closure in a clause are left out; the 15 most tempting are near misses. Start: the development begins with the 1 March IRGC \"de facto closed\" declaration. The 23 February explainer on drills that temporarily closed parts of the corridor is optional as a precursor; February drill and standoff stories are out. Same-event clusters: 13 and 14 April (US blockade order), 4 and 5 May (Project Freedom launch and first escorts) and 18 June (three stories on the deal reopening the strait). The earliest-published story of each event is marked as the turning point and the later same-event stories are routine; another story from the same cluster is an equally valid turning point. The 26 September offer and its 27 September rejection are two events and both are turning points. Our stories contradict each other on the 11 April reopening: \"iran-proposes-paid-passage-for-oil-and-gas-ships\" says Iran reopened the strait under the truce, while \"us-and-iran-meet-as-oil-disruption-roils-markets\" (same day) says the truce halted strikes \"but not Iran’s blockade\". The 19 April story confirms a brief reopening. Stranded ships disagree: about 2,000 ships (1 and 3 April, 24 May) versus more than 600 (13 April) and 900+ (4 May), with the same 20,000 seafarers cited for both 2,000 and 600 ships. Earlier counts (400+ vessels on 12 March, about 500 tankers on 18 March) are smaller and partly tankers only. Traffic disagrees too: \"us-strikes-iran-as-shipping-falls-by-90\" (6 November) says transits are down more than 90% since February, while six days later two stories citing UKMTO put traffic about 65% below prewar. \"us-and-israel-prepare-for-renewed-strikes\" (25 October) says Middle East oil exports have returned to pre-war levels and \"iran-charges-ships-to-cross-the-world-s-key-oil-route\" (7 November) puts Gulf exports at about 86% of pre-war: those count oil exports (partly via bypass routes), not transits, so they are not recorded as traffic values. Early traffic values (10, 12 and 29 March) count tanker traffic only and are marked matches false. \"iran-tactics-paralyze-asian-oil-and-gas-flows\" (12 May) gives the 95% collapse \"within weeks\" of the start; asOf is the story date because the text gives no date. Daily transits: \"shipping-cuts-push-fuel-prices-and-food-costs-higher\" gives a range (\"as few as two to 16\"), recorded as under 16. \"u-s-will-keep-ships-to-halt-iran-oil-transit\" (14 August) says transits fell \"to single digits\", which is not a number and is not recorded. Not tracked: oil flows lost (8–20 million barrels a day) appear mostly in energy-market near misses and in entries with inconsistent definitions; counts of ships attacked use different windows (about 20 vessels by 12 March, over 30 by 23 July, at least 27 in October, five in 48 hours). Tolls range from $1 a barrel to $2 million per vessel; Trump’s 20% fee on strait cargo (16 July) is reported only once. Open on 16 November 2026: no story reports the end event; the 14 November story still has traffic about 65% below normal."
+}

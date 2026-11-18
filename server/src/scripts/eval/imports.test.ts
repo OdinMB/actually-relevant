@@ -74,7 +74,29 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/researchFilter.js': '*',
   'services/researchChecks.js': '*',
   'services/researchCopying.js': '*',
+  // The text readers see of an applied research version (pure): eval:overviews finds the answer keys' quotes in it.
+  'services/researchedStory.js': ['storedResearchText'],
+  // Production's story context steps, so the `context` step of eval:overviews runs what the job
+  // runs; each held below to doing no I/O of its own.
+  'services/storyContextPipeline.js': '*',
+  'services/storyContextChecks.js': '*',
+  'services/storyContextSources.js': '*',
+  'services/storyContextPlacement.js': '*',
+  'services/storyContextRecords.js': '*',
+  'services/storyContextServed.js': '*',
+  // One story's input, loaded with SELECTs through the client it is given (held below): the eval's read-only session.
+  'services/storyContextInput.js': ['loadContextInput'],
 }
+
+/** The story context modules the eval imports whole: no database client, model client, HTTP or retry of their own (hashing is fine). */
+const CONTEXT_SERVICE_MODULES = [
+  'storyContextPipeline.ts',
+  'storyContextChecks.ts',
+  'storyContextSources.ts',
+  'storyContextPlacement.ts',
+  'storyContextRecords.ts',
+  'storyContextServed.ts',
+]
 
 /** The pure modules the eval may import whole: config and prompt types only. */
 const PURE_SERVICE_MODULES = ['promptInputs.ts']
@@ -87,7 +109,22 @@ const WITH_RETRY_ALLOWED: string[] = []
 
 describe('eval harness has no write path', () => {
   it('finds the eval source files', () => {
-    expect(files.map(f => f.name)).toEqual(expect.arrayContaining(['fixtures.ts', 'readOnlyDb.ts', 'models.ts', 'run.ts', 'suites/preassess.ts']))
+    expect(files.map(f => f.name)).toEqual(
+      expect.arrayContaining([
+        'fixtures.ts',
+        'readOnlyDb.ts',
+        'models.ts',
+        'run.ts',
+        'suites/preassess.ts',
+        'overviews.ts',
+        'overviews/factCheck.ts',
+        'overviews/keyCheck.ts',
+        'overviews/gapKeyCheck.ts',
+        'overviews/gapDraft.ts',
+        'overviews/contextInputs.ts',
+        'overviews/context.ts',
+      ]),
+    )
   })
 
   it('imports @prisma/client only from the two database modules, and never lib/prisma', () => {
@@ -141,6 +178,36 @@ describe('eval harness has no write path', () => {
       ]
     })
     expect(offenders).toEqual([])
+  })
+
+  it('imports whole only story context modules that bring no client, HTTP or retry of their own', () => {
+    expect(CONTEXT_SERVICE_MODULES.map(name => `services/${name.replace(/\.ts$/, '.js')}`)).toEqual(
+      Object.entries(ALLOWED_SERVICE_IMPORTS)
+        .filter(([suffix, names]) => names === '*' && suffix.includes('/storyContext'))
+        .map(([suffix]) => suffix),
+    )
+    const ioModule =
+      /lib\/prisma\.js$|^@prisma\/client$|^\.\/llm\.js$|lib\/retry\.js$|^axios$|lib\/tavily\.js$|storyContextSearch\.js$|storyContextRuns\.js$|^node:(?!crypto$)/
+    const io = /\bprisma\.|\brateLimitDelay\b|\bwithRetry\b|\$executeRaw|\$queryRaw|\bwithStructuredOutput\b|\bfetch\(/
+    const offenders = CONTEXT_SERVICE_MODULES.flatMap(name => {
+      const text = stripComments(readFileSync(join(ROOT, '../../services', name), 'utf8'))
+      return [
+        ...importsOf(text)
+          .filter(i => !i.typeOnly && ioModule.test(i.specifier))
+          .map(i => `${name}: ${i.specifier}`),
+        ...(io.test(text) ? [`${name}: ${io.exec(text)?.[0]}`] : []),
+      ]
+    })
+    expect(offenders).toEqual([])
+  })
+
+  it('loads story context input with SELECTs only, through the client it is given', () => {
+    const text = stripComments(readFileSync(join(ROOT, '../../services/storyContextInput.ts'), 'utf8'))
+    expect(importsOf(text).filter(i => /lib\/prisma(\.js)?$|\.\/llm\.js$|lib\/tavily\.js$/.test(i.specifier))).toEqual([])
+    expect(/\bprisma\.|\$executeRaw|\$queryRawUnsafe/.test(text)).toBe(false)
+    const queries = [...text.matchAll(/\$queryRaw<[^`]*`([^`]*)`/g)].map(m => m[1]!.trim())
+    expect(queries.length).toBeGreaterThan(0)
+    expect(queries.filter(q => !/^SELECT\b/.test(q))).toEqual([])
   })
 
   it('never calls the rate limiter, withRetry, or a Prisma write', () => {

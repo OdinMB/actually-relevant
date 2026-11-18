@@ -1,0 +1,2064 @@
+{
+  "schemaVersion": 1,
+  "id": "ebola-drc-2026",
+  "title": "Ebola outbreak in eastern DR Congo",
+  "charter": {
+    "in": "The Ebola disease outbreak caused by Bundibugyo virus that DR Congo declared on 15 May 2026 (WHO declared it a public health emergency of international concern on 17 May). It began in Ituri, spread through eastern, northern and northwestern provinces, and produced linked cases in Uganda, Kenya, Nigeria and France. Stories belong when they report on the outbreak itself: its counts and spread, the response (treatment, tracing, vaccines and trials, funding appeals for it), setbacks such as strikes and attacks on responders, linked cases abroad, or people affected.",
+    "out": [
+      "Global health funding cuts, USAID's dismantling and WHO budget stories that cite this outbreak only as an example",
+      "Pandemic preparedness reports, the WHO Pandemic Agreement (PABS annex) talks and UN pandemic declarations",
+      "Other outbreaks in the same places and months: cholera in DR Congo and Nigeria, polio, bird flu",
+      "The eastern Congo armed conflict and peace process (M23, AFC, MONUSCO) where it is not reported as hampering the Ebola response",
+      "Ebola vaccine or biosecurity research not tied to this outbreak"
+    ],
+    "endEvent": "DR Congo's health authorities and WHO declare the Bundibugyo outbreak over. Uganda declaring its own linked outbreak over (reported 24 October 2026), or any other country clearing its imported cases, does not end it."
+  },
+  "closed": null,
+  "figures": [
+    {
+      "key": "cases",
+      "name": "Cases",
+      "unit": "people",
+      "definition": "Confirmed Ebola (Bundibugyo virus) cases, cumulative since the outbreak was declared on 15 May 2026, all affected countries; nearly all are in DR Congo, so a DR Congo total and an all-country total both match. Most of our stories say 'confirmed cases'; stories that say 'cases', 'reported cases', 'recorded cases' or 'people infected' give the same running tally and also match. Not counted: suspected cases, early totals that include suspected cases, and counts for one country other than DR Congo, one place, or health workers only.",
+      "cumulative": true,
+      "variants": [
+        "suspected cases (246 on 17 May, nearly 750 on 23 May, nearly 1,000 on 29 May)",
+        "early total including suspected cases (over 500 by 19 May)",
+        "one country other than DR Congo (Uganda: 2, 7, 19, 20; Kenya: 9)",
+        "one place (Beni health zone)",
+        "health workers only (75 to 167)",
+        "DR Congo government count quoted by CIDRAP on 2 November (6,100), far below the running total"
+      ]
+    },
+    {
+      "key": "deaths",
+      "name": "Deaths",
+      "unit": "people",
+      "definition": "Deaths among confirmed Ebola (Bundibugyo virus) cases, cumulative since the outbreak was declared on 15 May 2026, all affected countries (nearly all in DR Congo), as WHO, Africa CDC, the UN or DR Congo report them. Not counted: suspected deaths, early totals that include suspected deaths, deaths in one place or one reporting window, and health-worker deaths only.",
+      "cumulative": true,
+      "variants": [
+        "suspected deaths (about 80 on 17 May, over 220 on 29 May)",
+        "early total including suspected deaths (130 by 19 May)",
+        "one place (Kigonze camp, Beni health zone)",
+        "health workers only (4 to 50)",
+        "deaths reported since a date (512 since 21 October)",
+        "DR Congo government count quoted by CIDRAP on 2 November (2,950), far below the running total",
+        "UN 'more than 5,000' and Africa CDC 'more than 5,400' in mid-November: the same count, rounded differently"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "slug": "who-declares-international-emergency-after-deaths-in-drc-and-uganda",
+      "date": "2026-05-17",
+      "title": "WHO declares international emergency after deaths in DRC and Uganda",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 8,
+          "approx": "exact",
+          "asOf": "2026-05-17",
+          "matches": true,
+          "countedAs": null,
+          "quote": "eight lab-confirmed cases"
+        },
+        {
+          "figure": "cases",
+          "value": 246,
+          "approx": "exact",
+          "asOf": "2026-05-17",
+          "matches": false,
+          "countedAs": "suspected cases",
+          "quote": "246 suspected cases"
+        },
+        {
+          "figure": "deaths",
+          "value": 80,
+          "approx": "about",
+          "asOf": "2026-05-17",
+          "matches": false,
+          "countedAs": "suspected deaths",
+          "quote": "about 80 suspected deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 4,
+          "approx": "at_least",
+          "asOf": "2026-05-17",
+          "matches": false,
+          "countedAs": "health-worker deaths only",
+          "quote": "At least four healthcare worker deaths"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "DR Congo",
+          "status": "outbreak declared a public health emergency of international concern (PHEIC) by WHO",
+          "asOf": "2026-05-17"
+        },
+        {
+          "subject": "Uganda",
+          "status": "linked cases confirmed (Kampala)",
+          "asOf": "2026-05-17"
+        }
+      ],
+      "why": "WHO's PHEIC declaration is the development's opening event and its first count."
+    },
+    {
+      "slug": "who-raises-national-risk-to-very-high-in-eastern-drc",
+      "date": "2026-05-23",
+      "title": "WHO raises national risk to 'very high' in eastern DRC",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 82,
+          "approx": "exact",
+          "asOf": "2026-05-23",
+          "matches": true,
+          "countedAs": null,
+          "quote": "82 confirmed cases and seven deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 7,
+          "approx": "exact",
+          "asOf": "2026-05-23",
+          "matches": true,
+          "countedAs": null,
+          "quote": "82 confirmed cases and seven deaths"
+        },
+        {
+          "figure": "cases",
+          "value": 750,
+          "approx": "about",
+          "asOf": "2026-05-23",
+          "matches": false,
+          "countedAs": "suspected cases",
+          "quote": "nearly 750 suspected cases"
+        },
+        {
+          "figure": "cases",
+          "value": 2,
+          "approx": "exact",
+          "asOf": "2026-05-23",
+          "matches": false,
+          "countedAs": "Uganda only",
+          "quote": "two cases reached Uganda"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "DR Congo",
+          "status": "WHO raised the national risk to 'very high'; global risk assessed as low",
+          "asOf": "2026-05-23"
+        }
+      ],
+      "why": "WHO raises DR Congo's national risk to very high and the UN mobilizes $60 million as confirmed cases reach 82."
+    },
+    {
+      "slug": "goma-cases-surge-past-500-after-who-emergency-call",
+      "date": "2026-05-25",
+      "title": "Goma cases surge past 500 after WHO emergency call",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 500,
+          "approx": "at_least",
+          "asOf": "2026-05-19",
+          "matches": false,
+          "countedAs": "all recorded cases, evidently including suspected ones (82 were confirmed on 23 May)",
+          "quote": "over 500 cases and 130 deaths by 19 May"
+        },
+        {
+          "figure": "deaths",
+          "value": 130,
+          "approx": "exact",
+          "asOf": "2026-05-19",
+          "matches": false,
+          "countedAs": "all recorded deaths, evidently including suspected ones (7 confirmed deaths on 23 May)",
+          "quote": "over 500 cases and 130 deaths by 19 May"
+        }
+      ],
+      "statuses": [],
+      "why": "Explains why the outbreak will be hard to contain and gives WHO's early count; mostly repeats the known situation."
+    },
+    {
+      "slug": "who-warns-of-ebola-and-conflict-colliding-in-eastern-congo",
+      "date": "2026-05-29",
+      "title": "WHO warns of Ebola and conflict colliding in eastern Congo",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 1000,
+          "approx": "about",
+          "asOf": "2026-05-29",
+          "matches": false,
+          "countedAs": "suspected cases",
+          "quote": "nearly 1,000 suspected cases"
+        },
+        {
+          "figure": "deaths",
+          "value": 220,
+          "approx": "at_least",
+          "asOf": "2026-05-29",
+          "matches": false,
+          "countedAs": "suspected deaths",
+          "quote": "over 220 suspected deaths"
+        },
+        {
+          "figure": "cases",
+          "value": 7,
+          "approx": "exact",
+          "asOf": "2026-05-29",
+          "matches": false,
+          "countedAs": "Uganda only",
+          "quote": "seven confirmed linked cases in Uganda"
+        }
+      ],
+      "statuses": [],
+      "why": "WHO update on the outbreak amid conflict; Uganda closes its border; suspected counts only."
+    },
+    {
+      "slug": "dr-congo-reports-nearly-600-infections-and-115-deaths",
+      "date": "2026-06-10",
+      "title": "DR Congo reports nearly 600 infections and 115 deaths",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 598,
+          "approx": "about",
+          "asOf": "2026-06-10",
+          "matches": true,
+          "countedAs": null,
+          "quote": "about 598 confirmed Bundibugyo cases"
+        },
+        {
+          "figure": "deaths",
+          "value": 115,
+          "approx": "exact",
+          "asOf": "2026-06-10",
+          "matches": true,
+          "countedAs": null,
+          "quote": "115 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Count update: three provinces, weak contact tracing, US travel restrictions."
+    },
+    {
+      "slug": "who-says-unchecked-ebola-circulates-in-northeastern-drc",
+      "date": "2026-06-18",
+      "title": "WHO says unchecked Ebola circulates in northeastern DRC",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 708,
+          "approx": "at_least",
+          "asOf": "2026-06-18",
+          "matches": true,
+          "countedAs": null,
+          "quote": "at least 708 confirmed cases and 141 deaths across the DRC and Uganda"
+        },
+        {
+          "figure": "deaths",
+          "value": 141,
+          "approx": "exact",
+          "asOf": "2026-06-18",
+          "matches": true,
+          "countedAs": null,
+          "quote": "at least 708 confirmed cases and 141 deaths across the DRC and Uganda"
+        }
+      ],
+      "statuses": [],
+      "why": "Tedros's visit to the outbreak area: count update and contact tracing at about 28%."
+    },
+    {
+      "slug": "75-health-workers-infected-as-drc-cases-surge",
+      "date": "2026-06-20",
+      "title": "75 health workers infected as DRC cases surge",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 896,
+          "approx": "about",
+          "asOf": "2026-06-20",
+          "matches": true,
+          "countedAs": null,
+          "quote": "infected about 896 people and killed 232"
+        },
+        {
+          "figure": "deaths",
+          "value": 232,
+          "approx": "exact",
+          "asOf": "2026-06-20",
+          "matches": true,
+          "countedAs": null,
+          "quote": "infected about 896 people and killed 232"
+        },
+        {
+          "figure": "cases",
+          "value": 75,
+          "approx": "exact",
+          "asOf": "2026-06-20",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "75 health workers infected"
+        },
+        {
+          "figure": "deaths",
+          "value": 17,
+          "approx": "exact",
+          "asOf": "2026-06-20",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "17 medics dead"
+        }
+      ],
+      "statuses": [],
+      "why": "Count update with health-worker infections and funding gaps."
+    },
+    {
+      "slug": "dozens-die-in-congo-camp-as-testing-refused",
+      "date": "2026-06-21",
+      "title": "Dozens die in Congo camp as testing refused",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 30,
+          "approx": "at_least",
+          "asOf": "2026-06-21",
+          "matches": false,
+          "countedAs": "deaths in Kigonze displaced-persons camp since May, not all tested for Ebola",
+          "quote": "At least 30 people have died since May in Kigonze displaced-persons camp"
+        },
+        {
+          "figure": "cases",
+          "value": 900,
+          "approx": "about",
+          "asOf": "2026-06-21",
+          "matches": true,
+          "countedAs": null,
+          "quote": "over 90% of nearly 900"
+        }
+      ],
+      "statuses": [],
+      "why": "Suspected undetected spread in a displacement camp in the outbreak zone."
+    },
+    {
+      "slug": "conflict-blocks-health-teams-risking-regional-ebola-spread",
+      "date": "2026-06-24",
+      "title": "Conflict blocks health teams, risking regional Ebola spread",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 1003,
+          "approx": "exact",
+          "asOf": "2026-06-24",
+          "matches": true,
+          "countedAs": null,
+          "quote": "1,003 confirmed cases (19 in Uganda)"
+        },
+        {
+          "figure": "cases",
+          "value": 19,
+          "approx": "exact",
+          "asOf": "2026-06-24",
+          "matches": false,
+          "countedAs": "Uganda only",
+          "quote": "1,003 confirmed cases (19 in Uganda)"
+        }
+      ],
+      "statuses": [],
+      "why": "Analysis of how conflict blocks this outbreak's response, with a count update."
+    },
+    {
+      "slug": "who-flags-6-5-billion-exposed-to-deadly-air-pollution",
+      "date": "2026-07-03",
+      "title": "WHO flags 6.5 billion exposed to deadly air pollution",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 1406,
+          "approx": "exact",
+          "asOf": "2026-07-03",
+          "matches": true,
+          "countedAs": null,
+          "quote": "1,406 confirmed cases and 438 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 438,
+          "approx": "exact",
+          "asOf": "2026-07-03",
+          "matches": true,
+          "countedAs": null,
+          "quote": "1,406 confirmed cases and 438 deaths"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Uganda",
+          "status": "no new cases reported",
+          "asOf": "2026-07-03"
+        }
+      ],
+      "why": "Borderline: a WHO roundup led by air pollution that gives one paragraph to an Ebola update with counts."
+    },
+    {
+      "slug": "health-workers-walk-off-over-unpaid-wages",
+      "date": "2026-07-09",
+      "title": "Health workers walk off over unpaid wages",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 1708,
+          "approx": "exact",
+          "asOf": "2026-07-09",
+          "matches": true,
+          "countedAs": null,
+          "quote": "recorded 1,708 cases and 580 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 580,
+          "approx": "exact",
+          "asOf": "2026-07-09",
+          "matches": true,
+          "countedAs": null,
+          "quote": "recorded 1,708 cases and 580 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "First strike by unpaid health workers at the epicentre, as treatment centres near capacity."
+    },
+    {
+      "slug": "who-drc-cases-may-be-two-to-four-times-higher",
+      "date": "2026-07-15",
+      "title": "WHO: DRC cases may be two-to-four times higher",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 1963,
+          "approx": "exact",
+          "asOf": "2026-07-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "officially 1,963 cases and 719 deaths as of July 12"
+        },
+        {
+          "figure": "deaths",
+          "value": 719,
+          "approx": "exact",
+          "asOf": "2026-07-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "officially 1,963 cases and 719 deaths as of July 12"
+        }
+      ],
+      "statuses": [],
+      "why": "WHO says the true scale may be two to four times the official count; four provinces affected."
+    },
+    {
+      "slug": "drc-hospitals-overwhelmed-as-cases-surge",
+      "date": "2026-07-16",
+      "title": "DRC hospitals overwhelmed as cases surge",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 2011,
+          "approx": "about",
+          "asOf": "2026-07-16",
+          "matches": true,
+          "countedAs": null,
+          "quote": "about 2,011 cases and 754 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 754,
+          "approx": "exact",
+          "asOf": "2026-07-16",
+          "matches": true,
+          "countedAs": null,
+          "quote": "about 2,011 cases and 754 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Two-month count update: the virus outpaces the response."
+    },
+    {
+      "slug": "drc-outbreak-reaches-2-124-cases-exposing-global-gaps",
+      "date": "2026-07-21",
+      "title": "DRC outbreak reaches 2,124 cases, exposing global gaps",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 2124,
+          "approx": "exact",
+          "asOf": "2026-07-15",
+          "matches": true,
+          "countedAs": null,
+          "quote": "2,124 confirmed cases and 828 deaths (as of Jul 15)"
+        },
+        {
+          "figure": "deaths",
+          "value": 828,
+          "approx": "exact",
+          "asOf": "2026-07-15",
+          "matches": true,
+          "countedAs": null,
+          "quote": "2,124 confirmed cases and 828 deaths (as of Jul 15)"
+        }
+      ],
+      "statuses": [],
+      "why": "MSF commentary on this outbreak: fastest-growing Ebola event recorded, no approved tools for the strain."
+    },
+    {
+      "slug": "dr-congo-cases-top-2-400-amid-insecurity",
+      "date": "2026-07-22",
+      "title": "DR Congo cases top 2,400 amid insecurity",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 2423,
+          "approx": "exact",
+          "asOf": "2026-07-19",
+          "matches": true,
+          "countedAs": null,
+          "quote": "2,423 confirmed cases and 967 deaths (as of 19 July)"
+        },
+        {
+          "figure": "deaths",
+          "value": 967,
+          "approx": "exact",
+          "asOf": "2026-07-19",
+          "matches": true,
+          "countedAs": null,
+          "quote": "2,423 confirmed cases and 967 deaths (as of 19 July)"
+        }
+      ],
+      "statuses": [],
+      "why": "WHO count update with local signs of stabilization."
+    },
+    {
+      "slug": "u-s-imposes-new-penalties-over-alleged-chemical-weapons-use",
+      "date": "2026-07-22",
+      "title": "U.S. imposes new penalties over alleged chemical-weapons use",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 2344,
+          "approx": "exact",
+          "asOf": "2026-07-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "2,344 confirmed cases and at least 930 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 930,
+          "approx": "at_least",
+          "asOf": "2026-07-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "2,344 confirmed cases and at least 930 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Borderline: an Africa news roundup led by Sudan sanctions with one Ebola item and counts."
+    },
+    {
+      "slug": "death-toll-tops-1-300-as-rare-ebola-spreads-fast",
+      "date": "2026-07-26",
+      "title": "Death toll tops 1,300 as rare Ebola spreads fast",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "science",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 1300,
+          "approx": "at_least",
+          "asOf": "2026-07-26",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed more than 1,300 people"
+        },
+        {
+          "figure": "cases",
+          "value": 3000,
+          "approx": "about",
+          "asOf": "2026-07-26",
+          "matches": true,
+          "countedAs": null,
+          "quote": "nearly 3,000 confirmed cases"
+        },
+        {
+          "figure": "cases",
+          "value": 100,
+          "approx": "at_least",
+          "asOf": "2026-07-26",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "Over 100 health workers have been infected and about 35 have died"
+        },
+        {
+          "figure": "deaths",
+          "value": 35,
+          "approx": "about",
+          "asOf": "2026-07-26",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "Over 100 health workers have been infected and about 35 have died"
+        }
+      ],
+      "statuses": [],
+      "why": "First experimental Bundibugyo vaccine trial (Oxford) has started; deaths rose more than 40% in five days."
+    },
+    {
+      "slug": "dr-congo-reports-3-000-confirmed-cases-and-1-354-deaths",
+      "date": "2026-07-27",
+      "title": "DR Congo reports 3,000 confirmed cases and 1,354 deaths",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 3000,
+          "approx": "at_least",
+          "asOf": "2026-07-27",
+          "matches": true,
+          "countedAs": null,
+          "quote": "confirmed Ebola cases have passed 3,000, with 1,354 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 1354,
+          "approx": "exact",
+          "asOf": "2026-07-27",
+          "matches": true,
+          "countedAs": null,
+          "quote": "confirmed Ebola cases have passed 3,000, with 1,354 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Official count update: five provinces, a health-worker strike, a vaccine trial under way."
+    },
+    {
+      "slug": "eastern-congo-deaths-top-1-700-as-response-falters",
+      "date": "2026-08-05",
+      "title": "Eastern Congo deaths top 1,700 as response falters",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 3802,
+          "approx": "exact",
+          "asOf": "2026-08-05",
+          "matches": true,
+          "countedAs": null,
+          "quote": "3,802 cases and 1,707 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 1707,
+          "approx": "exact",
+          "asOf": "2026-08-05",
+          "matches": true,
+          "countedAs": null,
+          "quote": "3,802 cases and 1,707 deaths"
+        },
+        {
+          "figure": "cases",
+          "value": 100,
+          "approx": "at_least",
+          "asOf": "2026-08-05",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "Over 100 health workers infected"
+        }
+      ],
+      "statuses": [],
+      "why": "Count update: contact tracing failing, most cases in Ituri."
+    },
+    {
+      "slug": "drc-cases-top-4-000-as-vaccine-trial-urged",
+      "date": "2026-08-08",
+      "title": "DRC cases top 4,000 as vaccine trial urged",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 4053,
+          "approx": "exact",
+          "asOf": "2026-08-08",
+          "matches": true,
+          "countedAs": null,
+          "quote": "4,053 reported cases and 1,850 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 1850,
+          "approx": "exact",
+          "asOf": "2026-08-08",
+          "matches": true,
+          "countedAs": null,
+          "quote": "4,053 reported cases and 1,850 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "WHO experts recommend a full trial of the licensed Ervebo vaccine; the outbreak is now the world's second-largest."
+    },
+    {
+      "slug": "drc-outbreak-reveals-diagnostic-and-vaccine-blind-spots",
+      "date": "2026-08-12",
+      "title": "DRC outbreak reveals diagnostic and vaccine blind spots",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of how Zaire-focused tests and vaccines failed in this outbreak; no new counts."
+    },
+    {
+      "slug": "dr-congo-deaths-top-2-000-as-scientists-trace-virus-origin",
+      "date": "2026-08-14",
+      "title": "DR Congo deaths top 2,000 as scientists trace virus origin",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "science",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 2011,
+          "approx": "exact",
+          "asOf": "2026-08-14",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed 2,011 people among 4,381 confirmed cases since May"
+        },
+        {
+          "figure": "cases",
+          "value": 4381,
+          "approx": "exact",
+          "asOf": "2026-08-14",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed 2,011 people among 4,381 confirmed cases since May"
+        }
+      ],
+      "statuses": [],
+      "why": "Researchers identify a previously unrecorded Bundibugyo variant from a fresh animal spillover; deaths pass 2,000."
+    },
+    {
+      "slug": "4-665-cases-and-2-184-deaths-reported-in-six-provinces",
+      "date": "2026-08-16",
+      "title": "4,665 cases and 2,184 deaths reported in six provinces",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 4665,
+          "approx": "exact",
+          "asOf": "2026-08-16",
+          "matches": true,
+          "countedAs": null,
+          "quote": "4,665 confirmed cases and 2,184 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 2184,
+          "approx": "exact",
+          "asOf": "2026-08-16",
+          "matches": true,
+          "countedAs": null,
+          "quote": "4,665 confirmed cases and 2,184 deaths"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "France",
+          "status": "imported case detected, no onward transmission",
+          "asOf": "2026-08-16"
+        }
+      ],
+      "why": "Spread from one health zone to 54 across six provinces, and the first report of an imported case in France."
+    },
+    {
+      "slug": "motorbike-riders-recruited-to-track-cases-and-boost-response",
+      "date": "2026-08-19",
+      "title": "Motorbike riders recruited to track cases and boost response",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 5000,
+          "approx": "at_least",
+          "asOf": "2026-08-19",
+          "matches": true,
+          "countedAs": null,
+          "quote": "surpassed 5,000 confirmed cases and 2,325 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 2325,
+          "approx": "exact",
+          "asOf": "2026-08-19",
+          "matches": true,
+          "countedAs": null,
+          "quote": "surpassed 5,000 confirmed cases and 2,325 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Response update: WHO recruits motorbike riders for surveillance and adds beds and staff."
+    },
+    {
+      "slug": "dr-congo-to-get-70-000-doses-as-ebola-deaths-rise",
+      "date": "2026-08-21",
+      "title": "DR Congo to get 70,000 doses as Ebola deaths rise",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "response",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 5208,
+          "approx": "exact",
+          "asOf": "2026-08-21",
+          "matches": true,
+          "countedAs": null,
+          "quote": "5,208 confirmed cases and about 2,476 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 2476,
+          "approx": "about",
+          "asOf": "2026-08-21",
+          "matches": true,
+          "countedAs": null,
+          "quote": "5,208 confirmed cases and about 2,476 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "WHO allocates 70,000 Ervebo doses (20,000 for a trial, 50,000 for health workers) and Gavi pledges $13m."
+    },
+    {
+      "slug": "funding-gap-risks-response-in-eastern-dr-congo",
+      "date": "2026-08-22",
+      "title": "Funding gap risks response in eastern DR Congo",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 5290,
+          "approx": "exact",
+          "asOf": "2026-08-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "infected 5,290 people and killed 2,516 since 15 May"
+        },
+        {
+          "figure": "deaths",
+          "value": 2516,
+          "approx": "exact",
+          "asOf": "2026-08-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "infected 5,290 people and killed 2,516 since 15 May"
+        },
+        {
+          "figure": "cases",
+          "value": 160,
+          "approx": "at_least",
+          "asOf": "2026-08-22",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "At least 160 frontline workers infected and 43 dead"
+        },
+        {
+          "figure": "deaths",
+          "value": 43,
+          "approx": "exact",
+          "asOf": "2026-08-22",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "At least 160 frontline workers infected and 43 dead"
+        }
+      ],
+      "statuses": [],
+      "why": "UN responders warn of exponential growth and that funding will run out within weeks."
+    },
+    {
+      "slug": "un-warns-of-mounting-ebola-cases-needs-1-1-billion",
+      "date": "2026-08-28",
+      "title": "UN warns of mounting Ebola cases, needs $1.1 billion",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "money",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 5600,
+          "approx": "at_least",
+          "asOf": "2026-08-28",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 5,600 cases and 2,700 deaths since mid-May"
+        },
+        {
+          "figure": "deaths",
+          "value": 2700,
+          "approx": "at_least",
+          "asOf": "2026-08-28",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 5,600 cases and 2,700 deaths since mid-May"
+        }
+      ],
+      "statuses": [],
+      "why": "The UN asks for $1.1 billion with the response only 48% funded; Guterres condemns indifference."
+    },
+    {
+      "slug": "drc-cases-surge-to-nearly-5-800-across-60-zones",
+      "date": "2026-08-29",
+      "title": "DRC cases surge to nearly 5,800 across 60 zones",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 5794,
+          "approx": "exact",
+          "asOf": "2026-08-29",
+          "matches": true,
+          "countedAs": null,
+          "quote": "5,794 confirmed cases and 2,786 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 2786,
+          "approx": "exact",
+          "asOf": "2026-08-29",
+          "matches": true,
+          "countedAs": null,
+          "quote": "5,794 confirmed cases and 2,786 deaths"
+        },
+        {
+          "figure": "cases",
+          "value": 122,
+          "approx": "exact",
+          "asOf": "2026-08-29",
+          "matches": false,
+          "countedAs": "Beni health zone only",
+          "quote": "Beni has 122 confirmed cases and 87 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 87,
+          "approx": "exact",
+          "asOf": "2026-08-29",
+          "matches": false,
+          "countedAs": "Beni health zone only",
+          "quote": "Beni has 122 confirmed cases and 87 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Count update: two new health zones, 60 in all."
+    },
+    {
+      "slug": "drc-deaths-top-3-000-as-cases-surge-across-provinces",
+      "date": "2026-09-05",
+      "title": "DRC deaths top 3,000 as cases surge across provinces",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 3000,
+          "approx": "at_least",
+          "asOf": "2026-09-05",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed more than 3,000 of 6,250 confirmed cases"
+        },
+        {
+          "figure": "cases",
+          "value": 6250,
+          "approx": "exact",
+          "asOf": "2026-09-05",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed more than 3,000 of 6,250 confirmed cases"
+        }
+      ],
+      "statuses": [],
+      "why": "Africa CDC count update: deaths pass 3,000, contact tracing far below target."
+    },
+    {
+      "slug": "africa-s-systems-contain-latest-ebola-outbreak-despite-funding-squeeze",
+      "date": "2026-09-06",
+      "title": "Africa's systems contain latest Ebola outbreak despite funding squeeze",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: an opinion piece on Africa's preparedness system that uses this outbreak as its case but reports no outbreak facts beyond the declaration date."
+    },
+    {
+      "slug": "second-largest-ebola-outbreak-now-reaches-drc-s-northwest-province",
+      "date": "2026-09-12",
+      "title": "Second-largest Ebola outbreak now reaches DRC's northwest province",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 6942,
+          "approx": "exact",
+          "asOf": "2026-09-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "infected 6,942 people and killed 3,349"
+        },
+        {
+          "figure": "deaths",
+          "value": 3349,
+          "approx": "exact",
+          "asOf": "2026-09-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "infected 6,942 people and killed 3,349"
+        }
+      ],
+      "statuses": [],
+      "why": "The virus jumps to the previously unaffected northwest province of Sud-Ubangi via a traveler."
+    },
+    {
+      "slug": "61-health-zones-report-6-757-cases-and-3-267-deaths",
+      "date": "2026-09-14",
+      "title": "61 health zones report 6,757 cases and 3,267 deaths",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 6757,
+          "approx": "exact",
+          "asOf": "2026-09-07",
+          "matches": true,
+          "countedAs": null,
+          "quote": "6,757 confirmed cases and 3,267 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 3267,
+          "approx": "exact",
+          "asOf": "2026-09-07",
+          "matches": true,
+          "countedAs": null,
+          "quote": "6,757 confirmed cases and 3,267 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "WHO count update as of 7 September: 61 health zones in six provinces."
+    },
+    {
+      "slug": "congo-outbreak-exposes-pandemic-response-gaps",
+      "date": "2026-09-19",
+      "title": "Congo outbreak exposes pandemic response gaps",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 3500,
+          "approx": "at_least",
+          "asOf": "2026-09-19",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed over 3,500 people"
+        }
+      ],
+      "statuses": [],
+      "why": "Borderline: a Foreign Affairs essay that opens on this outbreak but argues mainly about global biosecurity, lab and AI risks."
+    },
+    {
+      "slug": "dr-congo-gives-frontline-workers-ervebo-doses-as-deaths-rise",
+      "date": "2026-09-20",
+      "title": "DR Congo gives frontline workers Ervebo doses as deaths rise",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "response",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 7541,
+          "approx": "about",
+          "asOf": "2026-09-20",
+          "matches": true,
+          "countedAs": null,
+          "quote": "infected roughly 7,541 people and killed 3,639"
+        },
+        {
+          "figure": "deaths",
+          "value": 3639,
+          "approx": "exact",
+          "asOf": "2026-09-20",
+          "matches": true,
+          "countedAs": null,
+          "quote": "infected roughly 7,541 people and killed 3,639"
+        }
+      ],
+      "statuses": [],
+      "why": "Vaccination of health workers with Ervebo begins (50,000 planned)."
+    },
+    {
+      "slug": "insecurity-threatens-control-as-drc-deaths-pass-3-900",
+      "date": "2026-09-29",
+      "title": "Insecurity threatens control as DRC deaths pass 3,900",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 8067,
+          "approx": "exact",
+          "asOf": "2026-09-29",
+          "matches": true,
+          "countedAs": null,
+          "quote": "8,067 confirmed cases and 3,901 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 3901,
+          "approx": "exact",
+          "asOf": "2026-09-29",
+          "matches": true,
+          "countedAs": null,
+          "quote": "8,067 confirmed cases and 3,901 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Count update with insecurity at Kigonze camp; cases falling in Ituri, rising in North Kivu."
+    },
+    {
+      "slug": "congo-death-toll-tops-4-000-as-treatment-site-burns",
+      "date": "2026-10-04",
+      "title": "Congo death toll tops 4,000 as treatment site burns",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 4018,
+          "approx": "exact",
+          "asOf": "2026-10-04",
+          "matches": true,
+          "countedAs": null,
+          "quote": "4,018 deaths among 8,300 recorded cases since May 15"
+        },
+        {
+          "figure": "cases",
+          "value": 8300,
+          "approx": "exact",
+          "asOf": "2026-10-04",
+          "matches": true,
+          "countedAs": null,
+          "quote": "4,018 deaths among 8,300 recorded cases since May 15"
+        },
+        {
+          "figure": "deaths",
+          "value": 50,
+          "approx": "at_least",
+          "asOf": "2026-10-04",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "at least 50 health workers have died after contracting Ebola"
+        }
+      ],
+      "statuses": [],
+      "why": "Soldiers destroy a transit centre, forcing 19,000 displaced people to flee, as deaths pass 4,000."
+    },
+    {
+      "slug": "congo-s-clinics-face-strikes-conflict-and-aid-cuts",
+      "date": "2026-10-05",
+      "title": "Congo's clinics face strikes, conflict and aid cuts",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 6686,
+          "approx": "exact",
+          "asOf": "2026-09-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "6,686 confirmed cases and 3,226 deaths by September 6, 2026"
+        },
+        {
+          "figure": "deaths",
+          "value": 3226,
+          "approx": "exact",
+          "asOf": "2026-09-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "6,686 confirmed cases and 3,226 deaths by September 6, 2026"
+        },
+        {
+          "figure": "cases",
+          "value": 167,
+          "approx": "exact",
+          "asOf": "2026-10-05",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "The 167 confirmed infections and 47 deaths among health-care workers"
+        },
+        {
+          "figure": "deaths",
+          "value": 47,
+          "approx": "exact",
+          "asOf": "2026-10-05",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "The 167 confirmed infections and 47 deaths among health-care workers"
+        }
+      ],
+      "statuses": [],
+      "why": "Lancet comment on care in this outbreak, with counts dated 6 September."
+    },
+    {
+      "slug": "kenya-quarantines-contacts-after-traveler-dies",
+      "date": "2026-10-07",
+      "title": "Kenya quarantines contacts after traveler dies",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 8000,
+          "approx": "at_least",
+          "asOf": "2026-10-07",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 8,000 cases and 4,000 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 4000,
+          "approx": "at_least",
+          "asOf": "2026-10-07",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 8,000 cases and 4,000 deaths"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Kenya",
+          "status": "first confirmed case: a traveler from Congo, via Uganda, who died in Nairobi",
+          "asOf": "2026-10-07"
+        }
+      ],
+      "why": "Kenya confirms its first case, linked to the Congo outbreak, and quarantines contacts."
+    },
+    {
+      "slug": "drc-reports-8-728-cases-as-kenya-confirms-imported-death",
+      "date": "2026-10-11",
+      "title": "DRC reports 8,728 cases as Kenya confirms imported death",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 8728,
+          "approx": "exact",
+          "asOf": "2026-10-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "DRC reports 8,728 cases"
+        },
+        {
+          "figure": "deaths",
+          "value": 4200,
+          "approx": "at_least",
+          "asOf": "2026-10-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 8,700 cases and 4,200 deaths were recorded by October 6"
+        }
+      ],
+      "statuses": [],
+      "why": "Count update and a new health zone; repeats Kenya's imported case."
+    },
+    {
+      "slug": "gynecologist-leki-taji-treats-pregnant-patients-in-bunia",
+      "date": "2026-10-15",
+      "title": "Gynecologist Leki Taji treats pregnant patients in Bunia",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 4000,
+          "approx": "at_least",
+          "asOf": "2026-10-15",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed more than 4,000 people in five months"
+        }
+      ],
+      "statuses": [],
+      "why": "Profile of a survivor-doctor treating pregnant patients at a Bunia treatment centre."
+    },
+    {
+      "slug": "outbreak-kills-2-788-as-response-falters-across-borders",
+      "date": "2026-10-16",
+      "title": "Outbreak kills 2,788 as response falters across borders",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 2788,
+          "approx": "exact",
+          "asOf": "2026-08-26",
+          "matches": true,
+          "countedAs": null,
+          "quote": "By Aug 26, 2026, 5,815 cases and 2,788 deaths had been reported."
+        },
+        {
+          "figure": "cases",
+          "value": 5815,
+          "approx": "exact",
+          "asOf": "2026-08-26",
+          "matches": true,
+          "countedAs": null,
+          "quote": "By Aug 26, 2026, 5,815 cases and 2,788 deaths had been reported."
+        },
+        {
+          "figure": "cases",
+          "value": 20,
+          "approx": "exact",
+          "asOf": "2026-08-26",
+          "matches": false,
+          "countedAs": "Uganda only",
+          "quote": "20 cases reported in Uganda"
+        },
+        {
+          "figure": "cases",
+          "value": 158,
+          "approx": "exact",
+          "asOf": "2026-08-20",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "158 workers had been infected and 45 had died by Aug 20"
+        },
+        {
+          "figure": "deaths",
+          "value": 45,
+          "approx": "exact",
+          "asOf": "2026-08-20",
+          "matches": false,
+          "countedAs": "health workers only",
+          "quote": "158 workers had been infected and 45 had died by Aug 20"
+        }
+      ],
+      "statuses": [],
+      "why": "Lancet comment proposing a cross-border response for this outbreak; its counts date from 26 August."
+    },
+    {
+      "slug": "nigeria-confirms-first-case-from-congo-outbreak",
+      "date": "2026-10-22",
+      "title": "Nigeria confirms first case from Congo outbreak",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 9000,
+          "approx": "at_least",
+          "asOf": "2026-10-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 9,000 cases and 4,000 deaths in the DRC"
+        },
+        {
+          "figure": "deaths",
+          "value": 4000,
+          "approx": "at_least",
+          "asOf": "2026-10-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 9,000 cases and 4,000 deaths in the DRC"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Nigeria",
+          "status": "first confirmed case, matching the DR Congo strain; patient had travelled from Uganda and is isolated",
+          "asOf": "2026-10-22"
+        }
+      ],
+      "why": "Nigeria confirms its first case linked to the outbreak; the strain matches DR Congo's."
+    },
+    {
+      "slug": "dr-congo-deaths-near-4-700-as-cases-cross-borders",
+      "date": "2026-10-24",
+      "title": "DR Congo deaths near 4,700 as cases cross borders",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 9765,
+          "approx": "exact",
+          "asOf": "2026-10-24",
+          "matches": true,
+          "countedAs": null,
+          "quote": "9,765 cases and 4,727 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 4727,
+          "approx": "exact",
+          "asOf": "2026-10-24",
+          "matches": true,
+          "countedAs": null,
+          "quote": "9,765 cases and 4,727 deaths"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Uganda",
+          "status": "outbreak declared over",
+          "asOf": "2026-10-24"
+        }
+      ],
+      "why": "Uganda's linked outbreak is declared over while DR Congo's spreads to eight provinces; not the development's end."
+    },
+    {
+      "slug": "drc-tests-three-candidates-as-deaths-pass-4-600",
+      "date": "2026-10-24",
+      "title": "DRC tests three candidates as deaths pass 4,600",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "science",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 9552,
+          "approx": "exact",
+          "asOf": "2026-10-21",
+          "matches": true,
+          "countedAs": null,
+          "quote": "9,552 confirmed cases and 4,602 deaths by October 21"
+        },
+        {
+          "figure": "deaths",
+          "value": 4602,
+          "approx": "exact",
+          "asOf": "2026-10-21",
+          "matches": true,
+          "countedAs": null,
+          "quote": "9,552 confirmed cases and 4,602 deaths by October 21"
+        }
+      ],
+      "statuses": [],
+      "why": "The Tumaini ring-vaccination trial of Ervebo and two Bundibugyo candidates starts in Bunia."
+    },
+    {
+      "slug": "congo-outbreak-passes-10-000-cases-kills-4-887",
+      "date": "2026-10-28",
+      "title": "Congo outbreak passes 10,000 cases, kills 4,887",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "milestone",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 10060,
+          "approx": "exact",
+          "asOf": "2026-10-28",
+          "matches": true,
+          "countedAs": null,
+          "quote": "10,060 cases and 4,887 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 4887,
+          "approx": "exact",
+          "asOf": "2026-10-28",
+          "matches": true,
+          "countedAs": null,
+          "quote": "10,060 cases and 4,887 deaths"
+        },
+        {
+          "figure": "cases",
+          "value": 9,
+          "approx": "exact",
+          "asOf": "2026-10-28",
+          "matches": false,
+          "countedAs": "Kenya only",
+          "quote": "Kenya reported nine cases"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Kenya",
+          "status": "nine cases reported",
+          "asOf": "2026-10-28"
+        }
+      ],
+      "why": "Cases pass 10,000, making it Congo's largest outbreak and the second-largest on record."
+    },
+    {
+      "slug": "african-leaders-prepare-as-deaths-near-5-000",
+      "date": "2026-10-30",
+      "title": "African leaders prepare as deaths near 5,000",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 10172,
+          "approx": "exact",
+          "asOf": "2026-10-26",
+          "matches": true,
+          "countedAs": null,
+          "quote": "As of 26 October, it had caused 10,172 confirmed cases and 4,932 deaths."
+        },
+        {
+          "figure": "deaths",
+          "value": 4932,
+          "approx": "exact",
+          "asOf": "2026-10-26",
+          "matches": true,
+          "countedAs": null,
+          "quote": "As of 26 October, it had caused 10,172 confirmed cases and 4,932 deaths."
+        }
+      ],
+      "statuses": [],
+      "why": "More than 40 African health ministers agree a continent-wide readiness and open-borders plan; Africa CDC says 'we are not winning'."
+    },
+    {
+      "slug": "nearly-5-000-deaths-expose-gaps-in-regional-response",
+      "date": "2026-10-30",
+      "title": "Nearly 5,000 deaths expose gaps in regional response",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 10091,
+          "approx": "exact",
+          "asOf": "2026-10-30",
+          "matches": true,
+          "countedAs": null,
+          "quote": "10,091 cases and 4,891 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 4891,
+          "approx": "exact",
+          "asOf": "2026-10-30",
+          "matches": true,
+          "countedAs": null,
+          "quote": "10,091 cases and 4,891 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Count update and Africa CDC's warning that the outbreak could reach other continents."
+    },
+    {
+      "slug": "nigeria-isolates-two-suspected-patients",
+      "date": "2026-11-01",
+      "title": "Nigeria isolates two suspected patients",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 10300,
+          "approx": "at_least",
+          "asOf": "2026-11-01",
+          "matches": true,
+          "countedAs": null,
+          "quote": "More than 10,300 cases and 5,000 deaths have been reported in the Democratic Republic of the Congo."
+        },
+        {
+          "figure": "deaths",
+          "value": 5000,
+          "approx": "at_least",
+          "asOf": "2026-11-01",
+          "matches": true,
+          "countedAs": null,
+          "quote": "More than 10,300 cases and 5,000 deaths have been reported in the Democratic Republic of the Congo."
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Nigeria",
+          "status": "two suspected cases isolated in the northeast while samples are tested",
+          "asOf": "2026-11-01"
+        }
+      ],
+      "why": "Nigeria investigates two suspected cases after its imported case; unconfirmed."
+    },
+    {
+      "slug": "dr-congo-reports-2-950-deaths-in-record-epidemic",
+      "date": "2026-11-02",
+      "title": "DR Congo reports 2,950 deaths in record epidemic",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 2950,
+          "approx": "exact",
+          "asOf": "2026-11-02",
+          "matches": false,
+          "countedAs": "'latest government numbers' quoted by CIDRAP, a narrower or older count: other stories put deaths above 5,100 by 1 November",
+          "quote": "2,950 deaths among 6,100 cases"
+        },
+        {
+          "figure": "cases",
+          "value": 6100,
+          "approx": "exact",
+          "asOf": "2026-11-02",
+          "matches": false,
+          "countedAs": "'latest government numbers' quoted by CIDRAP, a narrower or older count: other stories put confirmed cases above 10,400 by 31 October",
+          "quote": "2,950 deaths among 6,100 cases"
+        }
+      ],
+      "statuses": [],
+      "why": "A CIDRAP quick take led by this outbreak (schools reopening, government count)."
+    },
+    {
+      "slug": "ebola-outbreak-kills-over-5-300-across-three-countries",
+      "date": "2026-11-03",
+      "title": "Ebola outbreak kills over 5,300 across three countries",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "deaths",
+          "value": 5376,
+          "approx": "exact",
+          "asOf": "2026-11-03",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed 5,376 people and infected about 10,444"
+        },
+        {
+          "figure": "cases",
+          "value": 10444,
+          "approx": "about",
+          "asOf": "2026-11-03",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed 5,376 people and infected about 10,444"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "Kenya",
+          "status": "first cases recorded (the story's wording; Kenya's first case was reported on 7 October)",
+          "asOf": "2026-11-03"
+        },
+        {
+          "subject": "Nigeria",
+          "status": "suspected cases tested negative",
+          "asOf": "2026-11-03"
+        }
+      ],
+      "why": "Count update across DR Congo, Uganda and Kenya; Nigeria's suspected cases test negative."
+    },
+    {
+      "slug": "two-ebola-shots-join-congo-outbreak-trial",
+      "date": "2026-11-07",
+      "title": "Two Ebola shots join Congo outbreak trial",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "science",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 10500,
+          "approx": "at_least",
+          "asOf": "2026-11-01",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 10,500 confirmed cases and 5,126 deaths by November 1"
+        },
+        {
+          "figure": "deaths",
+          "value": 5126,
+          "approx": "exact",
+          "asOf": "2026-11-01",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 10,500 confirmed cases and 5,126 deaths by November 1"
+        }
+      ],
+      "statuses": [],
+      "why": "Two Bundibugyo-specific vaccines (Oxford, Moderna) are set to join the Ituri trial; same event as the Health Policy Watch story the same day."
+    },
+    {
+      "slug": "who-advances-two-candidates-for-a-deadly-ebola-strain",
+      "date": "2026-11-07",
+      "title": "WHO advances two candidates for a deadly Ebola strain",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "science",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 10500,
+          "approx": "at_least",
+          "asOf": "2026-11-07",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 10,500 confirmed cases and over 5,300 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 5300,
+          "approx": "at_least",
+          "asOf": "2026-11-07",
+          "matches": true,
+          "countedAs": null,
+          "quote": "more than 10,500 confirmed cases and over 5,300 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "WHO advisers clear two Bundibugyo vaccine candidates for Phase 2/3 trials; same event as the UN story the same day."
+    },
+    {
+      "slug": "ebola-teams-urged-to-monitor-unofficial-crossings",
+      "date": "2026-11-11",
+      "title": "Ebola teams urged to monitor unofficial crossings",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 10400,
+          "approx": "at_least",
+          "asOf": "2026-10-31",
+          "matches": true,
+          "countedAs": null,
+          "quote": "More than 10,400 confirmed cases and 5,103 deaths were reported in the DRC by October 31."
+        },
+        {
+          "figure": "deaths",
+          "value": 5103,
+          "approx": "exact",
+          "asOf": "2026-10-31",
+          "matches": true,
+          "countedAs": null,
+          "quote": "More than 10,400 confirmed cases and 5,103 deaths were reported in the DRC by October 31."
+        }
+      ],
+      "statuses": [],
+      "why": "IOM urges surveillance on informal routes, where 95% of cases at crossing points were found."
+    },
+    {
+      "slug": "congo-s-ebola-cases-top-11-000-as-spread-continues",
+      "date": "2026-11-13",
+      "title": "Congo's Ebola outbreak remains uncontrolled after six months",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 11000,
+          "approx": "at_least",
+          "asOf": "2026-11-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "More than 11,000 cases and over 5,000 deaths have been reported."
+        },
+        {
+          "figure": "deaths",
+          "value": 5000,
+          "approx": "at_least",
+          "asOf": "2026-11-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "More than 11,000 cases and over 5,000 deaths have been reported."
+        },
+        {
+          "figure": "deaths",
+          "value": 512,
+          "approx": "exact",
+          "asOf": "2026-11-13",
+          "matches": false,
+          "countedAs": "deaths reported since 21 October only",
+          "quote": "Of 512 deaths reported since October 21"
+        }
+      ],
+      "statuses": [],
+      "why": "Six-month mark: MSF says transmission is still uncontrolled; 67 health zones in eight provinces."
+    },
+    {
+      "slug": "congo-ebola-deaths-pass-5-000-as-armed-groups-block-care",
+      "date": "2026-11-14",
+      "title": "Armed groups obstruct Congo's Ebola response",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [
+        {
+          "figure": "cases",
+          "value": 11000,
+          "approx": "at_least",
+          "asOf": "2026-11-14",
+          "matches": true,
+          "countedAs": null,
+          "quote": "More than 11,000 confirmed cases and over 5,000 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 5000,
+          "approx": "at_least",
+          "asOf": "2026-11-14",
+          "matches": true,
+          "countedAs": null,
+          "quote": "the UN reported more than 5,000 deaths to date"
+        },
+        {
+          "figure": "deaths",
+          "value": 5400,
+          "approx": "at_least",
+          "asOf": "2026-11-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "Africa CDC reported more than 5,400 as of Nov. 12"
+        }
+      ],
+      "statuses": [],
+      "why": "An armed attack in Cantine-Aloya kills health workers and loses more than 1,000 contacts to follow-up."
+    },
+    {
+      "slug": "insecurity-strains-effort-to-contain-drc-ebola-outbreak",
+      "date": "2026-11-16",
+      "title": "Insecurity strains effort to contain DRC Ebola outbreak",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "cases",
+          "value": 11114,
+          "approx": "exact",
+          "asOf": "2026-11-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "A separate confirmed count was 11,114 cases and 5,433 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 5433,
+          "approx": "exact",
+          "asOf": "2026-11-12",
+          "matches": true,
+          "countedAs": null,
+          "quote": "A separate confirmed count was 11,114 cases and 5,433 deaths"
+        },
+        {
+          "figure": "cases",
+          "value": 11000,
+          "approx": "at_least",
+          "asOf": "2026-11-15",
+          "matches": true,
+          "countedAs": null,
+          "quote": "by Nov. 15, reported totals had passed 11,000 cases and 5,400 deaths"
+        },
+        {
+          "figure": "deaths",
+          "value": 5400,
+          "approx": "at_least",
+          "asOf": "2026-11-15",
+          "matches": true,
+          "countedAs": null,
+          "quote": "by Nov. 15, reported totals had passed 11,000 cases and 5,400 deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Latest count and the insecurity hampering containment; repeats the Cantine-Aloya attack."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "who-warns-outbreaks-are-growing-more-damaging",
+      "date": "2026-05-19",
+      "title": "WHO warns outbreaks are growing more damaging",
+      "why": "Published two days after the PHEIC and cites Ebola deaths in the DRC, but it reports the GPMB's global finding that outbreaks are growing more damaging."
+    },
+    {
+      "slug": "who-extends-pandemic-rules-talks-amid-rich-poor-split",
+      "date": "2026-05-21",
+      "title": "WHO extends pandemic rules talks amid rich-poor split",
+      "why": "WHO Pandemic Agreement (PABS) negotiations that name the current Ebola outbreak only as context."
+    },
+    {
+      "slug": "disinformation-fuels-attacks-vaccine-refusal-and-political-polarization",
+      "date": "2026-05-29",
+      "title": "Disinformation fuels attacks, vaccine refusal and political polarization",
+      "why": "Mentions burned Ebola tents in the DRC, but it is about health disinformation and trust worldwide."
+    },
+    {
+      "slug": "africa-needs-trained-experts-to-prevent-lab-accidents-and-misuse",
+      "date": "2026-06-06",
+      "title": "Africa needs trained experts to prevent lab accidents and misuse",
+      "why": "Opens with the May 2026 Bundibugyo event and its early counts, but the story is about Africa's biosecurity leadership and lab safety."
+    },
+    {
+      "slug": "who-warns-world-still-vulnerable-after-new-ebola-outbreak",
+      "date": "2026-06-06",
+      "title": "WHO warns world still vulnerable after new Ebola outbreak",
+      "why": "Its title names the new outbreak, but it is commentary on the GPMB preparedness report with no facts about the outbreak itself."
+    },
+    {
+      "slug": "satellites-detect-ocean-waves-that-raise-coastal-flood-risk",
+      "date": "2026-06-06",
+      "title": "Satellites detect ocean waves that raise coastal flood risk",
+      "why": "A science roundup with one item on an experimental mRNA Ebola vaccine, not tied to this outbreak."
+    },
+    {
+      "slug": "congress-urged-to-confirm-health-leaders-and-renew-preparedness",
+      "date": "2026-06-18",
+      "title": "Congress urged to confirm health leaders and renew preparedness",
+      "why": "US preparedness op-ed that names Bundibugyo ebolavirus among BARDA's targets; US law, not this outbreak."
+    },
+    {
+      "slug": "un-urges-parties-to-implement-ceasefire-commitments",
+      "date": "2026-06-28",
+      "title": "UN urges parties to implement ceasefire commitments",
+      "why": "Same provinces (Ituri, North Kivu) and UN source in the same weeks, but it covers the armed conflict and peace process and never mentions Ebola."
+    },
+    {
+      "slug": "donor-cuts-hollow-who-and-weaken-outbreak-response",
+      "date": "2026-07-21",
+      "title": "Donor cuts hollow WHO and weaken outbreak response",
+      "why": "The global health funding crisis, citing pay strikes in the eastern DRC Ebola response as one example."
+    },
+    {
+      "slug": "companies-delay-diet-rules-while-obesity-drugs-boom",
+      "date": "2026-07-28",
+      "title": "Companies delay diet rules while obesity drugs boom",
+      "why": "Its source headline ends 'Meanwhile Ebola Response Stumbles', but our story covers food-industry lawsuits and obesity drugs, with one line on a strained Ebola response."
+    },
+    {
+      "slug": "washington-funnels-nearly-2-billion-through-global-agencies",
+      "date": "2026-08-05",
+      "title": "Washington funnels nearly $2 billion through global agencies",
+      "why": "US aid rerouted after USAID's dissolution; cites outbreaks like Ebola as a driver but reports nothing about this one."
+    },
+    {
+      "slug": "six-countries-report-cross-border-cholera-with-thousands-infected",
+      "date": "2026-08-13",
+      "title": "Six countries report cross-border cholera with thousands infected",
+      "why": "A cross-border outbreak in DR Congo and Nigeria in the same months, from the same UN source, but it is cholera."
+    },
+    {
+      "slug": "kabila-unites-with-m23-leaders",
+      "date": "2026-10-13",
+      "title": "Kabila unites with M23 leaders",
+      "why": "Eastern Congo politics (the AFC-M23 movement in Goma) at the outbreak's height; no Ebola content."
+    },
+    {
+      "slug": "poor-water-and-conflict-fuel-59-000-cases",
+      "date": "2026-11-02",
+      "title": "Poor water and conflict fuel 59,000 cases",
+      "why": "CIDRAP quick takes on cholera in DR Congo, published the same day as an Ebola quick take; it only notes the DRC also faces Ebola."
+    },
+    {
+      "slug": "polio-vaccines-still-cannot-reach-every-child",
+      "date": "2026-11-04",
+      "title": "Polio vaccines still cannot reach every child",
+      "why": "Rotary polio interview that mentions Ebola contact tracing in general."
+    }
+  ],
+  "notes": "FIGURES. Cases are confirmed cases, the wording of most of our stories (32 of the 49 entries with a matching case count). The other stories write 'cases', 'reported cases', 'recorded cases' or 'people infected', but their numbers sit on the same running tally (e.g. 5,290 'infected' on 22 Aug between 5,208 and 5,794 confirmed on 21 and 29 Aug), so they match. Marked false: suspected counts (17 to 29 May), the WHO total of over 500 cases and 130 deaths by 19 May (our text does not say suspected, but 82 cases and 7 deaths were confirmed on 23 May, so it must include suspected ones), counts for Uganda or Kenya alone, one place (Kigonze camp, Beni), health workers only, and deaths since 21 October. A DR Congo-only total and an all-country total both match, since other countries add only a few dozen cases.\n\nNARROWER OR STALE COUNTS. 2 Nov (CIDRAP): 2,950 deaths among 6,100 cases, 'latest government numbers', against more than 10,400 cases and 5,103 deaths by 31 Oct (11 Nov story) and 5,126 by 1 Nov (7 Nov story). Our text does not say why, so both values are matches false and asOf is the story date. 16 Oct (Lancet): its title gives 2,788 deaths when the toll was over 4,000, but the text dates the count to 26 Aug, so asOf is 26 Aug and it matches. 22 Jul: the Sudan roundup's 2,344 cases and 930 deaths are lower than the 2,423 and 967 as of 19 Jul in the same day's UN story.\n\nMID-NOVEMBER DEATHS. The 14 Nov story itself flags that the UN said 'more than 5,000' while Africa CDC said 'more than 5,400' as of 12 Nov. The 16 Nov story's confirmed count of 5,433 as of 12 Nov supports Africa CDC: the UN figure is a loose floor rather than a different definition, so both match. Also notable: 5,376 deaths on 3 Nov (Al Jazeera) is about 250 above the UN's 5,126 by 1 Nov, and 'over 5,300' on 7 Nov sits beside 5,126 in the same-day UN story. No definitions are given, so all of them match.\n\nCOUNTRIES. Kenya: the 7 Oct story reports its first confirmed case (a traveler who died in Nairobi), 11 and 24 Oct repeat it, 28 Oct says 'Kenya reported nine cases', and 3 Nov says 'Kenya recorded its first cases'. The 3 Nov wording contradicts the earlier stories, and the status row keeps it as worded. Nigeria: the 22 Oct story reports its first confirmed case (travel from Uganda), 30 Oct repeats one imported case, 1 Nov reports two suspected cases isolated, and 3 Nov says the suspected cases tested negative. The negative tests concern the two suspected cases only, not the confirmed October case. Yet the 3 Nov title counts 'three countries' (DR Congo, Uganda, Kenya), leaving out Nigeria and France, where the 30 Oct Africa CDC story counted five countries. France's imported case is first reported on 16 Aug. Uganda: cases from 17 May, no new cases by 3 Jul, outbreak declared over in the 24 Oct story. That is a status inside this development, not its end, so closed stays null: no story reports DR Congo's outbreak declared over.\n\nOTHER INCONSISTENCIES. The 25 May title says 'Goma cases surge past 500', but the text counts all of DR Congo. The 17 May story says 'eight lab-confirmed cases' in its summary and antifactors, but its reasons say 'eight in Ituri, plus cases in Kinshasa and Kampala'. The key reads eight as the total. The 6 Sep African Arguments piece says Africa's systems 'are containing spread' while same-week stories report more than 3,000 deaths and uncontrolled spread.\n\nCONVENTIONS. Quotes come only from title, summary, relevance reasons, antifactors and research paragraphs. When a story states one number both rounded and exact, the key lists the exact one. In 'more than X cases and Y deaths', the qualifier also applies to Y when Y is a round number (2,700, 4,000). Single-case country firsts are statuses, not values. Weekly incidence ('400 to 500 a week') is not recorded. Optional joins: two roundups that give Ebola one paragraph (3 Jul, 22 Jul) and two essays that use the outbreak as the opening case for a wider argument (6 Sep, 19 Sep). Of the two 7 Nov stories on the same vaccine decision, both are turning points because they were published at the same time. The 2 Nov CIDRAP quick take is a must because the outbreak is its lead item and title."
+}

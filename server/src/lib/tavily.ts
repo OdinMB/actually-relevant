@@ -1,13 +1,18 @@
 /**
- * One Tavily news search over HTTP (story research, `.context/story-research.md`; eval:research
- * caches its answers around it). The key travels in the Authorization header only, never in the
- * body. Credits come from the response's usage field, else from the search depth. Tavily is plain
- * external HTTP, so it goes through `withRetry`. An axios error carries the request headers, so a
- * failure is rethrown as a `TavilyError` holding its status or error code alone.
+ * One Tavily search over HTTP: story research's news search (`.context/story-research.md`; eval:research
+ * caches its answers around it), and story context's general search at basic depth with an open or
+ * 30-day window (`.context/story-context.md`), through the optional `depth`, `topic`, `maxResults`
+ * and `startDate`; without them the request is research's, byte for byte. The key travels in the
+ * Authorization header only, never in the body. Credits come from the response's usage field, else
+ * from the search depth. Tavily is plain external HTTP, so it goes through `withRetry`. An axios
+ * error carries the request headers, so a failure is rethrown as a `TavilyError` holding its status
+ * or error code alone.
  */
 import axios from 'axios'
 import { z } from 'zod'
 import { responseStatus, withRetry } from './retry.js'
+import { recordOtherCost } from './runUsage.js'
+import { config } from '../config.js'
 
 export const TAVILY_URL = 'https://api.tavily.com/search'
 export const TAVILY_DEPTH = 'advanced'
@@ -16,11 +21,19 @@ export const CREDITS_PER_SEARCH = { basic: 1, advanced: 2 } as const
 export const TAVILY_MAX_RESULTS = 8
 const TIMEOUT_MS = 60_000
 
+export type TavilyDepth = keyof typeof CREDITS_PER_SEARCH
+
 export interface TavilySearch {
   query: string
-  /** `YYYY-MM-DD`, inclusive. */
-  startDate: string
+  /** `YYYY-MM-DD`, inclusive; unset leaves the window open before `endDate`. */
+  startDate?: string
   endDate: string
+  /** Research's `advanced` when unset. */
+  depth?: TavilyDepth
+  /** Research's `news` when unset. */
+  topic?: 'news' | 'general'
+  /** Research's `TAVILY_MAX_RESULTS` when unset. */
+  maxResults?: number
 }
 
 export interface TavilyResult {
@@ -45,14 +58,15 @@ export interface TavilyOptions {
   retry?: { retries?: number; baseDelayMs?: number }
 }
 
+/** The request's JSON body; key order and values are research's when no option is set (tavily.test.ts holds it byte for byte). */
 export function tavilyRequestBody(s: TavilySearch) {
   return {
     query: s.query,
-    topic: 'news',
-    search_depth: TAVILY_DEPTH,
-    start_date: s.startDate,
+    topic: s.topic ?? 'news',
+    search_depth: s.depth ?? TAVILY_DEPTH,
+    ...(s.startDate !== undefined ? { start_date: s.startDate } : {}),
     end_date: s.endDate,
-    max_results: TAVILY_MAX_RESULTS,
+    max_results: s.maxResults ?? TAVILY_MAX_RESULTS,
     include_favicon: true,
     include_raw_content: 'text',
     include_answer: false,
@@ -107,7 +121,7 @@ async function post(body: ReturnType<typeof tavilyRequestBody>, apiKey: string):
   }
 }
 
-function parseResponse(data: unknown): TavilyAnswer {
+function parseResponse(data: unknown, depth: TavilyDepth): TavilyAnswer {
   const parsed = responseSchema.safeParse(data)
   if (!parsed.success) throw new TavilyError('Tavily search returned a response of an unexpected shape')
   return {
@@ -119,11 +133,14 @@ function parseResponse(data: unknown): TavilyAnswer {
       publishedDate: r.published_date ?? null,
       favicon: r.favicon ?? null,
     })),
-    credits: parsed.data.usage?.credits ?? CREDITS_PER_SEARCH[TAVILY_DEPTH],
+    credits: parsed.data.usage?.credits ?? CREDITS_PER_SEARCH[depth],
   }
 }
 
 export async function searchTavily(request: TavilySearch, apiKey: string, options: TavilyOptions = {}): Promise<TavilyAnswer> {
   const body = tavilyRequestBody(request)
-  return parseResponse(await withRetry(() => post(body, apiKey), options.retry))
+  const answer = parseResponse(await withRetry(() => post(body, apiKey), options.retry), request.depth ?? TAVILY_DEPTH)
+  // Counts toward the job run's cost on the Jobs page; nothing outside a run (lib/runUsage.ts)
+  recordOtherCost(answer.credits * config.research.tavilyUsdPerCredit, answer.credits)
+  return answer
 }

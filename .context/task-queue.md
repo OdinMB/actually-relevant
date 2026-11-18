@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bulk LLM operations run as background tasks on the server with concurrency control via `Semaphore`. The client submits a single request and polls for progress. Task types (`BulkTaskType` in `shared/types/index.ts` and `server/src/lib/taskRegistry.ts`): `preassess`, `assess`, `select`, `reclassify` (issue reassignment), `emotion` (emotion tagging only) and `research` (research runs: one story's, started by `POST /api/admin/research/stories/:storyId/runs`, or a bulk Research of up to 50, `POST /api/admin/research/runs`; `.context/story-research.md`, "Bulk research").
+Bulk LLM operations run as background tasks on the server with concurrency control via `Semaphore`. The client submits a single request and polls for progress. Task types (`BulkTaskType` in `shared/types/index.ts` and `server/src/lib/taskRegistry.ts`): `preassess`, `assess`, `select`, `reclassify` (issue reassignment), `emotion` (emotion tagging only) and `research` (research runs: one story's, started by `POST /api/admin/research/stories/:storyId/runs`, or a bulk Research of up to 50, `POST /api/admin/research/runs`; `.context/story-research.md`, "Bulk research") and `context` (an editor's context run of one story, `POST /api/admin/stories/:id/context/run`; `.context/story-context.md`, "On demand").
 
 ## Architecture
 
@@ -97,6 +97,7 @@ The client sends up to 500 IDs in a single request. The server gates LLM calls t
 - **Per-process deduplication only** — Stories already in a running task are skipped (see API Endpoints), but the check lives in this process's memory. Semaphore prevents LLM overload.
 - **No persistence** — Task history is not stored in the database.
 - **A `research` task holds one story, or a bulk Research's batch**, whose stories count as processing while it lasts, so a bulk action started meanwhile skips them. Its record is each story's `story_research_runs` row, not the in-memory task: the row survives a restart, the task doesn't, and a restart drops a bulk Research's stories not yet started.
+- **A `context` task holds one story** the same way: its story counts as processing (a bulk action skips it, and a shutdown waits for it), and its record is the story's `story_context_runs` row. The client tells its own run apart by the task id's prefix (`context-<storyId>-`), not by the processing list, so the story's Research button stays open while context is gathered.
 
 ## Key Files
 

@@ -50,12 +50,17 @@ export interface User {
 }
 
 export type JobName =
+  | 'intake_chain'
+  | 'daily_edition_chain'
+  | 'newsletter_chain'
+  | 'podcast_chain'
   | 'crawl_feeds'
   | 'preassess_stories'
   | 'assess_stories'
   | 'select_stories'
   | 'research_stories'
   | 'publish_stories'
+  | 'build_story_context'
   | 'social_auto_post'
   | 'bluesky_update_metrics'
   | 'mastodon_update_metrics'
@@ -196,6 +201,68 @@ export interface PublicStoryDetail extends PublicStory {
   research: ResearchedStory | null
   /** The text fields carry researched text: the label keys on this. */
   researched: boolean
+}
+
+// --- Story context (public; a hand-written mirror of server/src/services/storyContextView.ts, .context/story-context.md) ---
+
+/** The seven slots of the gap list, plus the figures box ("In numbers"). */
+export type ContextBoxType = 'compared' | 'why_now' | 'build_up' | 'who_affected' | 'response' | 'next' | 'key_term' | 'figures'
+
+export interface ContextTilesView {
+  kind: 'tiles'
+  /** Each tile's values: the headline first, then any later value that differs, each naming its source. */
+  tiles: { label: string; values: { text: string; estimate: boolean; sourceId: string }[] }[]
+}
+
+export interface ContextChartPointView {
+  label: string
+  value: number
+  /** The value formatted by the server ("600,000", "88%"). */
+  text: string
+  /** Drawn hatched. */
+  provisional: boolean
+  /** Within 30 days of the story's day: drawn in the area's color. */
+  recent: boolean
+  /** `YYYY-MM-DD`, `YYYY-MM` or `YYYY`. */
+  asOf: string | null
+  sourceId: string
+}
+
+export interface ContextChartView {
+  kind: 'bars' | 'line'
+  /** What every point measures: the chart's visible caption and accessible name. */
+  caption: string
+  unit: string
+  /** A line's points come in date order. */
+  points: ContextChartPointView[]
+  /** A different measure shown beside the comparison, never in it: drawn lighter. */
+  apart: { caption: string; unit: string; points: ContextChartPointView[] } | null
+}
+
+export interface ContextBoxView {
+  id: string
+  type: ContextBoxType
+  heading: string
+  /** The phone's one-line note. */
+  teaser: string
+  /** `P<n>` (a story paragraph), `W<n>` (a Why This Matters point) or `section` (More context). */
+  place: string
+  /** Cited as research's passages are, against `StoryContextView.sources`. */
+  sentences: ResearchedCitedText[]
+  visual: ContextTilesView | ContextChartView | null
+  /** `YYYY-MM-DD`, `YYYY-MM` or `YYYY`: the newest date its facts describe. */
+  asOf: string | null
+  /** The box's sources, first-cited order, for its footer. */
+  sourceIds: string[]
+}
+
+/** `GET /api/stories/:slug/context` (not in the OpenAPI contract): no boxes for a story without context. */
+export interface StoryContextView {
+  boxes: ContextBoxView[]
+  /** Ids `C1`… in first-cited order. */
+  sources: ResearchedSource[]
+  asOf: string | null
+  aiGenerated: { fields: string[]; model: string; digitalSourceType: string }
 }
 
 export interface Feed {
@@ -444,8 +511,8 @@ export type PodcastFridayRun = 'create' | 'finished' | 'waiting-for-person' | 'b
 
 /**
  * This ISO week's weekly-episode slot (UTC), read without creating a row. `fridayWindow`: `ahead`
- * before Friday, `open` while Friday's automatic slots still run, `passed` once the last slot has
- * gone by (Friday 19:00 UTC) through Sunday.
+ * before Friday, `open` while Friday's automatic run may still be going, `passed` once its hour has
+ * gone by (Friday 03:00 UTC) through Sunday.
  * `automaticRunEnabled`: whether the show's generate job (generate_podcast, generate_uplifting_podcast) is switched on.
  * `showProblem`: why the show's week episode cannot be opened or run now (Actually Uplifting while it
  * is switched off, naming what it waits for); null when it can.
@@ -793,10 +860,111 @@ export interface JobRun {
   cronExpression: string
   /** IANA zone the cron expression is read in; null for the server's own clock. */
   timeZone: string | null
-  /** The job's main setting in a few words (e.g. the cleanup's age cutoff); null when it has none to show. */
-  setting?: string | null
+  /** What the job does and its rules that are not obvious, shown behind its info icon; null for a job without one. */
+  note: string | null
+  /** A state the owner must notice now (e.g. research switched off), shown under the job's name; null when there is none. */
+  warning: string | null
+  /** Model calls go at OpenAI's flex price (half), falling back to standard when OpenAI is busy. */
+  flex: boolean
+  /** The job makes model calls, so its Flex switch matters. */
+  usesModels: boolean
+  /** A chain's step: the chain waits for a person after it (mode Review). */
+  pauseForReview: boolean
+  /** A chain's step: the chain holds before it until this time of day, "HH:MM" UTC; null for no hold. */
+  notBefore: string | null
+  /** A chain: calls go at standard price once this many hours have passed since each run started; null for no cut-off. */
+  flexHours: number | null
+  /**
+   * A chain: the step it is in ('running'), goes on from after a review ('review'), is held at until
+   * `resumeAt` ('waiting'), or stopped at ('failed').
+   */
+  resumeStep: JobName | null
+  resumeReason: 'running' | 'review' | 'waiting' | 'failed' | null
+  resumeAt: string | null
+  /** A chain waiting for review, held at a step or stopped at a step can be continued from the Jobs page. */
+  canContinue: boolean
+  /** The chain this job is a step of; null for a job that runs on its own schedule. */
+  chain: JobName | null
+  /** A chain's steps in the order they run; null for every other job. */
+  steps: JobName[] | null
+  /** What the last finished run spent; null before the first such run, or after an interrupted one. */
+  lastRunUsage: JobRunUsage | null
+  /** What the last finished run did, in a few words ("12 new stories", "nothing to do"); null when it did not say. */
+  lastRunSummary: string | null
   createdAt: string
   updatedAt: string
+}
+
+/** What one job run spent on paid services (a chain's run includes its steps'). */
+export interface JobRunUsage {
+  /** Model and embedding calls answered. */
+  calls: number
+  /** Calls answered at flex price. */
+  flexCalls: number
+  /** Calls asked at flex that OpenAI refused as busy until they were sent at standard price. */
+  flexFallbacks: number
+  inputTokens: number
+  cachedTokens: number
+  outputTokens: number
+  /** USD at the price each call was billed at, plus other paid services. */
+  costUsd: number
+  /** USD the same calls would have cost at standard price, plus other paid services. */
+  standardCostUsd: number
+  /** Calls to a model without a price on record, left out of the sums. */
+  unpricedCalls: number
+  /** Other paid services (web searches), part of both sums. */
+  otherUsd: number
+  /** Web search credits behind `otherUsd`. */
+  searchCredits: number
+  /** Items the run's own checks judged, and how many failed: the step's own, not added to its chain's. */
+  itemsChecked: number
+  itemsFailed: number
+}
+
+// --- Spending (the admin Dashboard's overview; server/src/services/spending.ts) ---
+
+/** Whose spend a row shows: a job, research started by an editor (which runs outside any job), or the total. */
+export type SpendScope = JobName | 'editor_research' | 'all'
+
+export interface SpendTotals {
+  /** Model calls: the total less the web searches. */
+  aiUsd: number
+  searchUsd: number
+  totalUsd: number
+}
+
+export interface SpendingRow {
+  scope: SpendScope
+  thisMonth: SpendTotals
+  /** This month's total at the pace so far: spend × days in the month ÷ days so far. */
+  paceUsd: number
+  /** The totals of the month before and of the one before that. */
+  previousUsd: [number, number]
+  /** The monthly warning level in whole USD; null for none. */
+  levelUsd: number | null
+  /** The level is passed, or the month is heading past it at this pace (from the 8th on); null otherwise. */
+  warning: 'passed' | 'on_pace' | null
+}
+
+/** A chain's steps in its order, or (`chain` null) the jobs on their own schedules and research started by an editor. */
+export interface SpendingGroup {
+  chain: JobName | null
+  rows: SpendingRow[]
+}
+
+/** GET /api/admin/spending: this UTC month so far and the two before it. */
+export interface SpendingOverview {
+  /** `YYYY-MM`. */
+  month: string
+  /** The month before and the one before that, `YYYY-MM`. */
+  previousMonths: [string, string]
+  /** Today's day of the UTC month, and its number of days. */
+  day: number
+  daysInMonth: number
+  groups: SpendingGroup[]
+  total: SpendingRow
+  /** The podcast's voices, on the ElevenLabs plan rather than billed per use: characters used this month and the monthly cap. */
+  voices: { usedChars: number; capChars: number }
 }
 
 // --- Query/filter types ---
@@ -849,6 +1017,17 @@ export interface LifetimeGroupRow {
 }
 
 /** GET /api/admin/stories/lifetime-stats: live stories plus those the monthly cleanup deleted. */
+/** One window of GET /api/admin/stories/recent-stats: stories crawled in the last `days` days, and stories published in them. */
+export interface RecentStoryWindow {
+  days: number
+  crawled: number
+  /** Of `crawled`, screened (a pre-rating) and fully assessed (a rating) */
+  screened: number
+  assessed: number
+  /** Published in the window, whenever crawled */
+  published: number
+}
+
 export interface LifetimeStoryStats {
   total: number
   archived: number
@@ -880,8 +1059,8 @@ export interface ResearchUsage {
   /** Why a run would be refused now (switched off, unpriced model, cap reached), or null. */
   refusal: string | null
   /**
-   * Why no run can be applied now (research switched off, or the owner's gate
-   * `RESEARCH_APPLY_ENABLED` closed), or null. Reverting is never refused for these.
+   * Why no run can be applied now (research switched off: `TAVILY_API_KEY` unset), or null.
+   * Reverting is never refused for it.
    */
   applyRefusal: string | null
   monthToDateUsd: number
@@ -1110,10 +1289,123 @@ export interface ResearchRun {
   cost: ResearchRunCost | null
 }
 
+// --- Story context, admin (a hand-written mirror of server/src/services/storyContextAdmin.ts and storyContextPipeline.ts) ---
+
+export type ContextSlot = Exclude<ContextBoxType, 'figures'>
+
+/** What a context run did (`story_context_runs.result`), for "What the run did". */
+export interface ContextRunRecord {
+  slots: { slot: ContextSlot; needed: boolean; covered: 'yes' | 'partly' | 'no' }[]
+  /** The story's own sentence that reports the response, when the gap list found one in it. */
+  responseInStory: string | null
+  /** The `response` search was added from the title, the gap list having listed none. */
+  responseFallback: boolean
+  searches: {
+    slot: ContextSlot
+    wanted: string
+    query: string
+    /** A `response` search's angle; absent on the other slots' and on older records. */
+    angle?: 'action' | 'elsewhere'
+    recent: boolean
+    cached: boolean
+    credits: number
+    results: number
+    kept: string[]
+  }[]
+  /** Searches not made because an earlier run of the story made them; absent on records from before 2026-11-17. */
+  skippedSearches?: { slot: ContextSlot; query: string }[]
+  /** `read`: a page an earlier run of the story already read. */
+  sourceDrops: { url: string; search: number; reason: 'opt-out' | 'blocklist' | 'known' | 'read' | 'empty' | 'per-query' | 'cap' }[]
+  extractionDrops: { url: string; reason: string }[]
+  /** `research`: research facts structured this run; `carried`: facts taken over from the story's earlier runs (absent on older records). */
+  facts: { research: number; leftOut: number; search: number; reused: number; carried?: number; supported: number; rejected: number; unjudged: number }
+  /** Each fact the check rejected or left unjudged, with its problem. */
+  droppedFacts: { ref: string; text: string; verdict: 'rejected' | 'unjudged'; problem: string | null }[]
+  boxDrops: { label: string; cause: 'structure' | 'expired' | 'undrawn' | 'check' | 'unjudged' | 'copying' | 'empty'; problem?: string }[]
+  numberHints: { label: string; numbers: string[] }[]
+  /** `response` was searched for, the story does not report it, and nothing supported answers it: no card says so. */
+  responseNotFound: boolean
+  tally: { checked: number; failed: number }
+  calls: { step: string; outcome: string; costUsd: number; model: string }[]
+  optOutChecked: boolean
+}
+
+export interface ContextAdminRun {
+  id: string
+  status: 'running' | 'completed' | 'skipped' | 'failed'
+  outcome: 'built' | 'none-kept' | 'no-research' | 'technical' | null
+  startedAt: string
+  finishedAt: string | null
+  costUsd: number
+  modelUsd: number
+  searchUsd: number
+  tavilyCredits: number
+  boxes: number
+  error: string | null
+  /** As stored: absent parts on a run that ended early. */
+  result: Partial<ContextRunRecord> | null
+}
+
+export interface ContextAdminBox {
+  id: string
+  type: ContextBoxType
+  heading: string
+  teaser: string
+  status: 'unreviewed' | 'reviewed' | 'demoted'
+  /** Demoted: readers don't see it. */
+  hidden: boolean
+  /**
+   * Where the page shows it now: `P<n>`, `W<n>` or `section`. A box the page does not serve (hidden,
+   * or nothing in it still shown) has its stored place, or `section`.
+   */
+  place: string
+  /** As stored: the write call's choice or the editor's, null for the section. */
+  storedPlace: string | null
+  placeByEditor: boolean
+  /** An editor may move it beside the text: every box but the In numbers card (the server's rule). */
+  movable: boolean
+  sources: { outlet: string; url: string }[]
+  asOf: string | null
+  position: number
+}
+
+export interface ContextAdminPlace {
+  /** `P<n>`, `W<n>` or `section`. */
+  place: string
+  /** 'Paragraph 1', 'Why This Matters 1', 'More context'. */
+  label: string
+  /** The paragraph's or point's start; empty for the section. */
+  text: string
+}
+
+/** `GET /api/admin/stories/:id/context`. */
+export interface StoryContextAdmin {
+  /** The newest run; null while the story has none, and the section then shows only "Gather context" for an eligible story. */
+  run: ContextAdminRun | null
+  /** The newest run that wrote boxes, hidden ones included, in order. */
+  boxes: ContextAdminBox[]
+  places: ContextAdminPlace[]
+  placement: 'model' | 'random' | 'section'
+  /**
+   * Whether an editor can gather the story's context: `eligible` (published, with a research run that
+   * holds facts), and why the action is closed now, or null. Absent from a server without it.
+   */
+  gather?: { eligible: boolean; refusal: string | null }
+}
+
+/** `POST /api/admin/stories/:id/context/run`: the one-story task to poll, and the run it claimed. */
+export interface ContextRunStarted {
+  taskId: string
+  runId: string
+}
+
 // --- Background task types ---
 
-/** `research`: research runs, one story's or a bulk Research's; their stories count as processing while it runs. */
-export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research'
+/**
+ * `research`: research runs, one story's or a bulk Research's; their stories count as processing while it runs.
+ * `context`: an editor's context run of one story.
+ */
+export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research' | 'context'
 export type BulkTaskStatus = 'running' | 'completed' | 'failed'
 
 /** A story the task left out, with why; neither completed nor failed (server: `TaskSkip` in lib/taskRegistry.ts). */

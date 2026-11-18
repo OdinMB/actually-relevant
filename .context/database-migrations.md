@@ -6,7 +6,7 @@ Local development runs PostgreSQL + pgvector in Docker (`docker-compose.yml` at 
 
 **Seed.** `npm run db:seed --prefix server` (also Prisma's `migrations.seed` in `prisma.config.ts`) upserts the issue taxonomy and five disabled job runs into whatever `DATABASE_URL` points at; it has no local-only guard, so run it only against the local database, or once against a new, empty production database (README, "Fresh Install"). A second run overwrites the seeded issues' fields and leaves existing job runs alone. The writes live in `prisma/seedDatabase.ts` (`prisma/seed.ts` is the entry), and two checks keep it in step with the schema: `npm run typecheck` checks `prisma/` against the generated client, and `src/test/db/seed.db.test.ts` runs the seed against the test database. A migration that drops or renames a column the seed writes fails both until the seed follows.
 
-**Job rows.** The scheduler runs only jobs that have a `job_runs` row, and the migrations create rows only for `social_auto_post`, `bluesky_update_metrics`, `mastodon_update_metrics`, `publish_newsletter`, `generate_podcast`, `publish_podcast` (all disabled), `poll_plunk_activity`, `cleanup_old_stories` and `send_queued_confirmations` (all three enabled); `crawl_feeds`, the four story jobs and `generate_newsletter` get theirs from a seed. `npm run db:seed:jobs --prefix server` (`src/scripts/seed-jobs.ts`) creates every job's row that does not exist yet, disabled, and never changes an existing one (`update: {}`), so it is safe to rerun on any database. Like `db:seed`, it writes to whatever `DATABASE_URL` points at, with no guard.
+**Job rows.** The scheduler runs only jobs that have a `job_runs` row, and the migrations create rows only for `social_auto_post`, `bluesky_update_metrics`, `mastodon_update_metrics`, `publish_newsletter`, `generate_podcast`, `publish_podcast` (all disabled), `poll_plunk_activity`, `cleanup_old_stories` and `send_queued_confirmations` (all three enabled); `crawl_feeds`, the four story jobs and `generate_newsletter` get theirs from a seed. `npm run db:seed:jobs --prefix server` (`src/scripts/seed-jobs.ts`) creates every job's row that does not exist yet, disabled except `research_stories` (enabled; owner decision 2026-11-14), and never changes an existing one (`update: {}`), so it is safe to rerun on any database. Like `db:seed`, it writes to whatever `DATABASE_URL` points at, with no guard.
 
 ## How Migrations Reach the Local Database
 
@@ -35,6 +35,7 @@ A separate local database filled with made-up content, for development, demos or
 
 - the live site's issue taxonomy (its slugs and names, with made-up descriptions) and 15 feeds, three per top-level issue, one of them switched off and one failing;
 - 45 stories in every status the pipeline uses: 26 published (every homepage section has uplifting, calm and negative ones), the rest fetched, pre-analyzed, analyzed, selected, trashed, and rejected with each reason; one dedup cluster, a published primary with two `duplicate` reports from other feeds; the two newest published stories researched (`research.ts`: a researched version built by the real projection, citing two invented outlets and the oldest published story, with the single-source snapshot), so the story page's researched format shows locally (`.context/story-research.md`, "Reader format");
+- one of them, the free school lunches story, with story context (`context.ts`: a finished run, its facts and four cards written by hand, no model: the figures tiles, a bar chart beside paragraph 1, a line chart beside Why This Matters 1 and a card of sentences; `.context/story-context.md`), so the cards and the admin's Context section show locally; the seed's last line names its page;
 - two published newsletter issues (`/newsletter/week-NN-YYYY`) and this week's draft; two published podcast episodes with transcripts, whose audio URL points nowhere (the player lists them but cannot play them), and this week's episode stopped after story selection, as a dry run (silent stub voice);
 - an admin login, `admin@example.org` with the password `synthetic-admin`: a throwaway that exists only in this local database.
 
@@ -174,7 +175,7 @@ Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prism
 | `npm run db:migrate:deploy --prefix server` | Apply pending migrations to whatever `DATABASE_URL` points at (no local guard) |
 | `npm run db:generate --prefix server` | Regenerate the Prisma client (**dev server stopped**) |
 | `npm run db:seed --prefix server` | Upsert the issue taxonomy and five disabled job runs (local DB, or once on a new empty one; no guard) |
-| `npm run db:seed:jobs --prefix server` | Create every missing job run, disabled; never changes an existing one, safe to rerun (no guard) |
+| `npm run db:seed:jobs --prefix server` | Create every missing job run, disabled except `research_stories` (enabled); never changes an existing one, safe to rerun (no guard) |
 
 **Never use:**
 

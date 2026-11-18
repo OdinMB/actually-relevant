@@ -28,6 +28,7 @@ import type {
   StoryFilters,
   PaginatedResponse,
   LifetimeStoryStats,
+  RecentStoryWindow,
   StoryStatus,
   CrawlResult,
   TaskState,
@@ -38,6 +39,10 @@ import type {
   ResearchBulkApplyOutcome,
   ResearchRun,
   ResearchUsage,
+  SpendScope,
+  SpendingOverview,
+  StoryContextAdmin,
+  ContextRunStarted,
 } from '@shared/types'
 import { getAccessToken, setAccessToken, refreshSession, notifySessionExpired } from './session'
 
@@ -242,7 +247,7 @@ export const authApi = {
 export const adminApi = {
   // Stories
   stories: {
-    stats: () => request<Record<string, number>>('/stories/stats'),
+    recentStats: () => request<RecentStoryWindow[]>('/stories/recent-stats'),
     lifetimeStats: () => request<LifetimeStoryStats>('/stories/lifetime-stats'),
     list: (filters: StoryFilters = {}) => request<PaginatedResponse<Story>>(`/stories${toQueryString(filters as Record<string, unknown>)}`),
     get: (id: string) => request<Story>(`/stories/${id}`),
@@ -374,12 +379,34 @@ export const adminApi = {
     revert: (storyId: string) => request<void>(`/research/stories/${storyId}/revert`, { method: 'POST' }),
   },
 
+  // A story's context cards (.context/story-context.md, "Admin"): hiding or moving one is the one way a person changes them
+  storyContext: {
+    /** The newest run, its boxes (hidden ones too), the story's places, whether context can be gathered. 404 for an unknown story, and from a backend without context. */
+    get: (storyId: string) => request<StoryContextAdmin>(`/stories/${storyId}/context`),
+    /** Start an editor's context run of the story, a task to poll; 409 with the reason when it cannot start now ("On demand"). */
+    gather: (storyId: string) => request<ContextRunStarted>(`/stories/${storyId}/context/run`, { method: 'POST' }),
+    /** Hide every card, or show the hidden ones again; nothing is deleted. */
+    setHidden: (storyId: string, hidden: boolean) => request<void>(`/stories/${storyId}/context`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
+    /** Hide, show or move one card; 400 for a place the story lacks, or for moving In numbers out of More context. */
+    updateBox: (storyId: string, boxId: string, change: { hidden?: boolean; place?: string }) =>
+      request<void>(`/stories/${storyId}/context/boxes/${boxId}`, { method: 'PATCH', body: JSON.stringify(change) }),
+  },
+
   // Jobs
   jobs: {
     list: () => request<JobRun[]>('/jobs'),
     update: (jobName: string, data: Partial<JobRun>) => request<JobRun>(`/jobs/${jobName}`, { method: 'PUT', body: JSON.stringify(data) }),
     run: (jobName: string) => request<{ message: string }>(`/jobs/${jobName}/run`, { method: 'POST' }),
+    continueChain: (jobName: string) => request<{ message: string }>(`/jobs/${jobName}/continue`, { method: 'POST' }),
     serverTime: () => request<{ time: string; timezone: string }>('/jobs/server-time'),
+  },
+
+  // The Dashboard's spending overview: this month per job with the two before, and the warning levels
+  spending: {
+    overview: () => request<SpendingOverview>('/spending'),
+    /** A whole number of dollars of at least 1, or null to clear the level; 400 otherwise. */
+    setLevel: (scope: SpendScope, levelUsd: number | null) =>
+      request<{ scope: SpendScope; levelUsd: number | null }>(`/spending/warnings/${scope}`, { method: 'PUT', body: JSON.stringify({ levelUsd }) }),
   },
 
   // Public caches: empty the server's in-memory copies so visitors' next requests read the database

@@ -1,0 +1,1132 @@
+{
+  "schemaVersion": 1,
+  "id": "el-nino-2026",
+  "title": "The 2026–27 El Niño",
+  "charter": {
+    "in": "The El Niño that formed in the tropical Pacific in June 2026, followed from the first forecasts of its onset (March 2026) through its threshold crossing, agency declarations and growth toward a forecast record-strong peak around the end of 2026. A story belongs when it reports on the event itself (onset odds, declarations, strength readings such as the Niño 3.4 anomaly, peak and duration forecasts) or on impacts and responses our story presents as this El Niño's, with El Niño as the story's subject.",
+    "out": [
+      "the 2023–24 El Niño and its after-effects",
+      "the 2025 La Niña",
+      "research on El Niño in general (coral records of past variability, future-frequency models, conflict links)",
+      "global temperature, sea-surface temperature and ocean-heat records",
+      "Earth's energy imbalance and WMO state-of-the-climate reports",
+      "the northeast Pacific marine heatwave off North America",
+      "Indonesia's 2026 fire and haze season (optional only where our story names El Niño as a main driver)",
+      "Amazon and tropical deforestation trends",
+      "US cuts to ocean observing networks",
+      "other drivers of the 2026 food crisis (Strait of Hormuz shipping, Ukraine grain exports, aid cuts)",
+      "Panama's drought where our story does not attribute it to El Niño"
+    ],
+    "endEvent": "Forecasting agencies (NOAA, WMO, JMA or the Australian Bureau of Meteorology) declare the El Niño over: ENSO-neutral or La Niña conditions have returned."
+  },
+  "closed": null,
+  "figures": [
+    {
+      "key": "elnino_odds",
+      "name": "Chance of El Niño conditions",
+      "unit": "percent",
+      "definition": "A forecasting agency's probability (NOAA, WMO, PAGASA, …) that El Niño conditions of any strength will be present in the target season the story names, whether forming or persisting into that season. Dated to the story, since the forecasts' issue dates are not given. Not the chance of a strong or very strong event, and not the chance of a record-hot year.",
+      "cumulative": false,
+      "variants": [
+        "chance it persists into a later season (in our pull quotes only: 96% for December–February, 97% for the first half of 2027, near-100% through February 2027)",
+        "chance of a moderate El Niño only (BMKG, Indonesia): matches false"
+      ]
+    },
+    {
+      "key": "strong_odds",
+      "name": "Chance of a very strong El Niño",
+      "unit": "percent",
+      "definition": "A forecaster's probability that this event reaches very strong ('super') strength: NOAA's very strong category (a Niño 3.4 anomaly of about 2°C or more) or an equivalent agency category. Not the chance of El Niño of any strength.",
+      "cumulative": false,
+      "variants": [
+        "'super' event",
+        "'very strong', ranking among the largest since 1950 (NOAA CPC)",
+        "'exceptionally strong' (WFP citing scientists)",
+        "'very strong' from October 2026 to January 2027 (PAGASA, 81%, in a pull quote only)",
+        "stated as odds ('one-in-four')"
+      ]
+    },
+    {
+      "key": "nino34_anomaly",
+      "name": "Niño 3.4 sea-surface temperature anomaly",
+      "unit": "°C",
+      "definition": "Observed departure of sea-surface temperature from normal in the Niño 3.4 region of the central-eastern equatorial Pacific, the index behind NOAA's ONI (El Niño threshold +0.5°C; very strong about +2°C). Forecast peaks, subsurface readings, local hotspots and other regions do not match.",
+      "cumulative": false,
+      "variants": [
+        "forecast peak or seasonal anomaly (more than 2°C, about 3°C, 3.7°C, up to 3.8°C, 4.0°C)",
+        "local readings 'in places' or 'in parts of the Pacific'",
+        "subsurface pockets",
+        "'Pacific temperature anomaly' with the index unstated",
+        "ocean heat anomalies (no number)"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "slug": "us-forecast-raises-chance-of-deficient-indian-monsoon-this-summer",
+      "date": "2026-03-13",
+      "title": "US forecast raises chance of deficient Indian monsoon this summer",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "science",
+      "values": [
+        {
+          "figure": "elnino_odds",
+          "value": 62,
+          "approx": "exact",
+          "asOf": "2026-03-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "62% chance of El Nino by June–August"
+        },
+        {
+          "figure": "elnino_odds",
+          "value": 80,
+          "approx": "at_least",
+          "asOf": "2026-03-13",
+          "matches": true,
+          "countedAs": null,
+          "quote": "rising above 80% later"
+        }
+      ],
+      "statuses": [],
+      "why": "First story on the event: NOAA's odds that El Niño forms this year and what that means for India's monsoon."
+    },
+    {
+      "slug": "summer-pacific-warming-could-push-2027-to-record-heat",
+      "date": "2026-04-14",
+      "title": "Summer Pacific warming could push 2027 to record heat",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "elnino_odds",
+          "value": 62,
+          "approx": "about",
+          "asOf": "2026-04-14",
+          "matches": true,
+          "countedAs": null,
+          "quote": "about a 62% chance of El Niño emerging this summer"
+        }
+      ],
+      "statuses": [],
+      "why": "Forecast odds of this summer's El Niño and the possibility of a 'super' event."
+    },
+    {
+      "slug": "strong-pacific-warming-could-lock-world-past-1-5-c",
+      "date": "2026-04-26",
+      "title": "Strong Pacific warming could lock world past 1.5°C",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Scientists on the forecast strong El Niño pushing the global average past 1.5°C; also cites research on super El Niños in general."
+    },
+    {
+      "slug": "el-nino-forecast-raises-heat-drought-risk-in-south-asia",
+      "date": "2026-05-03",
+      "title": "El Niño forecast raises heat, drought risk in South Asia",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "South Asian forecasters' consensus that El Niño will develop during the 2026 monsoon."
+    },
+    {
+      "slug": "eu-monitor-warns-may-sea-temperatures-could-hit-records",
+      "date": "2026-05-09",
+      "title": "EU monitor warns May sea temperatures could hit records",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: a global sea-surface record story, but its outlook is framed on the potentially powerful El Niño then forming."
+    },
+    {
+      "slug": "noaa-warns-82-chance-of-southern-africa-drought",
+      "date": "2026-05-23",
+      "title": "NOAA warns 82% chance of southern Africa drought",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "elnino_odds",
+          "value": 82,
+          "approx": "exact",
+          "asOf": "2026-05-23",
+          "matches": true,
+          "countedAs": null,
+          "quote": "82% chance El Niño will form by July"
+        },
+        {
+          "figure": "strong_odds",
+          "value": 25,
+          "approx": "about",
+          "asOf": "2026-05-23",
+          "matches": true,
+          "countedAs": null,
+          "quote": "about a one-in-four chance of a very strong 'Super' El Niño"
+        }
+      ],
+      "statuses": [],
+      "why": "NOAA's onset odds jump from 62% to 82%, with the event likely to last into early 2027."
+    },
+    {
+      "slug": "pacific-warming-set-to-weaken-india-s-monsoon",
+      "date": "2026-06-06",
+      "title": "Pacific warming set to weaken India's monsoon",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "milestone",
+      "values": [
+        {
+          "figure": "nino34_anomaly",
+          "value": 0.5,
+          "approx": "at_least",
+          "asOf": "2026-06-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "Nino 3.4 temperatures above the 0.5°C threshold"
+        },
+        {
+          "figure": "nino34_anomaly",
+          "value": 1,
+          "approx": "about",
+          "asOf": "2026-06-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "near +1°C"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "ECMWF",
+          "status": "shows Niño 3.4 above the +0.5°C El Niño threshold; official declaration still pending",
+          "asOf": "2026-06-06"
+        }
+      ],
+      "why": "The Niño 3.4 anomaly crosses the El Niño threshold and the atmospheric response is already visible."
+    },
+    {
+      "slug": "satellites-detect-ocean-waves-that-raise-coastal-flood-risk",
+      "date": "2026-06-06",
+      "title": "Satellites detect ocean waves that raise coastal flood risk",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: a weekly science roundup; one item reports satellite-tracked Kelvin waves consistent with the developing El Niño."
+    },
+    {
+      "slug": "un-warns-of-hotter-months-crop-and-health-risks",
+      "date": "2026-06-06",
+      "title": "UN warns of hotter months, crop and health risks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "WMO",
+          "status": "expects a moderate-to-strong El Niño through November",
+          "asOf": "2026-06-06"
+        }
+      ],
+      "why": "WMO update: a moderate-to-strong El Niño is likely through November."
+    },
+    {
+      "slug": "wmo-warns-of-higher-global-heat-and-extreme-storms",
+      "date": "2026-06-06",
+      "title": "WMO warns of higher global heat and extreme storms",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "elnino_odds",
+          "value": 80,
+          "approx": "at_least",
+          "asOf": "2026-06-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "80–90% chance"
+        },
+        {
+          "figure": "nino34_anomaly",
+          "value": 6,
+          "approx": "exact",
+          "asOf": "2026-06-06",
+          "matches": false,
+          "countedAs": "local tropical Pacific readings 'in places', not the Niño 3.4 average",
+          "quote": "6°C above average in places"
+        }
+      ],
+      "statuses": [],
+      "why": "Same WMO update, giving 80–90% odds of El Niño."
+    },
+    {
+      "slug": "pacific-warming-raises-drought-risk-in-southern-africa",
+      "date": "2026-06-11",
+      "title": "Pacific warming raises drought risk in southern Africa",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Japan Meteorological Agency",
+          "status": "declared that El Niño has emerged, the first major agency to do so",
+          "asOf": "2026-06-11"
+        }
+      ],
+      "why": "Japan's weather agency is the first major agency to declare that El Niño has emerged."
+    },
+    {
+      "slug": "satellites-show-pacific-warming-could-drive-global-extremes",
+      "date": "2026-06-19",
+      "title": "Satellites show Pacific warming could drive global extremes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Satellite data show the developing El Niño's unusually strong warming and ocean expansion."
+    },
+    {
+      "slug": "pacific-warming-could-drive-storms-and-wildfires-this-winter",
+      "date": "2026-06-21",
+      "title": "Pacific warming could drive storms and wildfires this winter",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [
+        {
+          "figure": "strong_odds",
+          "value": 50,
+          "approx": "at_least",
+          "asOf": "2026-06-21",
+          "matches": true,
+          "countedAs": null,
+          "quote": ">50% chance of becoming a \"super\" event"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "NOAA",
+          "status": "says a 2026 El Niño is underway",
+          "asOf": "2026-06-21"
+        }
+      ],
+      "why": "NOAA says the El Niño is underway, with better-than-even odds of a 'super' event."
+    },
+    {
+      "slug": "us-cuts-threaten-disaster-warnings-ahead-of-el-nino",
+      "date": "2026-06-24",
+      "title": "US cuts threaten disaster warnings ahead of El Niño",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "strong_odds",
+          "value": 63,
+          "approx": "exact",
+          "asOf": "2026-06-24",
+          "matches": true,
+          "countedAs": null,
+          "quote": "63% chance of becoming very strong"
+        }
+      ],
+      "statuses": [],
+      "why": "Borderline: an op-ed on US ocean-observing cuts framed by the El Niño; it reports NOAA's confirmation and 63% very-strong odds."
+    },
+    {
+      "slug": "india-maps-315-districts-for-drought-rescue-measures",
+      "date": "2026-06-25",
+      "title": "India maps 315 districts for drought rescue measures",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "India",
+          "status": "set up an El Niño Monitoring Cell and a Crop Weather Watch Group",
+          "asOf": "2026-06-25"
+        }
+      ],
+      "why": "Borderline: India's response to a 43% June monsoon shortfall includes an El Niño monitoring cell, but the story does not attribute the shortfall to El Niño."
+    },
+    {
+      "slug": "el-nino-raises-fire-risk-in-borneo-rice-projects",
+      "date": "2026-07-03",
+      "title": "El Niño raises fire risk in Borneo rice projects",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "elnino_odds",
+          "value": 50,
+          "approx": "at_least",
+          "asOf": "2026-07-03",
+          "matches": false,
+          "countedAs": "BMKG's chance of a moderate El Niño starting mid-year",
+          "quote": "roughly 50–60% chance of a moderate El Niño starting mid-year"
+        }
+      ],
+      "statuses": [],
+      "why": "Borderline: about Indonesia's peat-to-rice food estates; El Niño is the forecast fire risk they face."
+    },
+    {
+      "slug": "wmo-warns-of-stronger-pacific-warming-higher-global-heat",
+      "date": "2026-07-04",
+      "title": "WMO warns of stronger Pacific warming, higher global heat",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "nino34_anomaly",
+          "value": 2,
+          "approx": "at_least",
+          "asOf": "2026-07-04",
+          "matches": false,
+          "countedAs": "WMO forecast of the seasonal anomaly in parts of the Pacific",
+          "quote": "more than 2°C above average in parts of the Pacific"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "WMO",
+          "status": "expects strong El Niño conditions to form rapidly in July–September and peak in November–February",
+          "asOf": "2026-07-04"
+        }
+      ],
+      "why": "WMO: strong El Niño conditions will form rapidly and likely peak November–February."
+    },
+    {
+      "slug": "brazil-hires-record-firefighters-boosts-wildfire-budget",
+      "date": "2026-07-07",
+      "title": "Brazil hires record firefighters, boosts wildfire budget",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Brazil",
+          "status": "raised its 2026 wildfire budget to 1.023 billion reais and hired 4,410 federal firefighters",
+          "asOf": "2026-07-07"
+        }
+      ],
+      "why": "Borderline: Brazil's Amazon fire-season preparations, made explicitly ahead of the predicted strong El Niño."
+    },
+    {
+      "slug": "pacific-warming-set-to-spark-global-extreme-weather",
+      "date": "2026-07-08",
+      "title": "Pacific warming set to spark global extreme weather",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "ECMWF",
+          "status": "models show a likely record-strong El Niño",
+          "asOf": "2026-07-08"
+        }
+      ],
+      "why": "ECMWF models now show a likely record-strong El Niño, the strongest and most consistent forecast its scientists have seen."
+    },
+    {
+      "slug": "peru-bans-anchovy-season-as-el-nino-reshuffles-catches",
+      "date": "2026-07-09",
+      "title": "Peru bans anchovy season as El Niño reshuffles catches",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Peru",
+          "status": "banned the main April–July anchovy fishing season",
+          "asOf": "2026-07-09"
+        }
+      ],
+      "why": "First concrete impact: Peru bans its main anchovy season as the El Niño disrupts Pacific fisheries."
+    },
+    {
+      "slug": "us-forecasters-predict-a-record-strong-pacific-warming-this-winter",
+      "date": "2026-07-10",
+      "title": "US forecasters predict a record-strong Pacific warming this winter",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "strong_odds",
+          "value": 81,
+          "approx": "exact",
+          "asOf": "2026-07-10",
+          "matches": true,
+          "countedAs": null,
+          "quote": "81% chance of ranking among the largest since 1950"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "NOAA",
+          "status": "forecasts a very strong El Niño as likely this winter",
+          "asOf": "2026-07-10"
+        }
+      ],
+      "why": "NOAA's odds of a very strong event jump to 81%."
+    },
+    {
+      "slug": "goldman-sachs-warns-15-8-global-food-price-surge",
+      "date": "2026-07-13",
+      "title": "Goldman Sachs warns 15.8% global food price surge",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The expected food-price shock from the likely super El Niño (Goldman Sachs: 15.8%)."
+    },
+    {
+      "slug": "record-pacific-warming-threatens-southern-african-harvests",
+      "date": "2026-07-17",
+      "title": "Record Pacific warming threatens southern African harvests",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Forecasters expect the June-formed El Niño to break records; southern African harvests at risk."
+    },
+    {
+      "slug": "record-pacific-warming-threatens-global-food-and-commodity-prices",
+      "date": "2026-07-22",
+      "title": "Record Pacific warming threatens global food and commodity prices",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The possibly record-strong El Niño's expected hit to cocoa, coffee, rice, sugar and maize."
+    },
+    {
+      "slug": "el-nino-could-push-island-species-to-extinction",
+      "date": "2026-07-25",
+      "title": "El Niño could push island species to extinction",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Galápagos waters are already unusually warm as the El Niño builds, threatening population crashes."
+    },
+    {
+      "slug": "afdb-warns-10-20-billion-economic-hit-across-africa",
+      "date": "2026-07-27",
+      "title": "AfDB warns $10–20 billion economic hit across Africa",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The African Development Bank's cost estimate of a possible super El Niño for Africa."
+    },
+    {
+      "slug": "el-nino-threatens-harvests-for-billions",
+      "date": "2026-08-01",
+      "title": "El Niño threatens harvests for billions",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: about rice yields under heat and drought; El Niño shares the cause with long-term warming, and most of the text is about warming studies."
+    },
+    {
+      "slug": "millions-face-droughts-floods-and-hunger",
+      "date": "2026-08-01",
+      "title": "Millions face droughts, floods and hunger",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "UN briefing on the El Niño's expected floods and droughts in Africa and the anticipatory aid under way."
+    },
+    {
+      "slug": "un-warns-fossil-fuels-intensify-global-heat-crisis",
+      "date": "2026-08-01",
+      "title": "UN warns fossil fuels intensify global heat crisis",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "nino34_anomaly",
+          "value": 0.5,
+          "approx": "exact",
+          "asOf": "2026-04-30",
+          "matches": true,
+          "countedAs": null,
+          "quote": "jumped from 0.5°C in April"
+        },
+        {
+          "figure": "nino34_anomaly",
+          "value": 1.6,
+          "approx": "exact",
+          "asOf": "2026-06-30",
+          "matches": true,
+          "countedAs": null,
+          "quote": "1.6°C in June"
+        },
+        {
+          "figure": "nino34_anomaly",
+          "value": 3,
+          "approx": "about",
+          "asOf": "2026-08-01",
+          "matches": false,
+          "countedAs": "WMO forecast for key Pacific regions, August–October",
+          "quote": "WMO forecasts near 3°C above normal in key Pacific regions between August and October"
+        }
+      ],
+      "statuses": [],
+      "why": "WMO: the El Niño is fast-strengthening; the Niño 3.4 index jumped from 0.5°C in April to 1.6°C in June."
+    },
+    {
+      "slug": "un-warns-of-severe-heatwaves-floods-and-droughts",
+      "date": "2026-08-01",
+      "title": "UN warns of severe heatwaves, floods and droughts",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Same WMO update and UN warning on the rapidly intensifying El Niño."
+    },
+    {
+      "slug": "wfp-warns-el-nino-could-push-49-million-into-hunger",
+      "date": "2026-08-06",
+      "title": "WFP warns El Niño could push 49 million into hunger",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "people",
+      "values": [
+        {
+          "figure": "strong_odds",
+          "value": 81,
+          "approx": "exact",
+          "asOf": "2026-08-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "81% chance of an exceptionally strong El Niño"
+        }
+      ],
+      "statuses": [],
+      "why": "First humanitarian toll: WFP says the El Niño could push about 49 million more people into acute hunger."
+    },
+    {
+      "slug": "50-million-more-could-face-acute-hunger-by-2027",
+      "date": "2026-08-07",
+      "title": "50 million more could face acute hunger by 2027",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The same WFP projection, rounded to 50 million."
+    },
+    {
+      "slug": "daily-transits-cut-to-32-34-as-el-nino-lowers-water",
+      "date": "2026-08-22",
+      "title": "Daily transits cut to 32–34 as El Niño lowers water",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "Panama Canal",
+          "status": "daily transits capped at 34 from 4 September and 32 from 15 September",
+          "asOf": "2026-08-22"
+        }
+      ],
+      "why": "Panama caps canal transits as the El Niño cuts rainfall and watershed inflows."
+    },
+    {
+      "slug": "pacific-warming-could-push-2027-past-1-5-c",
+      "date": "2026-08-22",
+      "title": "Pacific warming could push 2027 past 1.5°C",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "nino34_anomaly",
+          "value": 3,
+          "approx": "about",
+          "asOf": "2026-08-22",
+          "matches": false,
+          "countedAs": "Met Office forecast rise in Pacific sea temperatures",
+          "quote": "Pacific sea temperatures rising about 3°C"
+        }
+      ],
+      "statuses": [],
+      "why": "The Met Office forecasts an El Niño likely stronger than any in a century."
+    },
+    {
+      "slug": "countries-mobilize-for-record-2026-27-climate-shock",
+      "date": "2026-08-24",
+      "title": "Countries mobilize for record 2026–27 climate shock",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "UN agencies",
+          "status": "launched appeals to help 22 high-risk nations prepare",
+          "asOf": "2026-08-24"
+        }
+      ],
+      "why": "Preparedness for the possibly record El Niño, including a UN and WFP appeal for 22 high-risk nations."
+    },
+    {
+      "slug": "record-pacific-heat-threatens-southern-african-maize-and-water-supplies",
+      "date": "2026-08-27",
+      "title": "Record Pacific heat threatens southern African maize and water supplies",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "milestone",
+      "values": [],
+      "statuses": [
+        {
+          "subject": "James Hansen and colleagues",
+          "status": "say the El Niño is already the strongest in the modern record",
+          "asOf": "2026-08-27"
+        }
+      ],
+      "why": "Hansen and colleagues say the El Niño is already the strongest on record, with ocean heat anomalies above 1997–98."
+    },
+    {
+      "slug": "philippine-farms-face-big-rice-shortfall-and-price-spikes",
+      "date": "2026-09-02",
+      "title": "Philippine farms face big rice shortfall and price spikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "PAGASA (Philippines)",
+          "status": "forecasts a very strong El Niño for late 2026 into 2027",
+          "asOf": "2026-09-02"
+        }
+      ],
+      "why": "PAGASA's very-strong forecast and the rice shortfall it implies for the Philippines."
+    },
+    {
+      "slug": "world-braces-for-months-of-extreme-heat-and-floods",
+      "date": "2026-09-04",
+      "title": "World braces for months of extreme heat and floods",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "nino34_anomaly",
+          "value": 8,
+          "approx": "at_least",
+          "asOf": "2026-09-04",
+          "matches": false,
+          "countedAs": "subsurface pockets, not the surface Niño 3.4 index",
+          "quote": "pockets reported more than 8°C above normal"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "WMO",
+          "status": "says a very strong El Niño is rapidly developing and likely to persist through February 2027",
+          "asOf": "2026-09-04"
+        }
+      ],
+      "why": "WMO: a very strong El Niño is rapidly developing and likely to last through February 2027."
+    },
+    {
+      "slug": "el-nino-piles-up-billions-and-strains-insurers",
+      "date": "2026-09-11",
+      "title": "El Niño piles up billions and strains insurers",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: El Niño leads the title and summary, but this is a commentary on disaster finance that attributes a grab bag of Asian disasters to it without detail."
+    },
+    {
+      "slug": "pacific-heat-drives-unusual-global-weather-patterns",
+      "date": "2026-09-16",
+      "title": "Pacific heat drives unusual global weather patterns",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "On this unusually strong, eastern-Pacific-triggered event and why its regional impacts are hard to predict."
+    },
+    {
+      "slug": "southeast-asia-faces-heat-water-shortages-and-crop-losses",
+      "date": "2026-09-17",
+      "title": "Southeast Asia faces heat, water shortages and crop losses",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Early impacts of the El Niño in Southeast Asia: bleached seaweed crops and drying reservoirs."
+    },
+    {
+      "slug": "2027-set-to-be-hottest-year-after-pacific-heat-spike",
+      "date": "2026-09-22",
+      "title": "2027 set to be hottest year after Pacific heat spike",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "milestone",
+      "values": [
+        {
+          "figure": "nino34_anomaly",
+          "value": 3.05,
+          "approx": "exact",
+          "asOf": "2026-09-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "The Pacific temperature anomaly has reached 3.05°C"
+        },
+        {
+          "figure": "nino34_anomaly",
+          "value": 4,
+          "approx": "exact",
+          "asOf": "2026-09-22",
+          "matches": false,
+          "countedAs": "forecast peak from some models",
+          "quote": "some models predict a possible 4.0°C peak"
+        }
+      ],
+      "statuses": [],
+      "why": "The El Niño has exceeded previous record highs (anomaly 3.05°C), with a larger peak still forecast."
+    },
+    {
+      "slug": "forecasts-give-months-to-prepare-for-global-harvest-shocks",
+      "date": "2026-09-23",
+      "title": "Forecasts give months to prepare for global harvest shocks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "WMO and FAO on preparing farming for the strong El Niño."
+    },
+    {
+      "slug": "451-000-extra-deaths-projected-by-february",
+      "date": "2026-09-24",
+      "title": "451,000 extra deaths projected by February",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A study projects about 451,000 extra heat deaths from this El Niño between June 2026 and February 2027."
+    },
+    {
+      "slug": "sumatra-blazes-burn-200-000-hectares-haze-reaches-neighbours",
+      "date": "2026-09-24",
+      "title": "Sumatra blazes burn 200,000 hectares, haze reaches neighbours",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: Indonesia's fire season, a development of its own; the fires are mainly human-set, worsened by the extreme El Niño."
+    },
+    {
+      "slug": "warming-may-make-pacific-extremes-more-powerful",
+      "date": "2026-10-01",
+      "title": "Warming may make Pacific extremes more powerful",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: mostly coral evidence on El Niño trends in general, opening with the forecast peak of this event."
+    },
+    {
+      "slug": "indonesia-s-fires-threaten-half-of-borneo-s-orangutans",
+      "date": "2026-10-02",
+      "title": "Indonesia’s fires threaten half of Borneo’s orangutans",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: orangutan habitat in Indonesia's fire season, which the story says dry El Niño conditions intensified."
+    },
+    {
+      "slug": "347-million-children-face-droughts-and-floods",
+      "date": "2026-10-07",
+      "title": "347 million children face droughts and floods",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "UNICEF: the El Niño could affect more than 347 million children; 1.2 million in Papua New Guinea need food relief."
+    },
+    {
+      "slug": "pacific-waters-set-to-reach-record-warmth-in-december",
+      "date": "2026-10-09",
+      "title": "Pacific waters set to reach record warmth in December",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "nino34_anomaly",
+          "value": 3.7,
+          "approx": "exact",
+          "asOf": "2026-10-09",
+          "matches": false,
+          "countedAs": "WMO forecast for October–December",
+          "quote": "Pacific sea temperatures may reach 3.7°C above normal"
+        }
+      ],
+      "statuses": [],
+      "why": "WMO: the El Niño will strengthen through December and almost certainly last through February 2027."
+    },
+    {
+      "slug": "california-braces-for-floods-storms-and-landslides",
+      "date": "2026-10-10",
+      "title": "California braces for floods, storms and landslides",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [
+        {
+          "subject": "California",
+          "status": "state emergency declared; officials reinforcing defenses and staging emergency resources",
+          "asOf": "2026-10-10"
+        }
+      ],
+      "why": "California's emergency preparations for the El Niño winter."
+    },
+    {
+      "slug": "indonesia-sees-nearly-two-million-hectares-burn",
+      "date": "2026-10-20",
+      "title": "Indonesia sees nearly two million hectares burn",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: Indonesia's fire season; most of the burning followed the drought that began in June during the El Niño."
+    },
+    {
+      "slug": "un-warns-50-million-face-greater-hunger",
+      "date": "2026-10-22",
+      "title": "UN warns 50 million face greater hunger",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "nino34_anomaly",
+          "value": 3.8,
+          "approx": "under",
+          "asOf": "2026-10-22",
+          "matches": false,
+          "countedAs": "forecast anomaly",
+          "quote": "A forecast temperature anomaly of up to 3.8°C"
+        }
+      ],
+      "statuses": [
+        {
+          "subject": "UN",
+          "status": "released more than $50 million for preparedness in 11 countries",
+          "asOf": "2026-10-22"
+        }
+      ],
+      "why": "UN agencies: 50 million face greater hunger, and $50 million is released for preparedness in 11 countries."
+    },
+    {
+      "slug": "africa-needs-tens-of-billions-to-prepare",
+      "date": "2026-10-24",
+      "title": "Africa needs tens of billions to prepare",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The African Development Bank: 30–48 million Africans affected by the El Niño and tens of billions needed to prepare."
+    },
+    {
+      "slug": "drought-and-fires-threaten-png-communities",
+      "date": "2026-10-27",
+      "title": "Drought and fires threaten PNG communities",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "El Niño-driven drought and bushfires across Papua New Guinea."
+    },
+    {
+      "slug": "indonesia-s-smoke-sickens-hundreds-of-thousands",
+      "date": "2026-10-31",
+      "title": "Indonesia’s smoke sickens hundreds of thousands",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: Indonesia's fire season; drought linked to the El Niño and land-clearing fires are named as joint drivers."
+    },
+    {
+      "slug": "el-nino-threatens-food-for-49-million-more-people",
+      "date": "2026-11-07",
+      "title": "El Niño threatens food for 49 million more people",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The El Niño's drought is damaging crops across the tropics; WFP's 49 million projection repeated."
+    },
+    {
+      "slug": "el-nino-threatens-harsher-weather-through-2027",
+      "date": "2026-11-10",
+      "title": "El Niño threatens harsher weather through 2027",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: the WMO climate-state update, titled on El Niño but mostly about record heat, oceans and glaciers."
+    },
+    {
+      "slug": "indonesia-s-fires-burn-nearly-3-million-hectares",
+      "date": "2026-11-14",
+      "title": "Indonesia’s 2026 fires may set a century record",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: Indonesia's fire season; an attribution study splits the fire weather between El Niño and human-caused warming."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "persistent-global-warming-wmo-says-2025-remained-among-the-hottest-years",
+      "date": "2026-01-31",
+      "title": "WMO says 2025 among three warmest years despite La Niña",
+      "why": "ENSO vocabulary, but about 2025's temperature record under the previous La Niña."
+    },
+    {
+      "slug": "el-nino-raised-coastal-waters-threatening-200-million-africans",
+      "date": "2026-02-10",
+      "title": "El Niño raised coastal waters, threatening 200 million Africans",
+      "why": "El Niño in the title, but it is the 2023–24 El Niño's sea-level spike, a past event."
+    },
+    {
+      "slug": "droughts-push-vulnerable-regions-toward-violence-after-thresholds",
+      "date": "2026-05-12",
+      "title": "Droughts push vulnerable regions toward violence after thresholds",
+      "why": "Labelled 'El Niño', but a study of 1950–2023 conflict data, not this event."
+    },
+    {
+      "slug": "huge-pacific-warm-patch-expands-threatens-us-water-and-weather",
+      "date": "2026-05-23",
+      "title": "Huge Pacific warm patch expands, threatens US water and weather",
+      "why": "Pacific warming that NOAA expects to grow alongside El Niño, but it is the northeast Pacific marine heatwave, a separate event since September 2025."
+    },
+    {
+      "slug": "indonesia-s-plantation-rules-fuel-massive-regional-haze",
+      "date": "2026-05-23",
+      "title": "Indonesia's plantation rules fuel massive regional haze",
+      "why": "Says haze is amplified by El Niño drought, but it is a governance commentary on fires that spiked before this El Niño formed."
+    },
+    {
+      "slug": "trump-plan-would-cut-key-sea-data-raise-forecast-errors",
+      "date": "2026-06-06",
+      "title": "Trump plan would cut key sea data, raise forecast errors",
+      "why": "About dismantling a US ocean-observing network; El Niño forecasting is only one thing it would degrade."
+    },
+    {
+      "slug": "july-sea-temperatures-hit-global-record",
+      "date": "2026-08-11",
+      "title": "July sea temperatures hit global record",
+      "why": "Global sea-surface record that the story says Pacific warming tied to El Niño led; the subject is the global record."
+    },
+    {
+      "slug": "warming-linked-to-stronger-pacific-climate-swings",
+      "date": "2026-08-28",
+      "title": "Warming linked to stronger Pacific climate swings",
+      "why": "Labelled 'El Niño', but a coral-record study of how El Niño cycles have intensified over decades, not this event."
+    },
+    {
+      "slug": "2026-fires-prompt-over-110-deployments-in-49-countries",
+      "date": "2026-08-28",
+      "title": "2026 fires prompt over 110 deployments in 49 countries",
+      "why": "Says 2026 wildfires were fueled by a strong El Niño, but it is about military deployments to fires worldwide, mostly before the event formed."
+    },
+    {
+      "slug": "human-warming-supercharges-pacific-climate-swings",
+      "date": "2026-08-29",
+      "title": "Human warming supercharges Pacific climate swings",
+      "why": "Labelled 'El Niño': the same Science coral study on El Niño variability since preindustrial times, not this event."
+    },
+    {
+      "slug": "el-nino-heat-waves-shorten-recovery-time-threaten-coastal-livelihoods",
+      "date": "2026-09-01",
+      "title": "El Niño heat waves shorten recovery time, threaten coastal livelihoods",
+      "why": "El Niño in the title, but a global coral survey covering bleaching since 1998; El Niño is one of the pressures."
+    },
+    {
+      "slug": "100-days-of-record-warmth-threaten-fisheries-and-coral-reefs",
+      "date": "2026-09-19",
+      "title": "100 days of record warmth threaten fisheries and coral reefs",
+      "why": "Global sea-surface record streak amplified by El Niño; the subject is ocean warmth from human-caused warming."
+    },
+    {
+      "slug": "late-net-zero-leaves-centuries-of-harsher-el-nino-years",
+      "date": "2026-10-16",
+      "title": "Late net zero leaves centuries of harsher El Niño years",
+      "why": "El Niño in the title, but a model study of extreme El Niño frequency after net zero, not this event."
+    },
+    {
+      "slug": "drought-threatens-panama-s-canal-and-drinking-supply",
+      "date": "2026-10-21",
+      "title": "Drought threatens Panama’s canal and drinking supply",
+      "why": "Same canal and drought as the 22 August transit-cap story, but our text never attributes it to El Niño."
+    },
+    {
+      "slug": "earth-is-trapping-heat-at-a-faster-rate",
+      "date": "2026-11-10",
+      "title": "Earth is trapping heat at a faster rate",
+      "why": "The WMO climate-state update (sibling of the optional 10 November El Niño story), mentioning the developing El Niño only in passing."
+    }
+  ],
+  "notes": "BOUNDARY RULE, applied the same way to every candidate. MUST: the 2026–27 El Niño is the story's subject, either the event itself (onset odds, the threshold crossing, agency declarations, strength readings, peak and duration forecasts) or impacts and responses the story presents as this El Niño's, with El Niño the subject of the title or the opening summary sentence (WFP and UN hunger projections, AfDB costs, Goldman Sachs food prices, Peru's anchovy ban, the Panama Canal caps, UNICEF, Papua New Guinea, California, Southeast Asia, the 451,000 heat-death projection). Impact stories that pass this test are must, not optional: an ongoing-story page about this El Niño would carry them. OPTIONAL: (a) the subject is an impact or response with a life of its own, the story names this El Niño as a main driver, but the cause is shared with land clearing or long-term warming (Indonesia's 2026 fire season, 6 stories; India's monsoon-shortfall plan; Brazil's wildfire budget; Indonesia's peat food estates; rice yields; a disaster-finance commentary); or (b) the story is about something else but carries a real update on the event (a science roundup, an ocean-monitoring op-ed with NOAA's confirmation and 63% odds, a global sea-surface outlook framed on the forming El Niño, a coral-trend feature that opens on this event, the WMO climate-state update titled on El Niño). OUT (near misses): El Niño named only as one factor or a future risk in stories about temperature, sea-surface or ocean-heat records, the energy imbalance, deforestation, heat, wildfires in general or war-driven food crises; research on El Niño in general; the 2023–24 El Niño; the 2025 La Niña. The 'El Niño' title label is not decisive: three labelled stories are near misses (general research) and two are optional. Same-day duplicates (6 Jun WMO, 1 Aug WMO, 6/7 Aug WFP) are all entries; at most one of each set is a turning point.\n\nVALUES. Taken only from title, summary, relevance reasons and antifactors, as the format lists (no entry with a value has research paragraphs). The pull quotes state four more numbers, left out for that reason: NOAA's 96% for December 2026–February 2027 (23 May), PAGASA's 81% chance of 'very strong' and 97% chance of persisting into the first half of 2027 (2 Sep), and WMO's near-100% persistence through February 2027 (9 Oct); an evaluator should not penalize a system that extracts them. Ranges are recorded as their lower bound with approx at_least (80–90% gives 80; BMKG's 50–60% gives 50). Forecast probabilities are dated to the story. The 1 Aug monthly Niño 3.4 values are dated to the month's last day (April 0.5°C on 2026-04-30, June 1.6°C on 2026-06-30). Only three entries state an observed Niño 3.4 anomaly (6 Jun about 1°C, 1 Aug 0.5 then 1.6°C, 22 Sep 3.05°C); forecast peaks and 'in places', 'parts of the Pacific' and subsurface readings are matches false. The 22 Sep 3.05°C is called 'the Pacific temperature anomaly' without naming the index, and its antifactors warn that raw and ONI baselines differ: kept as matching, but uncertain. Not values: Trenberth's 'above 2 degrees Celsius' (21 Jun) defines very strong, and the 9 Oct 'previous 2.6°C record' belongs to an earlier El Niño.\n\nSTATUS. Open on 16 Nov 2026 (closed null): the latest stories (9 Oct WMO, 22 Oct, 27 Oct) expect a peak around the end of 2026 and persistence at least through February 2027. Status rows record agency declarations and strength calls (ECMWF, WMO, JMA, NOAA, PAGASA, Hansen) and named El Niño-driven measures (Peru, Panama Canal, India, Brazil, California, UN).\n\nWHERE OUR STORIES DISAGREE. (1) Onset: JMA declared El Niño on 11 Jun, NOAA called it underway on 21 Jun and 'confirmed' on 24 Jun, and the 17 Jul story calls it 'June-formed'; yet the 4 Jul WMO story says strong conditions 'are expected to form' in July–September, and the 3 Jul Borneo story still cites BMKG's 50–60% chance of a moderate El Niño 'starting mid-year'. The 6 Jun WMO story calls El Niño 'confirmed' in its relevance summary while giving 80–90% odds. (2) Record: Hansen (27 Aug) says it is already the strongest in the modern record and 22 Sep says it has exceeded previous highs at 3.05°C, but 1 Oct ('may rank among the largest recorded'), 9 Oct ('a chance it will be one of the strongest since 1950'; a forecast 3.7°C would exceed 'the previous 2.6°C record') and 22 Oct ('could be unprecedented') still treat the record as ahead. (3) AfDB: 27 Jul gives $10–20 billion and 1–2% of GDP in the hardest-hit countries with $330 million in farm income lost; 24 Oct gives losses of up to 5% of the continent's GDP and $300 million in agricultural losses. (4) WFP's projection appears as 49 million (6 Aug, 7 Nov) and about 50 million (7 Aug, 22 Aug, 22 Sep, 22 Oct): one projection, rounded. (5) Panama: the 22 Aug canal-cap story blames El Niño; the 21 Oct Panama drought story never mentions it.\n\nCOVERAGE. Full text was read for all 86 archive stories that mention El Niño or La Niña in title, label or summary, 4 more found by API search, and about 20 impact stories chosen by keyword (Panama, Amazon fires, coral, hunger). A full-text scan of the other climate stories was cut short by the API limit (100 requests per 15 minutes); the stories it found that mention El Niño only in body text (UN 13 hunger hotspots, global CO2 record, Copernicus 21.1°C daily record, England heat deaths, 1.5°C by 2030) are all passing references."
+}

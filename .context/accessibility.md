@@ -122,6 +122,7 @@ Before deploying new pages/components:
 |---------|----------|-------|
 | Skip link | `PublicLayout.tsx` | The first tab stop, to `#main-content`, with `FOCUS_RING` |
 | Story filters | `StoryFilters.tsx` | To be implemented — use fieldset/legend |
+| Info notes | `InfoTip.tsx`, `lib/bubblePosition.ts`; the Jobs page | An "i" button named for what it explains ("About Crawl Feeds"), with the note as its `aria-describedby` tooltip, always in the DOM. Hover and keyboard focus show it (it stays while the pointer is on it); a click or tap pins it until a second one, a tap elsewhere (Safari gives a tapped button no focus, so a document `pointerdown` closes it), Escape or blur. The bubble is `position: fixed`, below the button or above it when there is no room, kept inside the viewport, so a table's scrolling box never clips it. 24x24px, like the admin's other icon buttons. Test: `InfoTip.test.tsx` |
 | Admin frame | `AdminLayout.tsx` | All text inside a landmark (axe "region"): desktop sidebar in `<aside>` with a labelled `<nav>`, mobile top bar a `<header>`, content in `<main>` |
 | Story list | `StoryList.tsx` | To be implemented — use semantic table or list |
 | Focus styles | All interactive elements | `FOCUS_RING` (`control-classes.ts`); see Buttons and Links above |

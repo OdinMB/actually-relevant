@@ -5,9 +5,11 @@ const log = createLogger('taskRegistry')
 
 /**
  * `research`: research runs, one story's (services/researchRuns.ts) or the stories list's bulk
- * Research (services/researchBatch.ts); its stories count as processing while it runs.
+ * Research (services/researchBatch.ts); its stories count as processing while it runs. `context`: an
+ * editor's context run of one story (services/storyContextOnDemand.ts), its story processing too, so
+ * a shutdown waits for it.
  */
-export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research'
+export type BulkTaskType = 'preassess' | 'assess' | 'select' | 'reclassify' | 'emotion' | 'research' | 'context'
 type BulkTaskStatus = 'running' | 'completed' | 'failed'
 
 /** A story the task left out, with why; neither completed nor failed. */

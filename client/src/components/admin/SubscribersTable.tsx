@@ -1,4 +1,5 @@
 import { Badge } from '../ui/Badge'
+import { SortableHeader, useSortableRows, type SortColumns } from '../ui/SortableHeader'
 import type { BadgeVariant } from '../../lib/constants'
 import { formatShortDate } from '../../lib/constants'
 import type { SubscriberRow, SubscriberDbStatus, SubscriberPlunkStatus } from '../../lib/admin-api'
@@ -25,34 +26,50 @@ function StatusBadge<T extends string>({ status, variantMap }: { status: T | nul
   return <Badge variant={variantMap[status]}>{status}</Badge>
 }
 
+type SubscriberSortKey = 'email' | 'db' | 'plunk' | 'edition' | 'confirmed' | 'created'
+
+const COLUMNS: SortColumns<SubscriberRow, SubscriberSortKey> = {
+  email: { value: r => r.email },
+  db: { value: r => r.dbStatus },
+  plunk: { value: r => r.plunkStatus },
+  edition: { value: r => r.plunkEdition },
+  confirmed: { value: r => r.dbConfirmedAt, firstDirection: 'desc' },
+  created: { value: r => r.dbCreatedAt, firstDirection: 'desc' },
+}
+
+const TH = 'px-4 py-3 text-xs font-medium uppercase tracking-wider text-neutral-500'
+
 export function SubscribersTable({ rows }: { rows: SubscriberRow[] }) {
+  const { rows: sorted, sort, sortBy } = useSortableRows(rows, COLUMNS, null)
+  const header = { sort, onSort: sortBy }
+
   return (
     <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
       <table className="min-w-full divide-y divide-neutral-200">
         <thead className="bg-neutral-50">
           <tr>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            <SortableHeader column="email" {...header} className={TH}>
               Email
-            </th>
-            <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="db" {...header} className={`hidden sm:table-cell ${TH}`}>
               In our DB
-            </th>
-            <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="plunk" {...header} className={`hidden sm:table-cell ${TH}`}>
               In Plunk
-            </th>
-            <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="edition" {...header} className={`hidden sm:table-cell ${TH}`}>
               Edition
-            </th>
-            <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="confirmed" {...header} className={`hidden lg:table-cell ${TH}`}>
               Confirmed
-            </th>
-            <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="created" {...header} className={`hidden lg:table-cell ${TH}`}>
               Created
-            </th>
+            </SortableHeader>
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-200">
-          {rows.map(row => (
+          {sorted.map(row => (
             <tr key={row.email} className={`hover:bg-neutral-50 ${row.mismatch ? 'bg-amber-50/40' : ''}`}>
               <td className="px-4 py-3 text-sm">
                 <div className="flex items-center gap-2">

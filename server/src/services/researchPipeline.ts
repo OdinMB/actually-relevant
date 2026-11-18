@@ -182,7 +182,7 @@ export interface ResearchEarlier {
 
 export type DropKind = DropReason | ExtractDropReason | 'extraction-failed'
 
-/** What one pass of the checks found, recorded for the shadow week's tally (`.context/story-research.md`, "Own words"). */
+/** What one pass of the checks found, recorded for the weekly tally (`.context/story-research.md`, "Own words"). */
 export interface CheckPass {
   problems: CitationProblem[]
   /** Each item's longest run of words shared with each outside source, per kind, below the threshold too. */
@@ -617,7 +617,8 @@ async function research(story: ResearchStory, deps: ResearchDeps, call: Call, r:
       url: o.url,
       title: o.title,
       outlet: o.outlet,
-      date: o.datePublished,
+      // The anchored date, so S0 shows the same day the window and the old-news cutoff use.
+      date: articleDate,
       favicon: null,
       usedRawContent: false,
       text: o.content,

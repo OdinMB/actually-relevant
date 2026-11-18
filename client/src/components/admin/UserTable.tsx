@@ -3,6 +3,7 @@ import { EllipsisVerticalIcon, PencilSquareIcon, TrashIcon } from '@heroicons/re
 import type { User, UserRole } from '@shared/types'
 import { Badge } from '../ui/Badge'
 import { ActionIconButton } from '../ui/ActionIconButton'
+import { SortableHeader, useSortableRows, type SortColumns } from '../ui/SortableHeader'
 import type { BadgeVariant } from '../../lib/constants'
 import { formatShortDate } from '../../lib/constants'
 
@@ -19,31 +20,45 @@ interface UserTableProps {
   onDelete: (user: User) => void
 }
 
+type UserSortKey = 'name' | 'email' | 'role' | 'created'
+
+const COLUMNS: SortColumns<User, UserSortKey> = {
+  name: { value: u => u.name },
+  email: { value: u => u.email },
+  role: { value: u => u.role },
+  created: { value: u => u.createdAt, firstDirection: 'desc' },
+}
+
+const TH = 'px-4 py-3 text-xs font-medium uppercase tracking-wider text-neutral-500'
+
 export function UserTable({ users, currentUserId, onEdit, onDelete }: UserTableProps) {
+  const { rows, sort, sortBy } = useSortableRows(users, COLUMNS, null)
+  const header = { sort, onSort: sortBy }
+
   return (
     <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
       <table className="min-w-full divide-y divide-neutral-200">
         <thead className="bg-neutral-50">
           <tr>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            <SortableHeader column="name" {...header} className={TH}>
               Name
-            </th>
-            <th scope="col" className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="email" {...header} className={`hidden md:table-cell ${TH}`}>
               Email
-            </th>
-            <th scope="col" className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="role" {...header} className={`hidden md:table-cell ${TH}`}>
               Role
-            </th>
-            <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
+            </SortableHeader>
+            <SortableHeader column="created" {...header} className={`hidden lg:table-cell ${TH}`}>
               Created
-            </th>
+            </SortableHeader>
             <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-neutral-500">
               Actions
             </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-200">
-          {users.map(user => {
+          {rows.map(user => {
             const isSelf = currentUserId === user.id
             return (
               <tr key={user.id} className="hover:bg-neutral-50">

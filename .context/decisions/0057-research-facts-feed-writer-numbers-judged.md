@@ -202,3 +202,93 @@ a call on the small tier), and so does a recheck that holds one of the three; no
 support failures on paragraphs too. The methodology page's "Each paragraph and point is then
 checked against the sources it cites" stays true, but does not say that the headline, summary and
 blurb are now checked against all facts; that wording is the owner's (`.context/ai-transparency.md`, §3).
+
+## Amendment 2026-11-14: newest information leads; contradicted and old news narrowed
+
+A researched story was written around the original article's main claim even where a later report
+showed that the development had moved on: a plan dropped, a figure revised. Such a report could
+also make the story `contradicted`, and an article reporting a new step in an event more than 14
+days old could be `stale`; the research step rejects both. The coordinating agent proposed on
+2026-11-14 that the newest information leads and that both verdicts narrow to match; the owner
+decided all three on 2026-11-14. The agent placed the rules marked below.
+
+- **Newest information leads.** Where a source dated after the original article (`S0`), or a fact
+  that dates its event after the article's date, shows that the development has since moved on, the
+  story is written around that latest state and the earlier claim is context ("First announced as a
+  ban on all imports, the plan was narrowed to luxury goods on March 4."). The title, the first
+  paragraph, the summary and the blurb state the latest state, never the earlier claim as if it
+  still held. It is one block, `LATEST_STATE` in `server/src/prompts/research.ts`, in the write and
+  repair prompts; the derive prompt carries its headline part (the agent's placement, so that a
+  title, summary or blurb written again from the kept story keeps the latest state). The fact check
+  is unchanged: the latest state and the earlier claim are each a claim its cited facts must state.
+- **The writer sees each source's publication day** on its `<SOURCE>` (`publishedDay`, `YYYY-MM-DD`
+  or `unknown`), and the prompt says what the date is. The date facts (`S2F0`) stay out of the write
+  prompt and in the fact check's evidence. A source dated as search gives it
+  (`Thu, 12 Nov 2026 08:00:00 GMT`) had no date fact, since `publishedFact` read only an ISO date;
+  it has one now (the agent's fix, found while checking what the writer sees).
+- **`contradicted` narrows to a disagreement no later report settles**: credible sources disagree
+  about the main claim at the same time, one stating the opposite of what another states about the
+  same moment, and no later report settles which is right (`<CONTRADICTED>`, and the
+  `isContradicted` description in `server/src/schemas/research.ts`). A later report that reverses,
+  updates or settles the claim is not a contradiction; the story gives that latest state. The
+  verdict, its fact ids and the gate (`decideGate`) are unchanged.
+- **Old news narrows to an old event with nothing new since**: the main development first happened
+  before the cutoff (14 days before the article's date) and no fact reports a new development
+  about it on or after the cutoff (`<OLD_NEWS>`, the `isOld` description). Where one does, the
+  story is written around that development, with the earlier event as context, and it is not old
+  news; the write prompt's one-development rule names that development (the agent's placement).
+  No schema field was added (the agent's choice): `firstHappened` stays the old event's own date,
+  so a kept run whose `firstHappened` precedes the cutoff records the rule at work, and stored runs
+  parse unchanged. The verdict and the gate are unchanged.
+
+Rule: a researched story states the latest state its sources show; an earlier claim is context,
+never the headline; a change over time is never a contradiction, and an old event with a fresh
+development is not old news.
+
+Consequences: a story whose development moved on after the article reads differently from the
+article that first reported it, its headline possibly the reverse of the original's ("Pakistan
+narrows import ban" for "Pakistan bans all imports"); the Sources list still starts with that
+article. Later reports are few where the research runs at selection (the search reaches 7 days past
+the article's date, never past the run time, and the research step runs on the day's selection);
+an editor's run of an older story finds the most. Fewer stories are rejected as contradicted: one
+whose claim a later report reversed is now published at its latest state, and only a dispute
+between reports of the same time still rejects it; runs stored before keep the verdicts they got.
+Fewer stories are rejected as stale too: an article about a fresh step in an older story is
+published, written around that step, which the model judges, as it judged the event's date
+before. Not yet measured with `eval:research`. The methodology page's "If the research shows that
+the story is old news or is contradicted by other reports, we don't publish it" now reads wider
+than both rules and says nothing of the latest state; that wording is the owner's
+(`.context/ai-transparency.md`, §3 and §11).
+
+## Amendment 2026-11-16: every new step, starting with story context
+
+The overviews roadmap (`.plans/2026-11-16_story-overviews.md`, decision D4, the owner's on
+2026-11-16: code checks are not reliable enough, "50%" against "half of") extends this decision's
+rule to every new step that states numbers. Story context (`.context/story-context.md`, ADR-0061)
+is the first.
+
+- **Extraction keeps the supporting sentence word for word and what a figure measures**: story
+  context's pass 2 keeps the sentence and a passage of at most 600 characters around it; pass 1
+  structures research's kept facts (value, unit, what is counted, place, as-of, credited body).
+- **A fact-check call judges each fact against the passage it came from**: research's prompt and
+  schema, unchanged, on each fact as `renderFact` renders its structured fields, with the sentence
+  (or passage) and its source's date fact as evidence; and again on each card's sentences, tiles
+  and charts against their cited facts, with the sources' lines for copying.
+- **Code checks only structure**: a fact names a source the run fetched and has a statement and a
+  sentence; a cited id is a supported fact; a place exists. A failure there drops the item.
+- **What else code notices is a hint**, never a failure. Sent to the judge: numbers in an item that
+  its evidence does not state digit for digit (`<NUMBERS_NOT_FOUND>`, as research gives them).
+  Recorded, not sent: whether the supporting sentence stood word for word in the fetched text
+  (`support_found`), which the judge could not use since it sees only the sentence; the eval
+  measures it, and a hint channel, which would change research's prompt, is the follow-up if
+  not-found facts prove often wrong. That an as-of date is later than its source's date is visible
+  to the judge through the date fact. Chart and tile rules are rules for drawing, not checks of
+  truth: a chart that breaks one is not drawn and fails nothing (ADR-0064).
+
+Rule: in every step, a number is judged by the fact check against its source's words; code fails
+only structure, and passes what else it notices as a hint or a record.
+
+Consequences: a story's context costs two fact-check passes (facts, then cards) on the small tier,
+no repair. A wrong number the judge misses reaches a card with its source shown (ADR-0063); where
+numbers slip through, the fact check's rules get tighter, and since the prompt is shared, research
+and context tighten together.

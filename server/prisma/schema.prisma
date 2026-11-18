@@ -116,6 +116,9 @@ model Story {
   mastodonPosts          MastodonPost[]
   feedback               Feedback[]
   researchRuns           StoryResearchRun[]
+  contextRuns            StoryContextRun[]
+  contextFacts           ContextFact[]
+  contextBoxes           ContextBox[]
   createdAt              DateTime     @default(now()) @map("created_at")
   updatedAt              DateTime     @updatedAt @map("updated_at")
 
@@ -458,10 +461,180 @@ model StoryResearchRun {
   error         String?
   startedAt     DateTime           @default(now()) @map("started_at")
   finishedAt    DateTime?          @map("finished_at")
+  contextRuns   StoryContextRun[]
 
   @@index([storyId, startedAt])
   @@index([startedAt])
   @@map("story_research_runs")
+}
+
+/// How long a context fact stays current, from its as-of date (.context/story-context.md, "Validity")
+enum ContextValidity {
+  fixed
+  slow
+  fast
+}
+
+/// The fact check's answer on a context fact; only `supported` facts are ever offered or shown
+enum ContextVerdict {
+  supported
+  rejected
+  unjudged
+}
+
+/// A judgment record's status (the overviews roadmap's record): `demoted` is never served
+enum JudgmentStatus {
+  unreviewed
+  reviewed
+  demoted
+}
+
+/// A context box's slot, or the figures box
+enum ContextBoxType {
+  compared
+  why_now
+  build_up
+  who_affected
+  response
+  next
+  key_term
+  figures
+}
+
+enum ContextRunStatus {
+  running
+  completed
+  skipped
+  failed
+}
+
+/// One story context run (.context/story-context.md): the step's or an editor's. The step settles a story with its first run, whatever its outcome; an editor may run it again, and each run builds on the story's earlier completed ones. At most one runs per story at a time. A deleted story's runs keep a null story_id, so their cost stays counted
+model StoryContextRun {
+  id            String            @id @default(uuid())
+  storyId       String?           @map("story_id")
+  story         Story?            @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  /// The completed research run whose facts the run read
+  researchRunId String?           @map("research_run_id")
+  researchRun   StoryResearchRun? @relation(fields: [researchRunId], references: [id], onDelete: SetNull)
+  status        ContextRunStatus  @default(running)
+  /// built, none-kept, no-research or technical; null while running
+  outcome       String?
+  boxes         Int               @default(0)
+  /// model_usd plus the web search credits at their price: an upper bound, model calls at standard price
+  costUsd       Float             @default(0) @map("cost_usd")
+  modelUsd      Float             @default(0) @map("model_usd")
+  tavilyCredits Int               @default(0) @map("tavily_credits")
+  /// What the run did: gap list, searches, filter drops, verdicts, box drops, number hints, item tally, calls
+  result        Json?
+  /// Why a run failed, sanitized: never fetched text
+  error         String?
+  startedAt     DateTime          @default(now()) @map("started_at")
+  finishedAt    DateTime?         @map("finished_at")
+  facts         ContextFact[]
+  contextBoxes  ContextBox[]
+
+  @@index([storyId])
+  @@index([startedAt])
+  @@map("story_context_runs")
+}
+
+/// One fact a context run structured (pass 1, from research's facts) or extracted (pass 2, from its own search), with its check's verdict. Only the supporting sentence and a short passage are kept, never a page's text
+model ContextFact {
+  id                 String          @id @default(uuid())
+  storyId            String          @map("story_id")
+  story              Story           @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  runId              String          @map("run_id")
+  run                StoryContextRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  /// The fact's id within its run, as boxes cite it: research's own (`S2F3`) for pass 1, the next source numbers for pass 2
+  ref                String
+  /// research (pass 1) or search (pass 2)
+  origin             String
+  /// The fact this one was copied from, when a kept box cited a reused one: an earlier story's, or one of this story's earlier runs'
+  reusedFromId       String?         @map("reused_from_id")
+  sourceUrl          String          @map("source_url")
+  sourceOutlet       String          @map("source_outlet")
+  sourceTitle        String          @map("source_title")
+  sourceDate         DateTime?       @map("source_date") @db.Date
+  sourceKind         String          @map("source_kind")
+  /// Copied verbatim from the source
+  supportingSentence String          @map("supporting_sentence")
+  /// Pass 2 only: the sentence with one sentence either side, at most 600 characters
+  passage            String?
+  /// The supporting sentence was found word for word in the fetched text
+  supportFound       Boolean         @default(false) @map("support_found")
+  statement          String
+  value              Float?
+  valueHigh          Float?          @map("value_high")
+  unit               String          @default("")
+  /// exact, about, at_least or under
+  approx             String          @default("exact")
+  provisional        Boolean         @default(false)
+  counted            String          @default("")
+  place              String          @default("")
+  asOf               DateTime?       @map("as_of") @db.Date
+  /// day, month or year; null without an as-of date
+  asOfPrecision      String?         @map("as_of_precision")
+  credited           String          @default("")
+  /// official, research, news or other; null when nobody is credited
+  creditedKind       String?         @map("credited_kind")
+  validity           ContextValidity @default(fixed)
+  verdict            ContextVerdict
+  verdictProblem     String?         @map("verdict_problem")
+  status             JudgmentStatus  @default(unreviewed)
+  model              String
+  promptVersion      String          @map("prompt_version")
+  createdAt          DateTime        @default(now()) @map("created_at")
+
+  @@unique([runId, ref])
+  @@index([storyId])
+  @@map("context_facts")
+}
+
+/// One context box a run wrote: a card on the story page (.context/story-context.md). Sentences and visuals cite their run's facts by ref
+model ContextBox {
+  id            String          @id @default(uuid())
+  storyId       String          @map("story_id")
+  story         Story           @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  runId         String          @map("run_id")
+  run           StoryContextRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  position      Int
+  type          ContextBoxType
+  heading       String
+  teaser        String          @default("")
+  /// [{ text, factIds }], each fact id a ref of the box's run
+  sentences     Json
+  /// A validated tiles, bars or line spec citing fact refs, or null
+  visual        Json?
+  /// Unused since 2026-11-17: no honest-gap card is written or served (ADR-0065); kept, as dropping it would be a destructive migration
+  gap           Boolean         @default(false)
+  /// The newest as-of date of its cited facts
+  asOf          DateTime?       @map("as_of") @db.Date
+  asOfPrecision String?         @map("as_of_precision")
+  /// P<n>, W<n>, or null for the More context section, as the write call chose it or an editor moved it
+  place         String?
+  placeByEditor Boolean         @default(false) @map("place_by_editor")
+  status        JudgmentStatus  @default(unreviewed)
+  /// Null for the honest gap, which code adds
+  model         String?
+  promptVersion String?         @map("prompt_version")
+  writtenAt     DateTime        @default(now()) @map("written_at")
+
+  @@index([storyId])
+  @@map("context_boxes")
+}
+
+/// Story context's answered web searches, reused for 7 days at no credit cost; rows past that are deleted at each run's start. Only results that passed the opt-out check are kept
+model ContextSearchCache {
+  /// sha256 of the normalized query, depth, topic and recent flag
+  key       String   @id
+  query     String
+  /// [{ url, title, date, text }]
+  results   Json
+  credits   Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("context_search_cache")
 }
 
 /// One row per show and ISO week whose Saturday publish slot found no weekly episode to publish: the claim that makes the missed-week alert go out once
@@ -490,10 +663,57 @@ model JobRun {
   // Consecutive runs cut off before they finished (shutdown at the drain deadline, or a process that
   // died); a normal finish resets it. Bounds the automatic resume (interruptedRuns.ts)
   interruptedRuns Int       @default(0) @map("interrupted_runs")
+  // Model calls at OpenAI flex price, with a fall back to standard (services/openaiFetch.ts)
+  flex            Boolean   @default(true)
+  // A chain's step: the chain waits for a person after this step (jobs/chains.ts)
+  pauseForReview  Boolean   @default(false) @map("pause_for_review")
+  // A chain's step, "HH:MM" UTC: the chain holds before this step until this time comes round after
+  // the run's start (a daytime social post after a night-time chain): "HH:MM", or "Sat 07:00" for a
+  // weekday, on the step's own clock (jobs/jobTimeZones.ts, else UTC). Null for no hold
+  notBefore       String?   @map("not_before")
+  // A chain's flex cut-off, in hours from the start of each run (any schedule, once or several times
+  // a day): calls go at standard price after it. Null on other jobs, and for flex the whole run
+  flexHours       Float?    @map("flex_hours")
+  // A chain's place to go on from: the step running now ('running'), the step after a review pause
+  // ('review'), the step held for its time ('waiting', going on at resumeAt), or the step it stopped
+  // at ('failed'); null when its last run ended normally
+  resumeStep      String?   @map("resume_step")
+  resumeReason    String?   @map("resume_reason")
+  resumeAt        DateTime? @map("resume_at")
+  // A chain's current run: when it started from its first step; a step's hold counts from it
+  chainStartedAt  DateTime? @map("chain_started_at")
+  // What the last finished run spent (lib/runUsage.ts RunUsage): calls, tokens, USD
+  lastRunUsage    Json?     @map("last_run_usage")
+  lastRunSummary  String?   @map("last_run_summary")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@map("job_runs")
+}
+
+/// What each job spent in each UTC month, added to by every finished run that recorded its usage (jobs/jobLease.ts finishJobRun; .context/scheduler.md, "Spending"), and by an editor's context run as a run of build_story_context. A chain's own runs add nothing: its steps' runs carry its spend. An interrupted run's spend is lost
+model JobMonthSpend {
+  jobName         String   @map("job_name")
+  /// The first day of the UTC month, on the database clock
+  month           DateTime @db.Date
+  /// USD as billed (flex calls at flex price), web searches included
+  costUsd         Float    @default(0) @map("cost_usd")
+  standardCostUsd Float    @default(0) @map("standard_cost_usd")
+  /// The part of cost_usd spent on web searches; AI spend is cost_usd minus search_usd
+  searchUsd       Float    @default(0) @map("search_usd")
+  searchCredits   Int      @default(0) @map("search_credits")
+  runs            Int      @default(0)
+
+  @@id([jobName, month])
+  @@map("job_month_spend")
+}
+
+/// A monthly warning level in whole USD (services/spending.ts): per job, for research started by an editor (`editor_research`) or for the total (`all`). Passing it, or heading past it at the month's pace, records a notice, at most one of each kind per scope and month; nothing stops on it
+model SpendWarning {
+  scope    String @id
+  levelUsd Int    @map("level_usd")
+
+  @@map("spend_warnings")
 }
 
 // --- Story retention (.context/story-retention.md) ---

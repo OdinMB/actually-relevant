@@ -5,7 +5,7 @@ import AiBadge from '../ai/AiBadge'
 import { AI_DISCLOSURE_COPY } from '../ai/aiDisclosureCopy'
 import { SourceIcon } from './SourceIcon'
 import { SourceLink, sourceHref } from './SourceLink'
-import { EARLIER_LABEL, sourceDetails } from './sourceText'
+import { outletName, sourceDetails } from './sourceText'
 
 /** A researched story's sources by id, as the citations look them up. */
 export type SourcesById = ReadonlyMap<string, ResearchedSource>
@@ -14,8 +14,6 @@ interface CitedSource {
   source: ResearchedSource
   sentence: string | null
 }
-
-const outletName = (source: ResearchedSource) => (source.origin === 'earlier' ? EARLIER_LABEL : source.outlet)
 
 function SourceCard({ source, sentence }: CitedSource) {
   const details = sourceDetails(source)

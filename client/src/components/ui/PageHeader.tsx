@@ -2,7 +2,8 @@ import type { ReactNode } from 'react'
 
 interface PageHeaderProps {
   title: string
-  description?: string
+  /** A line under the title: text, or phrasing content such as a badge. */
+  description?: ReactNode
   actions?: ReactNode
 }
 

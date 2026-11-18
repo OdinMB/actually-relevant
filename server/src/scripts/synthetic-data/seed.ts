@@ -20,6 +20,8 @@ export interface SeedSummary {
   clusters: number
   newsletters: number
   podcasts: number
+  /** The one story with context, by slug, and its cards. */
+  context: { slug: string; boxes: number }
   users: number
 }
 
@@ -68,6 +70,9 @@ export async function seedSyntheticData(db: PrismaClient, options: { now: Date; 
       await tx.story.updateMany({ where: { id: { in: data.cluster.memberIds } }, data: { clusterId: data.cluster.id } })
       await tx.newsletter.createMany({ data: data.newsletters })
       await tx.podcast.createMany({ data: data.podcasts })
+      await tx.storyContextRun.create({ data: data.context.run })
+      await tx.contextFact.createMany({ data: data.context.facts })
+      await tx.contextBox.createMany({ data: data.context.boxes })
       await tx.user.create({ data: { id: syntheticId('user:admin'), email: SYNTHETIC_ADMIN.email, name: SYNTHETIC_ADMIN.name, passwordHash, role: 'admin' } })
       // Nothing runs on a schedule against this database: no crawl, no model call, no send
       await tx.jobRun.updateMany({ data: { enabled: false } })
@@ -84,6 +89,7 @@ export async function seedSyntheticData(db: PrismaClient, options: { now: Date; 
     clusters: 1,
     newsletters: data.newsletters.length,
     podcasts: data.podcasts.length,
+    context: { slug: data.stories.find(s => s.row.id === data.context.run.storyId)!.row.slug!, boxes: data.context.boxes.length },
     users: 1,
   }
 }
@@ -96,6 +102,6 @@ export function describeSummary(s: SeedSummary): string {
     .join(', ')
   return (
     `seeded ${s.issues} issues, ${s.feeds} feeds, ${total} stories (${byStatus}), ${s.clusters} dedup cluster, ` +
-    `${s.newsletters} newsletter issues, ${s.podcasts} podcast episodes and ${s.users} admin user`
+    `${s.newsletters} newsletter issues, ${s.podcasts} podcast episodes, ${s.context.boxes} context cards (on /stories/${s.context.slug}) and ${s.users} admin user`
   )
 }

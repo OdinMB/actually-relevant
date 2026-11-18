@@ -8,6 +8,9 @@ import type { ResearchedSource } from '@shared/types'
 /** What our own earlier stories are called in the sources list and the citation cards. */
 export const EARLIER_LABEL = 'Earlier on Actually Relevant'
 
+/** The name a source goes by in citations and the header's icon tooltips: the outlet, or `EARLIER_LABEL` for our earlier stories. */
+export const outletName = (source: Pick<ResearchedSource, 'origin' | 'outlet'>) => (source.origin === 'earlier' ? EARLIER_LABEL : source.outlet)
+
 const KIND_NAMES: Partial<Record<NonNullable<ResearchedSource['kind']>, string>> = {
   analysis: 'analysis',
   opinion: 'opinion',

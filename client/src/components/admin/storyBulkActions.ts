@@ -4,22 +4,13 @@ import { adminApi } from '../../lib/admin-api'
 import type { useBackgroundTasks } from '../../hooks/useBackgroundTasks'
 import type { BulkAction } from './BulkActionsBar'
 import { bulkApplyConfirmation, bulkResearchConfirmation, type BulkResearchStory } from './bulkResearch'
+import type { DraftPanel, SocialChannel } from './social/useSocialDrafts'
 
 /** What the stories list's confirmation dialog asks, and what its Confirm runs. */
 export interface ConfirmAction {
   title: string
   description: string
   action: () => Promise<void>
-}
-
-type SocialChannel = 'bluesky' | 'mastodon'
-
-/** A social channel's draft panel on the stories list. */
-export interface DraftPanel {
-  /** Opened empty, while the draft is made. */
-  open: () => void
-  show: (draft: unknown) => void
-  close: () => void
 }
 
 /** What the handlers act through: the stories list's state, dialogs, toasts and tasks. */

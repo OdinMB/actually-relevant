@@ -1,11 +1,12 @@
 import { useState, useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { Story } from '@shared/types'
 import { getTopLevelIssue } from '../../lib/issues'
 import { adminApi } from '../../lib/admin-api'
 import { Badge } from '../ui/Badge'
 import { EMOTION_VARIANTS, formatShortDate } from '../../lib/constants'
+import { returnState, storyPath } from './storyReturn'
 
 export interface StoryListAction {
   icon: 'select' | 'discard'
@@ -90,6 +91,8 @@ export function AssignedStoriesList({
 }: AssignedStoriesListProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const isOpen = !collapsible || expanded
+  // A story's page opened from here comes back here
+  const openState = returnState(useLocation())
   const idsKey = useMemo(() => [...storyIds].sort().join(','), [storyIds])
 
   const {
@@ -190,7 +193,8 @@ export function AssignedStoriesList({
                           <tr key={story.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50 group">
                             <td className="px-3 py-2">
                               <Link
-                                to={`/admin/stories/${story.id}`}
+                                to={storyPath(story.id)}
+                                state={openState}
                                 className="font-medium text-neutral-900 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
                               >
                                 {story.title || story.sourceTitle}

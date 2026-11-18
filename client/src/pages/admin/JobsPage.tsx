@@ -1,13 +1,33 @@
+import { useState } from 'react'
 import { Helmet } from 'react-helmet-async'
+import type { JobRun } from '@shared/types'
 import { useJobs } from '../../hooks/useJobs'
+import { byPipelineOrder } from '../../lib/constants'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { JobsTable } from '../../components/admin/JobsTable'
+import { JobEditPanel } from '../../components/admin/JobEditPanel'
+import { ChainRows } from '../../components/admin/ChainRows'
+import { JobTable, OtherJobRows } from '../../components/admin/jobTable'
 
+/** The chains with their step rows in chain order, and the jobs that run on their own schedules. */
+function groupJobs(jobs: JobRun[]) {
+  const byName = new Map(jobs.map(job => [job.jobName, job]))
+  const chains = jobs
+    .filter(job => job.steps)
+    .sort(byPipelineOrder)
+    .map(chain => ({ chain, steps: (chain.steps ?? []).flatMap(name => byName.get(name) ?? []) }))
+  const standalone = jobs.filter(job => !job.steps && !job.chain)
+  return { chains, standalone }
+}
+
+/** Every job in one table: each chain's row with its steps indented under it, then the other jobs. */
 export default function JobsPage() {
   const jobsQuery = useJobs({ refetchInterval: 10_000 })
+  const [selected, setSelected] = useState<string | null>(null)
+  const groups = jobsQuery.data ? groupJobs(jobsQuery.data) : null
+  const panelJob = jobsQuery.data?.find(job => job.jobName === selected)
 
   return (
     <>
@@ -24,7 +44,16 @@ export default function JobsPage() {
       )}
       {jobsQuery.error && <ErrorState message="Failed to load jobs" onRetry={() => jobsQuery.refetch()} />}
       {jobsQuery.data && jobsQuery.data.length === 0 && <EmptyState title="No jobs configured" />}
-      {jobsQuery.data && jobsQuery.data.length > 0 && <JobsTable jobs={jobsQuery.data} />}
+      {groups && jobsQuery.data && jobsQuery.data.length > 0 && (
+        <JobTable>
+          {groups.chains.map(({ chain, steps }) => (
+            <ChainRows key={chain.jobName} chain={chain} steps={steps} onOpen={setSelected} />
+          ))}
+          {groups.standalone.length > 0 && <OtherJobRows jobs={groups.standalone} heading={groups.chains.length > 0} onOpen={setSelected} />}
+        </JobTable>
+      )}
+
+      {panelJob && <JobEditPanel job={panelJob} onClose={() => setSelected(null)} />}
     </>
   )
 }

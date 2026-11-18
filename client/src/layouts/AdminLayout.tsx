@@ -1,4 +1,4 @@
-import { useState, Suspense } from 'react'
+import { useRef, useState, Suspense } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Dialog, DialogPanel } from '@headlessui/react'
 import { useQuery } from '@tanstack/react-query'
@@ -22,11 +22,13 @@ import {
   GlobeAltIcon,
   BellAlertIcon,
   ChartBarIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../lib/auth'
 import { adminApi } from '../lib/admin-api'
 import { useServerTime } from '../hooks/useJobs'
 import { useNoticeCount } from '../hooks/useNotices'
+import { useAdminScroll } from '../hooks/useAdminScroll'
 import { feedbackBadge, noticeBadge, type BadgeKey, type NavBadge } from './navBadges'
 import { LoadingSpinner } from '../components/ui/LoadingSpinner'
 import { ToastProvider } from '../components/ui/Toast'
@@ -40,7 +42,6 @@ const navigation = [
   { name: 'Stories', href: '/admin/stories', icon: DocumentTextIcon },
   { name: 'Clusters', href: '/admin/clusters', icon: Square3Stack3DIcon },
   { name: 'Feeds', href: '/admin/feeds', icon: RssIcon },
-  { name: 'Stats', href: '/admin/stats', icon: ChartBarIcon },
   { name: 'Issues', href: '/admin/issues', icon: TagIcon },
   { name: 'Newsletters', href: '/admin/newsletters', icon: EnvelopeIcon },
   { name: 'Subscribers', href: '/admin/subscribers', icon: UserGroupIcon },
@@ -51,6 +52,8 @@ const navigation = [
   { name: 'Notices', href: '/admin/notices', icon: BellAlertIcon, badge: 'notices' as const },
   { name: 'Jobs', href: '/admin/jobs', icon: ClockIcon },
   { name: 'Users', href: '/admin/users', icon: UsersIcon },
+  { name: 'Spending', href: '/admin/spending', icon: BanknotesIcon },
+  { name: 'Stats', href: '/admin/stats', icon: ChartBarIcon },
 ]
 
 export function NavItems({ onClick, badgeCounts }: { onClick?: () => void; badgeCounts: Partial<Record<BadgeKey, NavBadge>> }) {
@@ -165,6 +168,9 @@ export default function AdminLayout() {
 
 function AdminShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  // <main> is the admin's scroll box: each page starts at the top, Back finds a page where it was
+  const mainRef = useRef<HTMLElement>(null)
+  useAdminScroll(mainRef)
 
   return (
     <ToastProvider>
@@ -211,7 +217,10 @@ function AdminShell() {
 
               <NewVersionBanner />
 
-              <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+              {/* `relative` makes this scroll box the containing block for visually hidden (absolutely positioned)
+                  text such as table captions; without it that text escapes to the document and makes the
+                  window scroll past the one-screen shell into blank space */}
+              <main ref={mainRef} className="relative flex-1 overflow-y-auto p-4 lg:p-6">
                 <Suspense
                   fallback={
                     <div className="flex justify-center py-12">

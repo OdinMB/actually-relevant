@@ -3,6 +3,7 @@ import { assessStories } from '../services/analysis.js'
 import { transition } from '../services/storyLifecycle.js'
 import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
+import { countOf, reportRunResult } from '../lib/runUsage.js'
 import prisma from '../lib/prisma.js'
 
 const log = createLogger('assess_stories')
@@ -44,13 +45,17 @@ export async function runAssessStories(): Promise<void> {
   const qualifiedSet = new Set(allIds)
   const belowThreshold = allPreAnalyzed.filter(id => !qualifiedSet.has(id))
 
+  let rejected = 0
   if (belowThreshold.length > 0) {
     const { moved } = await transition(belowThreshold, { to: 'rejected', reason: 'assess_threshold' }, 'pipeline')
+    rejected = moved.length
     log.info({ count: moved.length }, 'rejected pre_analyzed stories below assessment threshold')
   }
+  const rejectedNote = rejected > 0 ? `, ${rejected} rejected below the Min Pre-Rating` : ''
 
   if (allIds.length === 0) {
     log.info('no pre-analyzed stories above threshold')
+    reportRunResult(rejected > 0 ? `Nothing to analyze${rejectedNote}` : 'Nothing to analyze')
     return
   }
 
@@ -60,4 +65,6 @@ export async function runAssessStories(): Promise<void> {
   const result = await assessStories(allIds)
 
   log.info({ completed: result.completed, errors: result.errors, total: allIds.length }, 'assessment job finished')
+  const errorNote = result.errors > 0 ? `, ${countOf(result.errors, 'error')}` : ''
+  reportRunResult(`Analyzed ${countOf(result.completed, 'story', 'stories')}${rejectedNote}${errorNote}`)
 }

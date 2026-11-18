@@ -102,7 +102,7 @@ All public pages with dynamic data:
 - **HomePage** — HeroSkeleton, IssueSectionSkeleton
 - **IssuePage** — IssuePageSkeleton while the issue loads; IssueStoriesSkeleton under the loaded issue while its first page of stories, or another issue's, loads (paging and the mood dial keep the current page on screen instead, `useIssueStories`)
 - **IssuesPage** — IssueAccordionSkeleton
-- **StoryPage** — StoryPageSkeleton
+- **StoryPage** — StoryPageSkeleton until the story and its context cards have both settled, so the cards never shift the text; a failed context request also settles it (`.context/public-website.md`, "Story context")
 - **SearchPage** — SearchResultsSkeleton
 - **DevelopersPage** — ApiReferenceSkeleton (Suspense fallback for a lazy chunk, not a data load)
 

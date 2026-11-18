@@ -1,7 +1,9 @@
 import { getStoryIdsByStatus } from '../services/story.js'
 import { transition } from '../services/storyLifecycle.js'
 import { awaitingResearch } from '../services/researchQueue.js'
+import { awaitingContext } from '../services/storyContextQueue.js'
 import { createLogger } from '../lib/logger.js'
+import { countOf, reportRunResult } from '../lib/runUsage.js'
 
 const log = createLogger('publish_stories')
 
@@ -11,17 +13,27 @@ export async function runPublishStories(): Promise<void> {
   const selected = await getStoryIdsByStatus('selected')
   if (selected.length === 0) {
     log.info('no selected stories to publish')
+    reportRunResult('Nothing to publish')
     return
   }
 
-  // The publish gate (.context/story-research.md, "The pipeline step"): only while the research step
-  // applies (apply mode, the job enabled), a selected story it still owes waits for a later run, while
+  // The publish gate (.context/story-research.md, "The pipeline step"): only while research is switched
+  // on and the research step's job is enabled, a selected story it still owes waits for a later run, while
   // it was selected less than config.research.pipeline.maxWaitMinutes ago; an editor's publish never waits
   const waiting = await awaitingResearch(selected)
-  const ids = selected.filter(id => !waiting.has(id))
+  // The same for context cards (.context/story-context.md, "The publish gate"), while the context step's
+  // job is enabled and web search is on, within the same bound, and only in a run on its own: in the
+  // daily edition the context step has just had its turn, so its failure or lateness never holds the edition
+  const researched = selected.filter(id => !waiting.has(id))
+  const waitingForCards = await awaitingContext(researched)
+  const ids = researched.filter(id => !waitingForCards.has(id))
   if (waiting.size > 0) log.info({ waiting: waiting.size }, 'stories left for a later run: awaiting research')
+  if (waitingForCards.size > 0) log.info({ waiting: waitingForCards.size }, 'stories left for a later run: awaiting their context cards')
+  const waitingNote =
+    (waiting.size > 0 ? `, ${waiting.size} waiting for research` : '') + (waitingForCards.size > 0 ? `, ${waitingForCards.size} waiting for context cards` : '')
   if (ids.length === 0) {
     log.info('no selected stories to publish yet')
+    reportRunResult(`Nothing to publish yet${waitingNote}`)
     return
   }
 
@@ -32,5 +44,6 @@ export async function runPublishStories(): Promise<void> {
   // cluster primaries publish; a story trashed or rejected meanwhile is skipped.
   const { moved, skipped } = await transition(ids, { to: 'published' }, 'pipeline')
 
-  log.info({ published: moved.length, skipped: skipped.length, waiting: waiting.size }, 'publish job finished')
+  log.info({ published: moved.length, skipped: skipped.length, waiting: waiting.size, waitingForCards: waitingForCards.size }, 'publish job finished')
+  reportRunResult(`Published ${countOf(moved.length, 'story', 'stories')}${waitingNote}`)
 }

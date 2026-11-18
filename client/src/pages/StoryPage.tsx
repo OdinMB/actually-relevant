@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { usePublicStory, useStoryAppearances } from '../hooks/usePublicStories'
+import type { ContextBoxView } from '@shared/types'
+import { usePublicStory, useStoryAppearances, useStoryContext } from '../hooks/usePublicStories'
 import { getCategoryColor } from '../lib/category-colors'
 import { markdownToPlainText } from '../lib/plainText'
 import { getTitleLabel, getHeadline } from '../lib/title-label'
@@ -15,6 +16,10 @@ import RelatedStories from '../components/RelatedStories'
 import AlsoCoveredBy from '../components/AlsoCoveredBy'
 import { MetaSeparator, StoryMetaRow } from '../components/story/StoryMetaRow'
 import { StoryBody } from '../components/story/StoryBody'
+import { ContextNote } from '../components/context/ContextNote'
+import { StoryContext } from '../components/context/StoryContext'
+import { hasNotes, placeContext, placeCounts } from '../components/context/contextPlaces'
+import { useNoteStacking } from '../components/context/noteStacking'
 import { StoryPageSkeleton } from '../components/skeletons'
 import LoadFailure from '../components/LoadFailure'
 import { loadStateOf } from '../lib/loadState'
@@ -30,6 +35,7 @@ const KEEP_READING_LINK = `inline-flex items-center min-h-6 text-brand-700 hover
  * A story's page: the header (headline, metadata row with the actions, "Also covered by"), the
  * body, and where the reader goes next. The single-source and researched formats differ only in
  * `StoryMetaRow` and `StoryBody`, and in which of "Also covered by" and the Sources list shows.
+ * A story with context cards gets them in the body: notes beside the text, the rest under More context.
  */
 export default function StoryPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -41,6 +47,13 @@ export default function StoryPage() {
   const loadState = loadStateOf(storyQuery, false)
   // The issue and episode the story was in, for the cards at the end; by the address's slug, so also alongside the story
   const appearances = useStoryAppearances(slug).data
+  // Its context cards, alongside the story too; the skeleton waits for them so they never shift the text
+  const contextQuery = useStoryContext(slug)
+  const context = contextQuery.data
+  const placed = useMemo(() => (story && context ? placeContext(context.boxes, placeCounts(story, story.research ?? null)) : null), [story, context])
+  const noted = placed !== null && hasNotes(placed)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  useNoteStacking(bodyRef, noted, placed)
 
   // Redirect to primary story's URL if this slug was a non-primary cluster member
   useEffect(() => {
@@ -54,7 +67,8 @@ export default function StoryPage() {
     if (slug && story) markAsRead(slug)
   }, [slug, story])
 
-  if (loadState === 'loading') {
+  // A failed context request settles too: the page then shows without context, and no error
+  if (loadState === 'loading' || (loadState === 'ready' && contextQuery.isLoading)) {
     return <StoryPageSkeleton />
   }
 
@@ -98,6 +112,12 @@ export default function StoryPage() {
   const colors = getCategoryColor(issueSlug)
   // The cited version, when the story has one and it could be served; the label keys on `researched` instead
   const research = story.research ?? null
+  // Story context: notes beside their paragraph or point, the rest under More context (.context/public-website.md)
+  const contextSources = new Map((context?.sources ?? []).map(source => [source.id, source]))
+  const note = (inPoint: boolean) => (box: ContextBoxView | undefined) =>
+    box && <ContextNote key={box.id} box={box} sources={contextSources} colors={colors} inPoint={inPoint} />
+  // From lg up a story with notes leaves room on its right for them; the header moves with the body
+  const column = noted ? ' story-column-noted' : ''
 
   return (
     <>
@@ -126,7 +146,7 @@ export default function StoryPage() {
       <article>
         {/* Article header with category accent */}
         <header className="border-b border-neutral-100 pb-8 mb-8">
-          <div className="page-section !pb-0 !mb-0">
+          <div className={`page-section !pb-0 !mb-0${column}`}>
             {/* No issue link above the title (owner, 2026-11-03): the issue is linked at the end, "More in {issue}" */}
             {/* Title. data-ai-generated marks AI-written text by API field name (.context/ai-transparency.md). */}
             {titleLabel && (
@@ -163,8 +183,15 @@ export default function StoryPage() {
           </div>
         </header>
 
-        <div className="page-section !pt-0">
-          <StoryBody story={story} research={research} colors={colors} />
+        <div ref={bodyRef} className={`page-section !pt-0${column}`}>
+          <StoryBody
+            story={story}
+            research={research}
+            colors={colors}
+            paragraphNotes={placed?.paragraphNotes.map(note(false))}
+            pointNotes={placed?.pointNotes.map(note(true))}
+            context={placed && <StoryContext boxes={placed.section} sources={contextSources} colors={colors} wide={noted} />}
+          />
 
           {/* Report an error: a note on the analysis above, so it sits right under it, small and to the side */}
           <p className="text-sm text-neutral-600 text-right">

@@ -22,6 +22,13 @@ export function withArchiveFilter(params: URLSearchParams, filter: ArchiveFilter
   return next
 }
 
+/** `params` without the filter, so the list opens on its default; the other parameters are kept. */
+export function withoutArchiveFilter(params: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(params)
+  next.delete(ARCHIVE_FILTER_PARAM)
+  return next
+}
+
 /** The edition the archive request asks for: none for all issues. */
 export function archiveEdition(filter: ArchiveFilter): NewsletterEdition | undefined {
   return filter === 'uplifting' ? 'uplifting' : undefined

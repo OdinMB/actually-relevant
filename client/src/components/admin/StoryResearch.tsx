@@ -1,29 +1,17 @@
 import { useState } from 'react'
 import type { EmotionTag, ResearchFallbackCategory, ResearchRun, ResearchUsage, Story } from '@shared/types'
 import { EMOTION_TAGS } from '@shared/constants'
-import { ReasonButton } from '../ui/ReasonButton'
 import { Select } from '../ui/Select'
-import { useResearchRuns, useResearchUsage, useStartResearch } from '../../hooks/useResearch'
+import { useResearchRuns, useResearchUsage } from '../../hooks/useResearch'
 import { formatDateWithTime } from '../../lib/constants'
 import { fallbackName, ResearchRunView, verdictLabel, verdictName } from './ResearchRunView'
 import { canUseVersion, RevertToSingleSource, UseRunVersion } from './ResearchVersion'
-
-/** The statuses a run may start from (server: `RESEARCHABLE_STATUSES` in services/researchInput.ts). */
-const RESEARCHABLE: readonly string[] = ['analyzed', 'selected', 'published']
+import { EDITOR_HEADING, EDITOR_SECTION } from './storyEditorClasses'
 
 /** In the server's order (`FALLBACK_CATEGORIES` in services/researchChecks.ts). */
 const FALLBACK_CATEGORIES: readonly ResearchFallbackCategory[] = ['no_other_coverage', 'not_confirmed', 'draft_failed_check', 'technical']
 
 const money = (v: number) => `$${v.toFixed(2)}`
-
-/** Why the Research button does nothing now, or null when a run may start. */
-export function researchRefusal(story: Pick<Story, 'status'>, usage: ResearchUsage | undefined, inProgress: boolean): string | null {
-  if (!usage) return 'Research usage could not be loaded'
-  if (usage.refusal) return usage.refusal
-  if (!RESEARCHABLE.includes(story.status)) return `Only analyzed, selected or published stories can be researched; this one is ${story.status}`
-  if (inProgress) return 'A research run of this story is in progress'
-  return null
-}
 
 function runLabel(run: ResearchRun): string {
   const verdict = run.status === 'completed' && run.verdict ? (run.result ? verdictLabel(run.result.verdict) : verdictName(run.verdict)) : null
@@ -51,30 +39,29 @@ function fallbackCounts(counts: NonNullable<ResearchUsage['fallbacksThisMonth']>
 }
 
 /**
- * The story's research section in the edit form: the month's spend against the cap, the Research
- * button (visible with its reason when a run cannot start), the story's runs, the research step's
- * among them, and which version the story shows (`ResearchVersion.tsx`). Hidden against a backend
- * without research. An editor's run writes nothing to the story until an editor uses its version;
- * the research step applies its own verdicts in apply mode.
+ * The story's research section, the story page's Research tab: the month's spend against the cap,
+ * the story's runs, the research step's among them, and which version the story shows
+ * (`ResearchVersion.tsx`). A run starts from the page's action bar (`StoryActionBar`). Hidden
+ * against a backend without research. An editor's run writes nothing to the story until an editor
+ * uses its version; the research step applies its own verdicts.
  */
 export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 'emotionTag' | 'preResearch'> }) {
   const usage = useResearchUsage()
   const runs = useResearchRuns(story.id, usage.data != null)
-  const { start, running } = useStartResearch(story.id)
   const [chosenId, setChosenId] = useState<string | null>(null)
 
   if (usage.isPending || usage.data === null) return null
 
   const list = runs.data ?? []
-  const inProgress = running || list.some(r => r.status === 'running')
-  const reason = researchRefusal(story, usage.data, inProgress)
   const chosen = list.find(r => r.id === chosenId) ?? list[0]
   const selectId = `research-run-${story.id}`
 
   return (
-    <div className="border-t border-neutral-200 pt-4 space-y-3">
+    <section aria-labelledby={`research-${story.id}`} className={`${EDITOR_SECTION} space-y-3`}>
       <div>
-        <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Research</h3>
+        <h2 id={`research-${story.id}`} className={`${EDITOR_HEADING} mb-1`}>
+          Research
+        </h2>
         <p className="text-sm text-neutral-600">
           Admin only: a run you start changes nothing on the story until you use its version.
           {usage.data &&
@@ -84,10 +71,8 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 
           <p className="text-sm text-neutral-600">Fallbacks to today&apos;s format this month: {fallbackCounts(usage.data.fallbacksThisMonth)}.</p>
         )}
       </div>
+      {usage.isError && <p className="text-sm text-red-700">This month&apos;s research usage could not be loaded.</p>}
       <RevertToSingleSource story={story} />
-      <ReasonButton type="button" variant="secondary" reason={reason} onClick={start}>
-        Research this story
-      </ReasonButton>
       {runs.isError && <p className="text-sm text-red-700">The research runs could not be loaded.</p>}
       {list.length > 0 && chosen && (
         <>
@@ -104,6 +89,6 @@ export function StoryResearch({ story }: { story: Pick<Story, 'id' | 'status' | 
         </>
       )}
       {runs.isSuccess && list.length === 0 && <p className="text-sm text-neutral-500">No research runs yet.</p>}
-    </div>
+    </section>
   )
 }
