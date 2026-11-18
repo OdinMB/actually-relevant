@@ -258,12 +258,15 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
 // ---------------------------------------------------------------------------
 
 /** Every step, in the order a run takes them: `context` before `fact-check`, which `--facts context` samples from it. */
-export const OVERVIEW_STEPS = ['keys', 'gap-keys', 'gap-draft', 'context', 'update', 'fact-check', 'baseline'] as const
+export const OVERVIEW_STEPS = ['keys', 'gap-keys', 'gap-draft', 'context', 'update', 'link', 'found', 'role', 'fact-check', 'baseline'] as const
 export type OverviewStep = (typeof OVERVIEW_STEPS)[number]
+/** The overview linking steps: one replay of the half's stories serves all three, each scoring its own bars. */
+export const LINKING_STEPS: readonly OverviewStep[] = ['link', 'found', 'role']
 /**
- * A run without `--steps`. Story context's and the research passes' steps run only when named:
- * `gap-draft` writes drafts for the check, `context` searches with Tavily and calls the strong judge,
- * and `update` replays a later pass's article step on the answer keys' stories and judges its notes.
+ * A run without `--steps`. Story context's, the research passes' and the overviews' steps run only
+ * when named: `gap-draft` writes drafts for the check, `context` searches with Tavily and calls the
+ * strong judge, `update` replays a later pass's article step on the answer keys' stories and judges
+ * its notes, and `link`, `found` and `role` replay the overview linking on the answer keys' stories.
  */
 export const OVERVIEW_DEFAULT_STEPS: readonly OverviewStep[] = ['keys', 'fact-check', 'baseline']
 /** Which facts the fact check plants errors in: research's extracted statements, or module 1's rendered facts. */
@@ -296,7 +299,7 @@ export interface OverviewOptions {
   refreshFixtures: boolean
   /** `context`: the fact check samples the facts the `context` step's run 1 kept, so both steps run. */
   facts: OverviewFactSource
-  /** The gap keys the `context` step runs on, and the answer keys' stories the `update` step runs on: prompts are tuned on `tune`, the gate is read on `judge`. */
+  /** The gap keys the `context` step runs on, and the answer keys' stories the `update` and linking steps run on: prompts are tuned on `tune`, the gate is read on `judge`. */
   half: OverviewHalf
 }
 

@@ -12,8 +12,9 @@ export const CHAINS: Readonly<Record<string, readonly string[]>> = {
   intake_chain: ['crawl_feeds', 'preassess_stories', 'assess_stories'],
   // Story context comes before publishing, so stories go out with their cards (owner decision 2026-11-17,
   // .context/story-context.md); its failure does not stop the edition (GOES_ON_PAST_FAILURE). The research
-  // pass replaces both once switched on (.context/research-passes.md): one of the two kinds runs, the other is off
-  daily_edition_chain: ['select_stories', 'research_stories', 'build_story_context', 'research_pass', 'publish_stories'],
+  // pass replaces both once switched on (.context/research-passes.md): one of the two kinds runs, the other is off.
+  // Overview linking comes after publishing: it needs published stories and never holds the edition (.context/overviews.md)
+  daily_edition_chain: ['select_stories', 'research_stories', 'build_story_context', 'research_pass', 'publish_stories', 'link_overviews'],
   // Saturday morning: each edition's issue is built (with its test email), then sent
   newsletter_chain: ['generate_newsletter', 'publish_newsletter', 'generate_uplifting_newsletter', 'publish_uplifting_newsletter'],
   // Friday's one run builds both shows' episodes (a failed build is retried within the run); both
@@ -23,10 +24,12 @@ export const CHAINS: Readonly<Record<string, readonly string[]>> = {
 
 /**
  * Steps whose failure does not stop their chain: the step's own Error and failure notice stand, and
- * the chain goes on with the next step (a Review on it still pauses). Story context runs before
- * publishing, and its failure must never hold the edition: its stories publish without cards.
+ * the chain goes on with the next step (a Review on it still pauses), and its end parts run. Story
+ * context runs before publishing, and its failure must never hold the edition: its stories publish
+ * without cards. Overview linking runs after publishing, and its failure must not fail the chain run
+ * or skip story context's after-publish part: its stories are linked at the next run.
  */
-export const GOES_ON_PAST_FAILURE: ReadonlySet<string> = new Set(['build_story_context'])
+export const GOES_ON_PAST_FAILURE: ReadonlySet<string> = new Set(['build_story_context', 'link_overviews'])
 
 export const isChain = (jobName: string): boolean => CHAINS[jobName] !== undefined
 

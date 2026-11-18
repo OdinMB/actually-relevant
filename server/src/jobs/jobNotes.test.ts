@@ -69,6 +69,14 @@ describe('jobNotes', () => {
       ),
       ['$13', '47', '30%', '31'],
     ],
+    [
+      'link_overviews',
+      () => (
+        override(config.overviews, { perRun: 37, backfillPerRun: 290, backfillDays: 47, concurrency: 29, failedStoriesMin: 7 }),
+        override(config.jobs.failureShare, { share: 0.3, minItems: 31 })
+      ),
+      ['37', '290', '47', '29', '7', '30%', '31'],
+    ],
     ['preassess_stories', () => override(config.preassess, { batchSize: 17 }), ['17']],
     ['assess_stories', () => (override(config.assess, { fullAssessmentThreshold: 9 }), override(config.dedup, { timeWindowDays: 23 })), ['9', '23']],
     ['select_stories', () => override(config.selection, { ratio: 0.3, relevanceMin: 6, maxGroupSize: 33 }), ['30%', '6', '33']],

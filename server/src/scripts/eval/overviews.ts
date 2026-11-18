@@ -4,7 +4,9 @@
  * research's real cost; and story context's gate: the gap keys drafted and checked, production's
  * first research pass replayed on their stories against the bars (its cards judged), and the fact
  * check on its facts; and a later pass's article step replayed on the answer keys' researched
- * stories with the facts found since and planted corrections (`update`), its notes judged.
+ * stories with the facts found since and planted corrections (`update`), its notes judged; and the
+ * overview linking replayed on the answer keys' stories in an in-memory sandbox (`link`, `found`,
+ * `role`), the founded end events judged.
  *
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline
@@ -12,6 +14,7 @@
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps gap-draft
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps context,fact-check --facts context --half judge --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval --steps update --half judge --repeat 3
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --repeat 3
  *
  * Reads the database through the read-only session and writes nothing to any database; its only
  * HTTP is OpenAI, and Tavily for the `context` step. Writes overview-eval[-tags].md into --out, the
@@ -48,12 +51,33 @@ import { readGapKeyFiles, readKeyFiles } from './overviews/keyFiles.js'
 import { overviewReportName, renderOverviewReport, type FactCheckReport, type FactSample, type OverviewReportInput } from './overviews/report.js'
 import { runUpdateStep, type UpdateStepOptions } from './overviews/update.js'
 import type { UpdateStory } from './overviews/updateFixtures.js'
+import { runLinkStep } from './overviews/link.js'
+import { nearestPublished } from '../../services/overviewCandidates.js'
+import { linkStories } from '../../services/overviewInput.js'
+import type { LinkStory } from '../../services/overviewTypes.js'
+import type { Db } from './readOnlyDb.js'
+import { LINKING_STEPS } from './options.js'
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 const pct = (v: number | null) => (v === null ? 'n/a' : `${(v * 100).toFixed(1)}%`)
 const presence = (v: string | undefined) => (v ? 'present' : 'missing')
 /** The steps that call a model; a run of none of them, or a dry run, is offline. */
-const CALLING_STEPS: OverviewStep[] = ['gap-draft', 'context', 'update', 'fact-check']
+const CALLING_STEPS: OverviewStep[] = ['gap-draft', 'context', 'update', 'link', 'found', 'role', 'fact-check']
+
+/** The stories as overview linking reads them, by slug, through the read-only session; null for a slug not published there. */
+async function linkStoriesBySlug(q: Db, slugs: string[]): Promise<Map<string, LinkStory | null>> {
+  const rows = slugs.length === 0 ? [] : await q.$queryRaw<{ id: string; slug: string }[]>`SELECT id, slug FROM stories WHERE slug = ANY(${slugs}::text[])`
+  const stories = new Map(
+    (
+      await linkStories(
+        q,
+        rows.map(r => r.id),
+      )
+    ).map(s => [s.id, s]),
+  )
+  const idOf = new Map(rows.map(r => [r.slug, r.id]))
+  return new Map(slugs.map(slug => [slug, stories.get(idOf.get(slug) ?? '') ?? null]))
+}
 
 /** The read-only session, opened on first use only: a run of the key format alone needs none. */
 function lazySession() {
@@ -180,7 +204,8 @@ async function main(): Promise<void> {
     return r.inputs
   }
   try {
-    const keyFiles = runs('keys') || runs('gap-draft') || runs('update') ? readKeyFiles() : []
+    const linking = LINKING_STEPS.some(runs)
+    const keyFiles = runs('keys') || runs('gap-draft') || runs('update') || linking ? readKeyFiles() : []
     if (runs('keys')) for (const k of keyFiles) console.log(`${k.file}: ${k.errors.length === 0 ? 'format ok' : `${k.errors.length} format errors`}`)
     const gapKeyFiles = runs('gap-keys') || runs('context') ? readGapKeyFiles() : []
     if (runs('gap-keys')) {
@@ -335,6 +360,35 @@ async function main(): Promise<void> {
             console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no verdicts' : b.met ? 'met' : 'not met'})`)
         } catch (err) {
           failed('update', err)
+        }
+      }
+    }
+    if (linking) {
+      const steps = LINKING_STEPS.filter(runs).join(', ')
+      if (!canCall) {
+        skipped.push({
+          step: steps,
+          reason:
+            "needs OPENAI_API_KEY: each story's calls depend on the overviews the stories before it formed, so whether the cache holds them all is known only by running",
+        })
+      } else {
+        try {
+          report.link = await runLinkStep({
+            ctx,
+            files: keyFiles,
+            half: opts.half,
+            ...limit,
+            stories: async slugs => (await session.get()).read(q => linkStoriesBySlug(q, slugs)),
+            neighbours: async s => (await session.get()).read(q => nearestPublished(q, s.id, s.datePublished)),
+            repeat: opts.repeat,
+            concurrency: opts.concurrency,
+            budgetUsd: opts.budget,
+          })
+          if (report.link.stopped) skipped.push({ step: steps, reason: report.link.stopped })
+          for (const b of [...report.link.score.link, ...report.link.score.found, ...report.link.score.role])
+            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no data' : b.met ? 'met' : 'not met'})`)
+        } catch (err) {
+          failed(steps, err)
         }
       }
     }

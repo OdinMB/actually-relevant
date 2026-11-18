@@ -10,6 +10,7 @@ import { buildPreassessPrompt, buildPreassessPromptParts } from './preassess.js'
 import * as research from './research.js'
 import * as context from './storyContext.js'
 import * as pass from './researchPass.js'
+import * as overviews from './overviews.js'
 
 const guidelines = (n: number) => ({ factors: `factor ${n}`, antifactors: `antifactor ${n}`, ratings: `ratings ${n}` })
 const issues = [
@@ -86,7 +87,24 @@ const cases: Case[] = [
     'Paragraph one.',
     'Paragraph two.',
   ]),
+  pair(
+    'overview link',
+    overviews.buildLinkPromptParts,
+    overviews.buildLinkPrompt,
+    linkInput('Ebola in Ituri', '2026-05-10'),
+    linkInput('Cholera in Sudan', '2026-06-11'),
+    ['Ebola in Ituri', 'Cholera in Sudan', '2026-05-10', '2026-06-11'],
+  ),
 ]
+
+function linkInput(title: string, date: string): overviews.LinkInput {
+  const story = { id: 's', title, label: 'Label', summary: 'Summary.', datePublished: new Date(`${date}T12:00:00Z`), date, issueId: null, facts: ['Fact.'] }
+  return {
+    story,
+    overviews: [{ ref: 'O1', id: 'o', title: `${title} overview`, charter: { in: 'In.', out: [], endEvent: 'End.' }, entries: [{ title: 'Entry', date }] }],
+    partners: [{ ...story, id: 'p', ref: 'F1' }],
+  }
+}
 
 /** A case from a cached builder, its plain twin and two inputs. */
 function pair<I>(name: string, parts: (input: I) => PromptParts, plain: (input: I) => string, a: I, b: I, callValues: string[]): Case {

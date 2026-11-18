@@ -55,7 +55,14 @@ describeDb('spending (PostgreSQL)', () => {
       const overview = await getSpendingOverview(NOW)
 
       const daily = overview.groups.find(g => g.chain === 'daily_edition_chain')
-      expect(daily?.rows.map(r => r.scope)).toEqual(['select_stories', 'research_stories', 'build_story_context', 'research_pass', 'publish_stories'])
+      expect(daily?.rows.map(r => r.scope)).toEqual([
+        'select_stories',
+        'research_stories',
+        'build_story_context',
+        'research_pass',
+        'publish_stories',
+        'link_overviews',
+      ])
       expect(overview.groups.map(g => g.chain)).toEqual(['intake_chain', 'daily_edition_chain', 'newsletter_chain', 'podcast_chain', null])
       expect(overview.groups.at(-1)?.rows.map(r => r.scope)).toEqual(['editor_research', 'social_auto_post'])
       // A job that uses models is listed though it spent nothing; one that does not, only once it has spent

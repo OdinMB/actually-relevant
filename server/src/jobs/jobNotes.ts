@@ -7,6 +7,7 @@
  */
 import { config } from '../config.js'
 import type { RunUsage } from '../lib/runUsage.js'
+import { OVERVIEW_EVAL_GATE } from '../services/overviewGate.js'
 import { PASS_EVAL_GATE } from '../services/researchPassGate.js'
 import { researchSwitchOff } from '../services/researchSwitch.js'
 import { failureShareExceeded, failureShareLine } from './failureShare.js'
@@ -65,6 +66,25 @@ function researchPassNote(): string {
   )
 }
 
+function linkOverviewsNote(): string {
+  const { perRun, backfillPerRun, backfillDays, concurrency, failedStoriesMin } = config.overviews
+  const { share, minItems } = config.jobs.failureShare
+  const switchOn =
+    OVERVIEW_EVAL_GATE || PASS_EVAL_GATE
+      ? 'It cannot be enabled until its quality checks meet their bars and the owner switches it on, after Research Passes.'
+      : 'It can be enabled only while Research Passes is enabled.'
+  return (
+    'Files each newly published story under the ongoing development it reports on, or starts a new one when two stories report the same development: ' +
+    'nearby stories propose a development, the AI confirms it, quoting both sides, and two separate AI calls must agree before a new one starts. ' +
+    `It runs after Publish Stories, so it never holds the edition, and takes up to ${count(perRun, 'story', 'stories')} published in the last day, ${concurrency} at once, ` +
+    `plus up to ${count(backfillPerRun, 'older story', 'older stories')} from the last ${count(backfillDays, 'day')} that were never linked, oldest first. ` +
+    'A story is linked once; one it could not link because of a problem is tried again at the next run. If it fails, the rest of the daily edition is not affected. ' +
+    `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; ` +
+    `so is a notice when more than ${Math.round(share * 100)}% of at least ${failedStoriesMin} stories fail. Nothing pauses. ` +
+    `Readers see nothing of it yet. "Run now" does nothing while the job is disabled. ${switchOn}`
+  )
+}
+
 /** Why the research step can do nothing now, or null while research is on. */
 function researchWarning(): string | null {
   const off = researchSwitchOff()
@@ -116,6 +136,7 @@ export const NOTES: Readonly<Record<string, () => string>> = {
     'One exception: if Build Story Context fails, the chain still goes on to publish, and those stories go out without cards. ' +
     'Research Passes, off until it is switched on in their place, does the work of both in one step; if it fails as a whole, the chain stops before publishing. ' +
     'Once publishing is done, Build Story Context also builds the cards of published stories that still lack them, so publishing never waits for those. ' +
+    'Link Overviews, the last step and off until it is switched on, files the published stories under their ongoing developments; if it fails, the run still finishes. ' +
     'Once its flex hours (the Flex column of its Whole chain row) have passed since the run started, every call goes at standard price, so a slow flex queue cannot hold up publishing for long.',
   newsletter_chain: () =>
     `Builds this week's full newsletter and sends its test email, sends it to subscribers, then does the same for Actually Uplifting, in that order. ${CHAIN_RULES} ` +
@@ -136,6 +157,7 @@ export const NOTES: Readonly<Record<string, () => string>> = {
     `comparing up to ${config.selection.maxGroupSize} stories at a time, and rejects the rest. The picked stories go on to Research Stories and Publish Stories.`,
   research_stories: researchNote,
   research_pass: researchPassNote,
+  link_overviews: linkOverviewsNote,
   publish_stories: () =>
     'Publishes the selected stories. Of several stories about the same event, only the one chosen to lead the group is published, and the others are rejected as duplicates. ' +
     `While Research Stories is enabled and research is on, a story selected less than ${count(config.research.pipeline.maxWaitMinutes, 'minute')} ago waits for its research and goes out at a later run. ` +

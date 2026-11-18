@@ -487,6 +487,40 @@ export const config = {
     notesInText: 2,
     notesByPoints: 2,
   },
+  /**
+   * Ongoing-story overviews, the `link_overviews` step after publishing (jobs/linkOverviews.ts;
+   * .context/overviews.md). Code constants: the evals tune them (`eval:overviews --steps link`), and
+   * the step stays off until its gate opens (services/overviewGate.ts). Every window counts back from
+   * the story's own publication date.
+   */
+  overviews: {
+    /** The farthest cosine distance at which a published story counts as a neighbour. */
+    maxDistance: 0.45,
+    /** Neighbours read per story, nearest first, before grouping. */
+    neighbourLimit: 40,
+    /** Candidate overviews the link call sees at most, ranked by their nearest member. */
+    candidateOverviews: 5,
+    /** Unlinked neighbours offered as founding partners at most, and how many days before the story they may be. */
+    foundingCandidates: 3,
+    foundingWindowDays: 30,
+    /** An overview whose newest entry is older than this, before the story, is no candidate; neighbours are read over the same days. */
+    memberLookbackDays: 180,
+    /** Stories of the night (published within `nightHours`) linked per run, and older owed stories (the backfill) on top. */
+    perRun: 60,
+    backfillPerRun: 300,
+    nightHours: 24,
+    /** Published stories this many days back or fewer are owed a link decision (the backfill window). */
+    backfillDays: 183,
+    /** Link calls in flight at once; writes go one story at a time, oldest first. */
+    concurrency: 3,
+    /** The step records the failed-stories notice when more than `jobs.failureShare.share` of a run's stories failed technically, from this many stories on. */
+    failedStoriesMin: 5,
+    tiers: {
+      link: 'small' as const,
+      found: 'large' as const,
+      foundCheck: 'large' as const,
+    },
+  },
   embedding: {
     model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
     // Changing dimensions requires a DB migration to alter the vector(1536) column and rebuild the index

@@ -29,7 +29,7 @@ const { JOB_HANDLERS } = await import('./handlers.js')
 
 const CHAIN = 'daily_edition_chain'
 // The research pass is seeded disabled, as in production, so the chain skips it
-const STEPS = { select_stories: false, research_stories: false, build_story_context: true, research_pass: false, publish_stories: true }
+const STEPS = { select_stories: false, research_stories: false, build_story_context: true, research_pass: false, publish_stories: true, link_overviews: false }
 
 async function seedJobs() {
   await prisma.jobRun.create({ data: { jobName: CHAIN, cronExpression: '0 23 * * *', enabled: true } })

@@ -29,6 +29,9 @@ export const FAILURE_SHARE_MESSAGES: Readonly<Record<string, string>> = {
   research_pass:
     'The checks dropped more of what the research pass wrote than usual. Nothing paused, and readers see only what passed. ' +
     "Each story's research view shows what was dropped and why; switch the step off on the Jobs page if it keeps happening.",
+  link_overviews:
+    'Code refused more of the links the AI proposed than usual: their quotes did not match the stories or the development. Nothing paused, and those stories stay unlinked. ' +
+    'Switch the step off on the Jobs page if it keeps happening.',
 }
 
 const PLAIN_MESSAGE = 'Its checks failed more of what it wrote than usual. Nothing paused; switch it off on the Jobs page if it keeps happening.'

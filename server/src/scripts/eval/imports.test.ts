@@ -103,7 +103,16 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/storyContextInput.js': ['loadContextInput'],
   // A first pass's input, the same way; it reads no pass table (held below).
   'services/researchPassInput.js': ['loadFirstPassInput'],
+  // Overview linking: the pure steps and types whole, and the candidate and input reads, SELECT only through the client given (held below).
+  'services/overviewLink.js': '*',
+  'services/overviewTypes.js': '*',
+  'services/overviewCandidates.js': '*',
+  'services/overviewInput.js': '*',
 }
+
+/** The overview modules the eval imports whole: no database client, model client or HTTP of their own; the two readers SELECT only through the client given. */
+const OVERVIEW_SERVICE_MODULES = ['overviewLink.ts', 'overviewTypes.ts', 'overviewCandidates.ts', 'overviewInput.ts']
+const OVERVIEW_READERS = ['overviewCandidates.ts', 'overviewInput.ts']
 
 /** The story context modules the eval imports whole: no database client, model client, HTTP or retry of their own (hashing is fine). */
 const CONTEXT_SERVICE_MODULES = [
@@ -234,6 +243,31 @@ describe('eval harness has no write path', () => {
       ]
     })
     expect(offenders).toEqual([])
+  })
+
+  it('imports whole only overview modules that bring no client or HTTP of their own, whose readers SELECT only through the client given', () => {
+    expect(OVERVIEW_SERVICE_MODULES.map(name => `services/${name.replace(/\.ts$/, '.js')}`)).toEqual(
+      Object.entries(ALLOWED_SERVICE_IMPORTS)
+        .filter(([suffix, names]) => names === '*' && suffix.includes('/overview'))
+        .map(([suffix]) => suffix),
+    )
+    const ioModule =
+      /lib\/prisma\.js$|^@prisma\/client$|^\.\/llm\.js$|lib\/retry\.js$|^axios$|lib\/tavily\.js$|structuredCall\.js$|overviewLifecycle\.js$|^node:/
+    const io = /\bprisma\.|\brateLimitDelay\b|\bwithRetry\b|\$executeRaw|\$queryRawUnsafe|\bwithStructuredOutput\b|\bfetch\(/
+    const offenders = OVERVIEW_SERVICE_MODULES.flatMap(name => {
+      const text = stripComments(readFileSync(join(ROOT, '../../services', name), 'utf8'))
+      const queries = [...text.matchAll(/\$queryRaw<[^`]*`([^`]*)`/g)].map(m => m[1]!.trim())
+      return [
+        ...importsOf(text)
+          .filter(i => !i.typeOnly && ioModule.test(i.specifier))
+          .map(i => `${name}: ${i.specifier}`),
+        ...(io.test(text) ? [`${name}: ${io.exec(text)?.[0]}`] : []),
+        ...(!OVERVIEW_READERS.includes(name) && /\$queryRaw/.test(text) ? [`${name}: reads the database`] : []),
+        ...queries.filter(q => !/^(SELECT|WITH)\b/.test(q) || /\b(INSERT|UPDATE|DELETE|TRUNCATE)\b/i.test(q)).map(q => `${name}: ${q.slice(0, 40)}`),
+      ]
+    })
+    expect(offenders).toEqual([])
+    for (const name of OVERVIEW_READERS) expect(readFileSync(join(ROOT, '../../services', name), 'utf8')).toMatch(/\$queryRaw</)
   })
 
   it('loads story context input with SELECTs only, through the client it is given', () => {

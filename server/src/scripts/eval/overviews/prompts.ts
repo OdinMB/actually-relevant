@@ -3,7 +3,8 @@
  * (`gapDraft.ts`), the strong judge's three questions on story context (`contextJudge.ts`):
  * which key needs the kept cards meet, whether a figure fact's structured fields are right, and
  * whether a note beside a paragraph or point adds to it; and its question on a later pass's Update
- * note (`update.ts`): whether it says what changed and why. Box support is judged with production's own
+ * note (`update.ts`): whether it says what changed and why; and its question on a founded overview
+ * (`link.ts`): whether its end event is the answer key's. Box support is judged with production's own
  * fact-check prompt, not here. Written under `.context/prompting.md`: role, goal, XML blocks,
  * declarative requirements, format guidance in the schemas' `.describe()`s. Every fetched text sits
  * in escaped XML behind research's untrusted-input line; our own story is marked as ours. Plain
@@ -396,4 +397,43 @@ ${tag('NOTE', input.note)}
 - A note that only says the story was updated, without what changed, is not complete.
 - Judge the note against <CHANGES> and <FACTS> only, never on your own knowledge of the subject.
 </REQUIREMENTS>`
+}
+
+// ---------------------------------------------------------------------------
+// Judge: whether a founded charter names the key's end event
+// ---------------------------------------------------------------------------
+
+export const endEventJudgeSchema = z.object({
+  same: z
+    .enum(['yes', 'no'])
+    .describe("yes: a news report that <FOUNDED>'s end event has happened would also report that <KEY>'s has, and the reverse. no: otherwise."),
+  why: z.string().describe('One short sentence: where the two events differ, or why they are the same.'),
+})
+
+export type EndEventJudgeAnswer = z.infer<typeof endEventJudgeSchema>
+
+export interface EndEventJudgeInput {
+  development: string
+  key: string
+  founded: string
+}
+
+export function buildEndEventJudgePrompt(input: EndEventJudgeInput): string {
+  return `<ROLE>
+You check the timelines a news site keeps of ongoing developments.
+</ROLE>
+
+<GOAL>
+Judge whether the end event a new timeline was given (<FOUNDED>) is the same event as the answer key's (<KEY>) for the development named in <DEVELOPMENT>.
+</GOAL>
+
+<REQUIREMENTS>
+- The events are the same when the moment one happens the other has happened too: the same declaration, signature, ruling or publication, by the same body, about the same development.
+- A narrower or wider event is not the same: one province's outbreak declared over is not the country's, a signed text is not one in force.
+- Different wording of one event is the same.
+</REQUIREMENTS>
+
+<DEVELOPMENT>${escapeXml(input.development)}</DEVELOPMENT>
+<KEY>${escapeXml(input.key)}</KEY>
+<FOUNDED>${escapeXml(input.founded)}</FOUNDED>`
 }

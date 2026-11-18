@@ -159,7 +159,7 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context
 
 | Flag | Meaning |
 |------|---------|
-| `--steps` | Comma list of `keys`, `gap-keys`, `gap-draft`, `context`, `update`, `fact-check`, `baseline`, run in that order (default: `keys`, `fact-check`, `baseline`; story context's and the research passes' steps run only when named) |
+| `--steps` | Comma list of `keys`, `gap-keys`, `gap-draft`, `context`, `update`, `link`, `found`, `role`, `fact-check`, `baseline`, run in that order (default: `keys`, `fact-check`, `baseline`; story context's, the research passes' and the overviews' steps run only when named) |
 | `--facts` | `research` (default): the fact check samples research's extracted facts. `context`: the facts the `context` step's run 1 kept, so it needs `context` and `fact-check` in the same run (their calls and searches are cached) |
 | `--half` | `tune`, `judge` or `all` (default): the gap keys the `context` step runs on, and the development keys' stories the `update` step runs on. Prompts are tuned on `tune` only; the gate is read on `judge` |
 | `--budget` | USD cap on the folder's model ledger plus its Tavily credits at $0.008 (default 3; the $20 cap applies) |
@@ -173,7 +173,8 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context
 
 - **What they are:** for each past development we covered, what a perfect overview system would have done with our published stories: the charter (what's in, what's out, the end event) and whether it closed; the figures worth tracking with their definitions; every story that belongs (`join: must`, or `optional` where careful editors could disagree, which scoring ignores) with its role (`turning_point` with a `kind`, or `routine`), the figure values it states (with `approx`, `asOf`, whether the value `matches` the figure's definition and else what it `countedAs`, and the exact words of our story), and the statuses it changes; the tempting `nearMisses` that must not join; and `notes` on our stories' own contradictions.
 - **Where they live:** one file per development, `server/src/scripts/eval/overviews/keys/<id>.json`, committed (a file is named after its `id`). The first nine (2026-11-16): Ebola in eastern DR Congo, Hormuz shipping, the 2026–27 El Niño, the 2026 war in Lebanon, the investigations into the RSF's El Fasher atrocities, the WHO pandemic agreement's PABS annex talks, the Colorado River post-2026 rules, the UN talks on autonomous weapons, H5N1 in Australia's wildlife: 382 stories, 200 clear joins, 82 borderline, 114 near misses. They were drafted from the published stories with the whole history in view (for an answer key, hindsight is the point) and checked against those stories; every quote was found in its story's published text. Edit a key when a published story is corrected or a label proves wrong, never to make a step pass.
-- **Format:** `keySchema.ts` (Zod, the field rules in its `.describe()`s). `validateKey` adds: entries in date order and unique; a turning point has a `kind`, a routine entry none; every value names one of the key's figures; `countedAs` set exactly when `matches` is false; every figure has at least 3 values (a development with no such number has `figures: []`); no slug both an entry and a near miss; `closed.slug`, when set, is an entry.
+- **Format:** `keySchema.ts` (Zod, the field rules in its `.describe()`s). `validateKey` adds: entries in date order and unique; a turning point has a `kind`, a routine entry none; every value names one of the key's figures; `countedAs` set exactly when `matches` is false; every figure has at least 3 values (a development with no such number has `figures: []`); no slug both an entry and a near miss; `closed.slug`, when set, is an entry. **Version 2** (`schemaVersion: 2`, 2026-11-18, decision D10) adds an optional `responses[]`: what is being done about the development (`date`, `what`, the `slug` of the entry that reports it or null, and its `quote`), in date order; a quote goes only with a slug, and the database check finds it in that story's text. Version 1 keys stay valid.
+- **The halves** (`developmentHalves.ts`, plan decision D-OV6): a committed list, not a slug hash, so the judged half holds Ebola and each half holds developments of several kinds. Judged: Ebola, El Niño, Lebanon, the PABS annex, the Colorado River; tuned: Hormuz, autonomous weapons, El Fasher, H5N1 in Australia. A new key goes into one list in the change that commits it (`developmentHalves.test.ts` fails until it does).
 - **Tests:** `keys.test.ts` runs the schema and `validateKey` on every committed key, with no database, so a key can't rot in CI. Prettier formats the JSON: run `npm run format` after editing one.
 - **The database check** (the step): every slug is a published story; each entry's `date` is its UTC publication day; every quote occurs in the story's published text (title, summary, relevance reasons, antifactors, and the applied research's paragraphs, the text readers see through `storedResearchText`), after evening out whitespace, quote marks and dashes. A miss is an error in the key, to fix there; it passes or fails nothing in production. The report gives counts per development, including how many entry stories have a stored research run (what module 1's replay will need).
 
@@ -240,6 +241,25 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval -
   | Notes' copying-flag share (of the notes the checks ran on) against the rewritten sections' | no higher |
 
   Each run's row also gives the fixed lines' share of the served notes. The report lists up to 30 missed changes, false rewrites, false demotions and notes judged short. The gate is the judged half, means over 3 runs (ADR-0066), beside the `context` step's bars.
+
+### `link`, `found` and `role`: overview linking against the bars
+
+```bash
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --limit 20   # smoke run
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --repeat 3   # tuning
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half judge --repeat 3  # the gate
+```
+
+- **The replay** (`link.ts`, `overviewSandbox.ts`; `.context/overviews.md`): one replay serves the three steps. The half's answer keys (`developmentHalves.ts`) give their entries and near misses, replayed together in date order, so a story of one development may join another's overview, through production's `linkInOrder` and `linkStory` against an in-memory sandbox that writes by the lifecycle's rules. Neighbours come from production's `nearestPublished`, read-only and as of each story's date, kept to the replayed stories; the stories as production's `linkStories` reads them. Calls go through the eval's cache at the step tiers (the link call on the small tier, the founding draft and check on the large); each run k ≥ 2 has its own cache keys. Needs `OPENAI_API_KEY` (each story's calls depend on what the stories before it formed); the replay stops writing once the folder's budget is spent, and says so.
+- **Scoring** (`linkScore.ts`, pure): each replayed overview stands for the development most of its members are `must` entries of. `link`: joins right over `must` entries and near misses that ended in an overview (`optional` ignored; a near miss in its development's overview, or an entry in another's, is wrong), and `must` entries found in their development's overview. `found`: foundings whose pair is not two entries of one development, and whether each development's founded end event is the key's (the strong judge, gpt-6.1-sol@high, `buildEndEventJudgePrompt`). `role`: turning point or routine against the key, over `must` entries with a role.
+
+  | Step | Bar |
+  |---|---|
+  | `link` | joins right ≥97%; true joins found ≥85% |
+  | `found` | no wrong founding; the right end event for every development |
+  | `role` | roles agreeing ≥85% |
+
+  Means over the runs; the report gives each run's counts, the end-event verdicts and every wrong join and founding, and the replay's cost per story. The gate is the judged half, means over 3 runs (plan phase 6).
 
 ### `fact-check`: planted errors
 

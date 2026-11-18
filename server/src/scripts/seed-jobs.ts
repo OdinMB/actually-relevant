@@ -80,6 +80,17 @@ async function main() {
       update: {},
       create: { scope: 'research_pass', levelUsd: 20 },
     }),
+    // Disabled, its enabling refused until its evals meet their bars and research passes are on (.context/overviews.md)
+    prisma.jobRun.upsert({
+      where: { jobName: 'link_overviews' },
+      update: {},
+      create: { jobName: 'link_overviews', cronExpression: '30 1 * * *', enabled: false },
+    }),
+    prisma.spendWarning.upsert({
+      where: { scope: 'link_overviews' },
+      update: {},
+      create: { scope: 'link_overviews', levelUsd: 10 },
+    }),
     prisma.jobRun.upsert({
       where: { jobName: 'social_auto_post' },
       update: {},

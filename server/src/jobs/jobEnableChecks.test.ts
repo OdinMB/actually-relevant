@@ -14,6 +14,7 @@ vi.mock('../services/podcastEdition.js', async importOriginal => {
 
 const { jobEnableConflict, jobEnableRefusal, SWITCHED_OFF_BY } = await import('./jobEnableChecks.js')
 const { passSwitchRefusal } = await import('../services/researchPassQueue.js')
+const { overviewSwitchRefusal } = await import('../services/overviewQueue.js')
 const { PodcastBlockedError } = await import('../services/podcastGuards.js')
 const { GENERATE_PODCAST_JOB } = await import('../services/podcastAudioStages.js')
 const { PUBLISH_PODCAST_JOB } = await import('./publishPodcast.js')
@@ -136,6 +137,22 @@ describe('jobEnableRefusal', () => {
     mockJobRun.findUnique.mockResolvedValue({ enabled: false })
     expect(await jobEnableConflict('research_stories')).toBeNull()
     expect(SWITCHED_OFF_BY.research_pass).toEqual(['research_stories', 'build_story_context'])
+  })
+
+  it('refuses overview linking while its own eval gate is closed, then while research passes’ gate is', () => {
+    expect(jobEnableRefusal('link_overviews')).toMatch(/^Overviews are switched off: their evals have not yet met the plan's bars/)
+    expect(overviewSwitchRefusal(null, 'closed')).toMatch(/until research passes are on/)
+    expect(overviewSwitchRefusal(null, null)).toBeNull()
+  })
+
+  it('refuses overview linking while the research pass is disabled, and allows it once it is enabled', async () => {
+    mockJobRun.findUnique.mockResolvedValue({ enabled: false })
+    expect(await jobEnableConflict('link_overviews')).toMatch(/enable research_pass first/)
+    mockJobRun.findUnique.mockResolvedValue(null)
+    expect(await jobEnableConflict('link_overviews')).toMatch(/enable research_pass first/)
+    mockJobRun.findUnique.mockResolvedValue({ enabled: true })
+    expect(await jobEnableConflict('link_overviews')).toBeNull()
+    expect(mockJobRun.findUnique).toHaveBeenLastCalledWith({ where: { jobName: 'research_pass' }, select: { enabled: true } })
   })
 
   it('lets an unexpected error through rather than reading it as a missing setting', () => {

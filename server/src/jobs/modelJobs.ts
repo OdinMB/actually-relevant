@@ -11,6 +11,7 @@ export const MODEL_JOBS: ReadonlySet<string> = new Set([
   'research_stories',
   'build_story_context',
   'research_pass',
+  'link_overviews',
   'social_auto_post',
   'generate_newsletter',
   'generate_uplifting_newsletter',

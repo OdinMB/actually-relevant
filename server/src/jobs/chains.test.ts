@@ -43,7 +43,14 @@ const contextParts = vi.hoisted(() => ({ atStep: vi.fn(), atEnd: vi.fn(), due: v
 vi.mock('../lib/prisma.js', () => ({ default: mockPrisma }))
 vi.mock('./scheduler.js', () => ({ runJob: mockRunJob }))
 vi.mock('./handlers.js', () => ({
-  JOB_HANDLERS: { select_stories: vi.fn(), research_stories: vi.fn(), build_story_context: vi.fn(), research_pass: vi.fn(), publish_stories: vi.fn() },
+  JOB_HANDLERS: {
+    select_stories: vi.fn(),
+    research_stories: vi.fn(),
+    build_story_context: vi.fn(),
+    research_pass: vi.fn(),
+    publish_stories: vi.fn(),
+    link_overviews: vi.fn(),
+  },
   SPLIT_STEPS: { build_story_context: contextParts },
 }))
 vi.mock('../lib/notify.js', () => ({ notify: mockNotify }))
@@ -139,10 +146,12 @@ describe('chains', () => {
       for (const name of daily()) rows.set(name, step())
       // Seeded disabled, and switched on only in place of the two steps it replaces
       rows.set('research_pass', step({ enabled: false }))
+      // Seeded disabled, and switched on only after the research pass
+      rows.set('link_overviews', step({ enabled: false }))
     })
 
     it('builds the context cards after research and before publishing, the research pass in their place once it is on', async () => {
-      expect(daily()).toEqual(['select_stories', 'research_stories', 'build_story_context', 'research_pass', 'publish_stories'])
+      expect(daily()).toEqual(['select_stories', 'research_stories', 'build_story_context', 'research_pass', 'publish_stories', 'link_overviews'])
       await runChain('daily_edition_chain')
       expect(ranSteps()).not.toContain('research_pass')
 
@@ -201,6 +210,19 @@ describe('chains', () => {
       await runChain('daily_edition_chain')
       expect(ranSteps()).toEqual(['select_stories', 'research_stories', 'build_story_context'])
       expect(edition()).toMatchObject({ resumeStep: 'publish_stories', resumeReason: 'review' })
+    })
+
+    it('links overviews after publishing, and a failed linking leaves the chain going on: its end parts run and its resume stays clear', async () => {
+      rows.get('link_overviews')!.enabled = true
+      contextParts.due.mockResolvedValue(true)
+      mockRunJob.mockImplementation(async (name: string) =>
+        name === 'link_overviews' ? { result: 'failed', error: 'database gone' } : { result: 'succeeded' },
+      )
+      await runChain('daily_edition_chain')
+      expect(ranSteps()).toEqual(['select_stories', 'research_stories', 'build_story_context', 'publish_stories', 'link_overviews', 'build_story_context'])
+      expect(edition()).toMatchObject({ resumeStep: null, resumeReason: null })
+      // No chain notice on top of the step's own
+      expect(mockNotify).not.toHaveBeenCalled()
     })
 
     it('still stops at any other failed step', async () => {
