@@ -7,6 +7,7 @@ import {
   DEFAULT_BUDGET_USD,
   DEFAULT_FLOOR,
   MAX_ASSESS_SIZE,
+  MAX_BUDGET_USD,
   OVERVIEW_DEFAULT_ARMS,
   OVERVIEW_DEFAULT_STEPS,
   OVERVIEW_MAX_SIZE,
@@ -21,6 +22,9 @@ import { STEP_TIERS } from '../../services/researchPipeline.js'
 import { MAX_REPEAT } from './repeats.js'
 import { STEP_ARMS } from './research/pipeline.js'
 
+/** A cent over the project's spend cap, which every eval CLI refuses as a --budget. */
+const ABOVE_CAP = String(MAX_BUDGET_USD + 0.01)
+
 describe('parseOptions', () => {
   it('requires --out', () => {
     expect(() => parseOptions([])).toThrow(/--out/)
@@ -34,8 +38,8 @@ describe('parseOptions', () => {
   })
 
   it('refuses a budget above the spend cap', () => {
-    expect(() => parseOptions(['--out', 'x', '--budget', '20.01'])).toThrow(/budget/)
-    expect(parseOptions(['--out', 'x', '--budget', '20']).budget).toBe(20)
+    expect(() => parseOptions(['--out', 'x', '--budget', ABOVE_CAP])).toThrow(/budget/)
+    expect(parseOptions(['--out', 'x', '--budget', String(MAX_BUDGET_USD)]).budget).toBe(MAX_BUDGET_USD)
   })
 
   it('rejects unknown suites and non-positive limits', () => {
@@ -123,7 +127,7 @@ describe('parseRecalibrationOptions', () => {
   })
 
   it('applies the same spend cap and floor format as eval:models', () => {
-    expect(() => parseRecalibrationOptions(['--out', 'x', '--budget', '21'])).toThrow(/budget/)
+    expect(() => parseRecalibrationOptions(['--out', 'x', '--budget', ABOVE_CAP])).toThrow(/budget/)
     expect(() => parseRecalibrationOptions(['--out', 'x', '--floor', '2026-2-1'])).toThrow(/--floor/)
     expect(parseRecalibrationOptions(['--out', 'x', '--floor', '2026-02-01']).floor).toBe('2026-02-01')
   })
@@ -153,8 +157,8 @@ describe('parseResearchOptions', () => {
   })
 
   it('applies the project spend cap to --budget', () => {
-    expect(parseResearchOptions(['--out', 'x', '--budget', '20']).budget).toBe(20)
-    expect(() => parseResearchOptions(['--out', 'x', '--budget', '20.01'])).toThrow(/budget/)
+    expect(parseResearchOptions(['--out', 'x', '--budget', String(MAX_BUDGET_USD)]).budget).toBe(MAX_BUDGET_USD)
+    expect(() => parseResearchOptions(['--out', 'x', '--budget', ABOVE_CAP])).toThrow(/budget/)
     expect(() => parseResearchOptions(['--out', 'x', '--budget', '0'])).toThrow(/budget/)
   })
 
@@ -252,14 +256,16 @@ describe('parseOverviewOptions', () => {
   })
 
   it('caps the sample size, the repeats and the budget', () => {
-    expect(parseOverviewOptions(['--out', 'x', '--size', String(OVERVIEW_MAX_SIZE), '--repeat', String(MAX_REPEAT), '--budget', '20'])).toMatchObject({
+    expect(
+      parseOverviewOptions(['--out', 'x', '--size', String(OVERVIEW_MAX_SIZE), '--repeat', String(MAX_REPEAT), '--budget', String(MAX_BUDGET_USD)]),
+    ).toMatchObject({
       size: OVERVIEW_MAX_SIZE,
       repeat: MAX_REPEAT,
-      budget: 20,
+      budget: MAX_BUDGET_USD,
     })
     expect(() => parseOverviewOptions(['--out', 'x', '--size', String(OVERVIEW_MAX_SIZE + 1)])).toThrow(/--size/)
     expect(() => parseOverviewOptions(['--out', 'x', '--repeat', String(MAX_REPEAT + 1)])).toThrow(/--repeat/)
-    expect(() => parseOverviewOptions(['--out', 'x', '--budget', '20.01'])).toThrow(/budget/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--budget', ABOVE_CAP])).toThrow(/budget/)
   })
 
   it('parses a smoke run of the fact check', () => {

@@ -12,8 +12,13 @@ import type { Arm, ModelId, SuiteName } from './types.js'
 
 export const SUITE_NAMES: SuiteName[] = ['preassess', 'assess', 'dedup', 'related', 'social', 'large']
 export const DEFAULT_BUDGET_USD = 18
-/** This project's API spend cap for the eval. */
-export const MAX_BUDGET_USD = 20
+/**
+ * This project's API spend cap for the eval: no `--budget` above it is accepted. Raised from $20 to
+ * $75 on 2026-11-19 by the owner's decision, so the overviews upkeep eval can research the judged
+ * half's 121 stories in one folder (`.context/model-eval.md`, "The overviews gate, in order").
+ * `--budget` still sets each run's actual cap.
+ */
+export const MAX_BUDGET_USD = 75
 /**
  * Stories crawled before this date predate the current prompts and issue set.
  * `--floor` moves it earlier when the database copy is older than that (the
@@ -205,7 +210,7 @@ export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions 
 // eval:research
 // ---------------------------------------------------------------------------
 
-/** A few dollars for the measurement (design, "Measuring it properly"); the $20 cap still applies. */
+/** A few dollars for the measurement (design, "Measuring it properly"); `MAX_BUDGET_USD` still applies. */
 export const RESEARCH_DEFAULT_BUDGET_USD = 3
 /** The newest published stories sampled (owner's call: ~30). */
 export const RESEARCH_DEFAULT_SIZE = 30
