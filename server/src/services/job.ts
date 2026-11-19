@@ -8,6 +8,8 @@ import { canContinue } from '../jobs/chains.js'
 import { MODEL_JOBS } from '../jobs/modelJobs.js'
 import { SWITCHED_OFF_BY } from '../jobs/jobEnableChecks.js'
 import { emptyUsage, type RunUsage } from '../lib/runUsage.js'
+import { forgetOverviewLinks } from './overviewPublic.js'
+import { LINK_OVERVIEWS_JOB } from './overviewQueue.js'
 
 /**
  * Every job with its running state: a run in this process, or a live lease held by any process. The
@@ -42,8 +44,16 @@ export async function chainContinueStep(chainName: string): Promise<string | nul
 /**
  * Write the job's settings. Enabling a job that replaces others (`SWITCHED_OFF_BY`: the research pass)
  * switches those off in the same transaction; `switchedOff` names them, so the caller reloads them too.
+ * Switching overviews off makes every overview non-public, so the caches holding their links are
+ * emptied once it is written (`forgetOverviewLinks`).
  */
-export async function updateJob(
+export async function updateJob(jobName: string, data: Parameters<typeof writeJob>[1]): Promise<Awaited<ReturnType<typeof writeJob>>> {
+  const result = await writeJob(jobName, data)
+  if (data.enabled === false && jobName === LINK_OVERVIEWS_JOB) forgetOverviewLinks()
+  return result
+}
+
+async function writeJob(
   jobName: string,
   data: {
     cronExpression?: string

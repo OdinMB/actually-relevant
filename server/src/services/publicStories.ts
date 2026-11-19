@@ -1,12 +1,14 @@
 /**
  * Public reads of published stories: the paginated listing (search delegates to storySearch.ts),
  * the story page by slug, cluster redirects and "also covered by" sources, and the homepage buckets.
+ * Every story served carries its `overview` field (`withOverview`, `.context/overviews.md`).
  */
 import prisma from '../lib/prisma.js'
 import { Prisma, EmotionTag } from '@prisma/client'
 import { paginate } from '../lib/paginate.js'
 import { storyInIssueWhere } from '../lib/issueFilter.js'
 import { createLogger } from '../lib/logger.js'
+import { overviewOfStories, withOverview, type StoryOverviewLink } from './overviewPublic.js'
 import { publicVersions } from './passRecords.js'
 import { publicUpdates, updatesEarlierStoryIds, updatesForReaders, type PublicUpdate } from './publicUpdates.js'
 import { earlierStoryIds, forReaders, researchedStorySchema, type ResearchedStory } from './researchedStory.js'
@@ -69,14 +71,16 @@ export async function getPublishedStories(options: {
   }
 
   return paginate({
-    findMany: () =>
-      prisma.story.findMany({
-        where,
-        select: PUBLIC_STORY_SELECT,
-        orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
+    findMany: async () =>
+      withOverview(
+        await prisma.story.findMany({
+          where,
+          select: PUBLIC_STORY_SELECT,
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ),
     count: () => prisma.story.count({ where }),
     page,
     pageSize,
@@ -97,8 +101,9 @@ export async function getPublishedStoryBySlug(slug: string) {
     select: { ...PUBLIC_STORY_SELECT, research: true, preResearch: true },
   })
   if (!row) return null
-  const { research, preResearch, ...story } = row
-  return { ...story, ...(await researchForReaders(story.id, research)), researched: preResearch !== null }
+  const { research, preResearch, ...rest } = row
+  const [story] = await withOverview([rest])
+  return { ...story!, ...(await researchForReaders(rest.id, research)), researched: preResearch !== null }
 }
 
 /** The stored version, checked against its schema, and the Updates, both without earlier stories no longer published. */
@@ -182,6 +187,9 @@ export async function getClusterMembers(slug: string): Promise<{
 
 const NEGATIVE_EMOTIONS: EmotionTag[] = [EmotionTag.frustrating, EmotionTag.scary]
 
+type PublicStoryRow = Prisma.StoryGetPayload<{ select: typeof PUBLIC_STORY_SELECT }>
+type HomepageStory = PublicStoryRow & { overview: StoryOverviewLink | null }
+
 /**
  * Get all data needed for the homepage.
  * Returns stories grouped by issue slug in three emotion buckets:
@@ -222,10 +230,13 @@ export async function getHomepageData(issueSlugs: string[], storiesPerIssue = 7)
   })
 
   const issueResults = await Promise.all(storiesPromises)
+  // One read for the `overview` field of every story on the page
+  const links = await overviewOfStories(issueResults.flatMap(r => [...r.uplifting, ...r.calm, ...r.negative].map(s => s.id)))
+  const linked = (stories: PublicStoryRow[]): HomepageStory[] => stories.map(s => ({ ...s, overview: links.get(s.id) ?? null }))
 
-  const storiesByIssue: Record<string, Omit<(typeof issueResults)[number], 'slug'>> = {}
+  const storiesByIssue: Record<string, { uplifting: HomepageStory[]; calm: HomepageStory[]; negative: HomepageStory[] }> = {}
   for (const { slug, uplifting, calm, negative } of issueResults) {
-    storiesByIssue[slug] = { uplifting, calm, negative }
+    storiesByIssue[slug] = { uplifting: linked(uplifting), calm: linked(calm), negative: linked(negative) }
   }
 
   return { storiesByIssue }

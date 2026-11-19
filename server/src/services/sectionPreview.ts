@@ -1,7 +1,8 @@
 /**
  * Section preview images (.context/seo.md, "Section preview images"): the card image of a newsletter
- * issue, a podcast transcript and a topic page, which shows the logo and the section's name, and on
- * an issue card with an AI title the "AI" badge (`sectionImage.ts` draws it). Here: their URLs, as
+ * issue, a podcast transcript, an ongoing story and a topic page, which shows the logo and the
+ * section's name, and on an issue card with an AI title, the podcast's and an ongoing story's the "AI"
+ * badge (`sectionImage.ts` draws it). Here: their URLs, as
  * the pages' heads name them, and the images, rendered on request and cached in memory.
  */
 import prisma from '../lib/prisma.js'
@@ -25,6 +26,8 @@ const SECTION_LABELS = {
   newsletter: { text: 'Newsletter' },
   'newsletter-issue': { text: 'Newsletter', badge: PREVIEW_IMAGE_AI_BADGE },
   podcast: { text: 'Podcast', badge: PREVIEW_IMAGE_AI_BADGE },
+  // An ongoing story's summary and timeline are AI-written (`OVERVIEW_AI_LABEL`)
+  ongoing: { text: 'Ongoing story', badge: PREVIEW_IMAGE_AI_BADGE },
 } as const satisfies Record<string, SectionLabel>
 
 export type ImageSection = keyof typeof SECTION_LABELS

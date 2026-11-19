@@ -16,7 +16,14 @@ vi.mock('../../middleware/rateLimit.js', () => ({
   searchLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
 }))
 
+// The real read (null while overviews are switched off, as the gates keep them), wrapped so a test can make one public
+vi.mock('../../services/overviewPublic.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../services/overviewPublic.js')>()
+  return { ...actual, publicOverviewHead: vi.fn(actual.publicOverviewHead) }
+})
+
 const { storyPageRouter } = await import('./storyPreview.js')
+const { publicOverviewHead } = await import('../../services/overviewPublic.js')
 const { pagePreviewRouter } = await import('./pagePreview.js')
 const { default: publicRouter } = await import('./index.js')
 const { _resetStoryPreviewCaches } = await import('../../services/storyPreview.js')
@@ -350,6 +357,38 @@ describe('topic pages', () => {
 
   it('returns the unchanged shell for a topic that does not exist', async () => {
     expect((await request(app).get('/api/page/issues/nothing-here')).text).toBe(SHELL)
+  })
+})
+
+describe('ongoing story pages', () => {
+  const HEAD = {
+    slug: 'ebola-in-ituri',
+    title: 'Ebola in Ituri',
+    area: null,
+    status: 'open' as const,
+    closedReason: null,
+    closedAt: null,
+    since: new Date('2026-05-04T08:00:00Z'),
+    lastEntryAt: new Date('2026-11-17T08:00:00Z'),
+    lastChange: new Date('2026-11-18T08:00:00Z'),
+    stories: 41,
+  }
+
+  it("previews a public ongoing story as OverviewPage's Helmet sets it, the AI label last, with the ongoing image", async () => {
+    vi.mocked(publicOverviewHead).mockResolvedValueOnce(HEAD)
+    const html = (await request(app).get('/api/page/ongoing/ebola-in-ituri')).text
+    const title = 'Ebola in Ituri: ongoing story - Actually Relevant'
+    const description = '41 stories since May 2026, followed as one ongoing story. Summary and timeline by AI, from our stories and their sources.'
+    expect(html).toContain(`<title>${title}</title>`)
+    expect(html).toContain(meta('name', 'description', description))
+    expect(html).toContain(`<link data-rh="true" rel="canonical" href="${config.siteUrl}/ongoing/ebola-in-ituri" />`)
+    expect(html).toContain(meta('property', 'og:image', `${config.apiUrl}/api/section-images/ongoing.png`))
+    expect(vi.mocked(publicOverviewHead)).toHaveBeenCalledWith('ebola-in-ituri')
+  })
+
+  it('returns the unchanged shell while overviews are switched off, or for a deeper path', async () => {
+    expect((await request(app).get('/api/page/ongoing/ebola-in-ituri')).text).toBe(SHELL)
+    expect((await request(app).get('/api/page/ongoing/ebola-in-ituri/more')).text).toBe(SHELL)
   })
 })
 

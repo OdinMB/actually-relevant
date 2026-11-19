@@ -36,6 +36,12 @@ describe('getOpenAPIDocument', () => {
     }
   })
 
+  it('documents the ongoing story a story is part of, nullable, its AI title labeled', () => {
+    expect(schemas.PublicStory.required).toContain('overview')
+    expect(schemas.OverviewRef.properties.title.description.startsWith('AI-generated. ')).toBe(true)
+    expect(schemas.OverviewRef.required).toEqual(['slug', 'title'])
+  })
+
   it('serves the researched version and its flag on the single story only, labeled and listed in its marker', () => {
     const detail = schemas.PublicStoryDetail
     expect(doc.paths['/api/stories/{slug}'].get.responses['200'].content['application/json'].schema.$ref).toBe('#/components/schemas/PublicStoryDetail')

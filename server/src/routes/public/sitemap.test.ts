@@ -24,6 +24,11 @@ vi.mock('../../services/podcastEdition.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../../services/podcastEdition.js')>()
   return { ...actual, isEditionOpen: vi.fn(actual.isEditionOpen) }
 })
+// The real list (empty while overviews are switched off, as the gates keep them), wrapped so a test can list some
+vi.mock('../../services/overviewPublic.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../services/overviewPublic.js')>()
+  return { ...actual, publicOverviewList: vi.fn(actual.publicOverviewList) }
+})
 vi.mock('../../services/crawler.js', () => ({
   crawlFeed: vi.fn(),
   crawlAllDueFeeds: vi.fn(),
@@ -33,6 +38,7 @@ vi.mock('../../services/crawler.js', () => ({
 const { default: app } = await import('../../app.js')
 const { sitemapCache } = await import('./sitemap.js')
 const { isEditionOpen } = await import('../../services/podcastEdition.js')
+const { publicOverviewList } = await import('../../services/overviewPublic.js')
 
 const publishedStories = [
   { slug: 'ai-breakthrough-2024', datePublished: new Date('2024-06-15') },
@@ -46,6 +52,29 @@ describe('GET /api/sitemap.xml', () => {
     sitemapCache.clear()
     mockPrisma.podcast.findMany.mockResolvedValue([])
     mockPrisma.newsletter.findMany.mockResolvedValue([])
+  })
+
+  it('lists no ongoing story while overviews are switched off', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([])
+    const res = await request(app).get('/api/sitemap.xml')
+    expect(res.text).not.toContain('/ongoing')
+  })
+
+  it('lists the /ongoing index and each public ongoing story while overviews are switched on', async () => {
+    mockPrisma.story.findMany.mockResolvedValue([])
+    vi.mocked(publicOverviewList).mockResolvedValueOnce({
+      on: true,
+      overviews: [
+        { slug: 'ebola-in-ituri', lastChange: new Date('2026-11-18T10:00:00Z') } as Awaited<ReturnType<typeof publicOverviewList>>['overviews'][number],
+      ],
+    })
+
+    const res = await request(app).get('/api/sitemap.xml')
+
+    expect(res.text).toContain('<loc>https://actuallyrelevant.news/ongoing</loc>')
+    expect(res.text).toContain(
+      '<loc>https://actuallyrelevant.news/ongoing/ebola-in-ituri</loc>\n    <lastmod>2026-11-18</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.6</priority>',
+    )
   })
 
   it('lists the newsletter page and the web edition of each published newsletter issue', async () => {

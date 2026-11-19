@@ -365,25 +365,32 @@ export type PublicVersion = Pick<StoredVersion, 'number' | 'kind' | 'status' | '
  * versions `storyVersions` gives once its reverted ones are left out.
  */
 export async function publicVersions(db: ResearchDb, storyId: string): Promise<PublicVersion[]> {
-  const rows = await db.$queryRaw<Pick<VersionRow, 'number' | 'kind' | 'status' | 'research' | 'changes' | 'note' | 'createdAt'>[]>`
-    SELECT v.number, v.kind::text AS kind, v.status::text AS status, v.research, v.changes, v.note, v.created_at AS "createdAt"
-    FROM article_versions v WHERE v.story_id = ${storyId} AND v.status <> 'reverted' ORDER BY v.number DESC`
-  return rows.flatMap(row => {
+  return (await publicVersionsOf(db, [storyId])).get(storyId) ?? []
+}
+
+/** `publicVersions` for several stories in one read, by story id; a story with none is absent. */
+export async function publicVersionsOf(db: ResearchDb, storyIds: readonly string[]): Promise<Map<string, PublicVersion[]>> {
+  const byStory = new Map<string, PublicVersion[]>()
+  if (storyIds.length === 0) return byStory
+  const rows = await db.$queryRaw<(Pick<VersionRow, 'number' | 'kind' | 'status' | 'research' | 'changes' | 'note' | 'createdAt'> & { storyId: string })[]>`
+    SELECT v.story_id AS "storyId", v.number, v.kind::text AS kind, v.status::text AS status, v.research, v.changes, v.note, v.created_at AS "createdAt"
+    FROM article_versions v WHERE v.story_id = ANY(${[...new Set(storyIds)]}::text[]) AND v.status <> 'reverted' ORDER BY v.story_id, v.number DESC`
+  for (const row of rows) {
     const research = researchedStorySchema.safeParse(row.research)
-    if (!research.success) return []
+    if (!research.success) continue
     const note = row.note === null ? null : citedTextSchema.safeParse(row.note)
-    return [
-      {
-        number: row.number,
-        kind: oneOf(row.kind, VERSION_KINDS, 'legacy'),
-        status: oneOf(row.status, VERSION_STATUSES, 'superseded'),
-        research: research.data,
-        changes: changesSchema.parse(row.changes) as VersionChange[],
-        note: note?.success ? note.data : null,
-        createdAt: row.createdAt,
-      },
-    ]
-  })
+    const version: PublicVersion = {
+      number: row.number,
+      kind: oneOf(row.kind, VERSION_KINDS, 'legacy'),
+      status: oneOf(row.status, VERSION_STATUSES, 'superseded'),
+      research: research.data,
+      changes: changesSchema.parse(row.changes) as VersionChange[],
+      note: note?.success ? note.data : null,
+      createdAt: row.createdAt,
+    }
+    byStory.set(row.storyId, [...(byStory.get(row.storyId) ?? []), version])
+  }
+  return byStory
 }
 
 /** The cards of the story's newest pass that wrote any, in order: the ones served once passes run. */

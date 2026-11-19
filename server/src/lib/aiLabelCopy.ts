@@ -184,6 +184,15 @@ export const PODCAST_TRANSCRIPT_DESCRIPTION_PREFIX = 'AI: '
  */
 export const PREVIEW_IMAGE_AI_BADGE = 'AI'
 
+/**
+ * An ongoing-story overview's AI label (`/ongoing/<slug>`), here for its link preview's description
+ * (`services/pagePreviews.ts`), after the page's own words; the page shows the same line under its
+ * title (`AI_DISCLOSURE_COPY.overviewLabel` in client/src/components/ai/aiDisclosureCopy.ts). It covers
+ * the title, "Where this stands", "What's being done" and the timeline's labels. Owner's wording,
+ * decided 2026-11-18 (plan `2026-11-18_overviews-linking.md`, For Odin 3).
+ */
+export const OVERVIEW_AI_LABEL = 'Summary and timeline by AI, from our stories and their sources.'
+
 /** Carousel: pixel footer on every slide, the post text line, and the alt-text prefix. */
 export const CAROUSEL_COPY = {
   slideFooter: 'actuallyrelevant.news · AI-generated',

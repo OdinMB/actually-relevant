@@ -282,7 +282,7 @@ services:
         source: /newsletter-edition
         destination: /newsletter-edition/index.html
       # Dynamic pages that are not prerendered (a newsletter issue, a podcast transcript, a topic
-      # other than the four above): like story pages, the backend returns this build's index.html
+      # other than the four above, an ongoing story): like story pages, the backend returns this build's index.html
       # with the page's own title, description and og:/twitter: tags, or the shell unchanged on any
       # failure (.context/seo.md, "Link previews"). Below the prerendered pages, so /newsletter,
       # /podcast and the prerendered topics keep their own files; server/src/blueprint.test.ts
@@ -296,6 +296,11 @@ services:
       - type: rewrite
         source: /issues/*
         destination: https://api.actuallyrelevant.news/api/page/issues/*
+      # An ongoing story's page; while overviews are switched off no page has a preview, and the
+      # shell comes back unchanged (.context/overviews.md, "Public")
+      - type: rewrite
+        source: /ongoing/*
+        destination: https://api.actuallyrelevant.news/api/page/ongoing/*
       # SPA catch-all, last: the remaining client routes get dist/index.html and the client router.
       - type: rewrite
         source: /*

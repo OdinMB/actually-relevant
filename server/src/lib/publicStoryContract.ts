@@ -1,6 +1,6 @@
 /**
  * Type-level check, run by `npm run typecheck` (.context/ci.md, "Public API contract"): the story the
- * public routes serve (PUBLIC_STORY_SELECT, plus the `aiGenerated` marker the routes add) and the
+ * public routes serve (PUBLIC_STORY_SELECT, plus the `overview` field and the `aiGenerated` marker) and the
  * story the OpenAPI document promises (publicStorySchema) have the same fields, both ways and at
  * every depth, and every value the database can serve is one the document allows: a nullable column
  * is documented as nullable, an enum's values are documented, a date is a string. The two lists are
@@ -15,6 +15,7 @@
  */
 import type { Prisma } from '@prisma/client'
 import type { z } from 'zod'
+import type { withOverview } from '../services/overviewPublic.js'
 import type { getPublishedStoryBySlug } from '../services/publicStories.js'
 import type { PUBLIC_STORY_SELECT } from '../services/storySelect.js'
 import type { withAiGeneratedDetailMarker, withAiGeneratedMarker } from './aiProvenance.js'
@@ -49,8 +50,13 @@ type FieldGaps<Served, Documented, Path extends string> = [IsRecord<NonNullable<
 type NoGaps<Gaps extends never> = Gaps
 
 type PublicStoryRow = Prisma.StoryGetPayload<{ select: typeof PUBLIC_STORY_SELECT }>
-/** Every public story read filters on `status: 'published'` (services/publicStories.ts, relatedStories.ts, storySearch.ts). */
-type ServedStory = ReturnType<typeof withAiGeneratedMarker<Omit<PublicStoryRow, 'status'> & { status: 'published' }>>
+/**
+ * Every public story read filters on `status: 'published'` (services/publicStories.ts, relatedStories.ts,
+ * storySearch.ts) and adds the `overview` field (`withOverview`); the routes add the marker.
+ */
+type ServedStory = ReturnType<
+  typeof withAiGeneratedMarker<Awaited<ReturnType<typeof withOverview<Omit<PublicStoryRow, 'status'> & { status: 'published' }>>>[number]>
+>
 type DocumentedStory = z.infer<typeof publicStorySchema>
 
 export type PublicStoryContract = NoGaps<ContractGaps<ServedStory, DocumentedStory>>

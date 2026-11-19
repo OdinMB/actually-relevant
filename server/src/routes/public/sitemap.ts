@@ -8,6 +8,7 @@ import prisma from '../../lib/prisma.js'
 import { listPublishedEpisodeDates } from '../../services/podcastPublish.js'
 import { isEditionOpen, podcastEditionInfo } from '../../services/podcastEdition.js'
 import { listPublishedIssueDates } from '../../services/newsletterArchive.js'
+import { publicOverviewList } from '../../services/overviewPublic.js'
 import { loadSitemapRoutes } from '../../lib/staticRoutes.js'
 
 const router = Router()
@@ -26,10 +27,14 @@ const STATIC_ROUTES = loadSitemapRoutes()
 
 /**
  * Pages that exist only while a switch is on: Actually Uplifting's show page (not prerendered, so
- * not in routes.json), listed like /podcast once the show is open.
+ * not in routes.json), listed like /podcast once the show is open; the `/ongoing` index while
+ * overviews are switched on (`.context/overviews.md`, "Public").
  */
-function switchedRoutes(): typeof STATIC_ROUTES {
-  return isEditionOpen('uplifting') ? [{ path: podcastEditionInfo('uplifting').pagePath, priority: 0.7, changefreq: 'weekly' }] : []
+function switchedRoutes(ongoingOn: boolean): typeof STATIC_ROUTES {
+  return [
+    ...(isEditionOpen('uplifting') ? [{ path: podcastEditionInfo('uplifting').pagePath, priority: 0.7, changefreq: 'weekly' as const }] : []),
+    ...(ongoingOn ? [{ path: '/ongoing', priority: 0.7, changefreq: 'daily' as const }] : []),
+  ]
 }
 
 function formatDate(date: Date): string {
@@ -41,8 +46,9 @@ function buildSitemapXml(
   stories: { slug: string; datePublished: Date | null }[],
   episodes: { id: string; publishedAt: Date }[],
   issues: { slug: string; publishedAt: Date }[] = [],
+  ongoing: { on: boolean; overviews: { slug: string; lastChange: Date }[] } = { on: false, overviews: [] },
 ): string {
-  const staticUrls = [...STATIC_ROUTES, ...switchedRoutes()].map(
+  const staticUrls = [...STATIC_ROUTES, ...switchedRoutes(ongoing.on)].map(
     route => `  <url>
     <loc>${baseUrl}${route.path}</loc>
     <changefreq>${route.changefreq}</changefreq>
@@ -79,9 +85,19 @@ function buildSitemapXml(
   </url>`,
   )
 
+  // Each public ongoing story's page (its slug never changes once given)
+  const overviewUrls = ongoing.overviews.map(
+    o => `  <url>
+    <loc>${baseUrl}/ongoing/${o.slug}</loc>
+    <lastmod>${formatDate(o.lastChange)}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>`,
+  )
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${[...staticUrls, ...storyUrls, ...transcriptUrls, ...issueUrls].join('\n')}
+${[...staticUrls, ...storyUrls, ...transcriptUrls, ...issueUrls, ...overviewUrls].join('\n')}
 </urlset>
 `
 }
@@ -96,9 +112,13 @@ router.get('/', failsWith('Failed to generate sitemap'), async (_req, res) => {
 
     const episodes = await listPublishedEpisodeDates()
     const issues = await listPublishedIssueDates()
+    const ongoing = await publicOverviewList()
 
-    log.info({ storyCount: stories.length, episodeCount: episodes.length, issueCount: issues.length }, 'generated sitemap')
-    return buildSitemapXml(getSiteUrl(), stories as { slug: string; datePublished: Date | null }[], episodes, issues)
+    log.info(
+      { storyCount: stories.length, episodeCount: episodes.length, issueCount: issues.length, overviewCount: ongoing.overviews.length },
+      'generated sitemap',
+    )
+    return buildSitemapXml(getSiteUrl(), stories as { slug: string; datePublished: Date | null }[], episodes, issues, ongoing)
   })
 
   res.set('Content-Type', 'application/xml; charset=utf-8')

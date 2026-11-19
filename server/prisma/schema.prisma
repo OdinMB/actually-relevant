@@ -1006,6 +1006,7 @@ model Overview {
   entries              OverviewEntry[]
   stands               OverviewStands[]
   decisions            OverviewDecision[]
+  feedback             Feedback[]
 
   @@index([scope, status])
   @@index([issueId])
@@ -1309,10 +1310,16 @@ model Feedback {
   // The story a "Report an error" was sent from; cleared when the story is deleted (retention).
   storyId   String?          @map("story_id")
   story     Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  // The overview page a "Report an error" was sent from (.context/overviews.md, "Reviews")
+  overviewId   String?       @map("overview_id")
+  overview     Overview?     @relation(fields: [overviewId], references: [id], onDelete: SetNull)
+  // This report queued the overview's review: at most one report per overview per `overviews.reportReviewEveryDays`
+  queuesReview Boolean       @default(false) @map("queues_review")
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @updatedAt @map("updated_at")
 
   @@index([storyId])
+  @@index([overviewId])
   @@index([status])
   @@index([createdAt])
   @@map("feedback")

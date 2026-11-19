@@ -9,6 +9,7 @@ import { searchByEmbedding } from '../lib/vectors.js'
 import { createLogger } from '../lib/logger.js'
 import { storyInIssueSql, storyInIssueWhere } from '../lib/issueFilter.js'
 import { PUBLIC_STORY_SELECT } from './storySelect.js'
+import { withOverview } from './overviewPublic.js'
 
 const log = createLogger('story')
 
@@ -91,7 +92,7 @@ export async function hybridSearch(options: { query: string; issueSlug?: string;
   const ordered = pageIds.map(id => storyMap.get(id)).filter((s): s is NonNullable<typeof s> => s != null)
 
   return {
-    data: ordered,
+    data: await withOverview(ordered),
     total,
     page,
     pageSize,

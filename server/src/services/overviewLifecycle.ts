@@ -14,7 +14,9 @@
  * - an editor's action and Undo (`editorAction`, `undoDecision`): the change set `overviewEdits.ts`
  *   plans, logged with its changes as the editor's decision or an `undo`.
  * Each move is applied only from the state it was computed on (a conditional update), so a change made
- * meanwhile is never overwritten.
+ * meanwhile is never overwritten. A write that takes a public link away (a public overview hidden,
+ * leaving `ongoing`, or losing an entry) empties the public caches that hold links once it commits
+ * (`forgetOverviewLinks`).
  */
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
@@ -24,9 +26,20 @@ import { ConflictError, NotFoundError } from '../utils/errors.js'
 import { slugify } from '../utils/slugify.js'
 import { membershipsOf } from './overviewCandidates.js'
 import type { CloseCase, CloseResult } from './overviewClose.js'
-import { planEdit, planUndo, type Change, type EditEntry, type EditOverview, type EditPlan, type EditorAction, type OverviewFields } from './overviewEdits.js'
+import {
+  planEdit,
+  planUndo,
+  removesLink,
+  type Change,
+  type EditEntry,
+  type EditOverview,
+  type EditPlan,
+  type EditorAction,
+  type OverviewFields,
+} from './overviewEdits.js'
 import { parseCharter } from './overviewInput.js'
 import { isStale, type ApplyOutcome, type LinkResult } from './overviewLink.js'
+import { forgetOverviewLinks } from './overviewPublic.js'
 import type { AuditResult, ReviewCase, ReviewResult } from './overviewReview.js'
 import type { StandsResult } from './overviewStands.js'
 import type { StatusMove } from './overviewStatus.js'
@@ -297,6 +310,7 @@ export async function applyClosing(c: CloseCase, result: CloseResult, db: typeof
  */
 export async function applyStatus(state: OverviewState, moves: readonly StatusMove[], clock: Date, db: typeof prisma = prisma): Promise<void> {
   const now = new Date()
+  let removed = false
   await db.$transaction(async tx => {
     let detached = false
     for (const m of moves) {
@@ -312,6 +326,7 @@ export async function applyStatus(state: OverviewState, moves: readonly StatusMo
       } else if (m.kind === 'scope') {
         const done = await tx.overview.updateMany({ where: { id: state.id, scope: m.from }, data: { scope: m.to } })
         if (done.count > 0) await statusDecision(tx, state.id, null, m.to, { from: m.from, to: m.to })
+        removed ||= done.count > 0 && m.from === 'ongoing'
       } else if (m.kind === 'cancel_closing') {
         // Frozen or not: the unpublished-member rule
         const done = await tx.overview.updateMany({ where: { id: state.id, status: 'closing' }, data: { status: 'open', closingSince: null } })
@@ -329,7 +344,9 @@ export async function applyStatus(state: OverviewState, moves: readonly StatusMo
       }
     }
     if (detached) await refreshLastEntry(tx, state.id)
+    removed ||= detached
   })
+  if (removed && state.scope === 'ongoing' && !state.hidden) forgetOverviewLinks()
 }
 
 /** A burst (`anomalies`): the overview frozen, so automation pauses until its review, logged as a `frozen` status decision. */
@@ -360,8 +377,12 @@ async function freeSlug(tx: Tx, title: string): Promise<string> {
  * closing whose end-event story the review detached is cancelled.
  */
 export async function applyReview(c: ReviewCase, result: ReviewResult, now: Date, db: typeof prisma = prisma): Promise<void> {
+  let removed = false
   await db.$transaction(async tx => {
-    const overview = await tx.overview.findUnique({ where: { id: c.overviewId }, select: { closingSince: true, slug: true, status: true } })
+    const overview = await tx.overview.findUnique({
+      where: { id: c.overviewId },
+      select: { closingSince: true, slug: true, status: true, scope: true, hidden: true },
+    })
     await tx.overviewDecision.create({
       data: {
         kind: 'review',
@@ -404,7 +425,9 @@ export async function applyReview(c: ReviewCase, result: ReviewResult, now: Date
     if (result.cancelsClosing && overview.status === 'closing')
       await statusDecision(tx, c.overviewId, c.closingStoryId, 'open', { from: 'closing', to: 'open', reason: 'closing_cancelled', by: 'review' })
     if (detached) await refreshLastEntry(tx, c.overviewId)
+    removed = overview.scope === 'ongoing' && !overview.hidden && (detached || result.scope !== 'ongoing')
   })
+  if (removed) forgetOverviewLinks()
 }
 
 /** The monthly audit's findings, logged as an `audited` review decision and never applied. */
@@ -598,6 +621,13 @@ async function applyPlan(tx: Tx, plan: EditPlan, editorId: string, target: strin
   return decision.id
 }
 
+/** An editor's plan applied in one transaction; once it commits, the public caches forget a link it may have taken away (`removesLink`). */
+async function planned(db: typeof prisma, write: (tx: Tx) => Promise<{ plan: EditPlan; decisionId: string }>): Promise<{ decisionId: string }> {
+  const { plan, decisionId } = await db.$transaction(write)
+  if (removesLink(plan.changes)) forgetOverviewLinks()
+  return { decisionId }
+}
+
 /** A write the one-active-entry index refused, in the editor's words. */
 async function editorWrite<T>(write: () => Promise<T>): Promise<T> {
   try {
@@ -616,7 +646,7 @@ async function editorWrite<T>(write: () => Promise<T>): Promise<T> {
  */
 export async function editorAction(action: EditorAction, editorId: string, db: typeof prisma = prisma): Promise<{ decisionId: string }> {
   return editorWrite(() =>
-    db.$transaction(async tx => {
+    planned(db, async tx => {
       const o = await editOverview(tx, action.overviewId)
       const rows: Parameters<typeof planEdit>[2] = {}
       if (action.kind === 'detach' || action.kind === 'role') {
@@ -628,7 +658,7 @@ export async function editorAction(action: EditorAction, editorId: string, db: t
         rows.newEntryId = randomUUID()
       }
       const plan = planEdit(action, o, rows, { editorId, now: new Date() })
-      return { decisionId: await applyPlan(tx, plan, editorId, null) }
+      return { plan, decisionId: await applyPlan(tx, plan, editorId, null) }
     }),
   )
 }
@@ -640,7 +670,7 @@ export async function editorAction(action: EditorAction, editorId: string, db: t
  */
 export async function undoDecision(decisionId: string, editorId: string, db: typeof prisma = prisma): Promise<{ decisionId: string }> {
   return editorWrite(() =>
-    db.$transaction(async tx => {
+    planned(db, async tx => {
       const d = await tx.overviewDecision.findUnique({
         where: { id: decisionId },
         select: { id: true, kind: true, outcome: true, storyId: true, overviewId: true, inputs: true, undoneAt: true },
@@ -654,7 +684,7 @@ export async function undoDecision(decisionId: string, editorId: string, db: typ
       const marked = await tx.overviewDecision.updateMany({ where: { id: d.id, undoneAt: null }, data: { undoneAt: now, undoneBy: editorId } })
       if (marked.count === 0) throw new ConflictError('This decision is already undone')
       if (plan.relive) await tx.overviewDecision.updateMany({ where: { id: plan.relive }, data: { undoneAt: null, undoneBy: null } })
-      return { decisionId: await applyPlan(tx, plan, editorId, d.id) }
+      return { plan, decisionId: await applyPlan(tx, plan, editorId, d.id) }
     }),
   )
 }

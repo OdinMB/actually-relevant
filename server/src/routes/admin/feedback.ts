@@ -26,6 +26,9 @@ const feedbackSelect = {
   // The story a "Report an error" came from; null once retention deleted it
   storyId: true,
   story: { select: { id: true, slug: true, title: true, sourceTitle: true, status: true } },
+  // The ongoing story's page a report came from, and whether it queued the overview's review
+  overview: { select: { id: true, title: true } },
+  queuesReview: true,
 } as const
 
 // List feedback with filters and pagination

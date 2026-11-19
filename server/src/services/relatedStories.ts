@@ -15,6 +15,7 @@ import { relatedStoriesResultSchema } from '../schemas/llm.js'
 import { TTLCache, cached } from '../lib/cache.js'
 import { registerPublicCache } from '../lib/publicCaches.js'
 import { PUBLIC_STORY_SELECT } from './storySelect.js'
+import { withOverview } from './overviewPublic.js'
 import { relatedCandidate, relatedNeedsRanking, relatedSource, type RelatedRow } from './promptInputs.js'
 
 const log = createLogger('story')
@@ -63,10 +64,13 @@ export async function getRelatedStories(slug: string, limit: number = config.rel
     relatedCache.invalidate(slug)
     return []
   }
-  return entry.ids
-    .map(id => storyMap.get(id))
-    .filter((s): s is NonNullable<typeof s> => s != null)
-    .slice(0, limit)
+  // The ids are cached, the stories and their `overview` field read fresh
+  return withOverview(
+    entry.ids
+      .map(id => storyMap.get(id))
+      .filter((s): s is NonNullable<typeof s> => s != null)
+      .slice(0, limit),
+  )
 }
 
 /** Steps 2-5 of getRelatedStories: null when no published story with an embedding has this slug. */

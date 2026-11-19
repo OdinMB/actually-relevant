@@ -51,8 +51,9 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
       burstJoins: Math.max(0, ...byDay.values()),
       burstAt: o.frozen ? o.burstAt : null,
       closureReviewed: o.closingSince !== null && o.closureReviewedFor?.getTime() === o.closingSince.getTime(),
-      // No editor acts in a replay
+      // No editor acts in a replay, and no reader reports
       reopenedAt: null,
+      reportAt: null,
     }
   }
 

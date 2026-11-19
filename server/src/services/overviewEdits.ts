@@ -283,6 +283,18 @@ const reviewActions = z.object({
   ),
 })
 
+/**
+ * Whether the changes may take a public link away (`.context/overviews.md`, "The public story field"):
+ * the overview hidden, its scope leaving `ongoing`, or an entry leaving `active`. It does not ask
+ * whether the overview was public, which costs at most a needless cache rebuild.
+ */
+export const removesLink = (changes: readonly Change[]): boolean =>
+  changes.some(c =>
+    c.table === 'overview'
+      ? (c.after.hidden === true && c.before.hidden !== true) || (c.before.scope === 'ongoing' && c.after.scope !== undefined && c.after.scope !== 'ongoing')
+      : c.before.status === 'active' && c.after.status === 'detached',
+  )
+
 /** Whether the admin offers Undo on a decision: one not undone, of a kind and outcome `planUndo` can reverse. */
 export function undoable(d: Pick<UndoTarget, 'kind' | 'outcome' | 'undoneAt'>): boolean {
   if (d.undoneAt) return false

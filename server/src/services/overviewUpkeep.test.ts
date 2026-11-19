@@ -30,6 +30,8 @@ const state = (id: string, over: Partial<OverviewState> = {}): OverviewState => 
   burstJoins: 0,
   burstAt: null,
   closureReviewed: false,
+  reopenedAt: null,
+  reportAt: null,
   ...over,
 })
 

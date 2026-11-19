@@ -11,6 +11,7 @@ import { issueFormToken, verifyFormToken } from '../../lib/formToken.js'
 import { verifyTurnstile, type TurnstileResult } from '../../lib/turnstile.js'
 import { BadRequestError } from '../../utils/errors.js'
 import { FEEDBACK_CATEGORIES } from '../../schemas/feedback.js'
+import { overviewReport } from '../../services/overviewPublic.js'
 
 const router = Router()
 const log = createLogger('public:feedback')
@@ -32,6 +33,8 @@ const feedbackSchema = z.object({
   category: z.enum(FEEDBACK_CATEGORIES),
   // The story a "Report an error" was sent from (.context/public-website.md, "Feedback"); must exist
   storyId: z.string().min(1).max(100).optional(),
+  // The ongoing story's page a "Report an error" was sent from (.context/overviews.md, "Reviews"); must be public
+  overviewId: z.string().min(1).max(100).optional(),
   message: z.string().min(1).max(config.feedback.messageMaxLength),
   email: z.string().email().max(255).optional().or(z.literal('')),
   website: z.string().optional(), // honeypot field
@@ -76,12 +79,15 @@ router.post('/', failsWith('Something went wrong. Please try again.'), feedbackL
     return
   }
 
-  const { category, message, email, storyId } = req.body as z.infer<typeof feedbackSchema>
+  const { category, message, email, storyId, overviewId } = req.body as z.infer<typeof feedbackSchema>
 
   if (storyId) {
     const story = await prisma.story.findUnique({ where: { id: storyId }, select: { id: true } })
     if (!story) throw new BadRequestError('That story does not exist.')
   }
+  // A report on an ongoing story queues its review at most once a week; later ones are stored only
+  const report = overviewId ? await overviewReport(overviewId) : null
+  if (overviewId && !report) throw new BadRequestError('That ongoing story does not exist.')
 
   await prisma.feedback.create({
     data: {
@@ -90,10 +96,12 @@ router.post('/', failsWith('Something went wrong. Please try again.'), feedbackL
       email: email || null,
       ipHash,
       storyId: storyId ?? null,
+      overviewId: overviewId ?? null,
+      queuesReview: report?.queuesReview ?? false,
     },
   })
 
-  log.info({ category, hasEmail: !!email, hasStory: !!storyId }, 'feedback submitted')
+  log.info({ category, hasEmail: !!email, hasStory: !!storyId, hasOverview: !!overviewId, queuesReview: report?.queuesReview ?? false }, 'feedback submitted')
   res.json({ success: true })
 })
 

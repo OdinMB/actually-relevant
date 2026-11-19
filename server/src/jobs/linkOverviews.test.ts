@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LinkStory } from '../services/overviewTypes.js'
+import type { LinkStory, OverviewState } from '../services/overviewTypes.js'
 
 const gates = vi.hoisted(() => ({ overview: 'closed' as string | null, pass: 'closed' as string | null }))
 const mockJobRun = vi.hoisted(() => ({ findUnique: vi.fn() }))
@@ -135,7 +135,7 @@ describe('runLinkOverviewsJob', () => {
     gates.pass = null
     mocks.owedStories.mockResolvedValue({ backlog: [], night: [], backlogTotal: 0 })
     mocks.linkStories.mockResolvedValue([])
-    const quiet = {
+    const quiet: OverviewState = {
       id: 'o1',
       scope: 'ongoing',
       status: 'open',
@@ -144,6 +144,7 @@ describe('runLinkOverviewsJob', () => {
       hidden: false,
       lastEntryAt: new Date('2026-05-01T00:00:00Z'),
       closingSince: null,
+      closingStoryId: null,
       activeEntries: 3,
       unpublished: [],
       entriesAtLastReview: 3,
@@ -151,6 +152,8 @@ describe('runLinkOverviewsJob', () => {
       burstJoins: 0,
       burstAt: null,
       closureReviewed: false,
+      reopenedAt: null,
+      reportAt: null,
     }
     mocks.overviewStates.mockResolvedValue([quiet])
     await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))

@@ -1,7 +1,7 @@
 import { config } from '../config.js'
 
 /**
- * Machine-readable "AI-generated" markers for story text and podcast episodes (EU AI Act Art. 50(2) interim
+ * Machine-readable "AI-generated" markers for story text, ongoing-story overviews and podcast episodes (EU AI Act Art. 50(2) interim
  * measure; see .context/ai-transparency.md). These are unsigned metadata: they are not the
  * watermark layer the Code of Practice expects for long text, and copied text loses them.
  */
@@ -94,6 +94,31 @@ export interface AiGeneratedContextMarker {
 
 export function contextAiMarker(hasBoxes: boolean, model: string): AiGeneratedContextMarker {
   return { fields: hasBoxes ? [...AI_GENERATED_CONTEXT_FIELDS] : [], model, digitalSourceType: IPTC_TRAINED_ALGORITHMIC_MEDIA }
+}
+
+/**
+ * Fields of an ongoing-story overview (`GET /api/overviews/:slug`, services/overviewPublic.ts) with
+ * AI-generated content: its title (written when it was founded, a review or an editor may change it),
+ * `stands` ("Where this stands" and "What's being done", written from its stories' checked facts) and
+ * `entries`, its timeline: our stories' AI headlines and labels, the roles an AI model gave them, and
+ * their Updates' notes.
+ */
+export const AI_GENERATED_OVERVIEW_FIELDS = ['title', 'stands', 'entries'] as const
+
+export interface AiGeneratedOverviewMarker {
+  /** `stands` only while it is served, `entries` while any is. */
+  fields: (typeof AI_GENERATED_OVERVIEW_FIELDS)[number][]
+  /** The models recorded with the title and with the stands served, as recorded. */
+  models: string[]
+  digitalSourceType: typeof IPTC_TRAINED_ALGORITHMIC_MEDIA
+}
+
+export function overviewAiMarker(o: { titleModel: string; standsModel: string | null; entries: number }): AiGeneratedOverviewMarker {
+  return {
+    fields: ['title', ...(o.standsModel !== null ? (['stands'] as const) : []), ...(o.entries > 0 ? (['entries'] as const) : [])],
+    models: [...new Set([o.titleModel, ...(o.standsModel !== null ? [o.standsModel] : [])])],
+    digitalSourceType: IPTC_TRAINED_ALGORITHMIC_MEDIA,
+  }
 }
 
 /**

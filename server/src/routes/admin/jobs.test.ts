@@ -39,6 +39,11 @@ vi.mock('../../jobs/jobEnableChecks.js', () => ({
   jobEnableConflict: mockJobEnableConflict,
   SWITCHED_OFF_BY: { research_pass: ['research_stories', 'build_story_context'] },
 }))
+const mockForgetOverviewLinks = vi.hoisted(() => vi.fn())
+vi.mock('../../services/overviewPublic.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../services/overviewPublic.js')>()),
+  forgetOverviewLinks: mockForgetOverviewLinks,
+}))
 vi.mock('../../jobs/crawlFeeds.js', () => ({ runCrawlFeeds: mockRunCrawlFeeds }))
 vi.mock('../../jobs/preassessStories.js', () => ({ runPreassessStories: mockRunPreassessStories }))
 vi.mock('../../jobs/assessStories.js', () => ({ runAssessStories: mockRunAssessStories }))
@@ -157,6 +162,18 @@ describe('Admin Jobs API', () => {
       })
       expect(tx.jobRun.updateMany).toHaveBeenCalledWith({ where: { jobName: { in: ['research_stories'] } }, data: { enabled: false } })
       expect(mockReloadJob.mock.calls.map(c => c[0])).toEqual(['research_pass', 'research_stories'])
+    })
+
+    it('empties the caches holding overview links once overviews are switched off, and only then', async () => {
+      mockPrisma.jobRun.update.mockResolvedValue({})
+      await request(app).put('/api/admin/jobs/link_overviews').set(authHeader()).send({ enabled: true }).expect(200)
+      await request(app).put('/api/admin/jobs/link_overviews').set(authHeader()).send({ flex: true }).expect(200)
+      await request(app).put('/api/admin/jobs/crawl_feeds').set(authHeader()).send({ enabled: false }).expect(200)
+      expect(mockForgetOverviewLinks).not.toHaveBeenCalled()
+
+      await request(app).put('/api/admin/jobs/link_overviews').set(authHeader()).send({ enabled: false }).expect(200)
+      expect(mockPrisma.jobRun.update).toHaveBeenLastCalledWith({ where: { jobName: 'link_overviews' }, data: { enabled: false } })
+      expect(mockForgetOverviewLinks).toHaveBeenCalledTimes(1)
     })
 
     it("saves a Flex switch, and a chain step review pause and a chain's flex cut-off in hours", async () => {

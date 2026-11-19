@@ -105,6 +105,19 @@ describe('Admin Feedback API', () => {
       expect(args.select.story).toEqual({ select: { id: true, slug: true, title: true, sourceTitle: true, status: true } })
       expect(res.body.items[0].story).toEqual(story)
     })
+
+    it('returns the ongoing story a report came from and whether it queued a review', async () => {
+      const overview = { id: 'o1', title: 'Ebola in Ituri' }
+      mockPrisma.feedback.findMany.mockResolvedValue([{ ...sampleFeedback, category: 'correction', overview, queuesReview: true }])
+      mockPrisma.feedback.count.mockResolvedValue(1)
+
+      const res = await request(app).get('/api/admin/feedback').set(authHeader())
+
+      const args = mockPrisma.feedback.findMany.mock.calls[0][0]
+      expect(args.select.overview).toEqual({ select: { id: true, title: true } })
+      expect(args.select.queuesReview).toBe(true)
+      expect(res.body.items[0]).toMatchObject({ overview, queuesReview: true })
+    })
   })
 
   describe('GET /api/admin/feedback/count', () => {

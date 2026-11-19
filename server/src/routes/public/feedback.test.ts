@@ -30,6 +30,13 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
+
+// The overview's report rules are overviewPublic.ts's (its db test); here only what the route does with the answer
+const mockOverviewReport = vi.hoisted(() => vi.fn())
+vi.mock('../../services/overviewPublic.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../services/overviewPublic.js')>()),
+  overviewReport: (...args: unknown[]) => mockOverviewReport(...args),
+}))
 vi.mock('../../services/crawler.js', () => ({
   crawlFeed: vi.fn(),
   crawlAllDueFeeds: vi.fn(),
@@ -277,6 +284,45 @@ describe('Public Feedback API', () => {
       const res = await post({ category: 'correction', message: 'x', storyId: 'a'.repeat(101) })
       expect(res.status).toBe(400)
       expect(mockPrisma.story.findUnique).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('POST /api/feedback with an ongoing story ("Report an error" on its page)', () => {
+    it('stores the report with the overview, and whether it queues the review', async () => {
+      mockOverviewReport.mockResolvedValue({ queuesReview: true })
+      mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-8' })
+
+      const res = await post({ category: 'correction', message: 'The count is old', overviewId: 'o1' })
+
+      expect(res.status).toBe(200)
+      expect(mockOverviewReport).toHaveBeenCalledWith('o1')
+      expect(mockPrisma.feedback.create.mock.calls[0][0].data).toMatchObject({ overviewId: 'o1', queuesReview: true, storyId: null })
+    })
+
+    it('stores a later report that queues nothing', async () => {
+      mockOverviewReport.mockResolvedValue({ queuesReview: false })
+      mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-9' })
+
+      await post({ category: 'correction', message: 'Still old', overviewId: 'o1' })
+
+      expect(mockPrisma.feedback.create.mock.calls[0][0].data).toMatchObject({ overviewId: 'o1', queuesReview: false })
+    })
+
+    it('refuses an overview that is not public, and stores nothing', async () => {
+      mockOverviewReport.mockResolvedValue(null)
+
+      const res = await post({ category: 'correction', message: 'Wrong', overviewId: 'hidden' })
+
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'That ongoing story does not exist.' })
+      expect(mockPrisma.feedback.create).not.toHaveBeenCalled()
+    })
+
+    it('stores feedback without an overview as queuing nothing, and asks nothing about overviews', async () => {
+      mockPrisma.feedback.create.mockResolvedValue({ id: 'fb-10' })
+      await post({ category: 'general', message: 'Hi' })
+      expect(mockOverviewReport).not.toHaveBeenCalled()
+      expect(mockPrisma.feedback.create.mock.calls[0][0].data).toMatchObject({ overviewId: null, queuesReview: false })
     })
   })
 })

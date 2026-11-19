@@ -25,6 +25,7 @@ const state = (over: Partial<OverviewState> = {}): OverviewState => ({
   burstAt: null,
   closureReviewed: false,
   reopenedAt: null,
+  reportAt: null,
   ...over,
 })
 
@@ -148,6 +149,17 @@ describe('reviewDue', () => {
     expect(due({ ...closing, closingSince: daysAgo(6) })).toBeNull()
     expect(due(closing)).toBe('closure')
     expect(due({ ...closing, closureReviewed: true })).toBeNull()
+  })
+
+  it('is due on a reader’s report that queued one, until a review runs after it; never while frozen or single', () => {
+    expect(due({ reportAt: daysAgo(1) })).toBe('report')
+    expect(due({ reportAt: daysAgo(3) })).toBeNull()
+    expect(due({ reportAt: daysAgo(1), reviewedAt: null, entriesAtLastReview: 0, activeEntries: 2, scope: 'forming' })).toBe('report')
+    expect(due({ reportAt: daysAgo(1), status: 'closed', closedReason: 'faded' })).toBe('report')
+    expect(due({ reportAt: daysAgo(1), frozen: true })).toBeNull()
+    expect(due({ reportAt: daysAgo(1), scope: 'single', activeEntries: 1 })).toBeNull()
+    const closing = { status: 'closing' as const, closingSince: daysAgo(7), lastEntryAt: daysAgo(7), reportAt: daysAgo(1) }
+    expect(due(closing)).toBe('closure')
   })
 
   it('is due on a burst, the only review a frozen overview gets; a single overview never', () => {

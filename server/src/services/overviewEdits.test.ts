@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ConflictError } from '../utils/errors.js'
-import { planEdit, planUndo, undoable, type EditEntry, type EditOverview, type UndoTarget } from './overviewEdits.js'
+import { planEdit, planUndo, removesLink, undoable, type EditEntry, type EditOverview, type UndoTarget } from './overviewEdits.js'
 
 const NOW = new Date('2026-11-18T12:00:00Z')
 const ctx = { editorId: 'ed-1', now: NOW }
@@ -323,5 +323,18 @@ describe('undoable', () => {
       offered('stands', 'written'),
     ]).toEqual([true, true, false, true, true, false])
     expect(offered('link', 'joined', NOW)).toBe(false)
+  })
+})
+
+describe('removesLink', () => {
+  const changes = (action: Parameters<typeof planEdit>[0], rows: Parameters<typeof planEdit>[2] = {}) => planEdit(action, overview(), rows, ctx).changes
+
+  it('is true for a hide, a detach, and an undo that takes the scope off ongoing; false for an unhide or a retitle', () => {
+    expect(removesLink(changes({ kind: 'hide', overviewId: 'o1', hidden: true }))).toBe(true)
+    expect(removesLink(changes({ kind: 'detach', overviewId: 'o1', entryId: 'e1' }, { entry: entry() }))).toBe(true)
+    expect(removesLink([{ table: 'overview', id: 'o1', before: { scope: 'ongoing' }, after: { scope: 'forming' } }])).toBe(true)
+    expect(removesLink(planEdit({ kind: 'hide', overviewId: 'o1', hidden: false }, overview({ hidden: true }), {}, ctx).changes)).toBe(false)
+    expect(removesLink(changes({ kind: 'retitle', overviewId: 'o1', title: 'Ebola in Ituri and North Kivu' }))).toBe(false)
+    expect(removesLink([{ table: 'entry', id: 'e1', before: { status: 'detached' }, after: { status: 'active' } }])).toBe(false)
   })
 })

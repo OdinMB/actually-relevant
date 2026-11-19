@@ -105,6 +105,7 @@
         "required": ["edition", "publishedAt", "slug", "storyCount", "title"],
         "type": "object"
       },
+      "OverviewRef": { "properties": { "slug": { "type": "string" }, "title": { "type": "string" } }, "required": ["slug", "title"], "type": "object" },
       "PodcastEpisode": {
         "properties": {
           "aiGenerated": {
@@ -294,6 +295,7 @@
           "id": { "format": "uuid", "type": "string" },
           "issue": { "oneOf": [{ "$ref": "#/components/schemas/IssueRef" }, { "type": "null" }] },
           "marketingBlurb": { "type": ["null", "string"] },
+          "overview": { "oneOf": [{ "$ref": "#/components/schemas/OverviewRef" }, { "type": "null" }] },
           "quote": { "type": ["null", "string"] },
           "quoteAttribution": { "type": ["null", "string"] },
           "relevance": { "maximum": 10, "minimum": 0, "type": ["integer", "null"] },
@@ -318,6 +320,7 @@
           "id",
           "issue",
           "marketingBlurb",
+          "overview",
           "quote",
           "quoteAttribution",
           "relevance",
@@ -371,6 +374,7 @@
           "id": { "format": "uuid", "type": "string" },
           "issue": { "oneOf": [{ "$ref": "#/components/schemas/IssueRef" }, { "type": "null" }] },
           "marketingBlurb": { "type": ["null", "string"] },
+          "overview": { "oneOf": [{ "$ref": "#/components/schemas/OverviewRef" }, { "type": "null" }] },
           "quote": { "type": ["null", "string"] },
           "quoteAttribution": { "type": ["null", "string"] },
           "relevance": { "maximum": 10, "minimum": 0, "type": ["integer", "null"] },
@@ -557,6 +561,7 @@
           "id",
           "issue",
           "marketingBlurb",
+          "overview",
           "quote",
           "quoteAttribution",
           "relevance",

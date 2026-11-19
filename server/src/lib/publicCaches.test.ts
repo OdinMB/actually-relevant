@@ -27,4 +27,15 @@ describe('clearPublicCaches', () => {
     expect(ttl.get('a')).toBeUndefined()
     expect(bounded.get('c')).toBeUndefined()
   })
+
+  it('empties only the caches named, when given names', () => {
+    registerPublicCache('ttl', ttl)
+    registerPublicCache('bounded', bounded)
+    ttl.set('a', '1')
+    bounded.set('c', '3')
+
+    expect(clearPublicCaches(['bounded'])).toEqual([{ name: 'bounded', entries: 1 }])
+    expect(ttl.get('a')).toBe('1')
+    expect(bounded.get('c')).toBeUndefined()
+  })
 })

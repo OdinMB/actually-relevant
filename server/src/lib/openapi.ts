@@ -38,6 +38,18 @@ const feedRefSchema = z
   })
   .openapi({ ref: 'FeedRef' })
 
+const overviewRefSchema = z
+  .object({
+    slug: z.string().openapi({ example: 'ebola-in-ituri' }),
+    title: z.string().openapi({
+      description: aiField(
+        'Title of the ongoing story, written by an AI model when the story was first followed; a later AI review or an editor may change it.',
+      ),
+      example: 'Ebola in Ituri',
+    }),
+  })
+  .openapi({ ref: 'OverviewRef' })
+
 const aiGeneratedSchema = z
   .object({
     fields: z.array(z.enum(AI_GENERATED_STORY_FIELDS)).openapi({
@@ -139,6 +151,10 @@ export const publicStorySchema = z
       }),
     issue: issueRefSchema.nullable(),
     feed: feedRefSchema,
+    overview: overviewRefSchema.nullable().openapi({
+      description:
+        'The ongoing story this story is part of: a development our stories follow over time, with its page at `https://actuallyrelevant.news/ongoing/{slug}`. Null for a story in none, or in one that is not public.',
+    }),
     aiGenerated: aiGeneratedSchema,
   })
   .openapi({ ref: 'PublicStory' })

@@ -525,6 +525,8 @@ export const config = {
     /** A review is due each time the active entries reach one of these counts, and every `reviewEveryDays` while public and not closed. */
     reviewAt: [3, 6, 12, 25, 50] as readonly number[],
     reviewEveryDays: 30,
+    /** A reader's "Report an error" from the overview page queues a review at most once per overview in this many days; later reports are stored only. */
+    reportReviewEveryDays: 7,
     /** The monthly audit: this many random public overviews reviewed at high effort every `auditEveryDays`, logged and never applied. */
     auditSize: 5,
     auditEveryDays: 30,

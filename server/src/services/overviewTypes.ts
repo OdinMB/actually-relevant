@@ -98,8 +98,11 @@ export interface StandsLine {
   facts: string[]
 }
 
-/** Why a review runs: an entry count reached, its 30 days, a closure waiting on it, a burst of joins; the monthly audit reviews and never acts. */
-export const REVIEW_TRIGGERS = ['entries', 'periodic', 'closure', 'burst', 'audit'] as const
+/**
+ * Why a review runs: an entry count reached, its 30 days, a closure waiting on it, a burst of joins, a
+ * reader's "Report an error" from the overview page; the monthly audit reviews and never acts.
+ */
+export const REVIEW_TRIGGERS = ['entries', 'periodic', 'closure', 'burst', 'report', 'audit'] as const
 export type ReviewTrigger = (typeof REVIEW_TRIGGERS)[number]
 
 /** An overview as the status machine, the anomaly check and the review triggers read it (`overviewStatus.ts`). */
@@ -138,4 +141,9 @@ export interface OverviewState {
    * closed again by the next run.
    */
   reopenedAt: Date | null
+  /**
+   * The newest reader's report that queued a review (at most one per `reportReviewEveryDays`, the
+   * feedback route decides), or null: a review is due while no review has run since.
+   */
+  reportAt: Date | null
 }

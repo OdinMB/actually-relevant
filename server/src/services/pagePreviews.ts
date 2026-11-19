@@ -8,7 +8,8 @@
  */
 import prisma from '../lib/prisma.js'
 import { config } from '../config.js'
-import { PODCAST_TRANSCRIPT_DESCRIPTION_PREFIX } from '../lib/aiLabelCopy.js'
+import { OVERVIEW_AI_LABEL, PODCAST_TRANSCRIPT_DESCRIPTION_PREFIX } from '../lib/aiLabelCopy.js'
+import { publicOverviewHead } from './overviewPublic.js'
 import type { PreviewedSection } from '../lib/linkPreviewPaths.js'
 import { SITE_NAME, type LinkPreview, type PreviewTarget } from './linkPreview.js'
 import { findStoryLinkPreview } from './storyPreview.js'
@@ -108,6 +109,28 @@ async function topicPreview(slug: string): Promise<LinkPreview | null> {
   }
 }
 
+// --- An ongoing story, /ongoing/<slug> (OverviewPage.tsx), only while it is public ---
+
+const MONTH_YEAR = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+
+/** The page's title and description as its Helmet sets them (`overviewHead` in the client), the AI label last, and the ongoing-story image with the "AI" badge. */
+async function overviewPreview(slug: string): Promise<LinkPreview | null> {
+  const o = await publicOverviewHead(slug)
+  if (!o) return null
+  const title = `${o.title}: ongoing story - ${SITE_NAME}`
+  const count = `${o.stories} ${o.stories === 1 ? 'story' : 'stories'} since ${MONTH_YEAR.format(o.since)}`
+  return {
+    documentTitle: title,
+    title,
+    // Short enough that the 160-character cut never reaches the label
+    description: `${count}, followed as one ongoing story. ${OVERVIEW_AI_LABEL}`,
+    url: `${config.siteUrl}/ongoing/${encodeURIComponent(o.slug)}`,
+    canonical: true,
+    type: 'website',
+    image: sectionImage('ongoing'),
+  }
+}
+
 // --- The table ---
 
 interface PagePreview {
@@ -124,6 +147,7 @@ const PAGES: Record<PreviewedSection, PagePreview> = {
   newsletter: { keyOf: onlySegment, find: newsletterIssuePreview },
   podcast: { keyOf: rest => (rest.length === 2 && rest[1] === 'transcript' ? (rest[0] ?? null) : null), find: podcastTranscriptPreview },
   issues: { keyOf: onlySegment, find: topicPreview },
+  ongoing: { keyOf: onlySegment, find: overviewPreview },
 }
 
 function decodeSegment(segment: string): string | null {

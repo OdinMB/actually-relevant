@@ -25,13 +25,18 @@ export interface ClearedCache {
   entries: number
 }
 
-/** Empty every registered public cache; the next request for each rebuilds it from the database. */
-export function clearPublicCaches(): ClearedCache[] {
-  const cleared = [...registry].map(([name, cache]) => {
-    const entries = cache.size
-    cache.clear()
-    return { name, entries }
-  })
+/**
+ * Empty every registered public cache, or only the ones named; the next request for each rebuilds it
+ * from the database.
+ */
+export function clearPublicCaches(names?: readonly string[]): ClearedCache[] {
+  const cleared = [...registry]
+    .filter(([name]) => !names || names.includes(name))
+    .map(([name, cache]) => {
+      const entries = cache.size
+      cache.clear()
+      return { name, entries }
+    })
   log.info({ cleared }, 'public caches cleared')
   return cleared
 }

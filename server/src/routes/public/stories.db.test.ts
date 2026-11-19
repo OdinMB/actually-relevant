@@ -19,6 +19,9 @@ vi.mock('../../services/embedding.js', () => ({
   ensureEmbeddings: vi.fn(),
 }))
 vi.mock('../../services/llm.js', () => ({ getLLMByTier: vi.fn(), rateLimitDelay: () => Promise.resolve() }))
+// Overviews' gates open, so the full story's `overview` field is served from a public overview
+vi.mock('../../services/overviewGate.js', () => ({ OVERVIEW_EVAL_GATE: null }))
+vi.mock('../../services/researchPassGate.js', () => ({ PASS_EVAL_GATE: null }))
 
 const { default: app } = await import('../../app.js')
 const { publicStoryDetailSchema, storyListResponseSchema } = await import('../../lib/openapi.js')
@@ -105,7 +108,30 @@ async function seedStories() {
     data: { research, preResearch: { summary: 'The single-source summary.', relevanceSummary: 'Why it mattered.' } },
   })
   await seedUpdate(full.id, research)
+  await seedOverview(full.id)
   return { fullId: full.id }
+}
+
+/** The full story in a public ongoing overview, with overviews switched on. */
+async function seedOverview(storyId: string) {
+  await prisma.jobRun.upsert({
+    where: { jobName: 'link_overviews' },
+    create: { jobName: 'link_overviews', cronExpression: '30 1 * * *', enabled: true },
+    update: { enabled: true },
+  })
+  await prisma.overview.create({
+    data: {
+      title: 'Ebola in Ituri',
+      slug: 'ebola-in-ituri',
+      charter: { in: 'The Ebola outbreak in Ituri.', out: [], endEvent: 'The ministry declares it over' },
+      charterModel: 'gpt-6.1-sol',
+      charterPromptVersion: 'v',
+      foundedAt: new Date('2026-10-01T08:00:00Z'),
+      lastEntryAt: new Date('2026-10-20T08:00:00Z'),
+      scope: 'ongoing',
+      entries: { create: { storyId, role: 'routine', joinedBy: 'pipeline' } },
+    },
+  })
 }
 
 /**
