@@ -40,8 +40,9 @@ function TimelineEntry({ entry, accent }: { entry: PublicOverviewEntry; accent: 
           <StoryTitleLabel story={asStory(entry)} className="mb-0.5" />
           <span className="font-semibold leading-snug text-neutral-900 group-hover:text-brand-800">{getHeadline(asStory(entry))}</span>
         </Link>
-        {entry.updates.map(update => (
-          <p key={update.date} className="mt-1 text-sm text-neutral-600">
+        {/* A story may have two Updates on one day; the list never reorders, so its place keys it */}
+        {entry.updates.map((update, i) => (
+          <p key={`${update.date}-${i}`} className="mt-1 text-sm text-neutral-600">
             <span className="font-semibold">Updated {shortDay(update.date)}:</span> {update.note}
           </p>
         ))}

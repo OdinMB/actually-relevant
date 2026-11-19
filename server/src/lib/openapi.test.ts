@@ -5,7 +5,7 @@ import {
   AI_GENERATED_PODCAST_DETAIL_FIELDS,
   AI_GENERATED_PODCAST_FIELDS,
   AI_GENERATED_STORY_DETAIL_FIELDS,
-  AI_GENERATED_STORY_FIELDS,
+  AI_GENERATED_STORY_MARKER_FIELDS,
 } from './aiProvenance.js'
 
 describe('getOpenAPIDocument', () => {
@@ -25,11 +25,11 @@ describe('getOpenAPIDocument', () => {
   })
 
   it('lists exactly the registry fields as possible AI-generated field names', () => {
-    expect(schemas.AiGenerated.properties.fields.items.enum).toEqual([...AI_GENERATED_STORY_FIELDS])
+    expect(schemas.AiGenerated.properties.fields.items.enum).toEqual([...AI_GENERATED_STORY_MARKER_FIELDS])
   })
 
   it('labels every AI-generated field of the story schema, then describes it', () => {
-    for (const field of AI_GENERATED_STORY_FIELDS) {
+    for (const field of AI_GENERATED_STORY_MARKER_FIELDS) {
       const description: string = schemas.PublicStory.properties[field].description
       expect(description.startsWith('AI-generated. '), field).toBe(true)
       expect(description.length, field).toBeGreaterThan('AI-generated. '.length)

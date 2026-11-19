@@ -535,6 +535,8 @@ export const config = {
     minStandsFacts: 3,
     maxStandsSentences: 4,
     maxDoingSentences: 2,
+    /** `GET /api/overviews` (the layout's "Ongoing" switch and the `/ongoing` index): kept this long in memory, and as the browser's max-age. */
+    listCacheSeconds: 300,
     tiers: {
       link: 'small' as const,
       found: 'large' as const,

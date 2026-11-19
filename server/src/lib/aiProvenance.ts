@@ -28,19 +28,29 @@ export const AI_GENERATED_STORY_FIELDS = [
 
 export type AiGeneratedStoryField = (typeof AI_GENERATED_STORY_FIELDS)[number]
 
-export type AiStoryText = Partial<Record<AiGeneratedStoryField, string | null>>
+/**
+ * Every field a public story's marker can name: the text fields above, then `overview`, the ongoing
+ * story the story is part of, whose title an AI model wrote (services/overviewPublic.ts `withOverview`).
+ * openapi.test.ts checks the marker's documented values are exactly these.
+ */
+export const AI_GENERATED_STORY_MARKER_FIELDS = [...AI_GENERATED_STORY_FIELDS, 'overview'] as const
+
+export type AiGeneratedStoryMarkerField = (typeof AI_GENERATED_STORY_MARKER_FIELDS)[number]
+
+export type AiStoryText = Partial<Record<AiGeneratedStoryField, string | null>> & { overview?: { title: string } | null }
 
 export interface AiGeneratedMarker {
-  /** The AI-generated fields that carry text in this story object. */
-  fields: AiGeneratedStoryField[]
+  /** The AI-generated fields that carry a value in this story object. */
+  fields: AiGeneratedStoryMarkerField[]
   /** Model configured for story analysis when the response was served (per-story ids are not recorded). */
   model: string
   digitalSourceType: typeof IPTC_TRAINED_ALGORITHMIC_MEDIA
 }
 
+/** The text fields that carry text, then `overview` while the story is part of a public ongoing story. */
 export function aiGeneratedMarker(story: AiStoryText): AiGeneratedMarker {
   return {
-    fields: AI_GENERATED_STORY_FIELDS.filter(field => Boolean(story[field])),
+    fields: [...AI_GENERATED_STORY_FIELDS.filter(field => Boolean(story[field])), ...(story.overview ? (['overview'] as const) : [])],
     model: config.llm.models[config.assess.modelTier].name,
     digitalSourceType: IPTC_TRAINED_ALGORITHMIC_MEDIA,
   }
@@ -51,12 +61,13 @@ export function withAiGeneratedMarker<T extends AiStoryText>(story: T): T & { ai
 }
 
 /**
- * Fields of the single story (`GET /api/stories/:slug`) with AI-generated content: the text fields,
- * plus `research`, the researched version with its cited text (services/researchedStory.ts), and
- * `updates`, the Updates research passes recorded with the earlier text (services/publicUpdates.ts),
- * which only the single story serves. openapi.test.ts checks the detail marker lists exactly these.
+ * Fields of the single story (`GET /api/stories/:slug`) with AI-generated content: the list story's
+ * (the text fields and `overview`), plus `research`, the researched version with its cited text
+ * (services/researchedStory.ts), and `updates`, the Updates research passes recorded with the earlier
+ * text (services/publicUpdates.ts), which only the single story serves. openapi.test.ts checks the
+ * detail marker lists exactly these.
  */
-export const AI_GENERATED_STORY_DETAIL_FIELDS = [...AI_GENERATED_STORY_FIELDS, 'research', 'updates'] as const
+export const AI_GENERATED_STORY_DETAIL_FIELDS = [...AI_GENERATED_STORY_MARKER_FIELDS, 'research', 'updates'] as const
 
 export type AiGeneratedStoryDetailField = (typeof AI_GENERATED_STORY_DETAIL_FIELDS)[number]
 

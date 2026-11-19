@@ -5,14 +5,16 @@
  * entries; nothing is read while either gate is closed. Here: the `overview` field every public story
  * carries (`withOverview`, one query for a list), the overview page (its header, "Where this stands"
  * and "What's being done" as served now with their citations, the timeline with each story's
- * Updates), the `/ongoing` index, and the lists the sitemap, link previews and the reader's report read.
+ * Updates), the `/ongoing` index (kept in memory for its route, `servedOverviewList`), and the lists the
+ * sitemap, link previews and the reader's report read.
  */
 import type { Prisma } from '@prisma/client'
 import { config } from '../config.js'
 import { overviewAiMarker, type AiGeneratedOverviewMarker } from '../lib/aiProvenance.js'
+import { cached, TTLCache } from '../lib/cache.js'
 import { utcDay } from '../lib/days.js'
 import prisma from '../lib/prisma.js'
-import { clearPublicCaches } from '../lib/publicCaches.js'
+import { clearPublicCaches, registerPublicCache } from '../lib/publicCaches.js'
 import { SOURCE_KINDS } from '../schemas/research.js'
 import { overviewStepOn } from './overviewQueue.js'
 import { servedStands, type ServedFact } from './overviewStands.js'
@@ -27,8 +29,15 @@ import { oneOf } from './storyContextRecords.js'
 /** An overview readers may see, once the step is on. */
 const PUBLIC = { scope: 'ongoing', hidden: false, slug: { not: null } } satisfies Prisma.OverviewWhereInput
 
-/** Active entries of published stories: the ones readers see. */
-const SHOWN_ENTRY = { status: 'active', story: { status: 'published' } } satisfies Prisma.OverviewEntryWhereInput
+/**
+ * Active entries of published stories with a page (a slug and a publication date): the ones readers
+ * see. The page's timeline, the index's and the sitemap's counts and "public" itself all read this one
+ * filter, so a count never names a story the page leaves out.
+ */
+const SHOWN_ENTRY = {
+  status: 'active',
+  story: { status: 'published', slug: { not: null }, datePublished: { not: null } },
+} satisfies Prisma.OverviewEntryWhereInput
 
 /** The `overview` field of a public story: the public overview it is in. */
 export interface StoryOverviewLink {
@@ -58,12 +67,12 @@ export async function withOverview<T extends { id: string }>(stories: readonly T
 
 /**
  * The public caches that may hold an overview link: the homepage's stories (their `overview` field),
- * the sitemap and the link previews. A change that takes a link away empties them
- * (`forgetOverviewLinks`, from the lifecycle module and the job's switch); one that only adds a link
- * waits for their next refresh. Related stories keep only ids and read the field fresh, so their cache,
- * where each entry costs a model call to rebuild, stays.
+ * the sitemap, the link previews and the `/ongoing` list (`ongoing-list`). A change that takes a link
+ * away empties them (`forgetOverviewLinks`, from the lifecycle module and the job's switch); one that
+ * only adds a link waits for their next refresh. Related stories keep only ids and read the field
+ * fresh, so their cache, where each entry costs a model call to rebuild, stays.
  */
-export const OVERVIEW_LINK_CACHES = ['homepage', 'sitemap', 'link-preview-pages'] as const
+export const OVERVIEW_LINK_CACHES = ['homepage', 'sitemap', 'link-preview-pages', 'ongoing-list'] as const
 
 export function forgetOverviewLinks(): void {
   clearPublicCaches(OVERVIEW_LINK_CACHES)
@@ -150,11 +159,17 @@ async function countsAndStands(ids: string[]) {
   return { counts: new Map(groups.map(g => [g.overviewId, g._count._all])), standsAt: new Map(stands.map(s => [s.overviewId, s.writtenAt])) }
 }
 
+/** The `/ongoing` list: whether the step is on, and the public overviews. */
+export interface PublicOverviewList {
+  on: boolean
+  overviews: PublicOverviewHead[]
+}
+
 /**
  * Every public overview, the most recently changed first (the `/ongoing` index, the sitemap); `on` says
  * whether the step is switched on (the site's "Ongoing" links show only then). Empty while it is off.
  */
-export async function publicOverviewList(): Promise<{ on: boolean; overviews: PublicOverviewHead[] }> {
+export async function publicOverviewList(): Promise<PublicOverviewList> {
   if (!(await overviewStepOn())) return { on: false, overviews: [] }
   const rows = await prisma.overview.findMany({ where: { ...PUBLIC, entries: { some: SHOWN_ENTRY } }, select: HEAD_SELECT })
   const { counts, standsAt } = await countsAndStands(rows.map(r => r.id))
@@ -163,6 +178,20 @@ export async function publicOverviewList(): Promise<{ on: boolean; overviews: Pu
     .filter(o => o.stories > 0)
     .sort((a, b) => b.lastChange.getTime() - a.lastChange.getTime() || a.slug.localeCompare(b.slug))
   return { on: true, overviews }
+}
+
+/**
+ * `GET /api/overviews`'s list, kept `listCacheSeconds` in memory: the layout asks it on a visitor's
+ * first page view, so its queries run once per period, not once per visitor. A link-removing write and
+ * switching the step off empty it (`OVERVIEW_LINK_CACHES`); a newly public overview waits for it to expire.
+ */
+const listCache = new TTLCache<PublicOverviewList>(config.overviews.listCacheSeconds * 1000)
+registerPublicCache('ongoing-list', listCache)
+
+/** The list as served, its first `limit` overviews when given (0: only whether the step is on, the layout's question). */
+export async function servedOverviewList(limit?: number): Promise<PublicOverviewList> {
+  const list = await cached(listCache, 'list', publicOverviewList)
+  return limit === undefined ? list : { on: list.on, overviews: list.overviews.slice(0, limit) }
 }
 
 /** One public overview's header (its link preview), or null when there is no such public overview. */

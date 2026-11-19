@@ -138,7 +138,8 @@ export const publicApi = {
 
   /** Ongoing stories (`.context/overviews.md`, "Public"): `on: false` and none while switched off. */
   overviews: {
-    list: () => request<PublicOverviewList>('/overviews'),
+    /** The first `limit` public ongoing stories when given; `0` answers only whether the module is on. */
+    list: (limit?: number) => request<PublicOverviewList>(`/overviews${toQueryString({ limit })}`),
     /** 404 while switched off, or for one that is not public. */
     get: (slug: string) => request<PublicOverview>(`/overviews/${encodeURIComponent(slug)}`),
   },

@@ -47,6 +47,13 @@ describe('GET /api/overviews while overviews are switched off', () => {
     expect(res.body).toEqual({ error: 'Ongoing story not found' })
   })
 
+  it('answers the layout’s on-only question (`limit=0`) the same way, and refuses a limit that is no whole number from 0', async () => {
+    const on = await request(app).get('/api/overviews?limit=0')
+    expect(on.status).toBe(200)
+    expect(on.body).toEqual({ on: false, overviews: [] })
+    for (const bad of ['-1', 'two', '1.5']) expect((await request(app).get(`/api/overviews?limit=${bad}`)).status, bad).toBe(400)
+  })
+
   it('reads nothing while only the research passes gate is closed', async () => {
     gates.overview = null
     const [list, page] = await Promise.all([request(app).get('/api/overviews'), request(app).get('/api/overviews/ebola-in-ituri')])

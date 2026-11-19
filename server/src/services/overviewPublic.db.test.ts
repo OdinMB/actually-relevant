@@ -32,7 +32,8 @@ vi.mock('../lib/publicCaches.js', async importOriginal => {
 
 const { clearPublicCaches } = await import('../lib/publicCaches.js')
 const { editorAction } = await import('./overviewLifecycle.js')
-const { OVERVIEW_LINK_CACHES, overviewReport, publicOverview, publicOverviewHead, publicOverviewList, withOverview } = await import('./overviewPublic.js')
+const { OVERVIEW_LINK_CACHES, forgetOverviewLinks, overviewReport, publicOverview, publicOverviewHead, publicOverviewList, servedOverviewList, withOverview } =
+  await import('./overviewPublic.js')
 const { reviewDue } = await import('./overviewStatus.js')
 const { overviewStates } = await import('./overviewUpkeepInput.js')
 const { getHomepageData, getPublishedStories, getPublishedStoryBySlug } = await import('./publicStories.js')
@@ -290,6 +291,48 @@ describeDb('public overviews (PostgreSQL)', () => {
       ['newer', 2],
       ['older', 2],
     ])
+  })
+
+  it('counts in the list and the header only the stories the page shows, which have a page', async () => {
+    await switchOn(true)
+    const [a, b, c] = await stories(3)
+    const [noPage] = await stories(1)
+    await prisma.story.update({ where: { id: noPage!.id }, data: { slug: null } })
+    const o = await overview([a!.id, b!.id, c!.id, noPage!.id], { slug: 'counted' })
+
+    const page = await publicOverview(o.slug!)
+    expect(page!.entries).toHaveLength(3)
+    expect(page!.stories).toBe(3)
+    expect((await publicOverviewHead(o.slug!))!.stories).toBe(3)
+    expect((await publicOverviewList()).overviews.find(x => x.slug === 'counted')!.stories).toBe(3)
+  })
+
+  it('serves the list from memory until a link-removing write or the switch-off empties it; limit 0 answers only whether it is on', async () => {
+    await switchOn(true)
+    forgetOverviewLinks()
+    const [a, b, c, d, e, f] = await stories(6)
+    const first = await overview([a!.id, b!.id, c!.id], { slug: 'first' })
+    expect((await servedOverviewList()).overviews.map(o => o.slug)).toEqual(['first'])
+
+    // A newly public overview waits for the list to expire
+    await overview([d!.id, e!.id, f!.id], { slug: 'second' })
+    expect((await servedOverviewList()).overviews.map(o => o.slug)).toEqual(['first'])
+    expect(await servedOverviewList(0)).toEqual({ on: true, overviews: [] })
+
+    // Hiding one takes its link away: the list is read again at once
+    await editorAction({ kind: 'hide', overviewId: first.id, hidden: true }, 'editor-1')
+    expect((await servedOverviewList()).overviews.map(o => o.slug)).toEqual(['second'])
+
+    // Switching the step off (updateJob empties the same caches, routes/admin/jobs.test.ts)
+    await prisma.jobRun.update({ where: { jobName: 'link_overviews' }, data: { enabled: false } })
+    forgetOverviewLinks()
+    expect(await servedOverviewList()).toEqual({ on: false, overviews: [] })
+  })
+
+  it('names only caches that exist: forgetting the links empties every one of them', async () => {
+    await Promise.all([import('./homepage.js'), import('./linkPreview.js'), import('../routes/public/sitemap.js')])
+    const cleared = clearPublicCaches(OVERVIEW_LINK_CACHES).map(c => c.name)
+    expect(cleared.sort()).toEqual([...OVERVIEW_LINK_CACHES].sort())
   })
 
   it('queues one review for a reader’s reports within 7 days, which the job then owes', async () => {

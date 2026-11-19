@@ -308,13 +308,14 @@ describe('Public Feedback API', () => {
       expect(mockPrisma.feedback.create.mock.calls[0][0].data).toMatchObject({ overviewId: 'o1', queuesReview: false })
     })
 
-    it('refuses an overview that is not public, and stores nothing', async () => {
+    it('refuses an overview that is not public (hidden, or switched off since the page loaded) with a message the form shows, and stores nothing', async () => {
       mockOverviewReport.mockResolvedValue(null)
 
       const res = await post({ category: 'correction', message: 'Wrong', overviewId: 'hidden' })
 
-      expect(res.status).toBe(400)
-      expect(res.body).toEqual({ error: 'That ongoing story does not exist.' })
+      // The form shows a refusal's own message (as for the human check), not its generic error
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ success: false, message: expect.any(String) })
       expect(mockPrisma.feedback.create).not.toHaveBeenCalled()
     })
 

@@ -3,6 +3,7 @@ import { config } from '../config.js'
 import {
   AI_GENERATED_STORY_DETAIL_FIELDS,
   AI_GENERATED_STORY_FIELDS,
+  AI_GENERATED_STORY_MARKER_FIELDS,
   IPTC_TRAINED_ALGORITHMIC_MEDIA,
   aiGeneratedMarker,
   withAiGeneratedDetailMarker,
@@ -51,6 +52,14 @@ describe('withAiGeneratedMarker', () => {
     expect(marked).toMatchObject(story)
     expect(marked.aiGenerated.fields).toEqual(['summary'])
   })
+
+  it('names the ongoing story, whose title an AI model wrote, after the text fields while the story is in a public one', () => {
+    const inOne = withAiGeneratedMarker({ summary: 'AI summary', overview: { slug: 'ebola-in-ituri', title: 'Ebola in Ituri' } })
+    expect(inOne.aiGenerated.fields).toEqual(['summary', 'overview'])
+    expect(AI_GENERATED_STORY_MARKER_FIELDS).toEqual([...AI_GENERATED_STORY_FIELDS, 'overview'])
+    // In none, or in one that is not public: the field is null, and the marker leaves it out
+    expect(withAiGeneratedMarker({ summary: 'AI summary', overview: null }).aiGenerated.fields).toEqual(['summary'])
+  })
 })
 
 describe('withAiGeneratedDetailMarker', () => {
@@ -59,7 +68,13 @@ describe('withAiGeneratedDetailMarker', () => {
   it('names the researched version after the text fields when the story serves one', () => {
     const marked = withAiGeneratedDetailMarker({ ...storyWithAllAiFields(), research, researched: true, updates: [] })
     expect(marked.aiGenerated.fields).toEqual([...AI_GENERATED_STORY_FIELDS, 'research'])
-    expect(AI_GENERATED_STORY_DETAIL_FIELDS).toEqual([...AI_GENERATED_STORY_FIELDS, 'research', 'updates'])
+    expect(AI_GENERATED_STORY_DETAIL_FIELDS).toEqual([...AI_GENERATED_STORY_MARKER_FIELDS, 'research', 'updates'])
+  })
+
+  it('names the ongoing story in the single story too, before the researched version', () => {
+    const overview = { slug: 'ebola-in-ituri', title: 'Ebola in Ituri' }
+    const marked = withAiGeneratedDetailMarker({ summary: 'AI summary', overview, research, researched: true, updates: [] })
+    expect(marked.aiGenerated.fields).toEqual(['summary', 'overview', 'research'])
   })
 
   it('leaves it out when there is none, also for a researched story whose version could not be served', () => {

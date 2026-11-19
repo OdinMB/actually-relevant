@@ -179,6 +179,21 @@ describe('OverviewPage', () => {
     expect(within(timeline).getByRole('link', { name: /Headline a/ })).toBeInTheDocument()
   })
 
+  it('shows two Updates of one story on the same day as two lines, each with its own key', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const updates = [
+      { date: '2026-11-12', note: 'A newer count.' },
+      { date: '2026-11-12', note: 'A corrected date.' },
+    ]
+    mockApi.overviews.get.mockResolvedValue({ ...OVERVIEW, entries: [entry('e', '2026-11-10', { updates }), ...OVERVIEW.entries.slice(1)] })
+    renderPage()
+    const timeline = (await screen.findByRole('heading', { level: 2, name: 'Timeline' })).closest('section')!
+    expect(within(timeline).getByText('A newer count.')).toBeInTheDocument()
+    expect(within(timeline).getByText('A corrected date.')).toBeInTheDocument()
+    expect(errors.mock.calls.filter(call => String(call[0]).includes('same key'))).toEqual([])
+    errors.mockRestore()
+  })
+
   it('narrows the timeline to its turning points', async () => {
     const user = userEvent.setup()
     renderPage()

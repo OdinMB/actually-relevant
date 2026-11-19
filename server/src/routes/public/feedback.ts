@@ -21,6 +21,9 @@ const TURNSTILE_MESSAGES: Record<Exclude<TurnstileResult, 'ok'>, string> = {
   unavailable: 'Feedback is unavailable right now. Please try again later.',
 }
 
+/** A report on an ongoing story readers no longer see (hidden, no longer followed, or the module switched off). */
+const OVERVIEW_GONE_MESSAGE = 'This ongoing story is no longer on the site, so the report was not sent.'
+
 const feedbackLimiter = rateLimit({
   windowMs: config.feedback.rateLimitWindowMs,
   max: config.feedback.rateLimitMax,
@@ -85,9 +88,13 @@ router.post('/', failsWith('Something went wrong. Please try again.'), feedbackL
     const story = await prisma.story.findUnique({ where: { id: storyId }, select: { id: true } })
     if (!story) throw new BadRequestError('That story does not exist.')
   }
-  // A report on an ongoing story queues its review at most once a week; later ones are stored only
+  // A report on an ongoing story queues its review at most once a week; later ones are stored only.
+  // One that stopped being public since its page loaded is refused with a message the form shows.
   const report = overviewId ? await overviewReport(overviewId) : null
-  if (overviewId && !report) throw new BadRequestError('That ongoing story does not exist.')
+  if (overviewId && !report) {
+    res.json({ success: false, message: OVERVIEW_GONE_MESSAGE })
+    return
+  }
 
   await prisma.feedback.create({
     data: {

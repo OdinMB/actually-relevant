@@ -6,7 +6,18 @@
           "digitalSourceType": { "const": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia", "type": "string" },
           "fields": {
             "items": {
-              "enum": ["antifactors", "marketingBlurb", "quote", "quoteAttribution", "relevanceReasons", "relevanceSummary", "summary", "title", "titleLabel"],
+              "enum": [
+                "antifactors",
+                "marketingBlurb",
+                "overview",
+                "quote",
+                "quoteAttribution",
+                "relevanceReasons",
+                "relevanceSummary",
+                "summary",
+                "title",
+                "titleLabel"
+              ],
               "type": "string"
             },
             "type": "array"
@@ -347,6 +358,7 @@
                   "enum": [
                     "antifactors",
                     "marketingBlurb",
+                    "overview",
                     "quote",
                     "quoteAttribution",
                     "relevanceReasons",

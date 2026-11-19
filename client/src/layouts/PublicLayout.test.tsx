@@ -61,6 +61,12 @@ describe('PublicLayout', () => {
       expect(ongoingLinks()).toEqual([])
     })
 
+    it('asks only whether they are on, for no overview, on every page view', async () => {
+      renderLayout()
+      await waitFor(() => expect(mockTokens.overviews.list).toHaveBeenCalled())
+      expect(mockTokens.overviews.list.mock.calls).toEqual([[0]])
+    })
+
     it('is absent when the request fails, as when switched off', async () => {
       mockTokens.overviews.list.mockReset().mockRejectedValue(new Error('offline'))
       renderLayout()
