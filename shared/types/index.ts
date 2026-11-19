@@ -153,7 +153,7 @@ export interface PublicStory extends Story {
     }
   }
   /**
-   * The public ongoing story it belongs to (the story page's line, the card's chip); null while
+   * The public ongoing story it belongs to (the story page's callout, the card's chip); null while
    * overviews are switched off or it belongs to none. Absent from a backend before overviews.
    */
   overview?: PublicOverviewLink | null

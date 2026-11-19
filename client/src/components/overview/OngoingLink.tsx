@@ -5,9 +5,9 @@ import AiBadge from '../ai/AiBadge'
 
 /*
  * The link from a story to the public ongoing story it belongs to (`.context/public-website.md`,
- * "Ongoing stories"): a chip on its cards and a line on its page, shown only while the API names one
- * (`overview` is null while the module is off). The ongoing story's title is AI-written, so it
- * carries the "AI" badge, and `data-ai-generated="overview"` marks it.
+ * "Ongoing stories"): a chip on its cards and a callout card on its page, shown only while the API
+ * names one (`overview` is null while the module is off). The ongoing story's title is AI-written,
+ * so it carries the "AI" badge, and `data-ai-generated="overview"` marks it.
  */
 
 const ongoingPath = (overview: PublicOverviewLink) => `/ongoing/${encodeURIComponent(overview.slug)}`
@@ -34,17 +34,36 @@ export function OngoingChip({ overview, className = '' }: { overview: PublicOver
 }
 
 /**
- * "Part of an ongoing story: [AI] <title> →" under a story page's header. Only the title is
- * underlined: an underline on the whole link ran a stray line under the space after the badge.
+ * Under a story page's header, a callout card that is one link to the ongoing story: the eyebrow
+ * "Part of an ongoing story", the AI title behind its badge, "See the timeline and where things
+ * stand" and an arrow that nudges right on hover or keyboard focus (not with reduced motion). Its
+ * name is its visible text, the eyebrow first (WCAG 2.5.3); the arrow is decorative. `accent`, the
+ * story's issue color, draws the bar on its left edge. Hover darkens the border, not the fill: the
+ * eyebrow's neutral-500 is 4.5:1 on the neutral-50 fill and would fall below it on neutral-100.
  */
-export function OngoingLine({ overview, className = '' }: { overview: PublicOverviewLink | null | undefined; className?: string }) {
+export function OngoingCallout({ overview, accent, className = '' }: { overview: PublicOverviewLink | null | undefined; accent: string; className?: string }) {
   if (!overview) return null
   return (
-    <p className={`text-sm text-neutral-600 ${className}`.trim()} data-ai-generated="overview">
-      Part of an ongoing story:{' '}
-      <Link to={ongoingPath(overview)} className={`font-semibold text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded px-0.5`}>
-        <AiBadge className="mr-1 align-middle" /> <span className="underline">{overview.title}</span> <span aria-hidden="true">→</span>
-      </Link>
-    </p>
+    <Link
+      to={ongoingPath(overview)}
+      data-ai-generated="overview"
+      style={{ borderLeftColor: accent }}
+      className={`group flex items-center gap-4 rounded-lg border border-l-4 border-neutral-200 bg-neutral-50 px-4 py-3 transition hover:border-neutral-300 hover:shadow-sm md:px-5 md:py-4 ${FOCUS_RING} ${className}`.trim()}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-bold uppercase tracking-widest text-neutral-500">Part of an ongoing story</span>{' '}
+        {/* Inline, not flex: a wrapped title flows back under the badge instead of indenting */}
+        <span className="mt-1 block text-lg font-semibold leading-snug text-neutral-900 group-hover:text-brand-800">
+          <AiBadge className="mr-1.5 align-middle" /> {overview.title}
+        </span>{' '}
+        <span className="mt-1 block text-sm text-brand-700">See the timeline and where things stand</span>
+      </span>
+      <span
+        aria-hidden="true"
+        className="shrink-0 text-xl text-brand-700 motion-safe:transition-transform motion-safe:group-hover:translate-x-1 motion-safe:group-focus-visible:translate-x-1"
+      >
+        &rarr;
+      </span>
+    </Link>
   )
 }

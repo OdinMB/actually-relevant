@@ -15,7 +15,7 @@ import StoryAppearances from '../components/StoryAppearances'
 import RelatedStories from '../components/RelatedStories'
 import AlsoCoveredBy from '../components/AlsoCoveredBy'
 import { MetaSeparator, StoryMetaRow } from '../components/story/StoryMetaRow'
-import { OngoingLine } from '../components/overview/OngoingLink'
+import { OngoingCallout } from '../components/overview/OngoingLink'
 import { StoryBody } from '../components/story/StoryBody'
 import { ContextNote } from '../components/context/ContextNote'
 import { StoryContext } from '../components/context/StoryContext'
@@ -186,8 +186,8 @@ export default function StoryPage() {
             {/* Also covered by — cluster sources; a researched story's Sources list takes it over */}
             {story.slug && !research && <AlsoCoveredBy slug={story.slug} />}
 
-            {/* The public ongoing story it belongs to; the field is null while overviews are switched off */}
-            <OngoingLine overview={story.overview} className="mt-4" />
+            {/* The public ongoing story it belongs to, in its issue's color; the field is null while overviews are switched off */}
+            <OngoingCallout overview={story.overview} accent={colors.hex} className="mt-6" />
           </div>
         </header>
 

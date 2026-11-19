@@ -164,7 +164,7 @@ The upkeep's steps, the same pure code over the sandbox (`upkeepSandbox.ts`): `p
 | `services/overviewViews.ts` | `overviewsAdminState`, `adminOverviewList`, `adminOverview`, `storyOverview`: the admin's reads (SELECT only) |
 | `services/overviewPublic.ts` | `withOverview`, `publicOverview`, `publicOverviewList`, `publicOverviewHead`, `overviewReport`, `forgetOverviewLinks`: what readers get (SELECT only) |
 | `routes/public/overviews.ts` | `GET /api/overviews`, `GET /api/overviews/:slug` |
-| `client/src/pages/OverviewPage.tsx`, `OverviewsIndexPage.tsx`, `components/overview/`, `hooks/usePublicOverviews.ts` | The `/ongoing` pages, the story's line and the card's chip (`OngoingLink.tsx`), the timeline's folds (`overviewTimeline.ts`), their words (`overviewCopy.ts`) |
+| `client/src/pages/OverviewPage.tsx`, `OverviewsIndexPage.tsx`, `components/overview/`, `hooks/usePublicOverviews.ts` | The `/ongoing` pages, the story page's callout and the card's chip (`OngoingLink.tsx`), the timeline's folds (`overviewTimeline.ts`), their words (`overviewCopy.ts`) |
 | `routes/admin/overviews.ts` | The admin endpoints |
 | `client/src/pages/admin/OverviewsPage.tsx`, `OverviewDetailPage.tsx`, `components/admin/StoryOverview.tsx`, `Overview*.tsx`, `overviewLabels.ts`, `hooks/useOverviews.ts` | The admin's pages, the story's block, their words |
 | `services/overviewQueue.ts` | The switch (`overviewSwitchRefusal`, `overviewPassConflict`, `overviewStepOn`) and the owed stories |

@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import StoryPage from './StoryPage'
 import FeedbackProvider from '../components/FeedbackProvider'
 import SubscribeProvider from '../components/SubscribeProvider'
+import { getCategoryColor } from '../lib/category-colors'
 import { TEXT_LINK } from '../lib/control-classes'
 import { focusRingProblems, sizeByBreakpoint } from '../test/classes'
 import { contrastRatio } from '../test/contrast'
@@ -431,21 +432,23 @@ describe('StoryPage', () => {
     expect(screen.getByRole('link', { name: 'Find similar stories →' })).toHaveAttribute('href', `/search?q=${encodeURIComponent(AI_TEXT.title)}`)
   })
 
-  it('names the public ongoing story it belongs to under the header, its AI title behind the badge and marked', () => {
-    renderStory({ ...story, overview: { slug: 'ebola-in-ituri', title: 'Ebola in Ituri' } })
-    const link = screen.getByRole('link', { name: 'AI-generated Ebola in Ituri' })
+  it('names the public ongoing story it belongs to in a card under the header: one link to its page, its AI title behind the badge and marked', async () => {
+    const { container } = renderStory({ ...story, overview: { slug: 'ebola-in-ituri', title: 'Ebola in Ituri' } })
+    const link = screen.getByRole('link', { name: /^Part of an ongoing story/ })
     expect(link).toHaveAttribute('href', '/ongoing/ebola-in-ituri')
+    expect(link.closest('header')).not.toBeNull()
+    expect(link).toHaveAttribute('data-ai-generated', 'overview')
+    expect(announcedText(link)).toContain('AI-generated Ebola in Ituri')
+    // The whole card is the link, named by what it shows (WCAG 2.5.3), with nothing else to focus inside it
+    expect(link).toHaveAccessibleName(announcedText(link))
+    expect(link.querySelectorAll('a, button, input, select, textarea, [tabindex]')).toHaveLength(0)
     expect(focusRingProblems(link)).toEqual([])
-    const line = link.closest('p')!
-    expect(announcedText(line)).toBe('Part of an ongoing story: AI-generated Ebola in Ituri')
-    expect(line).toHaveAttribute('data-ai-generated', 'overview')
-    expect(line.closest('header')).not.toBeNull()
-    // Only the title is underlined, not the space after the badge or the arrow
-    expect(link).not.toHaveClass('underline')
-    expect(screen.getByText('Ebola in Ituri')).toHaveClass('underline')
+    // Its accent bar takes the story's issue color
+    expect(link).toHaveStyle({ borderLeftColor: getCategoryColor('planet-climate').hex })
+    expect(await axe(container)).toHaveNoViolations()
   })
 
-  it('shows no ongoing story line while the story is in none, or while overviews are off (the field null or absent)', () => {
+  it('shows no ongoing story card while the story is in none, or while overviews are off (the field null or absent)', () => {
     renderStory({ ...story, overview: null })
     expect(screen.queryByText(/Part of an ongoing story/)).toBeNull()
     expect(document.querySelector('[data-ai-generated="overview"]')).toBeNull()
