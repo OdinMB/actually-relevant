@@ -12,6 +12,9 @@ vi.mock('../services/podcastEdition.js', async importOriginal => {
   return { ...actual, upliftingShowProblem: vi.fn(actual.upliftingShowProblem) }
 })
 
+// Overviews' gate held closed here, so the switch-on change is that constant alone (.context/overviews.md, "Switching on")
+vi.mock('../services/overviewGate.js', () => ({ OVERVIEW_EVAL_GATE: 'their evals are pending' }))
+
 const { jobEnableConflict, jobEnableRefusal, SWITCHED_OFF_BY } = await import('./jobEnableChecks.js')
 const { passSwitchRefusal } = await import('../services/researchPassQueue.js')
 const { overviewSwitchRefusal } = await import('../services/overviewQueue.js')
@@ -140,7 +143,7 @@ describe('jobEnableRefusal', () => {
   })
 
   it('refuses overview linking while its own eval gate is closed, then while research passes’ gate is', () => {
-    expect(jobEnableRefusal('link_overviews')).toMatch(/^Overviews are switched off: their evals have not yet met the plan's bars/)
+    expect(jobEnableRefusal('link_overviews')).toBe('Overviews are switched off: their evals are pending')
     expect(overviewSwitchRefusal(null, 'closed')).toMatch(/until research passes are on/)
     expect(overviewSwitchRefusal(null, null)).toBeNull()
   })

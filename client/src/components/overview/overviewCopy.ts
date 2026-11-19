@@ -68,3 +68,7 @@ export function overviewHead(o: Pick<PublicOverviewHead, 'title' | 'stories' | '
 
 /** The page's address. */
 export const overviewUrl = (slug: string): string => `${SEO.siteUrl}/ongoing/${encodeURIComponent(slug)}`
+
+/** The methodology page's "Ongoing Stories" section, which the page's "How it works" leads to (shown only while the module is on, as the page). */
+export const ONGOING_METHOD_ID = 'ongoing-stories'
+export const ONGOING_METHOD_HREF = `/methodology#${ONGOING_METHOD_ID}`

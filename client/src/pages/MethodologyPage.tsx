@@ -5,6 +5,7 @@ import { SEO, CommonOgTags } from '../lib/seo'
 import { buildBreadcrumbSchema } from '../lib/structured-data'
 import StructuredData from '../components/StructuredData'
 import LandingCta from '../components/LandingCta'
+import OngoingStoriesMethod from '../components/overview/OngoingStoriesMethod'
 import ChevronIcon from '../components/icons/ChevronIcon'
 import { AI_DISCLOSURE_COPY } from '../components/ai/aiDisclosureCopy'
 import { useSources } from '../hooks/useSources'
@@ -241,6 +242,9 @@ export default function MethodologyPage() {
             starting with the article where we first found the story.
           </p>
           {/* The context-cards paragraph goes here when build_story_context is switched on (.context/story-context.md, "Before switching on") */}
+
+          {/* Ongoing Stories: shown only while overviews are switched on, so their switch needs no change here */}
+          <OngoingStoriesMethod />
 
           {/* What We Don't Do */}
           <h2 className="section-heading mt-10">What We Don't Do</h2>

@@ -24,7 +24,8 @@ vi.mock('../../services/podcastEdition.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../../services/podcastEdition.js')>()
   return { ...actual, isEditionOpen: vi.fn(actual.isEditionOpen) }
 })
-// The real list (empty while overviews are switched off, as the gates keep them), wrapped so a test can list some
+// The real list (empty while overviews are switched off, as the gate held closed here keeps them), wrapped so a test can list some
+vi.mock('../../services/overviewGate.js', () => ({ OVERVIEW_EVAL_GATE: 'off in these tests' }))
 vi.mock('../../services/overviewPublic.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../../services/overviewPublic.js')>()
   return { ...actual, publicOverviewList: vi.fn(actual.publicOverviewList) }

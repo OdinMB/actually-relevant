@@ -18,6 +18,8 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
+// Overviews switched off here, whatever the constant says: their own tests open them
+vi.mock('../../services/overviewGate.js', () => ({ OVERVIEW_EVAL_GATE: 'off in these tests' }))
 vi.mock('../../services/crawler.js', () => ({
   crawlFeed: vi.fn(),
   crawlAllDueFeeds: vi.fn(),

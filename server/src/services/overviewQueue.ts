@@ -24,14 +24,14 @@ export const LINK_OVERVIEWS_JOB = 'link_overviews'
  */
 export function overviewSwitchRefusal(gate: string | null = OVERVIEW_EVAL_GATE, passGate: string | null = PASS_EVAL_GATE): string | null {
   if (gate) return `Overviews are switched off: ${gate}`
-  if (passGate) return 'Overviews are switched off until research passes are on: their eval gate is still closed (.context/overviews.md, "Order of switches")'
+  if (passGate) return 'Overviews are switched off until research passes are on: their eval gate is still closed (.context/overviews.md, "Switching on")'
   return null
 }
 
 /** Why enabling the step conflicts with the research pass's switch: `research_pass` is disabled. Null when it is enabled. */
 export async function overviewPassConflict(): Promise<string | null> {
   const pass = await prisma.jobRun.findUnique({ where: { jobName: RESEARCH_PASS_JOB }, select: { enabled: true } })
-  return pass?.enabled ? null : `Overviews switch on only after research passes: enable ${RESEARCH_PASS_JOB} first (.context/overviews.md, "Order of switches")`
+  return pass?.enabled ? null : `Overviews switch on only after research passes: enable ${RESEARCH_PASS_JOB} first (.context/overviews.md, "Switching on")`
 }
 
 /** The step is switched on: both gates open and its job enabled. The gates are read first, so nothing is queried while either is closed. */

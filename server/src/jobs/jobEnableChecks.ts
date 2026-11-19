@@ -5,7 +5,7 @@
  * gate"): it is refused while its eval gate is closed, then without the key; enabling it switches the
  * two old steps off (`SWITCHED_OFF_BY`, `services/job.ts`), and enabling either of them is refused
  * while it is on (`jobEnableConflict`), so one switch is on at a time. Overview linking comes after
- * research passes (`.context/overviews.md`, "Order of switches"): refused while its own gate or
+ * research passes (`.context/overviews.md`, "Switching on"): refused while its own gate or
  * theirs is closed, and while `research_pass` is disabled.
  */
 import prisma from '../lib/prisma.js'

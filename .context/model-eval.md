@@ -159,9 +159,9 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context
 
 | Flag | Meaning |
 |------|---------|
-| `--steps` | Comma list of `keys`, `gap-keys`, `gap-draft`, `context`, `update`, `link`, `found`, `role`, `fact-check`, `baseline`, run in that order (default: `keys`, `fact-check`, `baseline`; story context's, the research passes' and the overviews' steps run only when named) |
-| `--facts` | `research` (default): the fact check samples research's extracted facts. `context`: the facts the `context` step's run 1 kept, so it needs `context` and `fact-check` in the same run (their calls and searches are cached) |
-| `--half` | `tune`, `judge` or `all` (default): the gap keys the `context` step runs on, and the development keys' stories the `update` step runs on. Prompts are tuned on `tune` only; the gate is read on `judge` |
+| `--steps` | Comma list of `keys`, `gap-keys`, `gap-draft`, `context`, `update`, `link`, `found`, `role`, `pass-pool`, `stands`, `closure`, `review`, `replay`, `fact-check`, `baseline`, run in that order (default: `keys`, `fact-check`, `baseline`; story context's, the research passes' and the overviews' steps run only when named) |
+| `--facts` | `research` (default): the fact check samples research's extracted facts. `context`: the facts the `context` step's run 1 kept, so it needs `context` and `fact-check` in the same run (their calls and searches are cached). `stands`: the lines the `stands` step's run 1 kept, so it needs `stands` and `fact-check` in the same run |
+| `--half` | `tune`, `judge` or `all` (default): the gap keys the `context` step runs on, and the development keys the `update`, linking and upkeep steps run on. Prompts are tuned on `tune` only; the gate is read on `judge` |
 | `--budget` | USD cap on the folder's model ledger plus its Tavily credits at $0.008 (default 3; the $20 cap applies) |
 | `--repeat N` | The fact check's arms, the `context` step's pipeline and the `update` step's replay, 1 to 10, with `repeats.ts`'s per-run cache keys (labels and the context step's strong judge run once) |
 | `--size N` | Facts to sample (default 300, at most 600) |
@@ -276,6 +276,30 @@ Production's upkeep code (`overviewStands.ts`, `overviewClose.ts`, `overviewRevi
 - **`stands`** (`stands.ts`, `standsScore.ts`): at each development's checkpoints (its must entries' dates at a third, two thirds and the last), production's `refreshStands` from the must entries published by then (the key stands in for the overview, so the stands are measured apart from linking), then the strong judge (`JUDGE_ARM`, `buildStandsJudgePrompt`) on every line kept against the facts it cites. A checkpoint with fewer than `minStandsFacts` offerable facts is counted, never written. Bars over the checkpoints with enough facts: no unsupported sentence; each figure's latest key value by then stated where an offered fact holds it ≥90%; "What's being done" present where the key has a sourced response by then that a current offered fact of its entry reports ≥70%, and no unsupported line of it. **Below 15 such checkpoints the report says "not enough evidence" and no bar is met**, so the gate stays closed for the stands.
 - **`review`** (`review.ts`, `reviewScore.ts`): production's `reviewOverview` on each development with at least 3 must entries published here, its overview built from the key with errors planted: up to 2 near misses inserted as entries, one must entry's role flipped, the charter's OUT list emptied. Caught: planted joins detached, the flipped role set back, OUT narrowed again where joins were planted (≥80% of everything planted). Correct entries detached or given a wrong role ≤3%.
 - **`closure` and `replay`** (`replay.ts`, `upkeepSandbox.ts`, `replayScore.ts`): one replay serves both. The half's stories are linked day by day as the `link` step links them, and after each day production's `runUpkeep` runs over the sandbox with that day as its clock (closing checks, status machine, bursts, reviews, stands; no audit), on past the last story until every closing could finish. `closure`: no premature closure at an end event (before the key's end, or of a development the key says is open), and developments whose end our stories report closed within 14 days of it ≥80%. `replay`: the linking bars on the end state, each development's three checkpoints (its overview's status, scope, must entries found, wrong members, offerable facts, stands), the share of checkpoints with enough evidence for the stands, each safeguard's firings per run, and the cost per story and per overview.
+
+### The overviews gate, in order
+
+What the owner runs before opening `OVERVIEW_EVAL_GATE` (`.context/overviews.md`, "Switching on", which has the bars in one table and what follows the gate). **Precondition: research passes are on** (their gate open and `research_pass` enabled), since overviews switch on only after them. Three folders, each keeping its caches, so a rerun pays nothing twice; `--budget` caps what a folder has spent over all its runs (default $3, at most `MAX_BUDGET_USD`, $20), so each command names its own. The costs are rough, as the folder's ledger counts them (calls at the standard price, Tavily at $0.008 a credit); no paid run has been made.
+
+```bash
+# 0. The answer keys still match the published stories (no API calls)
+npm run eval:overviews --prefix server -- --out ../DOCS/<date>_linking-eval --steps keys
+# 1. Linking: smoke run on the tuned half, then the gate on the judged half (about $4-8)
+npm run eval:overviews --prefix server -- --out ../DOCS/<date>_linking-eval --steps link,found,role --half tune --limit 20 --budget 3
+npm run eval:overviews --prefix server -- --out ../DOCS/<date>_linking-eval --steps link,found,role --half judge --repeat 3 --budget 15
+# 2. Reviews with planted errors (about $1-3)
+npm run eval:overviews --prefix server -- --out ../DOCS/<date>_review-eval --steps review --half judge --repeat 3 --budget 5
+# 3. Upkeep smoke run: read pass-pool's cost per story and the checkpoints with enough facts
+npm run eval:overviews --prefix server -- --out ../DOCS/<date>_upkeep-smoke --steps pass-pool,stands --half tune --limit 3 --budget 3
+# 4. Upkeep on the judged half (about $30-60 in all: raise MAX_BUDGET_USD first, below)
+npm run eval:overviews --prefix server -- --out ../DOCS/<date>_upkeep-eval --steps pass-pool,stands,fact-check --facts stands --half judge --repeat 3 --budget <cap>
+npm run eval:overviews --prefix server -- --out ../DOCS/<date>_upkeep-eval --steps pass-pool,closure,replay --half judge --repeat 3 --budget <cap>
+```
+
+- **Why the upkeep is one folder:** `stands`, `fact-check --facts stands`, `closure` and `replay` take `pass-pool`'s pools from the same invocation; in the same folder the second command's `pass-pool` is answered from the cache and costs nothing again. Most of the cost is `pass-pool`: production's first pass on the judged half's 121 must entries, with a first pass's reserve of $0.40 a story (`FIRST_PASS_RESERVE_USD`) holding each next story back once the budget is near.
+- **The cap:** the upkeep folder needs more than $20. The owner raises `MAX_BUDGET_USD` (`server/src/scripts/eval/options.ts`) for this run in its own change, to the smoke run's cost per story × 121 plus about $25 for the rest, and sets `--budget` to it. A step the budget stops says where it stopped, and its report is no evidence for the gate.
+- **The 15 checkpoints:** the judged half has exactly 15 (5 developments × 3), so the stands bars count only when every checkpoint has at least `minStandsFacts` (3) offerable facts; the smoke run's share tells whether the judged half is likely to get there.
+- **Reading the reports:** each folder's `overview-eval*.md` gives the bars as met or not per run and as the mean. The gate opens only when every bar in `.context/overviews.md`'s table is met on the judged half; a missed bar is tuned on the tuned half and the judged half run again, never met by editing a key.
 
 ### `fact-check`: planted errors
 

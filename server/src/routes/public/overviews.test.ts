@@ -17,20 +17,30 @@ const mockPrisma = vi.hoisted(
 )
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 
-const gates = vi.hoisted(() => ({ overview: 'Closed until the eval passes' as string | null }))
+// Both gates held here, so these tests keep their meaning once either constant is opened
+const gates = vi.hoisted(() => ({ overview: 'Closed until the eval passes' as string | null, pass: 'Closed until the eval passes' as string | null }))
 vi.mock('../../services/overviewGate.js', () => ({
   get OVERVIEW_EVAL_GATE() {
     return gates.overview
   },
 }))
+vi.mock('../../services/researchPassGate.js', () => ({
+  get PASS_EVAL_GATE() {
+    return gates.pass
+  },
+}))
 
 const { default: overviewsRouter } = await import('./overviews.js')
 const { errorHandler } = await import('../../middleware/routeErrors.js')
+const { clearPublicCaches } = await import('../../lib/publicCaches.js')
 
 const app = express().use('/api/overviews', overviewsRouter).use(errorHandler)
 
 beforeEach(() => {
   gates.overview = 'Closed until the eval passes'
+  gates.pass = 'Closed until the eval passes'
+  // The list is kept in memory: each test asks afresh
+  clearPublicCaches()
 })
 
 describe('GET /api/overviews while overviews are switched off', () => {
@@ -59,5 +69,12 @@ describe('GET /api/overviews while overviews are switched off', () => {
     const [list, page] = await Promise.all([request(app).get('/api/overviews'), request(app).get('/api/overviews/ebola-in-ituri')])
     expect(list.body).toEqual({ on: false, overviews: [] })
     expect(page.status).toBe(404)
+  })
+
+  it('reads the job row once both gates are open', async () => {
+    gates.overview = null
+    gates.pass = null
+    // The proxy throws on the first read, so the route answers 500: the read was tried
+    expect((await request(app).get('/api/overviews')).status).toBe(500)
   })
 })

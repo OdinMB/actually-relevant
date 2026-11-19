@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
@@ -22,6 +22,10 @@ vi.mock('../hooks/useSources', () => ({
     isLoading: false,
   }),
 }))
+
+// Whether overviews are switched on: the methodology's section on ongoing stories shows only then
+const ongoing = vi.hoisted(() => ({ on: false }))
+vi.mock('../hooks/usePublicOverviews', () => ({ useOngoingOn: () => ongoing.on }))
 
 function renderPage(component: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -73,6 +77,29 @@ describe('MethodologyPage', () => {
     expect(checks).not.toMatch(/matters less/)
     // A story still owed research at the daily publish usually goes out researched a day later
     expect(checks).toContain('or the research fails or would exceed our monthly research budget, we publish the single-source version instead.')
+  })
+
+  describe('ongoing stories', () => {
+    afterEach(() => {
+      ongoing.on = false
+    })
+
+    it('says nothing about them while they are switched off, so switching them on needs no change to the page', () => {
+      const { container } = renderPage(<MethodologyPage />)
+      expect(container.querySelector('#ongoing-stories')).toBeNull()
+    })
+
+    it('explains them after researched stories while they are on, quoting the label their pages show and linking the index', () => {
+      ongoing.on = true
+      const { container } = renderPage(<MethodologyPage />)
+      const heading = container.querySelector('#ongoing-stories')!
+      const researched = screen.getByRole('heading', { name: 'Researched Stories' })
+      expect(researched.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      const { lead, tail } = AI_DISCLOSURE_COPY.overviewLabel
+      const section = heading.nextElementSibling!.nextElementSibling!
+      expect(section.textContent!.replace(/\s+/g, ' ')).toContain(`carry the label "${lead} AI${tail}"`)
+      expect(within(section as HTMLElement).getByRole('link')).toHaveAttribute('href', '/ongoing')
+    })
   })
 })
 

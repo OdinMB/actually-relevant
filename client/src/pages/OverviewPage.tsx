@@ -16,7 +16,7 @@ import { useFeedback } from '../components/FeedbackProvider'
 import { SourcesList } from '../components/research/SourcesList'
 import { OverviewStands } from '../components/overview/OverviewStands'
 import { OverviewTimeline } from '../components/overview/OverviewTimeline'
-import { countLine, overviewHead, overviewUrl, statusLine } from '../components/overview/overviewCopy'
+import { countLine, ONGOING_METHOD_HREF, overviewHead, overviewUrl, statusLine } from '../components/overview/overviewCopy'
 
 const BACK_LINK = `text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`
 
@@ -65,7 +65,7 @@ function NotFound() {
   )
 }
 
-/** "Summary and timeline by [AI], from our stories and their sources." then "How it works". */
+/** "Summary and timeline by [AI], from our stories and their sources." then "How it works", leading to the methodology's section on ongoing stories. */
 function OverviewLabel() {
   return (
     <p className="text-sm text-neutral-600">
@@ -73,7 +73,7 @@ function OverviewLabel() {
         {label.lead} <AiBadge accessibleName={AI_DISCLOSURE_COPY.badgeText} className="align-middle text-neutral-700" />
         {label.tail}
       </span>{' '}
-      <Link to={AI_DISCLOSURE_COPY.howItWorksHref} className={TEXT_LINK}>
+      <Link to={ONGOING_METHOD_HREF} className={TEXT_LINK}>
         {AI_DISCLOSURE_COPY.howItWorksLinkText}
       </Link>
     </p>

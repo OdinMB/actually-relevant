@@ -123,7 +123,8 @@ describe('OverviewPage', () => {
     // The owner's label, its "AI" badge between "by" and the comma, announced as the word
     const label = screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent?.startsWith('Summary and timeline by') === true)
     expect(announcedText(label)).toBe('Summary and timeline by AI, from our stories and their sources.')
-    expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/methodology')
+    // To the methodology's section on ongoing stories, which shows whenever this page can (both only while the module is on)
+    expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/methodology#ongoing-stories')
   })
 
   it('shows "Where this stands" and "What\'s being done" cited, each source naming the story of ours it came through', async () => {

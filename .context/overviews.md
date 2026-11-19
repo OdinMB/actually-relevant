@@ -2,7 +2,7 @@
 
 An **overview** follows one ongoing development (an outbreak, a war, a negotiation, a rule-making) across our stories: a charter saying what belongs, a title, and a timeline of entries, one per story. The **link step** files each newly published story under the development it reports on, or starts a development when two stories report the same one. Plan: `.plans/2026-11-18_overviews-linking.md`; decision: ADR-0070.
 
-**What is built and what it does today.** Phases 1 to 5 of the plan: the records, the answer keys' version 2 and the halves; linking (candidates, the link confirmation, founding, roles); the upkeep after linking (end-event closing, the status machine, bursts, reviews and the monthly audit, "Where this stands"); the `link_overviews` job after publishing, the decisions log, and the evals of each part in an in-memory sandbox; the admin's pages, the story's Overview block, the editor's actions and Undo ("Admin", "Editor actions and undo"); what readers get once the step is on: the `/ongoing` pages, the story's `overview` field with its line and chip, the sitemap and link previews, and the reader's "Report an error" ("Public"). **Nothing runs in production and readers see nothing:** the job row is seeded disabled, enabling it is refused while its eval gate is closed and while research passes' is, the public reads answer as if no overview existed while the step is off, and the admin's pages stay out of sight while the step is off and no overview exists. Phase 6 (the switch) is still to come.
+**What is built and what it does today.** Phases 1 to 5 of the plan: the records, the answer keys' version 2 and the halves; linking (candidates, the link confirmation, founding, roles); the upkeep after linking (end-event closing, the status machine, bursts, reviews and the monthly audit, "Where this stands"); the `link_overviews` job after publishing, the decisions log, and the evals of each part in an in-memory sandbox; the admin's pages, the story's Overview block, the editor's actions and Undo ("Admin", "Editor actions and undo"); what readers get once the step is on: the `/ongoing` pages, the story's `overview` field with its line and chip, the sitemap and link previews, and the reader's "Report an error" ("Public"); and phase 6 up to the switch: the methodology's section on ongoing stories, shown only while the step is on, and the runbook below ("Switching on"), so the switch is the gate's one line and the job's enable. **Nothing runs in production and readers see nothing:** the job row is seeded disabled, enabling it is refused while its eval gate is closed and while research passes' is, the public reads answer as if no overview existed while the step is off, and the admin's pages stay out of sight while the step is off and no overview exists. What is left is the owner's: the evals' paid runs and the switch.
 
 ## Records
 
@@ -110,7 +110,33 @@ Nothing else is undoable (stands, audits, `none` or `rejected` links, unpublishe
 
 ## How the switch stays off
 
-Four layers, as for the research pass: **the eval gate** `OVERVIEW_EVAL_GATE` (`services/overviewGate.ts`, a code constant a test can mock and nothing at run time can change) refuses enabling (`ENABLE_CHECKS`) while set, and **while research passes' gate `PASS_EVAL_GATE` is closed**; **the order of switches**: enabling is refused while `research_pass` is disabled (`jobEnableConflict`); **the disabled row**; **the handler** does nothing unless both gates are open and the job is enabled ("Run now" on the disabled job does nothing). The owner opens the gate in its own change once the replay on the judged half meets the bars (plan phase 6).
+Four layers, as for the research pass: **the eval gate** `OVERVIEW_EVAL_GATE` (`services/overviewGate.ts`, a code constant a test can mock and nothing at run time can change) refuses enabling (`ENABLE_CHECKS`) while set, and **while research passes' gate `PASS_EVAL_GATE` is closed**; **the order of switches**: enabling is refused while `research_pass` is disabled (`jobEnableConflict`); **the disabled row**; **the handler** does nothing unless both gates are open and the job is enabled ("Run now" on the disabled job does nothing). The owner opens the gate in its own change once the evals on the judged half meet their bars ("Switching on").
+
+## Switching on
+
+The owner's, in this order (plan phase 6). Nothing before step 4 changes production.
+
+1. **Research passes on first.** Their gate (`PASS_EVAL_GATE`) open in its own change (`.context/research-passes.md`) and `research_pass` enabled, with a few nights of passes run cleanly. Until then enabling `link_overviews` is refused whatever its own gate says, and "Where this stands" would have no evidence: older members' evidence fills only as passes run (plan, For Odin 7). That change's tests are its own: opening `PASS_EVAL_GATE` alone fails tests that assume it closed.
+2. **The evals, in three folders**, each on the judged half with means over 3 runs (commands, flags and budgets in `.context/model-eval.md`, "The overviews gate, in order"): the answer keys against the database (no calls); linking (`link`, `found`, `role`, about $4–8); the reviews (`review`, about $1–3); the upkeep (`pass-pool` with `stands` and `fact-check --facts stands`, then `closure` and `replay`, about $30–60, most of it `pass-pool`'s first passes on the half's 121 must entries). The upkeep folder costs more than the eval's $20 cap on a folder (`MAX_BUDGET_USD`, `scripts/eval/options.ts`): the owner raises it for this run in its own change, after a smoke run on the tuned half has given a first pass's cost. Every bar must be met:
+
+   | Step | Bar |
+   |---|---|
+   | `link` | joins right ≥97%; must entries found ≥85% |
+   | `found` | no wrong founding; the key's end event for every development |
+   | `role` | roles agreeing ≥85% |
+   | `review` | planted errors caught ≥80%; correct items demoted ≤3% |
+   | `stands` | no unsupported sentence; latest key value stated ≥90%; "What's being done" present ≥70% and none unsupported; over at least 15 checkpoints with enough facts |
+   | `fact-check --facts stands` | planted errors in stands lines caught ≥90%; false rejection ≤5% |
+   | `closure` | no premature closure; ≥80% closed within 14 days of their end |
+   | `replay` | the bars above on its end state; cost per story within the plan's table (about $4–8 a month once on) |
+
+   **The 15 checkpoints are all the judged half has** (5 developments × 3), so each needs at least `minStandsFacts` (3) offerable facts from `pass-pool`, or the stands report "not enough evidence" and the gate stays closed; the smoke run shows the share early. A missed bar is a prompt or code change tuned on the tuned half, then the judged half again, never a key edited to pass.
+3. **The copy approved:** the methodology's "Ongoing Stories" section (`client/src/components/overview/OngoingStoriesMethod.tsx`, a draft shown only while the step is on) and the pages' other strings (`overviewCopy.ts`); the AI label's wording is decided (plan, For Odin 3).
+4. **The gate change**, a commit of its own: `OVERVIEW_EVAL_GATE` set to `null` (`services/overviewGate.ts`), the only line of code it needs; no test depends on the constant (each mocks the gate it needs). In the same commit, the docs that call the step built and switched off say instead that it runs once its job is enabled: this file's title and "What is built", `CLAUDE.md`'s row for it, `.context/ai-transparency.md` (rows 17 and 78) and `.context/public-website.md` ("Ongoing stories"). ADR-0070 already says the owner opens the gate this way, so it stays as it is.
+5. **Enable `link_overviews`** on the Jobs page, before a night's daily edition, once the deploy is live. The site's "Ongoing" links appear within `listCacheSeconds` (5 minutes); `/ongoing` lists nothing until a night's reviews make an overview public. The first nights take the backfill: about 6 of them at `backfillPerRun` 300, each 15 to 25 minutes longer after publishing, about $10–20 once (plan, For Odin 1).
+6. **Watch the first week:** the job's summary on the Jobs page ("backfill N of M" until the backlog is drained), its spending line against the $10 warning level, failure notices, and the admin's Overviews pages (wrong joins, foundings, closings); an editor's Detach, Hide or Undo fixes one at once.
+
+**Switching off** is disabling `link_overviews`: the public reads answer as if no overview existed, the caches that may hold a link are emptied (`updateJob`, "Caches"), and the records stay for the admin.
 
 ## Evals
 
