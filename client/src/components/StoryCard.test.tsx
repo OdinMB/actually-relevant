@@ -44,6 +44,14 @@ describe('StoryCard ongoing story chip', () => {
     expect(focusRingProblems(chip)).toEqual([])
   })
 
+  it.each(VARIANTS)('%s: keeps a long title out of the card’s minimum width, so it truncates on a phone rather than widening the grid', variant => {
+    renderCard(variant, makeStory({ overview: { slug: 'ebola-in-ituri', title: 'Ebola in Ituri' } }))
+    const chip = screen.getByRole('link', { name: /^Ongoing:/ })
+    // jsdom lays nothing out: the containment that does it (checked at 390px, 2026-11-19) is pinned instead
+    expect(chip.parentElement).toHaveClass('[contain:inline-size]')
+    expect(chip.querySelector('.truncate')).toHaveTextContent('Ebola in Ituri')
+  })
+
   it.each(VARIANTS)('%s: shows no chip while the story is in none (and while overviews are off, when the field is null)', variant => {
     renderCard(variant, makeStory({ overview: null }))
     expect(screen.queryByRole('link', { name: /^Ongoing:/ })).toBeNull()

@@ -113,7 +113,7 @@ function RoleSetter({ overviewId, entry: e }: { overviewId: string; entry: Admin
           </option>
         ))}
       </select>
-      {/* One element whatever its state (no swap into a tooltip wrapper), so focus stays on it after a click */}
+      {/* One element whatever its state (no swap into a tooltip wrapper), so focus stays on it after a click; on a phone its label keeps to one line beside the select */}
       <Button
         type="button"
         variant="secondary"
@@ -122,7 +122,7 @@ function RoleSetter({ overviewId, entry: e }: { overviewId: string; entry: Admin
         aria-disabled={reason ? 'true' : undefined}
         aria-describedby={reason ? `role-why-${e.id}` : undefined}
         title={reason ?? undefined}
-        className={reason ? 'opacity-50 cursor-not-allowed' : ''}
+        className={`shrink-0 whitespace-nowrap ${reason ? 'opacity-50 cursor-not-allowed' : ''}`}
       >
         Set role<span className="sr-only">: {storyName(e)}</span>
       </Button>
@@ -172,7 +172,8 @@ function EntryRow({ entry: e, children }: { entry: AdminOverviewEntry; children:
             {e.locked && <Badge variant="purple">Locked</Badge>}
           </p>
         </div>
-        <div className="flex items-center gap-2">{children}</div>
+        {/* Wraps on a phone, where the role select and its buttons are wider than the row */}
+        <div className="flex max-w-full flex-wrap items-center gap-2">{children}</div>
       </div>
       {hasJudgment && (
         <div className="mt-1">

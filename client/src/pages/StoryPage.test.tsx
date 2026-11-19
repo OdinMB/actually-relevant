@@ -440,6 +440,9 @@ describe('StoryPage', () => {
     expect(announcedText(line)).toBe('Part of an ongoing story: AI-generated Ebola in Ituri')
     expect(line).toHaveAttribute('data-ai-generated', 'overview')
     expect(line.closest('header')).not.toBeNull()
+    // Only the title is underlined, not the space after the badge or the arrow
+    expect(link).not.toHaveClass('underline')
+    expect(screen.getByText('Ebola in Ituri')).toHaveClass('underline')
   })
 
   it('shows no ongoing story line while the story is in none, or while overviews are off (the field null or absent)', () => {
