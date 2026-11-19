@@ -31,10 +31,9 @@ const mockPrisma = vi.hoisted(() => ({
 
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 
-// The overview's report rules are overviewPublic.ts's (its db test); here only what the route does with the answer
+// The overview's report rules are overviewReport.ts's (its db test); here only what the route does with the answer
 const mockOverviewReport = vi.hoisted(() => vi.fn())
-vi.mock('../../services/overviewPublic.js', async importOriginal => ({
-  ...(await importOriginal<typeof import('../../services/overviewPublic.js')>()),
+vi.mock('../../services/overviewReport.js', () => ({
   overviewReport: (...args: unknown[]) => mockOverviewReport(...args),
 }))
 vi.mock('../../services/crawler.js', () => ({

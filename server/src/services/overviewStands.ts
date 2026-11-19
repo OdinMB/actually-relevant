@@ -18,7 +18,7 @@ import { judgedProblems, unjudgedLabels, type CheckedDraftItem } from './researc
 import { checkCopying, sourceLines, type SourceLine } from './researchCopying.js'
 import { contextFact, poolFactKey, usable, type PoolFact, type PoolSource, type Voice } from './researchPool.js'
 import { citedCheckItem, promptItems, renderFact, wordingSources, type ContextFactData } from './storyContextChecks.js'
-import { isCurrent, type ValidityWindows } from './storyContextVisuals.js'
+import { currentUntil, isCurrent, type ValidityWindows } from './storyContextVisuals.js'
 
 export type StandsOptions = Pick<typeof config.overviews, 'maxStandsFacts' | 'minStandsFacts' | 'maxStandsSentences' | 'maxDoingSentences'>
 
@@ -305,6 +305,20 @@ export function standsSignature(offered: readonly OfferedFact[], entries: readon
   const facts = offered.map(o => `${o.id}:${o.current ? 'c' : 'e'}`).sort()
   const members = entries.map(e => `${e.storyId}:${e.role.role}:${e.role.roleKind ?? ''}`).sort()
   return `${facts.join(',')}|${members.join(',')}`
+}
+
+/**
+ * The first day the offer's current flags change: the earliest an offered current fact stops being
+ * current (the only way the same facts make another offer); null when none will. Until then, and while
+ * the members' facts and entries are unchanged (`StandsCase.marker`), the offer and its signature stay
+ * the same, so a run need not read the pools to know it.
+ */
+export function standsUntil(offered: readonly OfferedFact[], windows = WINDOWS()): string | null {
+  const days = offered.flatMap(o => {
+    const until = o.current ? currentUntil({ ...o.fact, sourceDate: o.fact.source.date }, windows) : null
+    return until ? [until] : []
+  })
+  return days.length === 0 ? null : days.sort()[0]!
 }
 
 /** A fact a served line cites, as it stands now. */

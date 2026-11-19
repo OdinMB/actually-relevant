@@ -16,6 +16,7 @@ const call = <T>(parsed: T | null, costUsd = 0.01): ModelCall<T> => ({ parsed, c
 
 const state = (id: string, over: Partial<OverviewState> = {}): OverviewState => ({
   id,
+  title: 'Ebola',
   scope: 'ongoing',
   status: 'open',
   closedReason: null,
@@ -119,6 +120,8 @@ const standsCase = (lastSignature: string | null = null): StandsCase => ({
   ],
   members: [member('a', 'f1', 'Cases rose to 120.'), member('a', 'f2', 'Vaccination began.', 'S1F2'), member('b', 'f3', 'The WHO sent 40 staff.')],
   lastSignature,
+  marker: 'm1',
+  unchanged: false,
 })
 
 const keepAll: ReviewAnswer = {
@@ -151,7 +154,7 @@ function fakes(over: Partial<UpkeepDeps> = {}): UpkeepDeps & { writes: string[] 
     applyBurst: async s => void writes.push(`burst:${s.id}`),
     applyReview: async (c, r) => void writes.push(`review:${c.overviewId}:${r.trigger}:${r.outcome}`),
     applyAudit: async (c, r) => void writes.push(`audit:${c.overviewId}:${r.outcome}`),
-    applyStands: async (c, r, signature) => void writes.push(`stands:${c.overviewId}:${r.outcome}:${signature === null ? 'none' : 'signed'}`),
+    applyStands: async (c, r, record) => void writes.push(`stands:${c.overviewId}:${r.outcome}:${record.signature === null ? 'none' : 'signed'}`),
     ...over,
   }
 }
@@ -190,19 +193,42 @@ describe('the upkeep after linking', () => {
   it('refreshes no stands whose signature has not changed, and signs no failed refresh', async () => {
     const first = fakes({ standsCases: async () => [standsCase()] })
     await runUpkeep(first, AT)
-    let signature: string | null = null
+    let record: { signature: string | null; marker: string | null; until: string | null } | null = null
     const capture = fakes({
       standsCases: async () => [standsCase()],
-      applyStands: async (_c, _r, s) => {
-        signature = s
+      applyStands: async (_c, _r, r) => {
+        record = r
       },
     })
     await runUpkeep(capture, AT)
-    const again = fakes({ standsCases: async () => [standsCase(signature)] })
+    // The marker it was made from, and no day its offer changes: the facts' source is dated 2026-11-10, and `fast` facts are none here
+    expect(record).toMatchObject({ marker: 'm1' })
+    const again = fakes({ standsCases: async () => [standsCase(record!.signature)] })
     expect((await runUpkeep(again, AT)).standsRefreshes).toBe(0)
     const failing = fakes({ standsCases: async () => [standsCase()], stands: { write: async () => call(null), check: async () => call(null) } })
     await runUpkeep(failing, AT)
     expect(failing.writes).toEqual(['stands:o1:failed:none'])
+  })
+
+  it('starts no stands item for a case whose inputs are unchanged, and counts the items it starts', async () => {
+    const deps = fakes({ standsCases: async () => [{ ...standsCase(), unchanged: true }], states: async () => [state('o1')] })
+    const tally = await runUpkeep(deps, AT)
+    expect(deps.writes).toEqual([])
+    expect([tally.items, tally.standsRefreshes]).toEqual([1, 0])
+  })
+
+  it('lists the overviews a burst or the review brake froze, with their titles, for the owner', async () => {
+    let reads = 0
+    const cut: ReviewAnswer = { ...keepAll, entries: keepAll.entries.map((e, i) => (i > 0 ? { ...e, belongs: 'no' as const } : e)) }
+    const deps = fakes({
+      states: async () => (reads++ === 0 ? [state('o1', { burstJoins: 6, title: 'Ebola' })] : [state('o2', { activeEntries: 6, title: 'Mpox' })]),
+      review: { review: async () => call(cut, 0.1) },
+    })
+    const tally = await runUpkeep(deps, AT)
+    expect(tally.freezes).toEqual([
+      { overviewId: 'o1', title: 'Ebola', cause: 'burst', count: 6 },
+      { overviewId: 'o2', title: 'Ebola', cause: 'brake', count: 2 },
+    ])
   })
 
   it('goes on past an overview that throws, and starts nothing once switched off', async () => {

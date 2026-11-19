@@ -13,6 +13,19 @@ const DAY = 86_400_000
 const NOW = new Date('2026-11-18T03:00:00Z')
 const daysFrom = (days: number) => new Date(NOW.getTime() + days * DAY)
 const charter = { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda'], endEvent: 'The ministry declares it over' }
+const auditFailed: AuditResult = {
+  outcome: 'failed',
+  entries: 0,
+  wrongJoins: 0,
+  wrongRoles: 0,
+  errorRate: null,
+  actions: [],
+  refusals: [],
+  answer: null,
+  costUsd: 0.3,
+  model: 'large',
+  promptVersion: 'v',
+}
 
 describeDb('the overview upkeep records', () => {
   useTestDatabase()
@@ -29,7 +42,9 @@ describeDb('the overview upkeep records', () => {
       status: 'open' | 'quiet' | 'closing' | 'closed'
       frozen: boolean
       hidden: boolean
+      slug: string
       closingSince: Date
+      closingStoryId: string
     }> = {},
   ) {
     const o = await prisma.overview.create({
@@ -115,22 +130,27 @@ describeDb('the overview upkeep records', () => {
     expect([...owed.backlog, ...owed.night]).not.toContain(a!.id)
   })
 
-  it('counts a burst, freezes on it, and clears the burst once a review has run', async () => {
+  it('counts a burst of stories published within the night, freezes on it, and clears the burst once a review has run', async () => {
     // Entries are joined at the wall clock, so the night is counted back from it
+    const feed = await createFeed((await createIssue()).id)
+    const published = (hoursAgo: number) => createStory({ feedId: feed.id, status: 'published', datePublished: new Date(Date.now() - hoursAgo * 3_600_000) })
+    const members = await Promise.all([published(2), published(3), published(4)])
+    // A backfill's join of a story published a week ago never counts toward a burst
+    const old = await published(24 * 7)
+    const o = await overview([...members, old].map(s => s.id))
     const wall = new Date()
-    const members = await stories([-1, -1, -1])
-    const o = await overview(members.map(s => s.id))
     const [state] = await overviewStates(prisma, wall)
     expect(state!.burstJoins).toBe(3)
     expect((await overviewStates(prisma, new Date(wall.getTime() + 2 * DAY)))[0]!.burstJoins).toBe(0)
 
-    await applyBurst(state!)
+    await applyBurst(state!, wall)
     const frozen = (await overviewStates(prisma, wall))[0]!
     expect(frozen.frozen).toBe(true)
     expect(frozen.burstAt).not.toBeNull()
 
+    expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ frozenBy: 'burst', frozenAt: wall, joinsCountedFrom: wall })
     const c = (await reviewCase(prisma, o.id))!
-    await applyReview(c, review({ trigger: 'burst', scope: 'forming', kept: 3, actions: [{ kind: 'unfreeze' }] }), wall)
+    await applyReview(c, review({ trigger: 'burst', scope: 'forming', kept: 4, actions: [{ kind: 'unfreeze' }] }), wall)
     const cleared = (await overviewStates(prisma, wall))[0]!
     expect(cleared.burstAt).toBeNull()
     // The joins the freeze answered never freeze it again at a run less than a day later
@@ -139,8 +159,13 @@ describeDb('the overview upkeep records', () => {
 
   it('cancels a closing when its end-event story is unpublished, frozen or not', async () => {
     const [a, b, end] = await stories([-12, -11, -10])
-    const o = await overview([a!.id, b!.id, end!.id], { scope: 'ongoing', status: 'closing', closingSince: end!.datePublished!, frozen: true })
-    await prisma.overviewDecision.create({ data: { kind: 'close', overviewId: o.id, storyId: end!.id, outcome: 'closing', actor: 'pipeline' } })
+    const o = await overview([a!.id, b!.id, end!.id], {
+      scope: 'ongoing',
+      status: 'closing',
+      closingSince: end!.datePublished!,
+      closingStoryId: end!.id,
+      frozen: true,
+    })
     expect((await overviewStates(prisma, NOW))[0]!.closingStoryId).toBe(end!.id)
     await prisma.story.update({ where: { id: end!.id }, data: { status: 'rejected' } })
 
@@ -203,8 +228,7 @@ describeDb('the overview upkeep records', () => {
 
   it('a closure review is recorded for its closing, and one that detaches the end-event story cancels it', async () => {
     const [a, b, end] = await stories([-12, -11, -10])
-    const o = await overview([a!.id, b!.id, end!.id], { scope: 'ongoing', status: 'closing', closingSince: end!.datePublished! })
-    await prisma.overviewDecision.create({ data: { kind: 'close', overviewId: o.id, storyId: end!.id, outcome: 'closing', actor: 'pipeline' } })
+    const o = await overview([a!.id, b!.id, end!.id], { scope: 'ongoing', status: 'closing', closingSince: end!.datePublished!, closingStoryId: end!.id })
     const c = (await reviewCase(prisma, o.id))!
     expect(c.closingStoryId).toBe(end!.id)
 
@@ -226,10 +250,30 @@ describeDb('the overview upkeep records', () => {
     expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({
       status: 'open',
       closingSince: null,
+      closingStoryId: null,
       scope: 'forming',
       lastEntryAt: b!.datePublished,
     })
     expect((await overviewStates(prisma, NOW))[0]!.closureReviewed).toBe(false)
+    // The cancellation is its own status record, by the review
+    expect(await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'status', outcome: 'open' } })).toMatchObject({
+      storyId: end!.id,
+      inputs: { reason: 'closing_cancelled', by: 'review' },
+    })
+  })
+
+  it('applies no detach of a review that asks for more than half the unlocked entries, and freezes the overview for an editor', async () => {
+    const members = await stories([-4, -3, -2, -1])
+    const o = await overview(
+      members.map(s => s.id),
+      { scope: 'ongoing', slug: 'braked' },
+    )
+    const c = (await reviewCase(prisma, o.id))!
+    await applyReview(c, review({ scope: 'ongoing', kept: 4, brake: { asked: 3, unlocked: 4 } }), NOW)
+    expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ frozen: true, frozenBy: 'review', frozenAt: NOW })
+    expect(await prisma.overviewEntry.count({ where: { overviewId: o.id, status: 'active' } })).toBe(4)
+    // No burst review clears it: it waits for an editor
+    expect((await overviewStates(prisma, NOW))[0]!.burstAt).toBeNull()
   })
 
   it('a failed review acts on nothing and leaves the review due', async () => {
@@ -244,10 +288,16 @@ describeDb('the overview upkeep records', () => {
     const members = await stories([-3, -2, -1])
     const o = await overview(
       members.map(s => s.id),
-      { scope: 'ongoing' },
+      { scope: 'ongoing', slug: 'audited' },
     )
-    await overview([], { scope: 'ongoing', hidden: true })
+    await overview([], { scope: 'ongoing', hidden: true, slug: 'hidden' })
     await overview([], { scope: 'forming' })
+    // A failed audit counts as recent for a day, not for the month
+    const failedAt = new Date()
+    await applyAudit((await reviewCase(prisma, o.id))!, { ...auditFailed, costUsd: 0 }, failedAt)
+    expect(await auditPicks(prisma, new Date(failedAt.getTime() + 3_600_000))).toEqual([])
+    expect(await auditPicks(prisma, new Date(failedAt.getTime() + 25 * 3_600_000))).toEqual([o.id])
+    await prisma.overviewDecision.deleteMany({ where: { outcome: 'audit_failed' } })
     // Audits are spaced by the wall clock they are logged at
     const wall = new Date()
     expect(await auditPicks(prisma, wall)).toEqual([o.id])
@@ -275,31 +325,39 @@ describeDb('the overview upkeep records', () => {
     const members = await stories([-3, -2, -1])
     const o = await overview(
       members.map(s => s.id),
-      { scope: 'ongoing' },
+      { scope: 'ongoing', slug: 'stands' },
     )
-    await overview([], { scope: 'ongoing', frozen: true })
-    const [c, ...rest] = await standsCases(prisma)
+    await overview([], { scope: 'ongoing', frozen: true, slug: 'frozen' })
+    const today = '2026-11-18'
+    const [c, ...rest] = await standsCases(prisma, today)
     expect(rest).toEqual([])
-    expect(c).toMatchObject({ overviewId: o.id, lastSignature: null, members: [] })
+    expect(c).toMatchObject({ overviewId: o.id, lastSignature: null, members: [], unchanged: false })
     expect(c!.entries.map(e => e.title)).toEqual(['Story -3', 'Story -2', 'Story -1'])
+    const record = (signature: string | null, until: string | null = null) => ({ signature, marker: c!.marker, until })
 
     // Refreshes are a night apart; here a few milliseconds keep their order
     const apart = () => new Promise(resolve => setTimeout(resolve, 5))
-    await applyStands(c!, stands('written', 'One.'), 'sig-1', '2026-11-18')
+    await applyStands(c!, stands('written', 'One.'), record('sig-1'), today)
     await apart()
-    await applyStands(c!, stands('written', 'Two.'), 'sig-2', '2026-11-18')
+    await applyStands(c!, stands('written', 'Two.'), record('sig-2'), today)
     await apart()
-    await applyStands(c!, stands('none_kept'), 'sig-3', '2026-11-18')
+    await applyStands(c!, stands('none_kept'), record('sig-3', '2026-11-20'), today)
     await apart()
+    // Nothing its offer is made of changed, and its day has not come: its facts are not read
+    expect((await standsCases(prisma, '2026-11-19'))[0]!.unchanged).toBe(true)
+    expect((await standsCases(prisma, '2026-11-20'))[0]!.unchanged).toBe(false)
+    // A role changed is a change of what it is made of
+    await prisma.overviewEntry.updateMany({ where: { storyId: members[0]!.id }, data: { role: 'turning_point', roleKind: 'spread' } })
+    expect((await standsCases(prisma, '2026-11-19'))[0]!.unchanged).toBe(false)
     const versions = await prisma.overviewStands.findMany({ where: { overviewId: o.id }, orderBy: { number: 'asc' } })
     expect(versions.map(v => [v.number, v.status, (v.sentences as { text: string }[])[0]!.text])).toEqual([
       [1, 'superseded', 'One.'],
       [2, 'current', 'Two.'],
     ])
-    await applyStands(c!, stands('failed'), null, '2026-11-18')
-    expect((await standsCases(prisma))[0]!.lastSignature).toBe('sig-3')
+    await applyStands(c!, stands('failed'), { signature: null, marker: null, until: null }, today)
+    expect((await standsCases(prisma, today))[0]!.lastSignature).toBe('sig-3')
 
-    await applyStands(c!, stands('too_few_facts'), 'sig-4', '2026-11-18')
+    await applyStands(c!, stands('too_few_facts'), record('sig-4'), today)
     expect(await prisma.overviewStands.count({ where: { overviewId: o.id, status: 'current' } })).toBe(0)
   })
 })

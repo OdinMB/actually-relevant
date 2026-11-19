@@ -5,10 +5,11 @@ import { createFeed, createIssue, createStory, describeDb, useTestDatabase } fro
 import type { LinkCandidateAnswer } from '../schemas/overviews.js'
 import { membershipsOf } from './overviewCandidates.js'
 import { candidateOverviews, linkStories } from './overviewInput.js'
-import { applyLink } from './overviewLifecycle.js'
+import { applyLink, applyStatus } from './overviewLifecycle.js'
 import { linkInOrder, type LinkDeps, type LinkResult } from './overviewLink.js'
 import { owedStories } from './overviewQueue.js'
-import { pendingClosings } from './overviewUpkeepInput.js'
+import { nextState } from './overviewStatus.js'
+import { overviewStates, pendingClosings } from './overviewUpkeepInput.js'
 import type { LinkStory, Shared } from './overviewTypes.js'
 
 const DAY = 86_400_000
@@ -113,7 +114,7 @@ describeDb('the overview lifecycle', () => {
     ).rejects.toThrow()
   })
 
-  it('joins a story: its entry, its link decision, and the overview reopened by the entry', async () => {
+  it('joins a story: its entry, its link decision, and the overview reopened by the status machine after it', async () => {
     const [s] = await stories(1)
     const faded = await overviewRow({ status: 'closed', closedReason: 'faded' })
     expect(await applyLink(joinResult(s!, faded.id), false)).toEqual({ kind: 'written', outcome: 'joined' })
@@ -128,11 +129,17 @@ describeDb('the overview lifecycle', () => {
       shared,
     })
     expect(entry.decision).toMatchObject({ kind: 'link', outcome: 'joined', overviewId: faded.id, actor: 'pipeline', costUsd: 0.001 })
-    expect(await prisma.overview.findUniqueOrThrow({ where: { id: faded.id } })).toMatchObject({
-      status: 'open',
-      closedReason: null,
-      lastEntryAt: s!.datePublished,
-    })
+    // The join moves only what follows the entries; the same run's status machine opens it again
+    expect(await prisma.overview.findUniqueOrThrow({ where: { id: faded.id } })).toMatchObject({ status: 'closed', lastEntryAt: s!.datePublished })
+    const [state] = (await overviewStates(prisma, s!.datePublished)).filter(x => x.id === faded.id)
+    const moves = nextState(state!, s!.datePublished)
+    expect(moves).toContainEqual({ kind: 'status', from: 'closed', to: 'open', reason: 'active' })
+    await applyStatus(state!, moves, s!.datePublished)
+    expect(await prisma.overview.findUniqueOrThrow({ where: { id: faded.id } })).toMatchObject({ status: 'open', closedReason: null, closedAt: null })
+    // Its link decision keeps the change set an Undo inverts
+    const inputs = entry.decision!.inputs as { changes: { table: string; after: { status?: string } }[]; created: { table: string }[] }
+    expect(inputs.changes.find(c => c.table === 'entry')?.after.status).toBe('active')
+    expect(inputs.created).toEqual([{ table: 'entry', id: entry.id }])
   })
 
   it("keeps a join's end-event flag on its link decision, where the closing checks find it", async () => {

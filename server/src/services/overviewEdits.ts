@@ -1,48 +1,35 @@
 /**
  * An editor's corrections to an overview and Undo (`.context/overviews.md`, "Editor actions and
- * undo"), planned as change sets: each action and each undo is turned, from the rows as they stand,
- * into the fields it changes on the overview and its entries, before and after. The lifecycle applies
- * a plan only while the rows still hold `before` (a change made meanwhile is never overwritten) and
- * logs it with its changes, so undoing an editor's action, or an undo, is the same changes the other
- * way round. An automated decision's undo is planned from what that decision did: a join detached, a
- * founding's entries detached, a closure or a closing reopened, a burst's freeze cleared, a review's
- * detaches, relabels, narrowing and retitle restored. A refusal is a ConflictError with its reason in
- * the editor's words. Pure.
+ * undo"), planned as change sets on the rows as they stand (`overviewChanges.ts`), like every
+ * automated write. Undo of any decision is the change set it stored, the other way round, applied only
+ * while every row still holds what that decision left: whole or not at all, never in part. Undoing an
+ * automated decision also makes what it restores the editor's (`stamped`). A refusal is a
+ * ConflictError with its reason in the editor's words. Pure.
  */
-import { z } from 'zod'
 import { ConflictError } from '../utils/errors.js'
-import { scopeAfter } from './overviewStatus.js'
-import type { Charter, EntryRole, OverviewScope, OverviewStatus, Role } from './overviewTypes.js'
-
-/** The overview fields an edit or an undo changes. */
-export interface OverviewFields {
-  title: string
-  scope: OverviewScope
-  status: OverviewStatus
-  closedAt: Date | null
-  closedReason: string | null
-  closingSince: Date | null
-  frozen: boolean
-  hidden: boolean
-  charter: Charter
-  /** The active entries the last review kept (the count trigger, `reviewDue`). */
-  entriesAtLastReview: number
-}
-
-/** The entry fields an edit or an undo changes. */
-export interface EntryFields {
-  status: 'active' | 'detached'
-  detachedBy: string | null
-  detachReason: string | null
-  detachedAt: Date | null
-  locked: boolean
-  role: EntryRole
-  roleKind: string | null
-}
-
-export type Change =
-  | { table: 'overview'; id: string; before: Partial<OverviewFields>; after: Partial<OverviewFields> }
-  | { table: 'entry'; id: string; before: Partial<EntryFields>; after: Partial<EntryFields> }
+import {
+  ACTIVE,
+  OPEN,
+  UNFROZEN,
+  changesFrom,
+  draft,
+  entryChange,
+  inverted,
+  leaving,
+  notHolding,
+  overviewChange,
+  plan,
+  publicBefore,
+  type Change,
+  type EntryFields,
+  type EntryRow,
+  type NewEntry,
+  type OverviewFields,
+  type Plan,
+  type Rows,
+} from './overviewChanges.js'
+import { readInputs, reviewInputs, storedChanges } from './overviewDecisions.js'
+import type { Role } from './overviewTypes.js'
 
 /** An editor's action on an overview (For Odin 8: the full set, each logged and undoable). */
 export type EditorAction =
@@ -67,171 +54,115 @@ const KIND_OF: Record<EditorAction['kind'], EditorKind> = {
   close: 'editor_close',
 }
 
-/**
- * An overview as an edit reads it: its fields, its active entries of published stories, while closing
- * the story that began it (the newest live `closing` decision's), and its newest live freeze decision,
- * a burst's or an editor's freeze or unfreeze.
- */
-export interface EditOverview extends OverviewFields {
-  id: string
-  activeEntries: number
-  closingStoryId: string | null
-  lastFreezeId: string | null
-}
-
-export interface EditEntry extends EntryFields {
-  id: string
-  storyId: string | null
-  /** Its story is published (only those count toward the scope). */
-  published: boolean
-}
-
-/** What an attach reads of the story: whether it is published, the overview it is in now, and its row in this overview if it ever had one. */
+/** What an attach reads of the story: whether it is published and when, the overview it is in now, and its newest row in this overview if it ever had one. */
 export interface AttachStory {
   id: string
   published: boolean
+  datePublished: Date | null
   activeIn: { overviewId: string; title: string } | null
-  rowHere: EditEntry | null
+  rowHere: EntryRow | null
 }
 
 export interface EditContext {
   editorId: string
   now: Date
+  /** A fresh id for a decision or an entry. */
+  newId: () => string
 }
-
-export interface EditPlan {
-  kind: EditorKind | 'undo'
-  outcome: string
-  overviewId: string
-  storyId: string | null
-  changes: Change[]
-  /** An attach of a story with no row in the overview yet: the row to create first, in the state an undo of the attach leaves; `changes` then activates it. */
-  create: { id: string; storyId: string; fields: EntryFields } | null
-  /** The plan reopens a closed overview: quiet and fading count from now (`OverviewState.reopenedAt`). */
-  reopens: boolean
-  /** An undo of an undo: the decision that undo had undone, live again. */
-  relive: string | null
-  /** An undo of a review: the OUT entries it took back out, which no review adds again while the undo stands (`ReviewCase.lockedOut`). */
-  lockedOut: string[]
-}
-
-const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
-
-function changed<F extends object>(from: F, to: Partial<F>): { before: Partial<F>; after: Partial<F> } {
-  const keys = (Object.keys(to) as (keyof F)[]).filter(k => !sameValue(from[k], to[k]))
-  const pick = (source: Partial<F>) => Object.fromEntries(keys.map(k => [k, source[k]])) as Partial<F>
-  return { before: pick(from), after: pick(to) }
-}
-
-const overviewChange = (o: EditOverview, to: Partial<OverviewFields>): Change[] => {
-  const c = changed<OverviewFields>(o, to)
-  return Object.keys(c.after).length === 0 ? [] : [{ table: 'overview', id: o.id, ...c }]
-}
-
-const entryChange = (e: EntryFields & { id: string }, to: Partial<EntryFields>): Change[] => {
-  const c = changed<EntryFields>(e, to)
-  return Object.keys(c.after).length === 0 ? [] : [{ table: 'entry', id: e.id, ...c }]
-}
-
-/** What entries leaving does to the overview: the scope they leave, and a closing cancelled when its end-event story is among them. */
-function leaving(o: EditOverview, entries: readonly EditEntry[]): Partial<OverviewFields> {
-  const counted = entries.filter(e => e.published).length
-  const cancels = o.status === 'closing' && o.closingStoryId !== null && entries.some(e => e.storyId === o.closingStoryId)
-  return { scope: scopeAfter(o.scope, o.activeEntries - counted), ...(cancels ? { status: 'open' as const, closingSince: null } : {}) }
-}
-
-const ACTIVE = { status: 'active', detachedBy: null, detachReason: null, detachedAt: null } as const
 
 const roleFields = (r: Role) => ({ role: r.role, roleKind: r.role === 'routine' ? null : r.roleKind })
 
-const OPEN = { status: 'open', closedAt: null, closedReason: null, closingSince: null } as const
-
 /**
- * The changes an editor's action makes (`.context/overviews.md`, "Editor actions and undo"):
- * - attach: a published story that is in no overview joins this one as the editor's (`locked`, so
- *   no review detaches it or changes its role), reusing its detached row here if it had one;
+ * The plan of an editor's action (`.context/overviews.md`, "Editor actions and undo"):
+ * - attach: a published story that is in no overview joins this one, unless it is closed, as the
+ *   editor's (`locked`, so no review detaches it or changes its role), reusing its row here if it had
+ *   one;
  * - detach: the entry leaves, `locked`, so automation never links the story there again;
  * - role: the entry takes the role, `locked`;
- * - retitle, freeze or unfreeze, hide or show;
+ * - retitle, hide or show;
+ * - freeze (the editor's, which only an editor lifts) or unfreeze (the burst check counting from now);
  * - close (`editor`, which automation never moves) or reopen (open again, quiet counted from now).
- * Entries joining or leaving recompute the scope as the status machine does, and a closing whose
- * end-event story leaves is cancelled. An action that would change nothing is refused.
+ * A closing whose end-event story leaves is cancelled (`leaving`); the scope and the last entry follow
+ * the entries. An action that would change nothing is refused.
  */
-export function planEdit(
-  action: EditorAction,
-  o: EditOverview,
-  rows: { entry?: EditEntry | null; story?: AttachStory; newEntryId?: string },
-  ctx: EditContext,
-): EditPlan {
-  const plan = (outcome: string, changes: Change[], over: Partial<EditPlan> = {}): EditPlan => ({
-    kind: KIND_OF[action.kind],
-    outcome,
-    overviewId: o.id,
-    storyId: null,
-    changes,
-    create: null,
-    reopens: false,
-    relive: null,
-    lockedOut: [],
-    ...over,
-  })
+export function planEdit(action: EditorAction, rows: Rows, attach: AttachStory | null, entryId: string | null, ctx: EditContext): Plan {
+  const o = rows.overview
+  const decisionId = ctx.newId()
+  const decide = (outcome: string, storyId: string | null, changes: Change[], over: Partial<Plan> = {}): Plan =>
+    plan(draft({ id: decisionId, kind: KIND_OF[action.kind], outcome, overviewId: o.id, storyId, inputs: { target: null }, actor: ctx.editorId }), {
+      changes,
+      wasPublic: publicBefore(o),
+      ...over,
+    })
   const activeEntry = () => {
-    const e = rows.entry
+    const e = rows.entries.find(x => x.id === entryId)
     if (!e) throw new ConflictError('That entry is not in this overview')
     if (e.status !== 'active') throw new ConflictError('That entry is already detached')
     return e
   }
   switch (action.kind) {
     case 'attach': {
-      const s = rows.story!
-      if (!s.published) throw new ConflictError('Only a published story can join an overview')
+      const s = attach!
+      if (!s.published || !s.datePublished) throw new ConflictError('Only a published story can join an overview')
       if (s.activeIn?.overviewId === o.id) throw new ConflictError('The story is already in this overview')
       if (s.activeIn) throw new ConflictError(`The story is in "${s.activeIn.title}": detach it there first`)
-      const id = s.rowHere?.id ?? rows.newEntryId!
-      const before: EntryFields = s.rowHere ?? {
-        status: 'detached',
-        detachedBy: ctx.editorId,
-        detachReason: 'undone',
-        detachedAt: ctx.now,
-        locked: false,
-        ...roleFields(action.role),
-      }
-      const changes = [
-        ...entryChange({ ...before, id }, { ...ACTIVE, locked: true, ...roleFields(action.role) }),
-        ...overviewChange(o, { scope: scopeAfter(o.scope, o.activeEntries + 1) }),
-      ]
-      return plan('attached', changes, { storyId: s.id, create: s.rowHere ? null : { id, storyId: s.id, fields: before } })
+      if (o.status === 'closed') throw new ConflictError('The overview is closed: reopen it first')
+      const created: NewEntry | null = s.rowHere
+        ? null
+        : {
+            id: ctx.newId(),
+            overviewId: o.id,
+            storyId: s.id,
+            joinedBy: 'editor',
+            joinedAt: ctx.now,
+            decisionId,
+            fields: { status: 'detached', detachedBy: ctx.editorId, detachReason: 'undone', detachedAt: ctx.now, locked: false, ...roleFields(action.role) },
+            datePublished: s.datePublished,
+            shared: null,
+            confidence: null,
+            model: null,
+            promptVersion: null,
+          }
+      const row: EntryFields & { id: string } = s.rowHere ?? { ...created!.fields, id: created!.id }
+      return decide('attached', s.id, entryChange(row, { ...ACTIVE, locked: true, ...roleFields(action.role) }), { newEntries: created ? [created] : [] })
     }
     case 'detach': {
       const e = activeEntry()
       const changes = [
         ...entryChange(e, { status: 'detached', detachedBy: ctx.editorId, detachReason: 'editor', detachedAt: ctx.now, locked: true }),
-        ...overviewChange(o, leaving(o, [e])),
+        ...overviewChange(o, leaving(o, [e.storyId])),
       ]
-      return plan('detached', changes, { storyId: e.storyId })
+      return decide('detached', e.storyId, changes)
     }
     case 'role': {
       const e = activeEntry()
       const to = roleFields(action.role)
       if (e.role === to.role && e.roleKind === to.roleKind) throw new ConflictError('The entry already has that role')
-      return plan('set', entryChange(e, { ...to, locked: true }), { storyId: e.storyId })
+      return decide('set', e.storyId, entryChange(e, { ...to, locked: true }))
     }
     case 'retitle':
       if (action.title === o.title) throw new ConflictError('The overview already has that title')
-      return plan('retitled', overviewChange(o, { title: action.title }))
+      return decide('retitled', null, overviewChange(o, { title: action.title }))
     case 'freeze':
       if (action.frozen === o.frozen) throw new ConflictError(o.frozen ? 'The overview is already frozen' : 'The overview is not frozen')
-      return plan(action.frozen ? 'frozen' : 'unfrozen', overviewChange(o, { frozen: action.frozen }))
+      return decide(
+        action.frozen ? 'frozen' : 'unfrozen',
+        null,
+        overviewChange(
+          o,
+          action.frozen ? { frozen: true, frozenBy: 'editor', frozenAt: ctx.now, joinsCountedFrom: ctx.now } : { ...UNFROZEN, joinsCountedFrom: ctx.now },
+        ),
+      )
     case 'hide':
       if (action.hidden === o.hidden) throw new ConflictError(o.hidden ? 'The overview is already hidden' : 'The overview is not hidden')
-      return plan(action.hidden ? 'hidden' : 'shown', overviewChange(o, { hidden: action.hidden }))
+      return decide(action.hidden ? 'hidden' : 'shown', null, overviewChange(o, { hidden: action.hidden }))
     case 'close':
       if (action.closed) {
         if (o.status === 'closed') throw new ConflictError('The overview is already closed')
-        return plan('closed', overviewChange(o, { status: 'closed', closedAt: ctx.now, closedReason: 'editor', closingSince: null }))
+        return decide('closed', null, overviewChange(o, { ...OPEN, status: 'closed', closedAt: ctx.now, closedReason: 'editor' }))
       }
       if (o.status !== 'closed') throw new ConflictError('The overview is not closed')
-      return plan('reopened', overviewChange(o, OPEN), { reopens: true })
+      return decide('reopened', null, overviewChange(o, { ...OPEN, reopenedAt: ctx.now }))
   }
 }
 
@@ -249,164 +180,110 @@ export interface UndoTarget {
   undoneAt: Date | null
 }
 
-const DATE_FIELDS = new Set(['closedAt', 'closingSince', 'detachedAt'])
-const revive = (fields: Record<string, unknown>) =>
-  Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, DATE_FIELDS.has(k) && typeof v === 'string' ? new Date(v) : v]))
+const isEditorKind = (kind: string) => (EDITOR_KINDS as readonly string[]).includes(kind)
 
-const changesInput = z.object({
-  changes: z.array(z.object({ table: z.enum(['overview', 'entry']), id: z.string(), before: z.record(z.unknown()), after: z.record(z.unknown()) })),
-  target: z.string().nullish(),
-})
-
-/** The changes an editor's decision or an undo stored, the other way round. */
-function inverted(inputs: unknown): { changes: Change[]; target: string | null } {
-  const parsed = changesInput.safeParse(inputs)
-  if (!parsed.success) throw new ConflictError('This decision did not record what it changed, so it cannot be undone')
-  const changes = parsed.data.changes.map(c => ({ table: c.table, id: c.id, before: revive(c.after), after: revive(c.before) }) as Change)
-  return { changes, target: parsed.data.target ?? null }
+/** The automated decisions Undo reverses, by kind and outcome. */
+const AUTOMATED: Record<string, readonly string[]> = {
+  link: ['joined'],
+  found: ['founded'],
+  status: ['closed', 'frozen'],
+  close: ['closing'],
+  review: ['reviewed'],
 }
-
-const roleSchema = z.object({ role: z.enum(['turning_point', 'routine']), roleKind: z.string().nullable() })
-const reviewActions = z.object({
-  actions: z.array(
-    z.union([
-      z.object({ kind: z.literal('detach'), entryId: z.string() }),
-      z.object({ kind: z.literal('relabel'), entryId: z.string(), from: roleSchema, to: roleSchema }),
-      z.object({
-        kind: z.literal('narrow'),
-        added: z.array(z.string()),
-        charter: z.object({ in: z.string(), out: z.array(z.string()), endEvent: z.string() }),
-      }),
-      z.object({ kind: z.literal('retitle'), from: z.string(), to: z.string() }),
-      z.object({ kind: z.literal('unfreeze') }),
-    ]),
-  ),
-})
-
-/**
- * Whether the changes may take a public link away (`.context/overviews.md`, "The public story field"):
- * the overview hidden, its scope leaving `ongoing`, or an entry leaving `active`. It does not ask
- * whether the overview was public, which costs at most a needless cache rebuild.
- */
-export const removesLink = (changes: readonly Change[]): boolean =>
-  changes.some(c =>
-    c.table === 'overview'
-      ? (c.after.hidden === true && c.before.hidden !== true) || (c.before.scope === 'ongoing' && c.after.scope !== undefined && c.after.scope !== 'ongoing')
-      : c.before.status === 'active' && c.after.status === 'detached',
-  )
 
 /** Whether the admin offers Undo on a decision: one not undone, of a kind and outcome `planUndo` can reverse. */
 export function undoable(d: Pick<UndoTarget, 'kind' | 'outcome' | 'undoneAt'>): boolean {
   if (d.undoneAt) return false
-  if ((EDITOR_KINDS as readonly string[]).includes(d.kind) || d.kind === 'undo') return true
-  const automated: Record<string, readonly string[]> = {
-    link: ['joined'],
-    found: ['founded'],
-    status: ['closed', 'frozen'],
-    close: ['closing'],
-    review: ['reviewed'],
+  if (isEditorKind(d.kind) || d.kind === 'undo') return true
+  return AUTOMATED[d.kind]?.includes(d.outcome) ?? false
+}
+
+/** What a field that no longer holds is, in the editor's words. */
+function what(change: Change, field: string): string {
+  if (change.table === 'entry') {
+    if (field === 'row') return 'a story it placed'
+    return field === 'role' || field === 'roleKind' ? "an entry's role" : 'an entry it moved'
   }
-  return automated[d.kind]?.includes(d.outcome) ?? false
+  const words: Record<string, string> = {
+    status: 'its status',
+    closedAt: 'its closure',
+    closedReason: 'its closure',
+    closingSince: 'its closing',
+    closingStoryId: 'its closing',
+    frozen: 'its freeze',
+    frozenBy: 'its freeze',
+    frozenAt: 'its freeze',
+    hidden: 'whether it is hidden',
+    title: 'its title',
+    charter: 'its charter',
+    lockedOut: "its charter's locked-out entries",
+    reopenedAt: 'its reopening',
+  }
+  return words[field] ?? 'the overview'
 }
 
 /**
- * The changes undoing one decision makes (`.context/overviews.md`, "Editor actions and undo"):
- * - an editor's action or an undo: its stored changes the other way round (an undo of an undo makes
- *   the decision it had undone live again);
- * - a join (`link`, joined): the entry detached, `undone` and `locked`, and the decision undone, so the
- *   story is owed again and may join another overview, never this one;
- * - a founding (`found`, founded): both founding entries detached the same way; their stories' link
- *   decisions stay live, so the pair does not found it again the next night;
- * - a closure (`status`, closed), or a closing begun (`close`, closing): open again, quiet counted
- *   from now for a closure; only while it is the closure or closing the overview is in now (closed on
- *   the day it recorded; closing on its story's report), never an earlier one a later one replaced;
- * - a burst's freeze (`status`, frozen): cleared, only while no freeze or unfreeze came after it;
- * - a review: the entries it detached back, its relabels, its narrowing and its retitle restored,
- *   each only while it still stands (its unfreeze stays). What it restores becomes the editor's: the
- *   entries `locked` (so no review detaches or relabels them again) and the OUT entries locked out
- *   (`lockedOut`); an ongoing overview's review count becomes the entries it now has, so the count
- *   trigger does not review it again at once. A forming one keeps its count: only a review makes an
- *   overview public (D-OV4), so it is reviewed when its count is due, and that review cannot detach
- *   the locked entries.
- * The scope follows the entries as the status machine's does. Anything else, or a decision whose
- * work no longer stands, is refused.
+ * What undoing an automated decision makes the editor's, on top of its changes inverted: an entry it
+ * moves `locked` (detached as `undone` by the editor, now), so automation never moves it back; a freeze
+ * it puts back the editor's, which only an editor lifts; an overview it takes out of `closed` open
+ * again, quiet counted from now; and for a review, the OUT entries its narrowing added locked out
+ * (`lockedOut`), so no review adds them again while the undo stands.
  */
-export function planUndo(d: UndoTarget, o: EditOverview, entries: readonly EditEntry[], ctx: EditContext): EditPlan {
+function stamped(changes: readonly Change[], rows: Rows, lockedOut: readonly string[], ctx: EditContext): Change[] {
+  const o = rows.overview
+  return changes.flatMap(c => {
+    if (c.table === 'entry') {
+      const e = rows.entries.find(x => x.id === c.id)!
+      const detaches = c.after.status === 'detached'
+      return entryChange(e, { ...c.after, locked: true, ...(detaches ? { detachedBy: ctx.editorId, detachReason: 'undone', detachedAt: ctx.now } : {}) })
+    }
+    const to: Partial<OverviewFields> = { ...c.after }
+    if (c.before.status === 'closed' && to.status !== undefined && to.status !== 'closed') Object.assign(to, OPEN, { reopenedAt: ctx.now })
+    if (to.frozen === true) Object.assign(to, { frozenBy: 'editor', frozenAt: ctx.now })
+    if (lockedOut.length > 0) to.lockedOut = [...new Set([...o.lockedOut, ...lockedOut])]
+    return overviewChange(o, to)
+  })
+}
+
+/**
+ * The plan undoing one decision (`.context/overviews.md`, "Editor actions and undo"): the change set it
+ * stored the other way round (`inverted`), applied only while every row still holds what the decision
+ * left; otherwise refused whole, naming what changed after it, so a later change is undone first. An
+ * undo of an undo makes the decision it had undone live again. Undoing an automated decision (a join, a
+ * founding, a closure or a closing begun, a burst's freeze, a review) also makes what it restores the
+ * editor's (`stamped`). The fields that follow the entries, a given slug and a review's run are never
+ * put back (`inverted`). A join's undo makes its story owed again (the lifecycle marks the decision
+ * undone): it may join another overview, never this one, where its entry is locked.
+ */
+export function planUndo(d: UndoTarget, rows: Rows, ctx: EditContext): Plan {
   if (d.undoneAt) throw new ConflictError('This decision is already undone')
   if (!undoable(d)) throw new ConflictError(d.kind === 'link' && d.outcome === 'founded' ? 'Undo the founding instead' : 'This decision cannot be undone')
-  const plan = (changes: Change[], over: Partial<EditPlan> = {}): EditPlan => {
-    if (changes.length === 0) throw new ConflictError('Nothing this decision changed is left to undo')
-    return {
-      kind: 'undo',
-      outcome: 'undone',
-      overviewId: o.id,
-      storyId: d.storyId,
+  const stored = storedChanges(d.kind, d.outcome, d.inputs)
+  if (stored.length === 0) throw new ConflictError('This decision did not record what it changed, so it cannot be undone')
+  const back = inverted(changesFrom(stored))
+  if (back.length === 0) throw new ConflictError('Nothing this decision changed is left to undo')
+  const stale = notHolding(back, rows)
+  if (stale) {
+    const whole = d.kind === 'review' ? ', and a review is undone whole or not at all' : ''
+    throw new ConflictError(`This cannot be undone: ${what(stale.change, stale.field)} changed after it${whole}. Undo the later change first.`)
+  }
+  const automated = !isEditorKind(d.kind) && d.kind !== 'undo'
+  const narrowed = d.kind === 'review' ? (readInputs(reviewInputs, d.inputs)?.actions ?? []).flatMap(a => (a.kind === 'narrow' ? a.added : [])) : []
+  const changes = automated ? stamped(back, rows, narrowed, ctx) : back
+  const target = d.kind === 'undo' ? readTarget(d.inputs) : null
+  const storyId = d.storyId
+  return plan(
+    draft({ id: ctx.newId(), kind: 'undo', outcome: 'undone', overviewId: rows.overview.id, storyId, inputs: { target: d.id }, actor: ctx.editorId }),
+    {
       changes,
-      create: null,
-      reopens: false,
-      relive: null,
-      lockedOut: [],
-      ...over,
-    }
-  }
-  const detachAll = (left: EditEntry[]) => {
-    if (left.length === 0) throw new ConflictError('Its stories are no longer in this overview')
-    const undone = { status: 'detached', detachedBy: ctx.editorId, detachReason: 'undone', detachedAt: ctx.now, locked: true } as const
-    return [...left.flatMap(e => entryChange(e, undone)), ...overviewChange(o, leaving(o, left))]
-  }
-  const activeOf = (storyIds: readonly (string | null)[]) => entries.filter(e => e.status === 'active' && e.storyId !== null && storyIds.includes(e.storyId))
+      relive: target,
+      wasPublic: publicBefore(rows.overview),
+    },
+  )
+}
 
-  if ((EDITOR_KINDS as readonly string[]).includes(d.kind) || d.kind === 'undo') {
-    const { changes, target } = inverted(d.inputs)
-    return plan(changes, { relive: d.kind === 'undo' ? target : null })
-  }
-  if (d.kind === 'link') return plan(detachAll(activeOf([d.storyId])))
-  if (d.kind === 'found') {
-    const partner = z.object({ partnerId: z.string() }).safeParse(d.inputs)
-    return plan(detachAll(activeOf([d.storyId, partner.success ? partner.data.partnerId : null])))
-  }
-  if (d.kind === 'status' && d.outcome === 'frozen') {
-    if (!o.frozen) throw new ConflictError('The overview is not frozen')
-    if (o.lastFreezeId !== d.id) throw new ConflictError('The overview was frozen again since: undo that freeze instead')
-    return plan(overviewChange(o, { frozen: false }))
-  }
-  if (d.kind === 'status') {
-    const closed = z.object({ reason: z.string().nullish(), clock: z.string().nullish() }).safeParse(d.inputs)
-    const at = closed.success && closed.data.clock ? new Date(closed.data.clock).getTime() : NaN
-    if (o.status !== 'closed' || o.closedReason !== (closed.success ? closed.data.reason : null) || o.closedAt?.getTime() !== at)
-      throw new ConflictError('The overview is no longer closed as this decision closed it')
-    return plan(overviewChange(o, OPEN), { reopens: true })
-  }
-  if (d.kind === 'close') {
-    // Only the closing the overview is in now: an earlier one was cancelled, and a later story's replaced it
-    if (o.status !== 'closing' || o.closingStoryId !== d.storyId) throw new ConflictError('The overview is no longer closing on this story')
-    return plan(overviewChange(o, { status: 'open', closingSince: null }))
-  }
-
-  // A review: what still stands of its demotions, restored as the editor's
-  const parsed = reviewActions.safeParse(d.inputs)
-  const actions = parsed.success ? parsed.data.actions : []
-  const byId = new Map(entries.map(e => [e.id, e]))
-  const back: EditEntry[] = []
-  const changes: Change[] = []
-  const lockedOut: string[] = []
-  let fields: Partial<OverviewFields> = {}
-  for (const a of actions) {
-    const e = 'entryId' in a ? byId.get(a.entryId) : undefined
-    if (a.kind === 'detach' && e?.status === 'detached' && e.detachReason === 'review') {
-      back.push(e)
-      changes.push(...entryChange(e, { ...ACTIVE, locked: true }))
-    } else if (a.kind === 'relabel' && e?.status === 'active' && e.role === a.to.role && e.roleKind === a.to.roleKind) {
-      changes.push(...entryChange(e, { ...roleFields({ role: a.from.role, roleKind: a.from.roleKind as Role['roleKind'] }), locked: true }))
-    } else if (a.kind === 'narrow' && sameValue(o.charter, a.charter)) {
-      fields = { ...fields, charter: { ...a.charter, out: a.charter.out.filter(x => !a.added.includes(x)) } }
-      lockedOut.push(...a.added)
-    } else if (a.kind === 'retitle' && o.title === a.to) {
-      fields = { ...fields, title: a.from }
-    }
-  }
-  const active = o.activeEntries + back.filter(e => e.published).length
-  const scope = active > o.activeEntries ? scopeAfter(o.scope, active) : o.scope
-  const counted = scope === 'ongoing' ? { entriesAtLastReview: active } : {}
-  return plan([...changes, ...overviewChange(o, { ...fields, scope, ...counted })], { lockedOut })
+/** The decision an undo undid. */
+function readTarget(inputs: unknown): string | null {
+  const t = (inputs as { target?: unknown } | null)?.target
+  return typeof t === 'string' ? t : null
 }

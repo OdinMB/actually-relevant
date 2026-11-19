@@ -38,7 +38,7 @@ import { applyAudit, applyBurst, applyClosing, applyLink, applyReview, applyStan
 import { linkInOrder, type ApplyLink, type LinkDeps } from '../services/overviewLink.js'
 import { LINK_OVERVIEWS_JOB, overviewStepOn, overviewSwitchRefusal, owedStories } from '../services/overviewQueue.js'
 import type { LinkOutcome, LinkStory } from '../services/overviewTypes.js'
-import { runUpkeep, type UpkeepDeps, type UpkeepTally } from '../services/overviewUpkeep.js'
+import { runUpkeep, type UpkeepDeps, type UpkeepFreeze, type UpkeepTally } from '../services/overviewUpkeep.js'
 import { auditPicks, overviewStates, pendingClosings, reviewCase, standsCases } from '../services/overviewUpkeepInput.js'
 import { structuredCall } from '../services/structuredCall.js'
 import { jobDisplayName } from './jobDisplayName.js'
@@ -72,7 +72,7 @@ export const productionUpkeepDeps = (now: Date): UpkeepDeps => {
     states: () => overviewStates(prisma, now),
     reviewCase: id => reviewCase(prisma, id),
     auditPicks: at => auditPicks(prisma, at),
-    standsCases: () => standsCases(prisma),
+    standsCases: today => standsCases(prisma, today),
     close: {
       close: input => structuredCall(tiers.close, closeSchema, buildClosePrompt(input)),
       closeCheck: input => structuredCall(tiers.closeCheck, closeCheckSchema, buildCloseCheckPrompt(input)),
@@ -82,12 +82,12 @@ export const productionUpkeepDeps = (now: Date): UpkeepDeps => {
       write: input => structuredCall(tiers.stands, standsSchema, buildStandsPromptParts(input)),
       check: (items, lines) => structuredCall(tiers.standsCheck, factCheckSchema, buildFactCheckPromptParts(items, lines, [])),
     },
-    applyClosing: (c, result) => applyClosing(c, result),
-    applyStatus: (state, moves, clock) => applyStatus(state, moves, clock),
-    applyBurst: state => applyBurst(state),
-    applyReview: (c, result, at) => applyReview(c, result, at),
-    applyAudit: (c, result) => applyAudit(c, result),
-    applyStands: (c, result, signature, today) => applyStands(c, result, signature, today),
+    applyClosing: (c, result) => applyClosing(c, result, now),
+    applyStatus: (state, moves, clock) => applyStatus(state, moves, clock, now),
+    applyBurst: state => applyBurst(state, now),
+    applyReview: (c, result) => applyReview(c, result, now),
+    applyAudit: (c, result) => applyAudit(c, result, now),
+    applyStands: (c, result, record, today) => applyStands(c, result, record, today),
   }
 }
 
@@ -112,8 +112,41 @@ export function upkeepSummary(t: UpkeepTally): string {
   return parts.join(', ')
 }
 
-/** Whether the technical failures pass the failure share: more than `share` of at least `failedStoriesMin` stories. */
-const storiesFailing = (taken: number, failed: number) => taken >= config.overviews.failedStoriesMin && failed / taken > config.jobs.failureShare.share
+/** Whether the technical failures pass the failure share: more than `share` of at least `failedStoriesMin` stories (or upkeep items). */
+const failing = (taken: number, failed: number) => taken >= config.overviews.failedStoriesMin && failed / taken > config.jobs.failureShare.share
+
+/** The owner's notice of an overview frozen this run: automation on it waits for a review (a burst's) or an editor (the brake's). */
+export async function notifyFreeze(f: UpkeepFreeze): Promise<void> {
+  const burst = f.cause === 'burst'
+  await notify({
+    source: 'jobs',
+    severity: 'warning',
+    title: burst
+      ? `Ongoing story frozen: ${f.count.toLocaleString('en-US')} stories joined "${f.title}" in a day`
+      : `Ongoing story frozen: a review of "${f.title}" asked to detach ${countOf(f.count, 'story', 'stories')}`,
+    message: burst
+      ? 'More stories joined it in one night than the burst limit allows, so nothing joins or changes it until its review runs at the next run. ' +
+        'Check its stories on its admin page; the review may unfreeze it.'
+      : 'The review asked to detach more than half of its entries, so none was detached and the overview is frozen for an editor. ' +
+        'Check its stories on its admin page, detach any that do not belong, then unfreeze it.',
+    link: `/admin/overviews/${f.overviewId}`,
+    dedupeKey: `overview-frozen:${f.overviewId}`,
+  })
+}
+
+async function notifyFailedUpkeep(items: number, failed: number): Promise<void> {
+  await notify({
+    source: 'jobs',
+    severity: 'warning',
+    title: `${jobDisplayName(LINK_OVERVIEWS_JOB)}: ${failed.toLocaleString('en-US')} of ${countOf(items, 'upkeep item', 'upkeep items')} failed in the last run`,
+    message:
+      'A technical problem stopped end-event checks, status moves, reviews or "Where this stands" refreshes: the AI service did not answer, or an error of ours. ' +
+      'Nothing paused, and the overviews keep what they had. They are tried again at the next run. ' +
+      'Switch the step off on the Jobs page if it keeps happening.',
+    link: '/admin/jobs',
+    dedupeKey: `upkeep-failing:${LINK_OVERVIEWS_JOB}`,
+  })
+}
 
 async function notifyFailedStories(taken: number, failed: number): Promise<void> {
   await notify({
@@ -156,7 +189,7 @@ export async function runLinkOverviewsJob(now: Date = new Date()): Promise<void>
   let switchedOff = false
   // A write that throws is rolled back: the story stays owed and the run goes on
   const apply: ApplyLink = (result, lastTry) =>
-    applyLink(result, lastTry).catch((err: unknown) => {
+    applyLink(result, lastTry, now).catch((err: unknown) => {
       log.error({ storyId: result.story.id, error: sanitizedError(err) }, 'writing the linking of a story failed; it is tried again next run')
       return { kind: 'written', outcome: 'failed' } as const
     })
@@ -191,7 +224,9 @@ export async function runLinkOverviewsJob(now: Date = new Date()): Promise<void>
   }
   // Checked: joins proposed and stands lines written; failed: yeses code refused and stands lines dropped (each part never more than its checked)
   recordItems(proposed + (upkeep?.standsChecked ?? 0), refused + (upkeep?.standsDropped ?? 0))
-  if (storiesFailing(run.outcomes.size, failed)) await notifyFailedStories(run.outcomes.size, failed).catch(() => {})
+  if (failing(run.outcomes.size, failed)) await notifyFailedStories(run.outcomes.size, failed).catch(() => {})
+  if (upkeep && failing(upkeep.items, upkeep.failed)) await notifyFailedUpkeep(upkeep.items, upkeep.failed).catch(() => {})
+  for (const f of upkeep?.freezes ?? []) await notifyFreeze(f).catch(() => {})
   const left = stories.length - run.outcomes.size
   const linked =
     stories.length === 0

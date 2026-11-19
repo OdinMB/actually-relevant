@@ -40,8 +40,8 @@ vi.mock('../../jobs/jobEnableChecks.js', () => ({
   SWITCHED_OFF_BY: { research_pass: ['research_stories', 'build_story_context'] },
 }))
 const mockForgetOverviewLinks = vi.hoisted(() => vi.fn())
-vi.mock('../../services/overviewPublic.js', async importOriginal => ({
-  ...(await importOriginal<typeof import('../../services/overviewPublic.js')>()),
+vi.mock('../../services/overviewCaches.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../services/overviewCaches.js')>()),
   forgetOverviewLinks: mockForgetOverviewLinks,
 }))
 vi.mock('../../jobs/crawlFeeds.js', () => ({ runCrawlFeeds: mockRunCrawlFeeds }))

@@ -498,8 +498,11 @@ export const config = {
     maxDistance: 0.45,
     /** Neighbours read per story, nearest first, before grouping. */
     neighbourLimit: 40,
-    /** Candidate overviews the link call sees at most, ranked by their nearest member. */
+    /** Candidate overviews the link call sees at most, ranked by their nearest member, each with its newest entries (as an end-event check shows its overview's). */
     candidateOverviews: 5,
+    candidateEntries: 5,
+    /** A story's usable pool facts the link call reads as context, at most. */
+    linkFacts: 10,
     /** Unlinked neighbours offered as founding partners at most, and how many days before the story they may be. */
     foundingCandidates: 3,
     foundingWindowDays: 30,
@@ -520,16 +523,21 @@ export const config = {
     fadeAfterDays: 120,
     /** Days an end-event closure waits for a new entry, which cancels it, before the overview closes (after its review). */
     closingDays: 7,
-    /** More joins than this to one overview of stories published on one day freeze it and queue a review. */
+    /** More joins than this to one overview, in one night, of stories published within `nightHours`, freeze it and queue a review (a backfill's old stories never count). */
     burstLimit: 5,
     /** A review is due each time the active entries reach one of these counts, and every `reviewEveryDays` while public and not closed. */
     reviewAt: [3, 6, 12, 25, 50] as readonly number[],
     reviewEveryDays: 30,
     /** A reader's "Report an error" from the overview page queues a review at most once per overview in this many days; later reports are stored only. */
     reportReviewEveryDays: 7,
-    /** The monthly audit: this many random public overviews reviewed at high effort every `auditEveryDays`, logged and never applied. */
+    /** The monthly audit: this many random public overviews reviewed at high effort every `auditEveryDays`, logged and never applied; a failed one waits `failedAuditHours` before it is tried again. */
     auditSize: 5,
     auditEveryDays: 30,
+    failedAuditHours: 24,
+    /** What a model may write into a title (founding or review; an editor's too) and a review into the OUT list, which every link prompt copies: characters, entries. */
+    maxTitleChars: 200,
+    maxOutEntries: 12,
+    maxOutChars: 120,
     /** "Where this stands": facts offered at most (response facts on top), the fewest it is written from, and its sentences and "What's being done" lines at most. */
     maxStandsFacts: 60,
     minStandsFacts: 3,
@@ -537,6 +545,13 @@ export const config = {
     maxDoingSentences: 2,
     /** `GET /api/overviews` (the layout's "Ongoing" switch and the `/ongoing` index): kept this long in memory, and as the browser's max-age. */
     listCacheSeconds: 300,
+    /** `GET /api/overviews/:slug`: a public overview's page, kept this long in memory and as the browser's max-age (a 404 is never cached). */
+    pageCacheSeconds: 60,
+    /** Whether the step is on (`overviewStepOn`), kept this long in memory so public reads add no query each; a switch change forgets it at once. */
+    stepOnCacheSeconds: 30,
+    /** The admin's overview page: its newest decisions shown at most (the status history keeps every move), and the overviews the attach picker lists. */
+    logSize: 100,
+    attachChoices: 200,
     tiers: {
       link: 'small' as const,
       found: 'large' as const,

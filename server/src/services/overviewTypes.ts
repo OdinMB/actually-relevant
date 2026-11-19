@@ -105,9 +105,19 @@ export interface StandsLine {
 export const REVIEW_TRIGGERS = ['entries', 'periodic', 'closure', 'burst', 'report', 'audit'] as const
 export type ReviewTrigger = (typeof REVIEW_TRIGGERS)[number]
 
-/** An overview as the status machine, the anomaly check and the review triggers read it (`overviewStatus.ts`). */
+/**
+ * The one rule for an overview readers may see once the step is on (`.context/overviews.md`, "Public"):
+ * ongoing, not hidden, and given its slug (which the review that first makes it ongoing gives). Readers
+ * also need one of its entries shown and the step on (`overviewPublic.ts`); the Prisma and SQL
+ * spellings of this rule are `overviewPublicRule.ts`'s, held to this one by a test.
+ */
+export const isPublicOverview = (o: { scope: string; hidden: boolean; slug: string | null }): boolean => o.scope === 'ongoing' && !o.hidden && o.slug !== null
+
+/** An overview as the status machine, the anomaly check and the review triggers read it (`overviewStatus.ts`; built by `overviewStateOf`). */
 export interface OverviewState {
   id: string
+  /** For the notices a freeze raises. */
+  title: string
   scope: OverviewScope
   status: OverviewStatus
   closedReason: string | null
@@ -127,13 +137,14 @@ export interface OverviewState {
   entriesAtLastReview: number
   reviewedAt: Date | null
   /**
-   * The most stories of one publication day the pipeline joined to it in the last `nightHours`, counting
-   * only joins after its last freeze or review, so joins a freeze already answered never freeze it again.
+   * The stories published in the last `nightHours` that the pipeline joined to it after its last freeze,
+   * unfreeze, review or undo (`joinsCountedFrom`), so joins a freeze already answered never freeze it
+   * again, and the backfill's old stories never count.
    */
   burstJoins: number
   /** When a burst froze it, while no review has run since. */
   burstAt: Date | null
-  /** A review with the trigger `closure` ran after its closing began. */
+  /** Its closure review ran for its current closing. */
   closureReviewed: boolean
   /**
    * When a person last reopened it (an editor's reopen, or an undone closure), while that decision

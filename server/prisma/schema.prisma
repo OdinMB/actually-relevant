@@ -127,6 +127,7 @@ model Story {
   passBoxes              PassBox[]
   overviewEntries        OverviewEntry[]
   overviewDecisions      OverviewDecision[]
+  closingOverviews       Overview[]             @relation("OverviewClosingStory")
   createdAt              DateTime     @default(now()) @map("created_at")
   updatedAt              DateTime     @updatedAt @map("updated_at")
 
@@ -996,11 +997,25 @@ model Overview {
   /// The newest active entry's publication date
   lastEntryAt          DateTime?          @map("last_entry_at")
   closingSince         DateTime?          @map("closing_since")
+  /// While closing: the story whose end-event report began it (20261119041008_overview_state; services/overviewChanges.ts)
+  closingStoryId       String?            @map("closing_story_id")
+  closingStory         Story?             @relation("OverviewClosingStory", fields: [closingStoryId], references: [id], onDelete: SetNull)
+  /// While closing: when its closure review ran
+  closureReviewedAt    DateTime?          @map("closure_reviewed_at")
   closedAt             DateTime?          @map("closed_at")
   /// end_event, faded or editor
   closedReason         String?            @map("closed_reason")
+  /// While frozen: who froze it (burst, review: the detach brake, or editor) and when
+  frozenBy             String?            @map("frozen_by")
+  frozenAt             DateTime?          @map("frozen_at")
   entriesAtLastReview  Int                @default(0) @map("entries_at_last_review")
   reviewedAt           DateTime?          @map("reviewed_at")
+  /// When a person last reopened it (an editor's reopen, or Undo of a closure): quiet and fading count from then
+  reopenedAt           DateTime?          @map("reopened_at")
+  /// The burst check counts the pipeline's joins after this: the last freeze, unfreeze, review or undo
+  joinsCountedFrom     DateTime?          @map("joins_counted_from")
+  /// OUT entries an editor's undo of a review took out, which no review adds again
+  lockedOut            Json               @default("[]") @map("locked_out")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
   entries              OverviewEntry[]

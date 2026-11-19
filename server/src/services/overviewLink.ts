@@ -6,6 +6,7 @@
  * ordered run (`linkInOrder`): calls in flight at once, writes one story at a time in date order, a
  * stale answer asked again once. Pure: nothing here reads or writes the database.
  */
+import { config } from '../config.js'
 import { quoteFound } from '../lib/quoteMatch.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
 import { OVERVIEW_PROMPT_VERSIONS, type FoundCheckInput, type FoundInput, type LinkInput } from '../prompts/overviews.js'
@@ -129,8 +130,9 @@ export interface FoundingDraft {
   roles: { a: Role; b: Role }
 }
 
-/** A draft that names no end event, no title or no IN founds nothing, and the check is not asked. */
-export const draftRefused = (draft: FoundAnswer): boolean => !draft.charter.endEvent.trim() || !draft.title.trim() || !draft.charter.in.trim()
+/** A draft that names no end event, no title or no IN, or whose title is longer than `maxTitleChars`, founds nothing, and the check is not asked. */
+export const draftRefused = (draft: FoundAnswer, options: Pick<typeof config.overviews, 'maxTitleChars'> = config.overviews): boolean =>
+  !draft.charter.endEvent.trim() || !draft.title.trim() || !draft.charter.in.trim() || draft.title.trim().length > options.maxTitleChars
 
 /**
  * Whether the two founding calls agree (`.context/overviews.md`, "How a story is linked", step 3):

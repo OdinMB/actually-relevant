@@ -12,7 +12,10 @@ import type { OverviewScope, OverviewState, OverviewStatus, ReviewTrigger } from
 const DAY_MS = 86_400_000
 const daysBetween = (from: Date, to: Date) => (to.getTime() - from.getTime()) / DAY_MS
 
-export type StatusOptions = Pick<typeof config.overviews, 'quietAfterDays' | 'fadeAfterDays' | 'closingDays' | 'burstLimit' | 'reviewAt' | 'reviewEveryDays'>
+export type StatusOptions = Pick<
+  typeof config.overviews,
+  'quietAfterDays' | 'fadeAfterDays' | 'closingDays' | 'burstLimit' | 'reviewAt' | 'reviewEveryDays' | 'reportReviewEveryDays'
+>
 
 /** Why a status moved. */
 export type StatusReason = 'quiet' | 'active' | 'faded' | 'end_event' | 'closing_cancelled'
@@ -91,7 +94,7 @@ export function nextState(state: OverviewState, clock: Date, options: StatusOpti
   return moves
 }
 
-/** What the anomaly check finds: a burst, more than `burstLimit` stories of one publication day joined in one night (frozen overviews are already paused). */
+/** What the anomaly check finds: a burst, more than `burstLimit` stories published in the last day joined in one night (frozen overviews are already paused). */
 export type Anomaly = 'burst'
 
 export function anomalies(state: OverviewState, options: Pick<StatusOptions, 'burstLimit'> = config.overviews): Anomaly[] {
@@ -119,4 +122,13 @@ export function reviewDue(
   if (options.reviewAt.some(t => state.entriesAtLastReview < t && t <= state.activeEntries)) return 'entries'
   const spaced = state.reviewedAt !== null && daysBetween(state.reviewedAt, at.now) >= options.reviewEveryDays
   return state.scope === 'ongoing' && state.status !== 'closed' && spaced ? 'periodic' : null
+}
+
+/**
+ * Whether a reader's "Report an error" queues the overview's review (`report` above): unless another
+ * report queued one within `reportReviewEveryDays` (`lastQueued`, the newest that did), so a reader
+ * queues at most one review per overview in that time, however many reports come.
+ */
+export function reportQueuesReview(lastQueued: Date | null, now: Date, options: Pick<StatusOptions, 'reportReviewEveryDays'> = config.overviews): boolean {
+  return lastQueued === null || daysBetween(lastQueued, now) >= options.reportReviewEveryDays
 }

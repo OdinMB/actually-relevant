@@ -165,7 +165,7 @@ describe('the sandbox', () => {
       outcome: 'founded' as const,
       draft,
       answers: { draft: null, check: null },
-      shared: {} as never,
+      shared: { cause: { story: 'x', other: 'y' }, place: { story: 'x', other: 'y' }, end: { story: '', other: '' } } as never,
       confidence: 0.9,
       costUsd: 0,
       model: null,

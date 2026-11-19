@@ -250,14 +250,28 @@ export interface StoryPoolFact {
 /**
  * The usable, structured facts of pages in these stories' pools, each with its story and its source in
  * use, read as `loadPool` reads them and in its order: what an overview's "Where this stands" is
- * written from (`overviewStands.ts`). Our own earlier stories' facts are never read.
+ * written from (`overviewStands.ts`). Our own earlier stories' facts are never read. With `factIds`,
+ * only those facts and their sources (the facts a served stands cites).
  */
-export async function loadMemberFacts(db: ResearchDb, storyIds: readonly string[]): Promise<StoryPoolFact[]> {
+export async function loadMemberFacts(db: ResearchDb, storyIds: readonly string[], factIds?: readonly string[]): Promise<StoryPoolFact[]> {
   const ids = [...new Set(storyIds)]
-  if (ids.length === 0) return []
+  if (ids.length === 0 || factIds?.length === 0) return []
+  const only = factIds ? [...new Set(factIds)] : null
   const [sources, facts] = await Promise.all([
-    poolSources(db, ids, Prisma.sql`AND s.origin <> 'earlier'`),
-    poolFacts(db, ids, Prisma.sql`AND s.origin <> 'earlier' AND f.verdict = 'supported' AND f.status <> 'demoted' AND f.structure_model IS NOT NULL`),
+    poolSources(
+      db,
+      ids,
+      only
+        ? Prisma.sql`AND s.origin <> 'earlier' AND EXISTS (SELECT 1 FROM pool_facts c WHERE c.source_id = s.id AND c.id = ANY(${only}::text[]))`
+        : Prisma.sql`AND s.origin <> 'earlier'`,
+    ),
+    poolFacts(
+      db,
+      ids,
+      Prisma.sql`AND s.origin <> 'earlier' AND f.verdict = 'supported' AND f.status <> 'demoted' AND f.structure_model IS NOT NULL ${
+        only ? Prisma.sql`AND f.id = ANY(${only}::text[])` : Prisma.empty
+      }`,
+    ),
   ])
   const sourceOf = new Map(usedSources(sources).map(s => [`${s.storyId}:${s.ref}`, sourceFromRow(s)]))
   return facts.flatMap(r => {

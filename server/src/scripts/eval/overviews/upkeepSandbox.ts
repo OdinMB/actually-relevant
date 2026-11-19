@@ -1,61 +1,39 @@
 /**
- * The upkeep's reads and writes over the overview sandbox (`overviewSandbox.ts`), by the rules of
- * production's lifecycle and loaders (`overviewLifecycle.ts`, `overviewUpkeepInput.ts`), so the
- * `replay` step runs production's upkeep (`runUpkeep`) day by day after each day's linking: the
- * closing checks of the joins flagged as reporting the end event, the status machine, bursts,
- * reviews and the stands refreshes, each overview's members' facts given by the step. Every story is
- * published in a replay, so no member is ever unpublished; the monthly audit does not run. Writes
- * nothing to the database.
+ * The upkeep's reads and writes over the overview sandbox (`overviewSandbox.ts`), by production's
+ * rules: the state each overview is judged on is production's (`overviewStateOf`), the closings due
+ * are read from the decisions as production's loader reads them (`pendingClosings`), and every write
+ * is production's plan (`overviewPlans.ts`) applied to memory. So the `replay` step runs production's
+ * upkeep (`runUpkeep`) day by day after each day's linking: the closing checks of the joins flagged as
+ * reporting the end event, the status machine, bursts, reviews and the stands refreshes, each
+ * overview's members' facts given by the step. Every story is published in a replay, so no member is
+ * ever unpublished; the monthly audit does not run. Writes nothing to the database.
  */
-import type { CloseCase } from '../../../services/overviewClose.js'
-import type { ReviewCase } from '../../../services/overviewReview.js'
-import type { MemberFact } from '../../../services/overviewStands.js'
-import type { OverviewState } from '../../../services/overviewTypes.js'
-import type { StandsCase, UpkeepDeps } from '../../../services/overviewUpkeep.js'
 import { config } from '../../../config.js'
-import { activeEntries, type Sandbox, type SandboxOverview } from './overviewSandbox.js'
+import type { CloseCase } from '../../../services/overviewClose.js'
+import { linkInputs, readInputs } from '../../../services/overviewDecisions.js'
+import { planAudit, planBurst, planClosing, planReview, planStatus } from '../../../services/overviewPlans.js'
+import type { ReviewCase } from '../../../services/overviewReview.js'
+import { overviewStateOf } from '../../../services/overviewState.js'
+import type { MemberFact } from '../../../services/overviewStands.js'
+import type { StandsCase, UpkeepDeps } from '../../../services/overviewUpkeep.js'
+import { applied } from '../../../services/overviewChanges.js'
+import { activeEntries, roleOf, safeguardsOf, type Sandbox, type SandboxOverview } from './overviewSandbox.js'
 
 /** What the upkeep did that the replay reports: each safeguard's firings, by name. */
 export type Safeguards = Map<string, number>
 
-export type UpkeepSandbox = Omit<UpkeepDeps, 'close' | 'review' | 'stands'> & { safeguards: Safeguards }
+export type UpkeepSandbox = Omit<UpkeepDeps, 'close' | 'review' | 'stands'> & {
+  /** The safeguards fired so far, counted from the sandbox's decisions (`safeguardsOf`). */
+  safeguards(): Safeguards
+}
 
-const HOUR_MS = 3_600_000
+const byDate = (a: { datePublished: Date | null }, b: { datePublished: Date | null }) => (a.datePublished?.getTime() ?? 0) - (b.datePublished?.getTime() ?? 0)
 
 /** The upkeep's reads and writes over the sandbox; `facts` gives the members' usable, structured facts; `now` the replay's clock. */
 export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => MemberFact[], now: () => Date): UpkeepSandbox {
-  const safeguards: Safeguards = new Map()
-  const fired = (name: string) => safeguards.set(name, (safeguards.get(name) ?? 0) + 1)
   const get = (id: string) => sandbox.overviews.get(id)
   const story = (id: string) => sandbox.stories.get(id)!
-
-  const state = (o: SandboxOverview): OverviewState => {
-    // Joins within the night and after the last freeze or review, as production counts them
-    const since = Math.max(now().getTime() - config.overviews.nightHours * HOUR_MS, o.burstAt?.getTime() ?? 0, o.reviewedAt?.getTime() ?? 0)
-    const byDay = new Map<string, number>()
-    for (const e of activeEntries(o)) if (e.joinedAt.getTime() > since) byDay.set(e.date, (byDay.get(e.date) ?? 0) + 1)
-    return {
-      id: o.id,
-      scope: o.scope,
-      status: o.status,
-      closedReason: o.closedReason,
-      frozen: o.frozen,
-      hidden: false,
-      lastEntryAt: o.lastEntryAt,
-      closingSince: o.closingSince,
-      closingStoryId: o.status === 'closing' ? o.closingStoryId : null,
-      activeEntries: activeEntries(o).length,
-      unpublished: [],
-      entriesAtLastReview: o.entriesAtLastReview,
-      reviewedAt: o.reviewedAt,
-      burstJoins: Math.max(0, ...byDay.values()),
-      burstAt: o.frozen ? o.burstAt : null,
-      closureReviewed: o.closingSince !== null && o.closureReviewedFor?.getTime() === o.closingSince.getTime(),
-      // No editor acts in a replay, and no reader reports
-      reopenedAt: null,
-      reportAt: null,
-    }
-  }
+  const ctx = () => ({ ...sandbox.context(), now: now() })
 
   const reviewCase = async (id: string): Promise<ReviewCase | null> => {
     const o = get(id)
@@ -67,113 +45,98 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
       scope: o.scope,
       frozen: o.frozen,
       entries: activeEntries(o)
-        .sort((a, b) => a.datePublished.getTime() - b.datePublished.getTime())
+        .sort(byDate)
         .map(e => ({
-          entryId: e.entryId,
-          storyId: e.storyId,
+          entryId: e.id,
+          storyId: e.storyId!,
           title: e.title,
-          label: story(e.storyId).label,
-          summary: story(e.storyId).summary,
+          label: story(e.storyId!).label,
+          summary: story(e.storyId!).summary,
           date: e.date,
-          role: e.role,
-          locked: false,
+          role: roleOf(e),
+          locked: e.locked,
         })),
       closingStoryId: o.status === 'closing' ? o.closingStoryId : null,
-      // The sandbox has no editor, so no undo has locked an OUT entry
-      lockedOut: [],
+      lockedOut: o.lockedOut,
+    }
+  }
+
+  /** `pendingClosings` over memory: live joins flagged as reporting the end event, of open or quiet unfrozen overviews, with no settling close decision. */
+  const closings = async (): Promise<CloseCase[]> => {
+    const judged = new Set(
+      sandbox.decisions.filter(d => d.kind === 'close' && d.outcome !== 'failed' && d.outcome !== 'stale').map(d => `${d.overviewId}:${d.storyId}`),
+    )
+    const flagged = sandbox.decisions.filter(d => d.kind === 'link' && d.outcome === 'joined' && !d.undone && readInputs(linkInputs, d.inputs)?.reportsEndEvent)
+    return flagged
+      .flatMap(d => {
+        const o = d.overviewId ? get(d.overviewId) : undefined
+        const e = o && activeEntries(o).find(x => x.storyId === d.storyId)
+        if (!o || !e || judged.has(`${o.id}:${d.storyId}`) || !(o.status === 'open' || o.status === 'quiet') || o.frozen) return []
+        return [
+          {
+            overviewId: o.id,
+            charter: o.charter,
+            story: story(e.storyId!),
+            entries: activeEntries(o)
+              .filter(x => x.storyId !== e.storyId && x.datePublished!.getTime() <= e.datePublished!.getTime())
+              .sort((a, b) => byDate(b, a))
+              .slice(0, config.overviews.candidateEntries)
+              .map(x => ({ title: x.title, date: x.date })),
+          },
+        ]
+      })
+      .sort((a, b) => a.story.datePublished.getTime() - b.story.datePublished.getTime())
+  }
+
+  const standsCase = (o: SandboxOverview, today: string): StandsCase => {
+    const entries = activeEntries(o).sort(byDate)
+    const members = facts(entries.map(e => e.storyId!))
+    const marker = JSON.stringify([entries.map(e => [e.storyId, e.role, e.roleKind]), members.map(m => [m.storyId, m.fact.id])])
+    return {
+      overviewId: o.id,
+      title: o.title,
+      entries: entries.map(e => ({ storyId: e.storyId!, title: e.title, date: e.date, role: roleOf(e) })),
+      members,
+      lastSignature: o.lastSignature,
+      marker,
+      unchanged: o.lastMarker === marker && (o.lastUntil === null || today < o.lastUntil),
     }
   }
 
   return {
-    safeguards,
-    closings: async (): Promise<CloseCase[]> =>
-      [...sandbox.overviews.values()].flatMap(o =>
-        (o.status === 'open' || o.status === 'quiet') && !o.frozen
-          ? activeEntries(o)
-              .filter(e => e.reportsEndEvent && !e.closeChecked)
-              .map(e => ({
-                overviewId: o.id,
-                charter: o.charter,
-                story: story(e.storyId),
-                entries: activeEntries(o)
-                  .filter(x => x.storyId !== e.storyId && x.datePublished.getTime() <= e.datePublished.getTime())
-                  .sort((a, b) => b.datePublished.getTime() - a.datePublished.getTime())
-                  .slice(0, 5)
-                  .map(x => ({ title: x.title, date: x.date })),
-              }))
-          : [],
-      ),
-    states: async () => [...sandbox.overviews.values()].filter(o => activeEntries(o).length > 0).map(state),
+    safeguards: () => safeguardsOf(sandbox.decisions),
+    closings,
+    // No reader reports in a replay
+    states: async () => [...sandbox.overviews.values()].filter(o => activeEntries(o).length > 0).map(o => overviewStateOf(o, activeEntries(o), null, now())),
     reviewCase,
     auditPicks: async () => [],
-    standsCases: async (): Promise<StandsCase[]> =>
-      [...sandbox.overviews.values()]
-        .filter(o => o.scope === 'ongoing' && !o.frozen)
-        .map(o => {
-          const entries = activeEntries(o).sort((a, b) => a.datePublished.getTime() - b.datePublished.getTime())
-          return {
-            overviewId: o.id,
-            title: o.title,
-            entries: entries.map(e => ({ storyId: e.storyId, title: e.title, date: e.date, role: e.role })),
-            members: facts(entries.map(e => e.storyId)),
-            lastSignature: o.lastSignature,
-          }
-        }),
+    standsCases: async today =>
+      [...sandbox.overviews.values()].filter(o => o.scope === 'ongoing' && !o.hidden && o.slug !== null && !o.frozen).map(o => standsCase(o, today)),
     applyClosing: async (c, result) => {
-      const o = get(c.overviewId)!
-      if (result.outcome !== 'failed') for (const e of o.entries) if (e.storyId === c.story.id) e.closeChecked = true
-      if (result.outcome === 'closing' && (o.status === 'open' || o.status === 'quiet') && !o.frozen)
-        Object.assign(o, { status: 'closing', closingSince: c.story.datePublished, closingStoryId: c.story.id })
-      else if (result.outcome !== 'failed') fired(`closing refused (${result.outcome})`)
+      const rows = sandbox.rowsOf(c.overviewId)
+      sandbox.write(rows, planClosing(rows?.overview ?? null, c, result, ctx()))
     },
     applyStatus: async (s, moves, clock) => {
-      const o = get(s.id)!
-      for (const m of moves) {
-        if (m.kind === 'detach') sandbox.detach(m.storyId)
-        else if (m.kind === 'scope' && o.scope === m.from) o.scope = m.to
-        else if (m.kind === 'cancel_closing' && o.status === 'closing') Object.assign(o, { status: 'open', closingSince: null })
-        else if (m.kind === 'status' && o.status === m.from && !o.frozen) {
-          if (m.reason === 'closing_cancelled') fired('closing cancelled by a new entry')
-          if (m.to === 'closed') Object.assign(o, { status: 'closed', closedAt: clock, closedReason: m.reason })
-          else if (m.to === 'open') Object.assign(o, { status: 'open', closedAt: null, closedReason: null, closingSince: null })
-          else o.status = m.to
-        }
+      let rows = sandbox.rowsOf(s.id)
+      if (!rows) return
+      for (const p of planStatus(rows, moves, clock, ctx())) {
+        sandbox.write(rows, p)
+        rows = applied(rows, p)
       }
     },
     applyBurst: async s => {
-      const o = get(s.id)!
-      if (o.frozen) return
-      Object.assign(o, { frozen: true, burstAt: now() })
-      fired('burst froze an overview')
+      const rows = sandbox.rowsOf(s.id)
+      const p = rows ? planBurst(rows.overview, s, ctx()) : null
+      if (rows && p) sandbox.write(rows, p)
     },
-    applyReview: async (c, result, at) => {
-      const o = get(c.overviewId)!
-      if (result.outcome !== 'reviewed') return
-      for (const a of result.actions) {
-        if (a.kind === 'detach') {
-          sandbox.detach(a.storyId)
-          fired('review detached an entry')
-        } else if (a.kind === 'relabel') {
-          for (const e of o.entries) if (e.entryId === a.entryId) e.role = a.to
-          fired('review relabeled a role')
-        } else if (a.kind === 'narrow') {
-          o.charter = a.charter
-          fired('review narrowed the charter')
-        } else if (a.kind === 'retitle') o.title = a.to
-        else o.frozen = false
-      }
-      if (result.refusals.length > 0) safeguards.set('review answers refused', (safeguards.get('review answers refused') ?? 0) + result.refusals.length)
-      if (result.trigger === 'closure') o.closureReviewedFor = o.closingSince
-      if (result.cancelsClosing && o.status === 'closing') {
-        Object.assign(o, { status: 'open', closingSince: null })
-        fired('closing cancelled by its review')
-      }
-      Object.assign(o, { scope: result.scope, entriesAtLastReview: result.kept, reviewedAt: at, burstAt: null })
+    applyReview: async (c, result) => {
+      const rows = sandbox.rowsOf(c.overviewId)
+      if (rows) sandbox.write(rows, planReview(rows, c, result, ctx()))
     },
-    applyAudit: async () => {},
-    applyStands: async (c, result, signature, today) => {
+    applyAudit: async (c, result) => sandbox.write(null, planAudit(c, result, ctx())),
+    applyStands: async (c, result, record, today) => {
       const o = get(c.overviewId)!
-      if (signature !== null) o.lastSignature = signature
+      if (record.signature !== null) Object.assign(o, { lastSignature: record.signature, lastMarker: record.marker, lastUntil: record.until })
       if (result.outcome === 'written') o.stands = { sentences: result.sentences, doing: result.doing, asOf: today }
       if (result.outcome === 'too_few_facts') o.stands = null
     },

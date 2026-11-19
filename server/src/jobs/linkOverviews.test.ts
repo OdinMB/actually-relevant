@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   standsCases: vi.fn(),
   applyStatus: vi.fn(),
   applyStands: vi.fn(),
+  applyBurst: vi.fn(),
 }))
 
 vi.mock('../services/overviewGate.js', () => ({
@@ -45,7 +46,7 @@ vi.mock('../services/overviewLifecycle.js', () => ({
   applyStatus: mocks.applyStatus,
   applyStands: mocks.applyStands,
   applyClosing: vi.fn(),
-  applyBurst: vi.fn(),
+  applyBurst: mocks.applyBurst,
   applyReview: vi.fn(),
   applyAudit: vi.fn(),
 }))
@@ -64,6 +65,7 @@ vi.mock('../lib/runUsage.js', async importOriginal => ({
 }))
 
 const { linkSummary, productionUpkeepDeps, runLinkOverviewsJob, upkeepClock, upkeepSummary } = await import('./linkOverviews.js')
+const { forgetOverviewStep } = await import('../services/overviewQueue.js')
 
 const story = (id: string, day: number): LinkStory => ({
   id,
@@ -79,6 +81,7 @@ const story = (id: string, day: number): LinkStory => ({
 describe('runLinkOverviewsJob', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    forgetOverviewStep()
     gates.overview = 'closed'
     gates.pass = 'closed'
     mockJobRun.findUnique.mockResolvedValue({ enabled: true })
@@ -157,9 +160,52 @@ describe('runLinkOverviewsJob', () => {
     }
     mocks.overviewStates.mockResolvedValue([quiet])
     await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
-    expect(mocks.applyStatus).toHaveBeenCalledWith(quiet, [{ kind: 'status', from: 'open', to: 'quiet', reason: 'quiet' }], new Date('2026-06-10T02:00:00Z'))
+    const at = new Date('2026-06-10T02:00:00Z')
+    expect(mocks.applyStatus).toHaveBeenCalledWith(quiet, [{ kind: 'status', from: 'open', to: 'quiet', reason: 'quiet' }], at, at)
     expect(mocks.recordItems).toHaveBeenCalledWith(0, 0)
     expect(mocks.reportRunResult).toHaveBeenCalledWith('Nothing to link; 0 overviews refreshed, 0 reviewed')
+  })
+
+  it('tells the owner of each overview a burst froze, and of upkeep items failing past the share', async () => {
+    gates.overview = null
+    gates.pass = null
+    mocks.owedStories.mockResolvedValue({ backlog: [], night: [], backlogTotal: 0 })
+    mocks.linkStories.mockResolvedValue([])
+    const base = {
+      scope: 'ongoing' as const,
+      status: 'open' as const,
+      closedReason: null,
+      frozen: false,
+      hidden: false,
+      // Quiet by now: each overview's status moves
+      lastEntryAt: new Date('2026-05-01T00:00:00Z'),
+      closingSince: null,
+      closingStoryId: null,
+      activeEntries: 9,
+      unpublished: [],
+      entriesAtLastReview: 9,
+      reviewedAt: new Date('2026-06-09T00:00:00Z'),
+      burstJoins: 0,
+      burstAt: null,
+      closureReviewed: false,
+      reopenedAt: null,
+      reportAt: null,
+    }
+    const states: OverviewState[] = Array.from({ length: 6 }, (_, i) => ({ ...base, id: `o${i}`, title: `Story ${i}` }))
+    states[0] = { ...states[0]!, burstJoins: 20 }
+    mocks.overviewStates.mockResolvedValue(states)
+    // Every status write throws: 6 of 6 items fail
+    mocks.applyStatus.mockRejectedValue(new Error('boom'))
+    mocks.applyBurst.mockResolvedValue(undefined)
+    await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
+    const titles = mocks.notify.mock.calls.map(([n]) => (n as { title: string; dedupeKey: string }).dedupeKey)
+    expect(titles).toContain('upkeep-failing:link_overviews')
+    mocks.applyStatus.mockResolvedValue(undefined)
+    mocks.notify.mockClear()
+    await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.stringContaining('"Story 0"'), dedupeKey: 'overview-frozen:o0', link: '/admin/overviews/o0' }),
+    )
   })
 })
 
@@ -210,7 +256,7 @@ describe('the upkeep clock and summary', () => {
     expect(mocks.overviewStates).toHaveBeenCalledWith(expect.anything(), now)
     expect(await deps.reviewCase('o1')).toBeNull()
     expect(await deps.auditPicks(now)).toEqual([])
-    expect(await deps.standsCases()).toEqual([])
+    expect(await deps.standsCases('2026-11-18')).toEqual([])
 
     const charter = { in: 'In.', out: [], endEvent: 'Declared over.' }
     const entries = [{ ref: 'E1', title: 'T', label: 'L', summary: 'S.', date: '2026-06-01', role: { role: 'routine' as const, roleKind: null } }]

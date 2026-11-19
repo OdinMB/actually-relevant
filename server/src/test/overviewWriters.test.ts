@@ -4,16 +4,18 @@ import { join, relative, sep } from 'path'
 import { SRC, prismaWrites, rawInsertsOrDeletes, rawUpdates, sourceFiles } from './writeFence.js'
 
 /**
- * Keeps `services/overviewLifecycle.ts` the only code that writes the overview tables
- * (`.context/overviews.md`, "Records"): every join, founding, detach, role, stands version, status
- * move and editor action goes through it and is logged as a decision. Every non-test source file under
- * `src/` except the module itself, `src/scripts/` and `src/test/` is scanned for any Prisma create,
- * update, upsert or delete of `overview`, `overviewEntry`, `overviewStands` or `overviewDecision`, and
- * raw SQL inserting, updating or deleting rows of their tables.
+ * Keeps `services/overviewLifecycle.ts` and its folder, `services/overviewLifecycle/`, the only code
+ * that writes the overview tables (`.context/overviews.md`, "Records"): every join, founding, detach,
+ * role, stands version, status move and editor action goes through it and is logged as a decision.
+ * Every non-test source file under `src/` except the module and its folder, `src/scripts/` and
+ * `src/test/` is scanned for any Prisma create, update, upsert or delete of `overview`,
+ * `overviewEntry`, `overviewStands` or `overviewDecision`, and raw SQL inserting, updating or deleting
+ * rows of their tables.
  */
 
+const LIFECYCLE_DIR = join('services', 'overviewLifecycle')
 const ALLOWED = new Set([join('services', 'overviewLifecycle.ts')])
-const SKIPPED_DIRS = new Set([join('scripts'), join('test')])
+const SKIPPED_DIRS = new Set([join('scripts'), join('test'), LIFECYCLE_DIR])
 
 const OPERATIONS = ['create', 'createMany', 'createManyAndReturn', 'update', 'updateMany', 'updateManyAndReturn', 'upsert', 'delete', 'deleteMany']
 const MODELS = ['overview', 'overviewEntry', 'overviewStands', 'overviewDecision']
@@ -32,6 +34,12 @@ describe('overview table writers', () => {
       overviewWrites(readFileSync(path, 'utf8')).map(w => `${relative(SRC, path).split(sep).join('/')}: ${w}`),
     )
     expect(offenders).toEqual([])
+  })
+
+  it('the lifecycle folder it allows holds the writers, and nothing outside it is allowed', () => {
+    const inFolder = sourceFiles(join(SRC, LIFECYCLE_DIR), new Set(), new Set()).map(p => relative(join(SRC, LIFECYCLE_DIR), p))
+    expect(inFolder.sort()).toEqual(['apply.ts', 'editor.ts', 'linking.ts', 'upkeep.ts'])
+    expect(inFolder.flatMap(name => overviewWrites(readFileSync(join(SRC, LIFECYCLE_DIR, name), 'utf8'))).length).toBeGreaterThan(0)
   })
 
   it('the scan finds the write shapes it guards against', () => {

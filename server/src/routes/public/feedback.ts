@@ -11,7 +11,7 @@ import { issueFormToken, verifyFormToken } from '../../lib/formToken.js'
 import { verifyTurnstile, type TurnstileResult } from '../../lib/turnstile.js'
 import { BadRequestError } from '../../utils/errors.js'
 import { FEEDBACK_CATEGORIES } from '../../schemas/feedback.js'
-import { overviewReport } from '../../services/overviewPublic.js'
+import { overviewReport } from '../../services/overviewReport.js'
 
 const router = Router()
 const log = createLogger('public:feedback')

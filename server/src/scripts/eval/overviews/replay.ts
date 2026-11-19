@@ -25,7 +25,7 @@ import type { KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
 import { evalCall, replaySlugs, TIER_ARMS } from './link.js'
 import { developmentOf, keyIndex } from './linkScore.js'
-import { activeEntries, createSandbox, type Sandbox } from './overviewSandbox.js'
+import { activeEntries, createSandbox, roleOf, type Sandbox } from './overviewSandbox.js'
 import { checkpointsOf, scoreReplay, type CheckpointState, type Closure, type ReplayRunResult, type ReplayScore } from './replayScore.js'
 import { upkeepCalls } from './upkeepCalls.js'
 import { sandboxUpkeep } from './upkeepSandbox.js'
@@ -201,10 +201,10 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
           })
       for (const c of checkpoints.get(day) ?? []) states.push(checkpoint(sandbox, c.key, index, slugOf, c, members => standsFacts(facts(members), day).length))
     }
-    for (const [name, n] of upkeep.safeguards) add(name, n)
+    for (const [name, n] of upkeep.safeguards()) add(name, n)
     const overviews = [...sandbox.overviews.values()]
     const roles = new Map([...sandbox.results].flatMap(([id, r]) => (r.role ? [[slugOf(id), r.role] as const] : [])))
-    for (const ov of overviews) for (const e of activeEntries(ov)) roles.set(slugOf(e.storyId), e.role)
+    for (const ov of overviews) for (const e of activeEntries(ov)) roles.set(slugOf(e.storyId), roleOf(e))
     runs.push({
       run,
       overviews: overviews.map(ov => ({

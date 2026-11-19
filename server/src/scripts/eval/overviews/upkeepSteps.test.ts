@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { CloseDeps } from '../../../services/overviewClose.js'
 import type { ReviewDeps } from '../../../services/overviewReview.js'
 import { standsFacts, type MemberFact, type StandsDeps } from '../../../services/overviewStands.js'
-import type { LinkStory, Role } from '../../../services/overviewTypes.js'
+import { newOverviewRow } from '../../../services/overviewChanges.js'
+import type { Charter, LinkStory, Role } from '../../../services/overviewTypes.js'
 import { runUpkeep } from '../../../services/overviewUpkeep.js'
 import type { PoolFact, PoolSource } from '../../../services/researchPool.js'
 import type { AnswerKey } from './keySchema.js'
-import { createSandbox, type SandboxEntry, type SandboxOverview } from './overviewSandbox.js'
+import { createSandbox, type Sandbox, type SandboxEntry, type SandboxOverview } from './overviewSandbox.js'
 import { checkpointStories, poolMemberFacts } from './passPool.js'
 import { PLANTED_JOINS, plantedCase } from './review.js'
 import { keyRole, standsFactFixtures } from './stands.js'
@@ -232,18 +233,64 @@ describe('standsFactFixtures', () => {
 
 describe('the upkeep over the sandbox', () => {
   const routine: Role = { role: 'routine', roleKind: null }
-  const sEntry = (s: LinkStory, n: number, reportsEndEvent = false): SandboxEntry => ({
-    entryId: `entry-${n}`,
-    storyId: s.id,
-    title: s.title,
-    date: s.date,
-    datePublished: s.datePublished,
-    role: routine,
-    status: 'active',
-    joinedAt: s.datePublished,
-    reportsEndEvent,
-    closeChecked: false,
-  })
+  /** An overview forming from these stories, as production's row and entries hold it. */
+  const seed = (
+    sandbox: Sandbox,
+    title: string,
+    charter: Charter,
+    members: LinkStory[],
+    joinedAt: (s: LinkStory) => Date = s => s.datePublished,
+  ): SandboxOverview => {
+    for (const s of members) sandbox.stories.set(s.id, s)
+    const id = 'o1'
+    const o: SandboxOverview = {
+      ...newOverviewRow({ id, title, issueId: null, charter, charterModel: 'm', charterPromptVersion: 'v', foundedAt: members[0]!.datePublished }),
+      scope: 'forming',
+      lastEntryAt: members.at(-1)!.datePublished,
+      entries: members.map((s, i): SandboxEntry => ({
+        id: `entry-${i + 1}`,
+        overviewId: id,
+        storyId: s.id,
+        joinedBy: 'pipeline',
+        joinedAt: joinedAt(s),
+        status: 'active',
+        detachedBy: null,
+        detachReason: null,
+        detachedAt: null,
+        locked: false,
+        role: 'routine',
+        roleKind: null,
+        published: true,
+        datePublished: s.datePublished,
+        title: s.title,
+        date: s.date,
+      })),
+      foundedFrom: [members[0]!.id, members[1]!.id],
+      stands: null,
+      lastSignature: null,
+      lastMarker: null,
+      lastUntil: null,
+    }
+    sandbox.overviews.set(id, o)
+    return o
+  }
+  /** A join's link decision flagging its story as reporting the end event. */
+  const flag = (sandbox: Sandbox, storyId: string) =>
+    sandbox.decisions.push({
+      id: `link-${storyId}`,
+      kind: 'link',
+      outcome: 'joined',
+      overviewId: 'o1',
+      storyId,
+      inputs: { reportsEndEvent: true },
+      answer: null,
+      model: null,
+      promptVersion: null,
+      confidence: null,
+      costUsd: 0,
+      actor: 'pipeline',
+      undone: false,
+    })
 
   it("runs production's upkeep on the sandbox: a closing begun, cancelled by the review that detaches its story, and a stands attempt recorded", async () => {
     const sandbox = createSandbox()
@@ -253,29 +300,8 @@ describe('the upkeep over the sandbox', () => {
       story('c', '2026-05-05'),
       story('d', '2026-05-07', { title: 'The outbreak is declared over' }),
     ]
-    for (const s of members) sandbox.stories.set(s.id, s)
-    const overview: SandboxOverview = {
-      id: 'o1',
-      title: 'Ebola in eastern DR Congo',
-      charter: { in: 'The outbreak.', out: [], endEvent: 'Declared over.' },
-      scope: 'forming',
-      status: 'open',
-      closedReason: null,
-      frozen: false,
-      lastEntryAt: members[3]!.datePublished,
-      closingSince: null,
-      closingStoryId: null,
-      closedAt: null,
-      entriesAtLastReview: 0,
-      reviewedAt: null,
-      burstAt: null,
-      closureReviewedFor: null,
-      entries: members.map((s, i) => sEntry(s, i + 1, s.id === 'd')),
-      foundedFrom: ['a', 'b'],
-      stands: null,
-      lastSignature: null,
-    }
-    sandbox.overviews.set(overview.id, overview)
+    const overview = seed(sandbox, 'Ebola in eastern DR Congo', { in: 'The outbreak.', out: [], endEvent: 'Declared over.' }, members)
+    flag(sandbox, 'd')
     const now = new Date('2026-05-07T12:00:00Z')
     const io = sandboxUpkeep(
       sandbox,
@@ -310,37 +336,27 @@ describe('the upkeep over the sandbox', () => {
     expect(tally.errors).toEqual([])
     expect(tally).toMatchObject({ closingsChecked: 1, closingsBegun: 1, reviews: 1, standsRefreshes: 1, standsWritten: 0, failed: 0 })
     expect(overview.entries.map(e => e.status)).toEqual(['active', 'active', 'active', 'detached'])
-    expect(overview).toMatchObject({ status: 'open', closingSince: null, scope: 'ongoing', entriesAtLastReview: 3, reviewedAt: now, stands: null })
+    expect(overview).toMatchObject({
+      status: 'open',
+      closingSince: null,
+      closingStoryId: null,
+      scope: 'ongoing',
+      entriesAtLastReview: 3,
+      reviewedAt: now,
+      stands: null,
+    })
+    // Public now, so given its slug, and its last entry follows the entries left
+    expect([overview.slug, overview.lastEntryAt]).toEqual(['ebola-in-eastern-dr-congo', members[2]!.datePublished])
     expect(overview.lastSignature).not.toBeNull()
-    expect(Object.fromEntries(io.safeguards)).toEqual({ 'review detached an entry': 1, 'closing cancelled by its review': 1 })
+    expect(Object.fromEntries(io.safeguards())).toEqual({ 'review detached an entry': 1, 'closing cancelled by its review': 1 })
+    expect(sandbox.decisions.map(d => `${d.kind}:${d.outcome}`)).toEqual(['link:joined', 'close:closing', 'review:reviewed', 'status:open'])
   })
 
   it("applies each upkeep write by the lifecycle's rules and counts the safeguards that fired", async () => {
     const sandbox = createSandbox()
-    const members = [story('a', '2026-05-01'), story('b', '2026-05-01'), story('c', '2026-05-02')]
-    for (const s of members) sandbox.stories.set(s.id, s)
-    const o: SandboxOverview = {
-      id: 'o1',
-      title: 'Old title',
-      charter: { in: 'In.', out: [], endEvent: 'End.' },
-      scope: 'forming',
-      status: 'open',
-      closedReason: null,
-      frozen: false,
-      lastEntryAt: members[2]!.datePublished,
-      closingSince: null,
-      closingStoryId: null,
-      closedAt: null,
-      entriesAtLastReview: 0,
-      reviewedAt: null,
-      burstAt: null,
-      closureReviewedFor: null,
-      entries: members.map((s, i) => ({ ...sEntry(s, i + 1), joinedAt: new Date('2026-05-02T10:00:00Z') })),
-      foundedFrom: ['a', 'b'],
-      stands: null,
-      lastSignature: null,
-    }
-    sandbox.overviews.set(o.id, o)
+    // a was published two days before the run, b and c within its night
+    const members = [story('a', '2026-05-01'), story('b', '2026-05-02'), story('c', '2026-05-02')]
+    const o = seed(sandbox, 'Old title', { in: 'In.', out: [], endEvent: 'End.' }, members, () => new Date('2026-05-02T10:00:00Z'))
     const now = new Date('2026-05-02T12:00:00Z')
     const io = sandboxUpkeep(
       sandbox,
@@ -348,16 +364,17 @@ describe('the upkeep over the sandbox', () => {
       () => now,
     )
     const [state] = await io.states()
-    // Two stories of one publication day joined within the night
+    // Only the joins of stories published within the night count toward a burst
     expect(state).toMatchObject({ id: 'o1', activeEntries: 3, burstJoins: 2, burstAt: null, closureReviewed: false, unpublished: [] })
 
-    const closeCase = (await io.closings())[0]
-    expect(closeCase).toBeUndefined()
+    expect(await io.closings()).toEqual([])
+    flag(sandbox, 'c')
+    expect((await io.closings()).map(x => x.story.id)).toEqual(['c'])
     const c = { overviewId: 'o1', charter: o.charter, story: members[2]!, entries: [] }
     await io.applyClosing(c, { outcome: 'failed' } as never)
-    expect(o.entries[2]!.closeChecked).toBe(false)
+    expect((await io.closings()).map(x => x.story.id)).toEqual(['c'])
     await io.applyClosing(c, { outcome: 'disagreed' } as never)
-    expect(o.entries[2]!.closeChecked).toBe(true)
+    expect(await io.closings()).toEqual([])
     await io.applyClosing(c, { outcome: 'closing' } as never)
     expect(o).toMatchObject({ status: 'closing', closingSince: members[2]!.datePublished, closingStoryId: 'c' })
 
@@ -373,7 +390,7 @@ describe('the upkeep over the sandbox', () => {
 
     await io.applyBurst(state!)
     await io.applyBurst(state!)
-    expect(o).toMatchObject({ frozen: true, burstAt: now })
+    expect(o).toMatchObject({ frozen: true, frozenBy: 'burst', frozenAt: now, joinsCountedFrom: now })
     const review = await io.reviewCase('o1')
     expect(review).toMatchObject({ frozen: true, closingStoryId: null })
     expect(review!.entries.map(e => [e.entryId, e.label, e.locked])).toEqual([
@@ -384,42 +401,42 @@ describe('the upkeep over the sandbox', () => {
     expect(await io.reviewCase('gone')).toBeNull()
 
     const turning: Role = { role: 'turning_point', roleKind: 'spread' }
-    await io.applyReview(
-      review!,
-      {
-        trigger: 'burst',
-        outcome: 'reviewed',
-        actions: [
-          { kind: 'relabel', entryId: 'entry-1', storyId: 'a', from: routine, to: turning },
-          { kind: 'narrow', added: ['Uganda'], charter: { ...o.charter, out: ['Uganda'] } },
-          { kind: 'retitle', from: 'Old title', to: 'New title' },
-          { kind: 'unfreeze' },
-        ],
-        refusals: [{ what: 'charter', reason: 'rewrites IN' }],
-        kept: 3,
-        scope: 'ongoing',
-        cancelsClosing: false,
-      } as never,
-      now,
-    )
-    expect(o).toMatchObject({ title: 'New title', frozen: false, scope: 'ongoing', burstAt: null, entriesAtLastReview: 3, reviewedAt: now })
+    await io.applyReview(review!, {
+      trigger: 'burst',
+      outcome: 'reviewed',
+      actions: [
+        { kind: 'relabel', entryId: 'entry-1', storyId: 'a', from: routine, to: turning },
+        { kind: 'narrow', added: ['Uganda'], charter: { ...o.charter, out: ['Uganda'] } },
+        { kind: 'retitle', from: 'Old title', to: 'New title' },
+        { kind: 'unfreeze' },
+      ],
+      refusals: [{ what: 'charter', reason: 'rewrites IN' }],
+      kept: 3,
+      scope: 'ongoing',
+      cancelsClosing: false,
+      brake: null,
+    } as never)
+    expect(o).toMatchObject({ title: 'New title', frozen: false, frozenBy: null, scope: 'ongoing', entriesAtLastReview: 3, reviewedAt: now, slug: 'new-title' })
     expect(o.charter.out).toEqual(['Uganda'])
-    expect(o.entries[0]!.role).toEqual(turning)
-    await io.applyReview(review!, { outcome: 'failed' } as never, new Date('2026-06-01T00:00:00Z'))
+    expect([o.entries[0]!.role, o.entries[0]!.roleKind]).toEqual(['turning_point', 'spread'])
+    await io.applyReview(review!, { outcome: 'failed' } as never)
     expect(o.reviewedAt).toEqual(now)
 
-    const [stands] = await io.standsCases()
-    expect(stands).toMatchObject({ overviewId: 'o1', title: 'New title', members: [], lastSignature: null })
-    await io.applyStands(stands!, { outcome: 'written', sentences: [{ text: 'S.', facts: ['f1'] }], doing: [] } as never, 'sig-1', '2026-05-02')
+    const [stands] = await io.standsCases('2026-05-02')
+    expect(stands).toMatchObject({ overviewId: 'o1', title: 'New title', members: [], lastSignature: null, unchanged: false })
+    const record = (signature: string | null) => ({ signature, marker: stands!.marker, until: null })
+    await io.applyStands(stands!, { outcome: 'written', sentences: [{ text: 'S.', facts: ['f1'] }], doing: [] } as never, record('sig-1'), '2026-05-02')
     expect(o).toMatchObject({ lastSignature: 'sig-1', stands: { sentences: [{ text: 'S.', facts: ['f1'] }], doing: [], asOf: '2026-05-02' } })
-    await io.applyStands(stands!, { outcome: 'failed' } as never, null, '2026-05-03')
+    // Nothing it is made of changed: the next run reads no facts for it
+    expect((await io.standsCases('2026-05-03'))[0]!.unchanged).toBe(true)
+    await io.applyStands(stands!, { outcome: 'failed' } as never, record(null), '2026-05-03')
     expect(o.lastSignature).toBe('sig-1')
-    await io.applyStands(stands!, { outcome: 'too_few_facts' } as never, 'sig-2', '2026-05-04')
+    await io.applyStands(stands!, { outcome: 'too_few_facts' } as never, record('sig-2'), '2026-05-04')
     expect(o).toMatchObject({ lastSignature: 'sig-2', stands: null })
     expect(await io.auditPicks(now)).toEqual([])
     await io.applyAudit(review!, {} as never)
 
-    expect(Object.fromEntries(io.safeguards)).toEqual({
+    expect(Object.fromEntries(io.safeguards())).toEqual({
       'closing refused (disagreed)': 1,
       'closing cancelled by a new entry': 1,
       'burst froze an overview': 1,

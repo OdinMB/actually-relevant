@@ -8,8 +8,17 @@
  */
 import { config } from '../config.js'
 import { checkClosing, type CloseCase, type CloseDeps, type CloseResult } from './overviewClose.js'
-import { auditOverview, reviewOverview, type AuditResult, type ReviewCase, type ReviewDeps, type ReviewResult } from './overviewReview.js'
-import { refreshStands, standsFacts, standsSignature, type MemberFact, type StandsDeps, type StandsOptions, type StandsResult } from './overviewStands.js'
+import { auditOverview, reviewOverview, type AuditResult, type ReviewCase, type ReviewDeps, type ReviewOptions, type ReviewResult } from './overviewReview.js'
+import {
+  refreshStands,
+  standsFacts,
+  standsSignature,
+  standsUntil,
+  type MemberFact,
+  type StandsDeps,
+  type StandsOptions,
+  type StandsResult,
+} from './overviewStands.js'
 import { anomalies, nextState, reviewDue, type StatusMove, type StatusOptions } from './overviewStatus.js'
 import type { OverviewState, Role } from './overviewTypes.js'
 
@@ -22,6 +31,19 @@ export interface StandsCase {
   members: MemberFact[]
   /** The last settled refresh's signature (`standsSignature`); null before the first. */
   lastSignature: string | null
+  /** What the offer is made of, as a marker the next refresh compares (`standsCases`). */
+  marker: string
+  /** Nothing the offer is made of changed since the last refresh, and no current flag has: the facts were not read, and nothing is due. */
+  unchanged: boolean
+}
+
+/** An overview frozen this run, for the owner's notice: by a burst of joins, or by a review that asked to detach more than half its entries. */
+export interface UpkeepFreeze {
+  overviewId: string
+  title: string
+  cause: 'burst' | 'brake'
+  /** The joins the burst counted, or the detaches the review asked for. */
+  count: number
 }
 
 export interface UpkeepDeps {
@@ -32,19 +54,24 @@ export interface UpkeepDeps {
   reviewCase(overviewId: string): Promise<ReviewCase | null>
   /** The public overviews the monthly audit takes now: none when one ran within `auditEveryDays`. */
   auditPicks(now: Date): Promise<string[]>
-  /** Public overviews that are not frozen, with what their stands are written from. */
-  standsCases(): Promise<StandsCase[]>
+  /** Public overviews that are not frozen, with what their stands are written from on `today`. */
+  standsCases(today: string): Promise<StandsCase[]>
   close: CloseDeps
   review: ReviewDeps
   stands: StandsDeps
   applyClosing(c: CloseCase, result: CloseResult): Promise<void>
   applyStatus(state: OverviewState, moves: StatusMove[], clock: Date): Promise<void>
   applyBurst(state: OverviewState): Promise<void>
-  applyReview(c: ReviewCase, result: ReviewResult, now: Date): Promise<void>
+  applyReview(c: ReviewCase, result: ReviewResult): Promise<void>
   applyAudit(c: ReviewCase, result: AuditResult): Promise<void>
-  /** `signature` is null for a failed refresh, which the next run tries again. */
-  applyStands(c: StandsCase, result: StandsResult, signature: string | null, today: string): Promise<void>
-  options?: StatusOptions & StandsOptions
+  /** The record's `signature` is null for a failed refresh, which the next run tries again. */
+  applyStands(
+    c: StandsCase,
+    result: StandsResult,
+    record: { signature: string | null; marker: string | null; until: string | null },
+    today: string,
+  ): Promise<void>
+  options?: StatusOptions & StandsOptions & ReviewOptions
 }
 
 /**
@@ -77,8 +104,11 @@ export interface UpkeepTally {
   /** Stands lines written (within the limits), and those of them any check dropped: never more than the lines written. */
   standsChecked: number
   standsDropped: number
-  /** Items whose call gave nothing or that threw: the next run tries them again. */
+  /** Items started (an end-event check, an overview's status, a review, an audit, a stands refresh due), and those whose call gave nothing or that threw: the next run tries them again. */
+  items: number
   failed: number
+  /** Overviews frozen this run, each with its title, for the owner's notice. */
+  freezes: UpkeepFreeze[]
   costUsd: number
   errors: { part: UpkeepPart; id: string; error: unknown }[]
   /** The step was switched off before every part ran. */
@@ -101,7 +131,9 @@ const emptyTally = (): UpkeepTally => ({
   standsWritten: 0,
   standsChecked: 0,
   standsDropped: 0,
+  items: 0,
   failed: 0,
+  freezes: [],
   costUsd: 0,
   errors: [],
   stopped: false,
@@ -123,6 +155,7 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
         return
       }
       try {
+        tally.items++
         await work(item)
       } catch (error) {
         tally.failed++
@@ -160,6 +193,7 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
       if (anomalies(state, options).includes('burst')) {
         await deps.applyBurst(state)
         tally.bursts++
+        tally.freezes.push({ overviewId: state.id, title: state.title, cause: 'burst', count: state.burstJoins })
       }
     },
   )
@@ -176,13 +210,14 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
     async ({ id, trigger }) => {
       const c = await deps.reviewCase(id)
       if (!c || c.entries.length === 0) return
-      const result = await reviewOverview(c, trigger, deps.review)
+      const result = await reviewOverview(c, trigger, deps.review, options)
       tally.costUsd += result.costUsd
       tally.reviews++
       if (result.outcome === 'failed') tally.failed++
       tally.reviewActions += result.actions.length
       tally.reviewRefusals += result.refusals.length
-      await deps.applyReview(c, result, at.now)
+      await deps.applyReview(c, result)
+      if (result.brake) tally.freezes.push({ overviewId: c.overviewId, title: c.title, cause: 'brake', count: result.brake.asked })
     },
   )
   if (tally.stopped) return tally
@@ -205,7 +240,7 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
 
   await each(
     'stands',
-    await deps.standsCases(),
+    (await deps.standsCases(at.today)).filter(c => !c.unchanged),
     c => c.overviewId,
     async c => {
       const offered = standsFacts(c.members, at.today, options)
@@ -218,7 +253,8 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
       if (result.outcome === 'failed') tally.failed++
       tally.standsChecked += result.checked
       tally.standsDropped += result.failed
-      await deps.applyStands(c, result, result.outcome === 'failed' ? null : signature, at.today)
+      const failed = result.outcome === 'failed'
+      await deps.applyStands(c, result, { signature: failed ? null : signature, marker: failed ? null : c.marker, until: standsUntil(offered) }, at.today)
     },
   )
   return tally

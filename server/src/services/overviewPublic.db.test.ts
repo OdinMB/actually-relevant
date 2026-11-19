@@ -32,8 +32,11 @@ vi.mock('../lib/publicCaches.js', async importOriginal => {
 
 const { clearPublicCaches } = await import('../lib/publicCaches.js')
 const { editorAction } = await import('./overviewLifecycle.js')
-const { OVERVIEW_LINK_CACHES, forgetOverviewLinks, overviewReport, publicOverview, publicOverviewHead, publicOverviewList, servedOverviewList, withOverview } =
-  await import('./overviewPublic.js')
+const { publicOverview, publicOverviewHead, publicOverviewList, servedOverview, servedOverviewList, withOverview } = await import('./overviewPublic.js')
+const { OVERVIEW_LINK_CACHES, forgetOverviewLinks } = await import('./overviewCaches.js')
+const { overviewReport } = await import('./overviewReport.js')
+const { forgetOverviewStep } = await import('./overviewQueue.js')
+const { PUBLIC_OVERVIEW, isPublicOverview, publicOverviewSql } = await import('./overviewPublicRule.js')
 const { reviewDue } = await import('./overviewStatus.js')
 const { overviewStates } = await import('./overviewUpkeepInput.js')
 const { getHomepageData, getPublishedStories, getPublishedStoryBySlug } = await import('./publicStories.js')
@@ -45,6 +48,8 @@ const charter = { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda'], 
 
 async function switchOn(on: boolean) {
   gate.closed = on ? null : 'closed for the test'
+  // Written past `updateJob`, so the step's flag kept in memory is forgotten here
+  forgetOverviewStep()
   await prisma.jobRun.upsert({
     where: { jobName: 'link_overviews' },
     create: { jobName: 'link_overviews', cronExpression: '30 1 * * *', enabled: on },
@@ -325,8 +330,42 @@ describeDb('public overviews (PostgreSQL)', () => {
 
     // Switching the step off (updateJob empties the same caches, routes/admin/jobs.test.ts)
     await prisma.jobRun.update({ where: { jobName: 'link_overviews' }, data: { enabled: false } })
+    forgetOverviewStep()
     forgetOverviewLinks()
     expect(await servedOverviewList()).toEqual({ on: false, overviews: [] })
+  })
+
+  it('serves a page from memory until a link-removing write empties it, and keeps no missing page', async () => {
+    await switchOn(true)
+    forgetOverviewLinks()
+    const [a, b, c] = await stories(3)
+    expect(await servedOverview('kept')).toBeNull()
+    const o = await overview([a!.id, b!.id, c!.id], { slug: 'kept' })
+    // Not kept while missing: found as soon as it is public
+    expect((await servedOverview('kept'))!.entries).toHaveLength(3)
+    await prisma.story.update({ where: { id: c!.id }, data: { titleLabel: 'Changed meanwhile' } })
+    expect((await servedOverview('kept'))!.entries.map(e => e.titleLabel)).not.toContain('Changed meanwhile')
+    const entry = await prisma.overviewEntry.findFirstOrThrow({ where: { storyId: a!.id } })
+    await editorAction({ kind: 'detach', overviewId: o.id, entryId: entry.id }, 'editor-1')
+    expect((await servedOverview('kept'))!.entries).toHaveLength(2)
+  })
+
+  it('holds one answer to what is public in code, in the Prisma filter and in SQL', async () => {
+    const cases = [
+      { scope: 'ongoing', hidden: false, slug: 'p1' },
+      { scope: 'ongoing', hidden: true, slug: 'p2' },
+      { scope: 'ongoing', hidden: false, slug: null },
+      { scope: 'forming', hidden: false, slug: 'p4' },
+      { scope: 'single', hidden: false, slug: null },
+    ] as const
+    const made = []
+    for (const c of cases) made.push(await overview([], c))
+    const byCode = made.filter(o => isPublicOverview(o)).map(o => o.id)
+    const byPrisma = (await prisma.overview.findMany({ where: PUBLIC_OVERVIEW, select: { id: true } })).map(o => o.id)
+    const bySql = (await prisma.$queryRaw<{ id: string }[]>`SELECT o.id FROM overviews o WHERE ${publicOverviewSql('o')}`).map(o => o.id)
+    expect(byCode).toHaveLength(1)
+    expect(byPrisma.sort()).toEqual(byCode.sort())
+    expect(bySql.sort()).toEqual(byCode.sort())
   })
 
   it('names only caches that exist: forgetting the links empties every one of them', async () => {

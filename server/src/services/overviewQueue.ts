@@ -34,11 +34,24 @@ export async function overviewPassConflict(): Promise<string | null> {
   return pass?.enabled ? null : `Overviews switch on only after research passes: enable ${RESEARCH_PASS_JOB} first (.context/overviews.md, "Switching on")`
 }
 
-/** The step is switched on: both gates open and its job enabled. The gates are read first, so nothing is queried while either is closed. */
-export async function overviewStepOn(): Promise<boolean> {
+let stepOn: { on: boolean; until: number } | null = null
+
+/**
+ * The step is switched on: both gates open and its job enabled. The gates are read first, so nothing
+ * is queried while either is closed; the job's flag is kept `stepOnCacheSeconds`, so public reads add
+ * no query each, and a change to it forgets it at once (`forgetOverviewStep`, from `updateJob`).
+ */
+export async function overviewStepOn(now: number = Date.now()): Promise<boolean> {
   if (overviewSwitchRefusal() !== null) return false
+  if (stepOn && now < stepOn.until) return stepOn.on
   const job = await prisma.jobRun.findUnique({ where: { jobName: LINK_OVERVIEWS_JOB }, select: { enabled: true } })
-  return job?.enabled === true
+  stepOn = { on: job?.enabled === true, until: now + config.overviews.stepOnCacheSeconds * 1000 }
+  return stepOn.on
+}
+
+/** Forgets whether the step is on: the next read asks the jobs table. */
+export function forgetOverviewStep(): void {
+  stepOn = null
 }
 
 const HOUR_MS = 3_600_000

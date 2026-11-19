@@ -115,6 +115,12 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/overviewReview.js': '*',
   'services/overviewStatus.js': '*',
   'services/overviewUpkeep.js': '*',
+  // The write model, production's planners, the state they judge and the decision log's schemas, pure (held below), so
+  // the sandbox writes by the lifecycle's own plans.
+  'services/overviewChanges.js': '*',
+  'services/overviewPlans.js': '*',
+  'services/overviewState.js': '*',
+  'services/overviewDecisions.js': '*',
   // The member stories' usable facts, read with SELECTs through the client it is given (held below), never written.
   'services/passRecords.js': ['loadMemberFacts'],
 }
@@ -130,6 +136,10 @@ const OVERVIEW_SERVICE_MODULES = [
   'overviewReview.ts',
   'overviewStatus.ts',
   'overviewUpkeep.ts',
+  'overviewChanges.ts',
+  'overviewPlans.ts',
+  'overviewState.ts',
+  'overviewDecisions.ts',
 ]
 const OVERVIEW_READERS = ['overviewCandidates.ts', 'overviewInput.ts']
 

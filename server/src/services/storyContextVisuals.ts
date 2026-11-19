@@ -89,6 +89,14 @@ export function isCurrent(f: Pick<VisualFact, 'validity' | 'asOf' | 'sourceDate'
   return daysBetween(periodStart(date), onDay) <= (f.validity === 'fast' ? windows.fastDays : windows.slowDays)
 }
 
+/** The first day a fact current today is no longer (`isCurrent`); null for a `fixed` one, which always is, or one with no date, which never is. */
+export function currentUntil(f: Pick<VisualFact, 'validity' | 'asOf' | 'sourceDate'>, windows: ValidityWindows): string | null {
+  const date = factDate(f)
+  if (f.validity === 'fixed' || date === null) return null
+  const days = (f.validity === 'fast' ? windows.fastDays : windows.slowDays) + 1
+  return new Date(Date.parse(`${periodStart(date)}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10)
+}
+
 const trimmed = (n: number) => String(Number(n.toFixed(2)))
 
 function compact(v: number): string {

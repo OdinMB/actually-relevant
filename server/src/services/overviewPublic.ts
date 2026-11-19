@@ -5,8 +5,8 @@
  * entries; nothing is read while either gate is closed. Here: the `overview` field every public story
  * carries (`withOverview`, one query for a list), the overview page (its header, "Where this stands"
  * and "What's being done" as served now with their citations, the timeline with each story's
- * Updates), the `/ongoing` index (kept in memory for its route, `servedOverviewList`), and the lists the
- * sitemap, link previews and the reader's report read.
+ * Updates; kept in memory for its route, `servedOverview`), the `/ongoing` index (`servedOverviewList`),
+ * and the lists the sitemap and link previews read. What counts as public is `overviewPublicRule.ts`'s.
  */
 import type { Prisma } from '@prisma/client'
 import { config } from '../config.js'
@@ -14,8 +14,9 @@ import { overviewAiMarker, type AiGeneratedOverviewMarker } from '../lib/aiProve
 import { cached, TTLCache } from '../lib/cache.js'
 import { utcDay } from '../lib/days.js'
 import prisma from '../lib/prisma.js'
-import { clearPublicCaches, registerPublicCache } from '../lib/publicCaches.js'
+import { registerPublicCache } from '../lib/publicCaches.js'
 import { SOURCE_KINDS } from '../schemas/research.js'
+import { PUBLIC_OVERVIEW as PUBLIC, SHOWN_ENTRY } from './overviewPublicRule.js'
 import { overviewStepOn } from './overviewQueue.js'
 import { servedStands, type ServedFact } from './overviewStands.js'
 import type { StandsLine } from './overviewTypes.js'
@@ -25,19 +26,6 @@ import { hostOf, type CitedText, type ResearchedSource } from './researchedStory
 import { normalizedUrl } from './researchFilter.js'
 import { contextFact, usable, type PoolSource } from './researchPool.js'
 import { oneOf } from './storyContextRecords.js'
-
-/** An overview readers may see, once the step is on. */
-const PUBLIC = { scope: 'ongoing', hidden: false, slug: { not: null } } satisfies Prisma.OverviewWhereInput
-
-/**
- * Active entries of published stories with a page (a slug and a publication date): the ones readers
- * see. The page's timeline, the index's and the sitemap's counts and "public" itself all read this one
- * filter, so a count never names a story the page leaves out.
- */
-const SHOWN_ENTRY = {
-  status: 'active',
-  story: { status: 'published', slug: { not: null }, datePublished: { not: null } },
-} satisfies Prisma.OverviewEntryWhereInput
 
 /** The `overview` field of a public story: the public overview it is in. */
 export interface StoryOverviewLink {
@@ -63,38 +51,6 @@ export async function overviewOfStories(storyIds: readonly string[]): Promise<Ma
 export async function withOverview<T extends { id: string }>(stories: readonly T[]): Promise<(T & { overview: StoryOverviewLink | null })[]> {
   const links = await overviewOfStories(stories.map(s => s.id))
   return stories.map(s => ({ ...s, overview: links.get(s.id) ?? null }))
-}
-
-/**
- * The public caches that may hold an overview link: the homepage's stories (their `overview` field),
- * the sitemap, the link previews and the `/ongoing` list (`ongoing-list`). A change that takes a link
- * away empties them (`forgetOverviewLinks`, from the lifecycle module and the job's switch); one that
- * only adds a link waits for their next refresh. Related stories keep only ids and read the field
- * fresh, so their cache, where each entry costs a model call to rebuild, stays.
- */
-export const OVERVIEW_LINK_CACHES = ['homepage', 'sitemap', 'link-preview-pages', 'ongoing-list'] as const
-
-export function forgetOverviewLinks(): void {
-  clearPublicCaches(OVERVIEW_LINK_CACHES)
-}
-
-/**
- * A reader's "Report an error" from an overview page (`.context/overviews.md`, "Reviews"): null when
- * no public overview has this id; otherwise whether the report queues the overview's review, which it
- * does unless another report queued one within `reportReviewEveryDays` (later reports are stored and
- * queue nothing). The job's review reads the queued one (`overviewStates`, `reportAt`).
- */
-export async function overviewReport(
-  id: string,
-  now = new Date(),
-  options: Pick<typeof config.overviews, 'reportReviewEveryDays'> = config.overviews,
-): Promise<{ queuesReview: boolean } | null> {
-  if (!(await overviewStepOn())) return null
-  const o = await prisma.overview.findFirst({ where: { ...PUBLIC, id, entries: { some: SHOWN_ENTRY } }, select: { id: true } })
-  if (!o) return null
-  const since = new Date(now.getTime() - options.reportReviewEveryDays * 86_400_000)
-  const queued = await prisma.feedback.count({ where: { overviewId: o.id, queuesReview: true, createdAt: { gt: since } } })
-  return { queuesReview: queued === 0 }
 }
 
 const HEAD_SELECT = {
@@ -243,7 +199,7 @@ const linesOf = (value: Prisma.JsonValue): StandsLine[] =>
 /** The cited facts as they stand now: usable and published only for an active member's published story; a fact gone since is absent. */
 async function servedFacts(factIds: string[], members: ReadonlyMap<string, StoryOverviewLink>) {
   const owners = await prisma.poolFact.findMany({ where: { id: { in: factIds } }, select: { storyId: true } })
-  const facts = await loadMemberFacts(prisma, [...new Set(owners.map(o => o.storyId))])
+  const facts = await loadMemberFacts(prisma, [...new Set(owners.map(o => o.storyId))], factIds)
   const cited = new Set(factIds)
   const served = new Map<string, ServedFact & { storyId: string; source: PoolSource }>()
   for (const f of facts)
@@ -317,7 +273,25 @@ async function standsForReaders(overviewId: string, members: ReadonlyMap<string,
   return { stands: { asOf: utcDay(row.asOf), writtenAt: row.writtenAt, sentences, doing }, sources: book.sources, model: row.model }
 }
 
-/** One public overview's page (`GET /api/overviews/:slug`), or null when there is no such public overview. */
+/**
+ * `GET /api/overviews/:slug`'s pages, kept `pageCacheSeconds` in memory (`ongoing-page`): a link-removing
+ * write and switching the step off empty it (`OVERVIEW_LINK_CACHES`). A missing page is not kept, so
+ * an overview made public is served at once.
+ */
+const pageCache = new TTLCache<PublicOverview | null>(config.overviews.pageCacheSeconds * 1000)
+registerPublicCache('ongoing-page', pageCache)
+
+/** One public overview's page as served. */
+export function servedOverview(slug: string): Promise<PublicOverview | null> {
+  return cached(
+    pageCache,
+    slug,
+    () => publicOverview(slug),
+    page => page !== null,
+  )
+}
+
+/** One public overview's page, or null when there is no such public overview. */
 export async function publicOverview(slug: string, now = new Date()): Promise<PublicOverview | null> {
   if (!(await overviewStepOn())) return null
   const o = await prisma.overview.findFirst({ where: { ...PUBLIC, slug }, select: HEAD_SELECT })

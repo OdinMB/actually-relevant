@@ -158,8 +158,24 @@ describe('a review', () => {
     expect((await reviewOverview(base(), 'entries', deps(answer()))).scope).toBe('ongoing')
     const cut = await reviewOverview(base(), 'entries', deps(answer({ entries: [judged('E1'), judged('E2', 'no'), judged('E3')] })))
     expect([cut.scope, cut.kept]).toEqual(['forming', 2])
-    const one = await reviewOverview(base(), 'entries', deps(answer({ entries: [judged('E1'), judged('E2', 'no'), judged('E3', 'no')] })))
-    expect(one.scope).toBe('single')
+    const three = base()
+    const pair = { ...three, entries: three.entries.slice(0, 2) }
+    const one = await reviewOverview(pair, 'entries', deps(answer({ entries: [judged('E1'), judged('E2', 'no')] })))
+    expect([one.scope, one.kept, one.brake]).toEqual(['single', 1, null])
+  })
+
+  it('applies no detach of a review asking for more than half the unlocked entries, and stays frozen for an editor', async () => {
+    const braked = await reviewOverview(base(), 'entries', deps(answer({ entries: [judged('E1'), judged('E2', 'no'), judged('E3', 'no')] })))
+    expect(braked.brake).toEqual({ asked: 2, unlocked: 3 })
+    expect(braked.actions.filter(a => a.kind === 'detach')).toEqual([])
+    // Kept whole, and not made public while it is held
+    expect([braked.scope, braked.kept]).toEqual(['forming', 3])
+    expect(braked.refusals.at(-1)).toMatchObject({ what: 'detaches', reason: expect.stringContaining('more than half') })
+    // Exactly half is allowed
+    const four = base()
+    const half = { ...four, entries: [...four.entries, { ...four.entries[0]!, entryId: 'e4', storyId: 's4' }] }
+    const allowed = await reviewOverview(half, 'entries', deps(answer({ entries: [judged('E1'), judged('E2', 'no'), judged('E3', 'no'), judged('E4')] })))
+    expect([allowed.brake, allowed.kept]).toEqual([null, 2])
   })
 
   it('never raises the scope of an overview it leaves frozen, and lowers it', async () => {

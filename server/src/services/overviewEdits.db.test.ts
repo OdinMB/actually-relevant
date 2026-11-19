@@ -3,7 +3,8 @@ import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { ConflictError } from '../utils/errors.js'
 import { membershipsOf } from './overviewCandidates.js'
-import { applyBurst, editorAction, undoDecision } from './overviewLifecycle.js'
+import { foundResult, joinResult, linkStory } from '../test/db/overviewFixtures.js'
+import { applyBurst, applyClosing, applyLink, applyReview, editorAction, undoDecision } from './overviewLifecycle.js'
 import { owedStories } from './overviewQueue.js'
 import { reviewDue } from './overviewStatus.js'
 import { overviewStates, reviewCase } from './overviewUpkeepInput.js'
@@ -81,8 +82,9 @@ describeDb("an editor's actions and undo", () => {
 
     const { decisionId } = await editorAction({ kind: 'retitle', overviewId: one.id, title: 'Ebola' }, EDITOR)
     await editorAction({ kind: 'retitle', overviewId: one.id, title: 'Ebola in Congo' }, EDITOR)
-    await expect(undoDecision(decisionId, EDITOR)).rejects.toThrow('changed meanwhile')
+    await expect(undoDecision(decisionId, EDITOR)).rejects.toThrow('its title changed after it. Undo the later change first')
     expect((await row(one.id)).title).toBe('Ebola in Congo')
+    expect((await prisma.overviewDecision.findUniqueOrThrow({ where: { id: decisionId } })).undoneAt).toBeNull()
   })
 
   it('detaches an entry as locked, so linking never offers that overview to the story again', async () => {
@@ -122,8 +124,9 @@ describeDb("an editor's actions and undo", () => {
 
   it('undoes a join: the entry detached and locked, the story owed again; an undo of that undo restores both', async () => {
     const [a, b, s] = await stories(3)
-    const o = await overview([a!.id, b!.id, s!.id], { scope: 'ongoing' })
-    const link = await prisma.overviewDecision.create({ data: { kind: 'link', storyId: s!.id, overviewId: o.id, outcome: 'joined', actor: 'pipeline' } })
+    const o = await overview([a!.id, b!.id], { scope: 'ongoing' })
+    await applyLink(joinResult(linkStory(s!), o.id), false)
+    const link = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'link', storyId: s!.id } })
     const owed = async () => {
       const slices = await owedStories(new Date())
       return [...slices.backlog, ...slices.night]
@@ -142,12 +145,13 @@ describeDb("an editor's actions and undo", () => {
 
   it('undoes a founding by detaching both its entries, leaving the pair settled; an undo is refused once the story is elsewhere', async () => {
     const [a, b] = await stories(2)
-    const o = await overview([a!.id, b!.id])
-    for (const id of [a!.id, b!.id])
-      await prisma.overviewDecision.create({ data: { kind: 'link', storyId: id, overviewId: o.id, outcome: 'founded', actor: 'pipeline' } })
-    const found = await prisma.overviewDecision.create({
-      data: { kind: 'found', storyId: b!.id, overviewId: o.id, outcome: 'founded', inputs: { partnerId: a!.id }, actor: 'pipeline' },
-    })
+    await applyLink(foundResult(linkStory(b!), linkStory(a!)), false)
+    const found = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'found', outcome: 'founded' } })
+    const o = { id: found.overviewId! }
+    expect((await row(o.id)).scope).toBe('forming')
+    await expect(undoDecision((await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'link', storyId: a!.id } })).id, EDITOR)).rejects.toThrow(
+      'Undo the founding instead',
+    )
     const undo = await undoDecision(found.id, EDITOR)
     expect((await prisma.overviewEntry.findMany({ where: { overviewId: o.id } })).map(e => [e.status, e.locked])).toEqual([
       ['detached', true],
@@ -170,31 +174,32 @@ describeDb("an editor's actions and undo", () => {
       { scope: 'ongoing' },
     )
     const narrowed = { ...charter, out: [...charter.out, 'cholera'] }
-    // The review detached the last story and narrowed the charter; it kept 3
-    await prisma.overviewEntry.update({
-      where: { id: o.entries[3]!.id },
-      data: { status: 'detached', detachedBy: 'review', detachReason: 'review', detachedAt: new Date() },
+    // The review detaches the last story and narrows the charter; it keeps 3
+    const c = (await reviewCase(prisma, o.id))!
+    await applyReview(c, {
+      trigger: 'periodic',
+      outcome: 'reviewed',
+      actions: [
+        { kind: 'detach', entryId: o.entries[3]!.id, storyId: members[3]!.id, reason: 'No.' },
+        { kind: 'narrow', added: ['cholera'], charter: narrowed },
+      ],
+      refusals: [],
+      kept: 3,
+      scope: 'ongoing',
+      cancelsClosing: false,
+      brake: null,
+      answer: null,
+      costUsd: 0.2,
+      model: 'large',
+      promptVersion: 'v',
     })
-    await prisma.overview.update({ where: { id: o.id }, data: { charter: narrowed, entriesAtLastReview: 3, reviewedAt: new Date() } })
-    const review = await prisma.overviewDecision.create({
-      data: {
-        kind: 'review',
-        overviewId: o.id,
-        outcome: 'reviewed',
-        actor: 'review',
-        inputs: {
-          trigger: 'periodic',
-          actions: [
-            { kind: 'detach', entryId: o.entries[3]!.id, storyId: members[3]!.id, reason: 'No.' },
-            { kind: 'narrow', added: ['cholera'], charter: narrowed },
-          ],
-        },
-      },
-    })
+    const review = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'review' } })
+    expect(await row(o.id)).toMatchObject({ charter: narrowed, entriesAtLastReview: 3 })
 
     const undo = await undoDecision(review.id, EDITOR)
-    expect(await entryOf(members[3]!.id)).toMatchObject({ status: 'active', locked: true })
-    expect(await row(o.id)).toMatchObject({ charter, entriesAtLastReview: 4 })
+    expect(await entryOf(members[3]!.id)).toMatchObject({ status: 'active', locked: true, detachReason: null })
+    // What the review ran stays run: its count is the one it kept
+    expect(await row(o.id)).toMatchObject({ charter, entriesAtLastReview: 3 })
     const state = (await overviewStates(prisma, new Date()))[0]!
     expect(reviewDue(state, { clock: new Date(), now: new Date() })).toBeNull()
     expect((await reviewCase(prisma, o.id))!.lockedOut).toEqual(['cholera'])
@@ -205,21 +210,57 @@ describeDb("an editor's actions and undo", () => {
     expect((await reviewCase(prisma, o.id))!.lockedOut).toEqual([])
   })
 
+  it('refuses a review’s undo whole once a later change touched what it changed', async () => {
+    const members = await stories(4)
+    const o = await overview(
+      members.map(s => s.id),
+      { scope: 'ongoing' },
+    )
+    const c = (await reviewCase(prisma, o.id))!
+    await applyReview(c, {
+      trigger: 'periodic',
+      outcome: 'reviewed',
+      actions: [
+        { kind: 'detach', entryId: o.entries[3]!.id, storyId: members[3]!.id, reason: 'No.' },
+        { kind: 'retitle', from: 'Ebola in Ituri', to: 'Ebola in Ituri province' },
+      ],
+      refusals: [],
+      kept: 3,
+      scope: 'ongoing',
+      cancelsClosing: false,
+      brake: null,
+      answer: null,
+      costUsd: 0.2,
+      model: 'large',
+      promptVersion: 'v',
+    })
+    const review = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'review' } })
+    await editorAction({ kind: 'retitle', overviewId: o.id, title: 'Mine' }, EDITOR)
+    await expect(undoDecision(review.id, EDITOR)).rejects.toThrow('a review is undone whole or not at all')
+    // Nothing of it was undone: the detached entry stays out
+    expect(await entryOf(members[3]!.id)).toMatchObject({ status: 'detached', detachReason: 'review' })
+    expect((await prisma.overviewDecision.findUniqueOrThrow({ where: { id: review.id } })).undoneAt).toBeNull()
+  })
+
   it('refuses to undo a closing an entry cancelled once a later story began another', async () => {
     const [a, b, c] = await stories(3)
     const o = await overview([a!.id, b!.id, c!.id], { scope: 'ongoing' })
-    const old = await prisma.overviewDecision.create({ data: { kind: 'close', storyId: a!.id, overviewId: o.id, outcome: 'closing', actor: 'pipeline' } })
-    await prisma.overviewDecision.create({ data: { kind: 'close', storyId: c!.id, overviewId: o.id, outcome: 'closing', actor: 'pipeline' } })
-    await prisma.overview.update({ where: { id: o.id }, data: { status: 'closing', closingSince: c!.datePublished } })
-    await expect(undoDecision(old.id, EDITOR)).rejects.toThrow('no longer closing on this story')
-    expect((await row(o.id)).status).toBe('closing')
+    const closeCase = (story: { id: string; datePublished: Date | null }) => ({ overviewId: o.id, charter, story: linkStory(story), entries: [] })
+    const agreed = { outcome: 'closing' as const, answers: { close: null, check: null }, costUsd: 0.1, model: 'large', promptVersion: 'v' }
+    await applyClosing(closeCase(a!), agreed)
+    const old = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'close', storyId: a!.id } })
+    // A new entry cancelled it, and a later story began another closing
+    await prisma.overview.update({ where: { id: o.id }, data: { status: 'open', closingSince: null, closingStoryId: null } })
+    await applyClosing(closeCase(c!), agreed)
+    await expect(undoDecision(old.id, EDITOR)).rejects.toThrow('its closing changed after it')
+    expect(await row(o.id)).toMatchObject({ status: 'closing', closingStoryId: c!.id })
   })
 
   it("clears a burst's freeze by undo without the same joins freezing it again, and an editor's freeze asks for no burst review", async () => {
     const members = await stories(3)
     const o = await overview(members.map(s => s.id))
     const state = (await overviewStates(prisma, new Date()))[0]!
-    await applyBurst(state)
+    await applyBurst(state, new Date())
     const freeze = await prisma.overviewDecision.findFirstOrThrow({ where: { overviewId: o.id, kind: 'status', outcome: 'frozen' } })
     await undoDecision(freeze.id, EDITOR)
     const after = (await overviewStates(prisma, new Date()))[0]!
@@ -229,6 +270,6 @@ describeDb("an editor's actions and undo", () => {
     expect((await overviewStates(prisma, new Date()))[0]).toMatchObject({ frozen: true, burstAt: null })
     // The burst's freeze was undone and an editor froze it since: its undo would lift the editor's freeze
     await prisma.overviewDecision.update({ where: { id: freeze.id }, data: { undoneAt: null } })
-    await expect(undoDecision(freeze.id, EDITOR)).rejects.toThrow('frozen again since')
+    await expect(undoDecision(freeze.id, EDITOR)).rejects.toThrow('its freeze changed after it')
   })
 })

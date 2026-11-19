@@ -1,65 +1,60 @@
 /**
  * The overview sandbox (`.context/model-eval.md`, "Overview evals"; plan "Evals and bars"): overviews
- * kept in memory, written by the same rules as production's lifecycle (`applyLink`: a story linked
- * meanwhile is skipped, a stale result asked again and then a conflict, a join adds an entry and opens
- * a quiet or faded overview, a founding adds an overview with both entries), so production's pure
- * steps (`linkStory`, `linkInOrder`) replay a half's developments in date order against it. The
- * upkeep's writes are `upkeepSandbox.ts`'s, over the same overviews. Writes nothing to the database.
+ * kept in memory and written by production's own planners and write model (`overviewPlans.ts`,
+ * `overviewChanges.ts`: the same plans, settled and applied the same way, only to memory instead of
+ * the tables), so production's pure steps (`linkStory`, `linkInOrder`) replay a half's developments in
+ * date order against it, and its upkeep (`upkeepSandbox.ts`) runs over the same rows. Like
+ * production's applier it skips a story linked meanwhile and asks a stale result again, then stores it
+ * as a conflict. Every write is kept as its decisions, which the replay's safeguards are counted from
+ * (`safeguardsOf`). Writes nothing to the database.
  */
-import type { StandsLine } from '../../../services/overviewTypes.js'
-import { isStale, type ApplyLink, type LinkResult } from '../../../services/overviewLink.js'
+import { slugify } from '../../../utils/slugify.js'
+import {
+  applied,
+  merged,
+  overviewChange,
+  settle,
+  type DecisionDraft,
+  type EntryRow,
+  type OverviewRow,
+  type Plan,
+  type Rows,
+} from '../../../services/overviewChanges.js'
+import { isStale, type ApplyLink } from '../../../services/overviewLink.js'
+import { planAlone, planConflict, planFounding, planJoin, type LinkPlan, type PlanContext } from '../../../services/overviewPlans.js'
 import {
   SETTLING_OUTCOMES,
   type CandidateOverview,
-  type Charter,
   type LinkOutcome,
   type LinkStory,
   type Membership,
   type Memberships,
-  type OverviewScope,
-  type OverviewStatus,
   type Role,
+  type StandsLine,
 } from '../../../services/overviewTypes.js'
 
-export interface SandboxEntry {
-  entryId: string
+/** An entry as production's row holds it, with what the replay shows of its story. */
+export interface SandboxEntry extends EntryRow {
+  /** Every entry of a replay is a story's. */
   storyId: string
   title: string
   date: string
-  datePublished: Date
-  role: Role
-  status: 'active' | 'detached'
-  /** The sandbox's clock when it joined: the burst check counts joins of one night. */
-  joinedAt: Date
-  /** The link call flagged it as reporting the end event, and whether the closing checks judged it. */
-  reportsEndEvent: boolean
-  closeChecked: boolean
 }
 
-export interface SandboxOverview {
-  id: string
-  title: string
-  charter: Charter
-  scope: OverviewScope
-  status: OverviewStatus
-  closedReason: string | null
-  frozen: boolean
-  lastEntryAt: Date
-  closingSince: Date | null
-  closingStoryId: string | null
-  closedAt: Date | null
-  entriesAtLastReview: number
-  reviewedAt: Date | null
-  burstAt: Date | null
-  /** The closing a closure review ran for. */
-  closureReviewedFor: Date | null
-  /** Its members in the order they joined, the two founding stories first; detached ones stay. */
+/** An overview as production's row holds it, with its entries and what the replay reports of it. */
+export interface SandboxOverview extends OverviewRow {
+  /** Its entries in the order they were made, the two founding stories first; detached ones stay. */
   entries: SandboxEntry[]
   foundedFrom: [string, string]
-  /** The current stands, and the last refresh's signature. */
+  /** The current stands, and the last refresh's record (signature, marker, the day its offer next changes). */
   stands: { sentences: StandsLine[]; doing: StandsLine[]; asOf: string } | null
   lastSignature: string | null
+  lastMarker: string | null
+  lastUntil: string | null
 }
+
+/** A decision as the sandbox keeps it: what production's applier writes. */
+export type SandboxDecision = DecisionDraft & { undone: boolean }
 
 export interface Sandbox {
   overviews: Map<string, SandboxOverview>
@@ -67,11 +62,17 @@ export interface Sandbox {
   results: Map<string, { outcome: LinkOutcome; role: Role | null }>
   /** The stories linked so far, as linking read them. */
   stories: Map<string, LinkStory>
+  /** Every decision written, in order. */
+  decisions: SandboxDecision[]
   memberships(storyIds: string[], asOf?: Date): Promise<Memberships>
   candidateOverviews(ids: string[], asOf: Date): Promise<CandidateOverview[]>
   apply: ApplyLink
-  /** The entry of a story leaves its overview (a review's detach). */
-  detach(storyId: string): void
+  /** An overview's rows as a plan is made on them; null when there is no such overview. */
+  rowsOf(id: string): Rows | null
+  /** Writes a plan as production's applier does (`applyPlan`), to memory. */
+  write(rows: Rows | null, plan: Plan): void
+  /** What a plan is made with: the sandbox's clock and its next ids. */
+  context(): PlanContext
   /** The sandbox's clock, which joins are stamped with: the replay sets it to each day. */
   setClock(at: Date): void
 }
@@ -80,19 +81,26 @@ const SETTLES: ReadonlySet<LinkOutcome> = new Set(SETTLING_OUTCOMES)
 
 export const activeEntries = (o: SandboxOverview): SandboxEntry[] => o.entries.filter(e => e.status === 'active')
 
+/** An entry's role as linking reads it. */
+export const roleOf = (e: Pick<EntryRow, 'role' | 'roleKind'>): Role =>
+  e.role === 'routine' ? { role: 'routine', roleKind: null } : ({ role: 'turning_point', roleKind: e.roleKind } as Role)
+
 export function createSandbox(): Sandbox {
   const overviews = new Map<string, SandboxOverview>()
   /** The overview a story is an active entry of: one at most, as production's partial index holds. */
   const activeIn = (storyId: string) => [...overviews.values()].find(o => o.entries.some(e => e.storyId === storyId && e.status === 'active'))
   const results = new Map<string, { outcome: LinkOutcome; role: Role | null }>()
   const stories = new Map<string, LinkStory>()
+  const decisions: SandboxDecision[] = []
   let clock = new Date(0)
-  let entryCount = 0
+  let ids = 0
+  const context = (): PlanContext => ({ now: clock, newId: () => `sandbox-${++ids}` })
+
   /** Its active entries published on or before `asOf`, newest first: the development as it stood on that day. */
   const entriesAsOf = (o: SandboxOverview, asOf?: Date) =>
     activeEntries(o)
-      .filter(e => !asOf || e.datePublished.getTime() <= asOf.getTime())
-      .sort((a, b) => b.datePublished.getTime() - a.datePublished.getTime())
+      .filter(e => !asOf || (e.datePublished !== null && e.datePublished.getTime() <= asOf.getTime()))
+      .sort((a, b) => b.datePublished!.getTime() - a.datePublished!.getTime())
   const membership = (o: SandboxOverview, asOf?: Date): Membership => ({
     overviewId: o.id,
     scope: o.scope,
@@ -108,96 +116,141 @@ export function createSandbox(): Sandbox {
         return o ? [[id, membership(o, asOf)] as const] : []
       }),
     ),
+    // No editor acts in a replay, so no story is locked out of an overview
     lockedOut: new Map(),
   })
-  const candidateOverviews = async (ids: string[], asOf: Date): Promise<CandidateOverview[]> =>
-    ids.flatMap(id => {
+  const candidateOverviews = async (storyIds: string[], asOf: Date): Promise<CandidateOverview[]> =>
+    storyIds.flatMap(id => {
       const o = overviews.get(id)
       if (!o) return []
       const newest = entriesAsOf(o, asOf).slice(0, 5)
       return [{ id, title: o.title, charter: o.charter, entries: newest.map(e => ({ title: e.title, date: e.date })) }]
     })
-  const record = (result: LinkResult, outcome: LinkOutcome) => {
-    results.set(result.story.id, { outcome, role: result.role })
-    return { kind: 'written', outcome } as const
+
+  const rowsOf = (id: string): Rows | null => {
+    const o = overviews.get(id)
+    return o ? { overview: o, entries: o.entries } : null
   }
-  const entryOf = (s: LinkStory, role: Role, reportsEndEvent = false): SandboxEntry => {
-    stories.set(s.id, s)
-    return {
-      entryId: `entry-${++entryCount}`,
-      storyId: s.id,
-      title: s.title,
-      date: s.date,
-      datePublished: s.datePublished,
-      role,
-      status: 'active',
-      joinedAt: clock,
-      reportsEndEvent,
-      closeChecked: false,
+
+  const write = (rows: Rows | null, planned: Plan) => {
+    if (!rows && !planned.newOverview) {
+      // A decision about no overview row: a story left alone, a conflict, an audit
+      decisions.push({ ...planned.decision, undone: false }, ...planned.also.map(d => ({ ...d, undone: false })))
+      return
     }
+    let p = settle(rows, planned)
+    if (p.needsSlug) {
+      const after = applied(rows, p).overview
+      if (after.slug === null) p = { ...p, changes: [...p.changes, ...overviewChange(after, { slug: slugify(after.title) })] }
+    }
+    const after = applied(rows, p)
+    const n = p.newOverview
+    let o = n ? undefined : overviews.get(after.overview.id)
+    if (n) {
+      const [first, second] = p.newEntries
+      const [a, b] = first && second && second.datePublished.getTime() <= first.datePublished.getTime() ? [second, first] : [first, second]
+      o = { ...after.overview, entries: [], foundedFrom: [a!.storyId, b!.storyId], stands: null, lastSignature: null, lastMarker: null, lastUntil: null }
+      overviews.set(o.id, o)
+    }
+    if (!o) throw new Error(`No overview ${after.overview.id} in the sandbox`)
+    const { entries: _entries, ...row } = after.overview as SandboxOverview
+    Object.assign(o, row)
+    for (const e of after.entries) {
+      const had = o.entries.find(x => x.id === e.id)
+      if (had) Object.assign(had, e)
+      else {
+        const s = stories.get(e.storyId!)
+        o.entries.push({ ...e, storyId: e.storyId!, title: s?.title ?? '', date: s?.date ?? '' })
+      }
+    }
+    decisions.push(
+      { ...p.decision, inputs: { ...p.decision.inputs, changes: merged(p.changes) }, undone: false },
+      ...p.also.map(d => ({ ...d, undone: false })),
+    )
+    if (p.undoesLinksOf) for (const d of decisions) if (d.kind === 'link' && d.storyId === p.undoesLinksOf) d.undone = true
   }
+
   const apply: ApplyLink = async (result, lastTry) => {
     stories.set(result.story.id, result.story)
+    if (result.founding) stories.set(result.founding.partner.id, result.founding.partner)
     const settled = results.get(result.story.id)
     if (activeIn(result.story.id) || (settled && SETTLES.has(settled.outcome))) return { kind: 'skipped' }
-    if (isStale(result, await memberships(result.shown.partners.map(p => p.id)))) return lastTry ? record(result, 'conflict') : { kind: 'stale' }
-    if (result.outcome === 'joined') {
-      const o = overviews.get(result.join!.candidate.id)
-      if (!o || (o.status === 'closed' && o.closedReason !== 'faded')) return record(result, 'conflict')
-      if (o.frozen) return record(result, 'held')
-      o.entries.push(entryOf(result.story, result.role ?? { role: 'routine', roleKind: null }, result.join!.reportsEndEvent))
-      if (result.story.datePublished > o.lastEntryAt) o.lastEntryAt = result.story.datePublished
-      if (o.status === 'quiet' || o.status === 'closed') Object.assign(o, { status: 'open', closedReason: null, closedAt: null, closingSince: null })
-      return record(result, 'joined')
+    const ctx = context()
+    let rows: Rows | null = null
+    let linked: LinkPlan
+    if (isStale(result, await memberships(result.shown.partners.map(p => p.id)))) {
+      if (!lastTry) return { kind: 'stale' }
+      linked = planConflict(result, ctx)
+    } else if (result.outcome === 'joined') {
+      rows = rowsOf(result.join!.candidate.id)
+      linked = planJoin(rows?.overview ?? null, result, ctx)
+    } else if (result.outcome === 'founded') linked = planFounding(result, ctx)
+    else linked = planAlone(result, ctx)
+    write(rows, linked.plan)
+    results.set(result.story.id, { outcome: linked.outcome, role: result.role })
+    if (linked.outcome === 'founded') {
+      const partner = result.founding!.partner.id
+      const entry = [...overviews.values()].flatMap(o => o.entries).find(e => e.storyId === partner && e.status === 'active')
+      results.set(partner, { outcome: 'founded', role: entry ? roleOf(entry) : null })
+      const own = [...overviews.values()].flatMap(o => o.entries).find(e => e.storyId === result.story.id && e.status === 'active')
+      if (own) results.set(result.story.id, { outcome: 'founded', role: roleOf(own) })
     }
-    if (result.outcome === 'founded') {
-      const f = result.founding!
-      const draft = f.draft!
-      const [a, b] = f.partner.datePublished <= result.story.datePublished ? [f.partner, result.story] : [result.story, f.partner]
-      const id = `sandbox-${overviews.size + 1}`
-      overviews.set(id, {
-        id,
-        title: draft.title,
-        charter: draft.charter,
-        scope: 'forming',
-        status: 'open',
-        closedReason: null,
-        frozen: false,
-        lastEntryAt: b.datePublished,
-        closingSince: null,
-        closingStoryId: null,
-        closedAt: null,
-        entriesAtLastReview: 0,
-        reviewedAt: null,
-        burstAt: null,
-        closureReviewedFor: null,
-        entries: [entryOf(a, draft.roles.a), entryOf(b, draft.roles.b)],
-        foundedFrom: [a.id, b.id],
-        stands: null,
-        lastSignature: null,
-      })
-      results.set(f.partner.id, { outcome: 'founded', role: a.id === f.partner.id ? draft.roles.a : draft.roles.b })
-      return record(result, 'founded')
-    }
-    return record(result, result.outcome)
+    return { kind: 'written', outcome: linked.outcome }
   }
-  const detach = (storyId: string) => {
-    const o = activeIn(storyId)
-    if (!o) return
-    for (const e of o.entries) if (e.storyId === storyId) e.status = 'detached'
-    const newest = entriesAsOf(o)[0]
-    if (newest) o.lastEntryAt = newest.datePublished
-  }
+
   return {
     overviews,
     results,
     stories,
+    decisions,
     memberships,
     candidateOverviews,
     apply,
-    detach,
+    rowsOf,
+    write,
+    context,
     setClock: at => {
       clock = at
     },
   }
+}
+
+/**
+ * The safeguards that fired, by name, counted from the decisions written (what the replay reports):
+ * end-event checks that did not begin a closing, closings cancelled (by a new entry, by a review, by an
+ * unpublished member), bursts, the review brake, and what reviews did and what code refused of them.
+ */
+export function safeguardsOf(decisions: readonly SandboxDecision[]): Map<string, number> {
+  const fired = new Map<string, number>()
+  const add = (name: string, n = 1) => {
+    if (n > 0) fired.set(name, (fired.get(name) ?? 0) + n)
+  }
+  for (const d of decisions) {
+    const inputs = d.inputs as {
+      reason?: string | null
+      by?: string | null
+      actions?: { kind: string }[]
+      refusals?: unknown[]
+      brake?: unknown
+      changes?: { table: string; after: { detachReason?: string } }[]
+    }
+    if (d.kind === 'close' && d.outcome !== 'closing' && d.outcome !== 'failed') add(`closing refused (${d.outcome})`)
+    if (d.kind === 'status' && inputs.reason === 'closing_cancelled')
+      add(
+        inputs.by === 'review'
+          ? 'closing cancelled by its review'
+          : inputs.by === 'unpublished'
+            ? 'closing cancelled: its story unpublished'
+            : 'closing cancelled by a new entry',
+      )
+    if (d.kind === 'status' && d.outcome === 'frozen') add('burst froze an overview')
+    if (d.kind === 'review' && d.outcome === 'reviewed') {
+      add('review detached an entry', (inputs.changes ?? []).filter(c => c.table === 'entry' && c.after.detachReason === 'review').length)
+      add('review relabeled a role', (inputs.actions ?? []).filter(a => a.kind === 'relabel').length)
+      add('review narrowed the charter', (inputs.actions ?? []).filter(a => a.kind === 'narrow').length)
+      add('review answers refused', (inputs.refusals ?? []).length)
+      if (inputs.brake) add('review brake froze an overview')
+    }
+  }
+  return fired
 }
