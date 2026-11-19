@@ -56,12 +56,15 @@ function decision(over: Partial<AdminOverviewDecision> = {}): AdminOverviewDecis
     costUsd: 0.002,
     model: 'gpt-6-luna',
     confidence: 0.9,
+    move: null,
     inputs: {},
     answer: {},
     undoable: true,
     ...over,
   }
 }
+
+const quiet = decision({ id: 'd4', kind: 'status', outcome: 'quiet', storyId: null, move: { from: 'open', to: 'quiet', reason: 'quiet' }, undoable: false })
 
 function detail(over: Partial<AdminOverviewDetail> = {}): AdminOverviewDetail {
   return {
@@ -146,9 +149,11 @@ function detail(over: Partial<AdminOverviewDetail> = {}): AdminOverviewDetail {
         confidence: null,
       }),
       decision({ id: 'd2', kind: 'stands', outcome: 'written', undoable: false }),
-      decision({ id: 'd4', kind: 'status', outcome: 'quiet', storyId: null, inputs: { from: 'open', to: 'quiet', reason: 'quiet' }, undoable: false }),
+      quiet,
       decision(),
     ],
+    decisionsTotal: 4,
+    statusHistory: [quiet],
     ...over,
   }
 }
@@ -176,6 +181,15 @@ describe('OverviewDetailPage', () => {
     expect(screen.getByText(/Sentence 2: fact check/)).toBeInTheDocument()
     const history = screen.getByRole('heading', { name: 'Status history' }).closest('section') as HTMLElement
     expect(within(history).getByText(/Status: open to quiet/)).toBeInTheDocument()
+  })
+
+  it('says when the log shows only the newest decisions, and keeps every move in the status history', async () => {
+    const older = decision({ id: 'd0', kind: 'status', outcome: 'open', storyId: null, move: { from: 'quiet', to: 'open', reason: 'active' }, undoable: false })
+    mockApi.overviews.get.mockResolvedValue(detail({ decisionsTotal: 250, statusHistory: [quiet, older] }))
+    renderPage()
+    expect(await screen.findByText('The newest 4 of 250 decisions.')).toBeInTheDocument()
+    const history = screen.getByRole('heading', { name: 'Status history' }).closest('section') as HTMLElement
+    expect(within(history).getByText(/Status: quiet to open \(active\)/)).toBeInTheDocument()
   })
 
   it('offers Undo only on what can be undone, and undoes after a confirmation', async () => {
@@ -299,6 +313,8 @@ describe('OverviewDetailPage', () => {
         ],
         members: [],
         decisions: [],
+        decisionsTotal: 0,
+        statusHistory: [],
       }),
     )
     renderPage()

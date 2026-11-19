@@ -9,20 +9,17 @@ import { formatDateWithTime } from '../../lib/constants'
 import { actorLabel, decisionKindLabel, STATUS_KINDS } from './overviewLabels'
 
 /*
- * An overview's status history and its decision log on its admin page, newest first. Undo shows on
- * a decision the server can reverse (`undoable`); the server still refuses one whose work no longer
- * stands, and the toast gives its reason. An undo is itself a decision, and undoing it restores what
- * it reversed.
+ * An overview's status history and its decision log on its admin page, newest first: the log its
+ * newest decisions (the server's log size), the history every move. Undo shows on a decision the
+ * server can reverse (`undoable`); the server refuses one when anything it changed was changed again
+ * since (whole or not at all), and the toast gives its reason. An undo is itself a decision, and
+ * undoing it restores what it reversed.
  */
 
-const readMove = (inputs: unknown): { from?: string; to?: string; reason?: string } =>
-  typeof inputs === 'object' && inputs !== null ? (inputs as { from?: string; to?: string; reason?: string }) : {}
-
 /** A status decision in words: "open to quiet (faded)", or its outcome. */
-export function describeStatus(d: Pick<AdminOverviewDecision, 'outcome' | 'inputs'>): string {
-  const move = readMove(d.inputs)
-  const reason = move.reason ? ` (${move.reason.replace(/_/g, ' ')})` : ''
-  if (typeof move.from === 'string' && typeof move.to === 'string') return `${move.from} to ${move.to}${reason}`
+export function describeStatus(d: Pick<AdminOverviewDecision, 'outcome' | 'move'>): string {
+  const reason = d.move?.reason ? ` (${d.move.reason.replace(/_/g, ' ')})` : ''
+  if (d.move?.from && d.move.to) return `${d.move.from} to ${d.move.to}${reason}`
   return `${d.outcome.replace(/_/g, ' ')}${reason}`
 }
 
@@ -33,11 +30,11 @@ const UNDO_WHAT: Record<string, string> = {
   'status:frozen': 'The overview is unfrozen.',
   close: 'The closing is cancelled and the overview is open again.',
   review:
-    'What the review detached, relabeled, narrowed or retitled goes back, where it still stands. The stories and OUT entries it restores are locked, so no later review takes them out again.',
+    'Everything the review detached, relabeled, narrowed or retitled goes back, or nothing does: if any of it changed since, the undo is refused. The stories and OUT entries it restores are locked, so no later review takes them out again.',
   undo: 'What this undo reversed is restored.',
 }
 const undoWhat = (d: AdminOverviewDecision) =>
-  UNDO_WHAT[`${d.kind}:${d.outcome}`] ?? UNDO_WHAT[d.kind] ?? 'What this decision changed goes back, where it still stands.'
+  UNDO_WHAT[`${d.kind}:${d.outcome}`] ?? UNDO_WHAT[d.kind] ?? 'What this decision changed goes back, unless something changed it again since.'
 
 function Undone({ d }: { d: AdminOverviewDecision }) {
   if (!d.undoneAt) return null
@@ -75,7 +72,7 @@ export function OverviewStatusHistory({ decisions }: { decisions: AdminOverviewD
   )
 }
 
-export function OverviewDecisionLog({ decisions }: { decisions: AdminOverviewDecision[] }) {
+export function OverviewDecisionLog({ decisions, total = decisions.length }: { decisions: AdminOverviewDecision[]; total?: number }) {
   const action = useOverviewAction()
   const [undoing, setUndoing] = useState<AdminOverviewDecision | null>(null)
   return (
@@ -83,6 +80,11 @@ export function OverviewDecisionLog({ decisions }: { decisions: AdminOverviewDec
       <h2 id="overview-log" className="text-lg font-semibold text-neutral-900">
         Decision log
       </h2>
+      {total > decisions.length && (
+        <p className="text-sm text-neutral-500">
+          The newest {decisions.length.toLocaleString('en-US')} of {total.toLocaleString('en-US')} decisions.
+        </p>
+      )}
       {decisions.length === 0 ? (
         <p className="text-sm text-neutral-500">No decisions yet.</p>
       ) : (

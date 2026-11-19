@@ -20,23 +20,12 @@ import { notify } from '../lib/notify.js'
 import { sanitizedError } from '../lib/runErrors.js'
 import { countOf, recordItems, reportRunResult } from '../lib/runUsage.js'
 import { utcDay } from '../lib/days.js'
-import { buildFactCheckPromptParts } from '../prompts/research.js'
-import {
-  buildCloseCheckPrompt,
-  buildClosePrompt,
-  buildFoundCheckPrompt,
-  buildFoundPrompt,
-  buildLinkPromptParts,
-  buildReviewPrompt,
-  buildStandsPromptParts,
-} from '../prompts/overviews.js'
-import { closeCheckSchema, closeSchema, foundCheckSchema, foundSchema, linkSchema, reviewSchema, standsSchema } from '../schemas/overviews.js'
-import { factCheckSchema } from '../schemas/research.js'
 import { membershipsOf, nearestPublished } from '../services/overviewCandidates.js'
 import { candidateOverviews, linkStories } from '../services/overviewInput.js'
 import { applyAudit, applyBurst, applyClosing, applyLink, applyReview, applyStands, applyStatus } from '../services/overviewLifecycle.js'
 import { linkInOrder, type ApplyLink, type LinkDeps } from '../services/overviewLink.js'
 import { LINK_OVERVIEWS_JOB, overviewStepOn, overviewSwitchRefusal, owedStories } from '../services/overviewQueue.js'
+import { overviewCalls, type OverviewCalls } from '../services/overviewSteps.js'
 import type { LinkOutcome, LinkStory } from '../services/overviewTypes.js'
 import { runUpkeep, type UpkeepDeps, type UpkeepFreeze, type UpkeepTally } from '../services/overviewUpkeep.js'
 import { auditPicks, overviewStates, pendingClosings, reviewCase, standsCases } from '../services/overviewUpkeepInput.js'
@@ -50,46 +39,36 @@ const log = createLogger(LINK_OVERVIEWS_JOB)
 /** Why the step does nothing while its gates are open: its job is disabled. */
 export const OVERVIEW_JOB_DISABLED = 'Overviews are switched off: the link_overviews job is disabled on the Jobs page'
 
-/** Linking as production runs it: the tables, read as they stand at each step, and the models at the step's tiers. */
-export const productionLinkDeps = (): LinkDeps => {
-  const { tiers } = config.overviews
-  return {
-    neighbours: story => nearestPublished(prisma, story.id, story.datePublished),
-    memberships: (ids, asOf) => membershipsOf(prisma, ids, asOf),
-    overviews: (ids, asOf) => candidateOverviews(prisma, ids, asOf),
-    stories: ids => linkStories(prisma, ids),
-    link: input => structuredCall(tiers.link, linkSchema, buildLinkPromptParts(input)),
-    found: input => structuredCall(tiers.found, foundSchema, buildFoundPrompt(input)),
-    foundCheck: input => structuredCall(tiers.foundCheck, foundCheckSchema, buildFoundCheckPrompt(input)),
-  }
-}
+/** The step's model calls as production makes them: `structuredCall` at each step's tier and effort (`overviewSteps.ts`). */
+export const productionCalls = (): OverviewCalls =>
+  overviewCalls((step, prompt) => structuredCall(step.tier, step.schema, prompt, step.effort ? { effort: step.effort } : {}))
 
-/** The upkeep as production runs it: the tables, the lifecycle's writes, and the models at the step's tiers (the audit at high effort). */
-export const productionUpkeepDeps = (now: Date): UpkeepDeps => {
-  const { tiers } = config.overviews
-  return {
-    closings: () => pendingClosings(prisma),
-    states: () => overviewStates(prisma, now),
-    reviewCase: id => reviewCase(prisma, id),
-    auditPicks: at => auditPicks(prisma, at),
-    standsCases: today => standsCases(prisma, today),
-    close: {
-      close: input => structuredCall(tiers.close, closeSchema, buildClosePrompt(input)),
-      closeCheck: input => structuredCall(tiers.closeCheck, closeCheckSchema, buildCloseCheckPrompt(input)),
-    },
-    review: { review: (input, { audit }) => structuredCall(tiers.review, reviewSchema, buildReviewPrompt(input), audit ? { effort: 'high' } : {}) },
-    stands: {
-      write: input => structuredCall(tiers.stands, standsSchema, buildStandsPromptParts(input)),
-      check: (items, lines) => structuredCall(tiers.standsCheck, factCheckSchema, buildFactCheckPromptParts(items, lines, [])),
-    },
-    applyClosing: (c, result) => applyClosing(c, result, now),
-    applyStatus: (state, moves, clock) => applyStatus(state, moves, clock, now),
-    applyBurst: state => applyBurst(state, now),
-    applyReview: (c, result) => applyReview(c, result, now),
-    applyAudit: (c, result) => applyAudit(c, result, now),
-    applyStands: (c, result, record, today) => applyStands(c, result, record, today),
-  }
-}
+/** Linking as production runs it: the tables, read as they stand at each step, and the step's calls. */
+export const productionLinkDeps = (calls: OverviewCalls = productionCalls()): LinkDeps => ({
+  neighbours: story => nearestPublished(prisma, story.id, story.datePublished),
+  memberships: (ids, asOf) => membershipsOf(prisma, ids, asOf),
+  overviews: (ids, asOf) => candidateOverviews(prisma, ids, asOf),
+  stories: ids => linkStories(prisma, ids),
+  ...calls.link,
+})
+
+/** The upkeep as production runs it: the tables, the lifecycle's writes, and the step's calls (the audit at high effort). */
+export const productionUpkeepDeps = (now: Date, calls: OverviewCalls = productionCalls()): UpkeepDeps => ({
+  closings: () => pendingClosings(prisma),
+  states: () => overviewStates(prisma, now),
+  reviewCase: id => reviewCase(prisma, id),
+  auditPicks: at => auditPicks(prisma, at),
+  standsCases: today => standsCases(prisma, today),
+  close: calls.close,
+  review: calls.review,
+  stands: calls.stands,
+  applyClosing: (c, result) => applyClosing(c, result, now),
+  applyStatus: (state, moves, clock) => applyStatus(state, moves, clock, now),
+  applyBurst: state => applyBurst(state, now),
+  applyReview: (c, result) => applyReview(c, result, now),
+  applyAudit: (c, result) => applyAudit(c, result, now),
+  applyStands: (c, result, record, today) => applyStands(c, result, record, today),
+})
 
 /**
  * The development time the status machine counts in (`.context/overviews.md`, "The job"): while a
@@ -174,7 +153,8 @@ export function linkSummary(outcomes: ReadonlyMap<string, LinkOutcome>, backlog:
   return backlog ? `${line}; backfill ${backlog.taken.toLocaleString('en-US')} of ${backlog.total.toLocaleString('en-US')}` : line
 }
 
-export async function runLinkOverviewsJob(now: Date = new Date()): Promise<void> {
+/** One run of the step at `now`; `calls` are production's model calls (a test gives scripted ones). */
+export async function runLinkOverviewsJob(now: Date = new Date(), calls: OverviewCalls = productionCalls()): Promise<void> {
   const refusal = overviewSwitchRefusal()
   if (refusal || !(await overviewStepOn())) {
     const why = refusal ?? OVERVIEW_JOB_DISABLED
@@ -200,7 +180,7 @@ export async function runLinkOverviewsJob(now: Date = new Date()): Promise<void>
     }
     return !switchedOff
   }
-  const run = await linkInOrder(stories, productionLinkDeps(), apply, { concurrency: config.overviews.concurrency, keepGoing })
+  const run = await linkInOrder(stories, productionLinkDeps(calls), apply, { concurrency: config.overviews.concurrency, keepGoing })
 
   const proposed = run.results.reduce((sum, r) => sum + r.proposed, 0)
   const refused = run.results.reduce((sum, r) => sum + r.refusals.length, 0)
@@ -217,7 +197,7 @@ export async function runLinkOverviewsJob(now: Date = new Date()): Promise<void>
       stories.filter(s => run.outcomes.has(s.id)),
       now,
     )
-    upkeep = await runUpkeep(productionUpkeepDeps(now), { clock, now, today: utcDay(now) }, keepGoing)
+    upkeep = await runUpkeep(productionUpkeepDeps(now, calls), { clock, now, today: utcDay(now) }, keepGoing)
     for (const e of upkeep.errors)
       log.error({ part: e.part, overviewId: e.id, error: sanitizedError(e.error) }, 'overview upkeep failed for an overview; it is tried again next run')
     log.info({ ...upkeep, errors: upkeep.errors.length, clock }, 'overview upkeep finished')

@@ -268,12 +268,12 @@ describe('the upkeep clock and summary', () => {
     await deps.stands.check([], [])
     const { tiers } = (await import('../config.js')).config.overviews
     expect(mocks.structuredCall.mock.calls.map(c => [c[0], c[3]])).toEqual([
-      [tiers.close, undefined],
-      [tiers.closeCheck, undefined],
+      [tiers.close, {}],
+      [tiers.closeCheck, {}],
       [tiers.review, {}],
       [tiers.review, { effort: 'high' }],
-      [tiers.stands, undefined],
-      [tiers.standsCheck, undefined],
+      [tiers.stands, {}],
+      [tiers.standsCheck, {}],
     ])
 
     const state = {} as Parameters<typeof deps.applyBurst>[0]

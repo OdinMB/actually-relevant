@@ -8,14 +8,12 @@
  * linking reads them. Then the strong judge compares each development's founded end event with the
  * key's, and `linkScore.ts` scores the bars. Each run k ≥ 2 has its own cache keys.
  */
-import { buildFoundCheckPrompt, buildFoundPrompt, buildLinkPromptParts } from '../../../prompts/overviews.js'
-import { foundCheckSchema, foundSchema, linkSchema } from '../../../schemas/overviews.js'
 import type { Neighbour } from '../../../services/overviewCandidates.js'
 import { linkInOrder, type LinkDeps, type ModelCall } from '../../../services/overviewLink.js'
+import { overviewCalls, type OverviewCalls, type OverviewStep } from '../../../services/overviewSteps.js'
 import type { LinkStory } from '../../../services/overviewTypes.js'
 import type { Prompt } from '../../../lib/promptCache.js'
 import type { z } from 'zod'
-import { config } from '../../../config.js'
 import { arm, versionedSchemaName } from '../models.js'
 import { runNumbers, runSchemaName } from '../repeats.js'
 import type { Arm, SuiteContext } from '../types.js'
@@ -33,17 +31,10 @@ export const TIER_ARMS: Record<'small' | 'medium' | 'large', Arm> = {
   medium: arm('gpt-6-luna', 'medium'),
   large: arm('gpt-6.1-sol', 'medium'),
 }
-const STEP_ARMS = {
-  link: TIER_ARMS[config.overviews.tiers.link],
-  found: TIER_ARMS[config.overviews.tiers.found],
-  foundCheck: TIER_ARMS[config.overviews.tiers.foundCheck],
-}
-const SCHEMA_NAMES = {
-  link: versionedSchemaName('overview-link', linkSchema),
-  found: versionedSchemaName('overview-found', foundSchema),
-  foundCheck: versionedSchemaName('overview-found-check', foundCheckSchema),
-  endEvent: versionedSchemaName('overview-end-event-judge', endEventJudgeSchema),
-}
+/** A step's arm: its tier's, at the step's own effort where it has one (the audit's). */
+export const stepArm = (step: OverviewStep<unknown>): Arm => ({ ...TIER_ARMS[step.tier], ...(step.effort ? { effort: step.effort } : {}) })
+
+const END_EVENT_SCHEMA = versionedSchemaName('overview-end-event-judge', endEventJudgeSchema)
 
 export interface LinkStepOptions {
   ctx: SuiteContext & { spentUsd(): number }
@@ -82,6 +73,10 @@ export async function evalCall<T>(ctx: SuiteContext, a: Arm, schemaName: string,
   return { parsed: rec.outcome === 'ok' ? rec.parsed : null, costUsd: rec.costUsd, model: a.model }
 }
 
+/** Production's model calls of the step (`overviewCalls`) on the eval's cache, each at its step's arm, run k ≥ 2 under its own key. */
+export const evalCalls = (ctx: SuiteContext, run: number): OverviewCalls =>
+  overviewCalls((step, prompt) => evalCall(ctx, stepArm(step), versionedSchemaName(step.name, step.schema), step.schema, prompt, run))
+
 /** Every slug the half's keys replay: entries (must and optional) and near misses, once. */
 export function replaySlugs(keys: readonly AnswerKey[]): string[] {
   return [...new Set(keys.flatMap(k => [...k.entries.map(e => e.slug), ...k.nearMisses.map(n => n.slug)]))]
@@ -116,9 +111,7 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
       memberships: sandbox.memberships,
       overviews: sandbox.candidateOverviews,
       stories: async wanted => wanted.flatMap(id => (byId.has(id) ? [byId.get(id)!] : [])),
-      link: input => evalCall(o.ctx, STEP_ARMS.link, SCHEMA_NAMES.link, linkSchema, buildLinkPromptParts(input), run),
-      found: input => evalCall(o.ctx, STEP_ARMS.found, SCHEMA_NAMES.found, foundSchema, buildFoundPrompt(input), run),
-      foundCheck: input => evalCall(o.ctx, STEP_ARMS.foundCheck, SCHEMA_NAMES.foundCheck, foundCheckSchema, buildFoundCheckPrompt(input), run),
+      ...evalCalls(o.ctx, run).link,
     }
     await linkInOrder(replayed, deps, sandbox.apply, {
       concurrency: o.concurrency,
@@ -155,7 +148,7 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
         continue
       }
       const prompt = buildEndEventJudgePrompt({ development: k.title, key: k.charter.endEvent, founded: founded.endEvent })
-      const answer = await evalCall(o.ctx, JUDGE_ARM, SCHEMA_NAMES.endEvent, endEventJudgeSchema, prompt, r.run)
+      const answer = await evalCall(o.ctx, JUDGE_ARM, END_EVENT_SCHEMA, endEventJudgeSchema, prompt, r.run)
       endEvents.push({
         key: k.id,
         run: r.run,

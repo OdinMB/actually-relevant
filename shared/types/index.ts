@@ -1836,10 +1836,19 @@ export interface AdminOverviewDecision {
   costUsd: number
   model: string | null
   confidence: number | null
+  /** What a `status` decision moved (the server reads it with the decision's schema); null for other kinds. */
+  move: OverviewDecisionMove | null
   inputs: unknown
   answer: unknown
   /** Undo can reverse it (the server still refuses one whose work no longer stands, with the reason). */
   undoable: boolean
+}
+
+/** A status move: from and to (a scope or a status), and why; a burst's freeze names neither. */
+export interface OverviewDecisionMove {
+  from: string | null
+  to: string | null
+  reason: string | null
 }
 
 /** `GET /api/admin/overviews/:id`. `members` are the entries, active first; `entries` the count of active published ones. */
@@ -1854,7 +1863,11 @@ export interface AdminOverviewDetail extends AdminOverviewListItem {
   on: boolean
   members: AdminOverviewEntry[]
   stands: AdminStandsVersion[]
+  /** The newest decisions, at most the server's log size, of `decisionsTotal`. */
   decisions: AdminOverviewDecision[]
+  decisionsTotal: number
+  /** Every status move, end-event closing and editor's close or freeze, newest first, however long the log. */
+  statusHistory: AdminOverviewDecision[]
 }
 
 export interface OverviewRef {

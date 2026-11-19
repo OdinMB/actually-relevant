@@ -4,15 +4,22 @@
  * the list, one overview with its entries and their judgments, its stands versions with each line's
  * facts as they stand now, and its decision log with what Undo can reverse, and a story's Overview
  * block (its membership, its last link decision with the candidates shown, the overviews it can be
- * attached to). The public page's reads come with phase 5.
+ * attached to). The public reads are `overviewPublic.ts`'s; "public" here is the one rule
+ * (`isPublicOverview`).
  */
 import { z } from 'zod'
+import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { NotFoundError } from '../utils/errors.js'
+import { decisionMove } from './overviewDecisions.js'
 import { undoable } from './overviewEdits.js'
 import { parseCharter } from './overviewInput.js'
+import { isPublicOverview } from './overviewPublicRule.js'
 import { overviewStepOn } from './overviewQueue.js'
 import { usable } from './researchPool.js'
+
+/** The decisions the status history lists: the status machine's, end-event closings, an editor's close and freeze. */
+const STATUS_KINDS = ['status', 'close', 'editor_close', 'editor_freeze'] as const
 
 export interface OverviewsAdminState {
   /** The step is switched on (both gates open, its job enabled). */
@@ -47,9 +54,6 @@ const LIST_SELECT = {
   issue: { select: { id: true, name: true } },
 } as const
 
-/** Public once the step is on: ongoing and not hidden. */
-const isPublic = (o: { scope: string; hidden: boolean }) => o.scope === 'ongoing' && !o.hidden
-
 /** Active entries of published stories per overview. */
 async function entryCounts(ids: string[]): Promise<Map<string, number>> {
   if (ids.length === 0) return new Map()
@@ -69,7 +73,7 @@ export async function adminOverviewList(filters: OverviewListFilters = {}) {
     select: LIST_SELECT,
   })
   const counts = await entryCounts(rows.map(r => r.id))
-  return rows.map(r => ({ ...r, entries: counts.get(r.id) ?? 0, public: isPublic(r) }))
+  return rows.map(r => ({ ...r, entries: counts.get(r.id) ?? 0, public: isPublicOverview(r) }))
 }
 
 const sharedSchema = z.object({
@@ -136,29 +140,49 @@ export async function adminOverview(id: string) {
     },
   })
   if (!o) throw new NotFoundError('Overview not found')
-  const [entries, stands, decisions, counts, on] = await Promise.all([
+  const newest = [{ createdAt: 'desc' as const }, { id: 'desc' as const }]
+  const withStory = { story: { select: { title: true, sourceTitle: true } } }
+  const [entries, stands, decisions, decisionsTotal, history, counts, on] = await Promise.all([
     prisma.overviewEntry.findMany({
       where: { overviewId: id },
       orderBy: [{ status: 'asc' }, { story: { datePublished: 'desc' } }, { id: 'asc' }],
       include: { story: { select: { id: true, title: true, sourceTitle: true, status: true, datePublished: true } } },
     }),
     prisma.overviewStands.findMany({ where: { overviewId: id }, orderBy: { number: 'desc' } }),
-    prisma.overviewDecision.findMany({
-      where: { overviewId: id },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      include: { story: { select: { title: true, sourceTitle: true } } },
-    }),
+    prisma.overviewDecision.findMany({ where: { overviewId: id }, orderBy: newest, take: config.overviews.logSize, include: withStory }),
+    prisma.overviewDecision.count({ where: { overviewId: id } }),
+    // Every move, however long the log: the status history is short
+    prisma.overviewDecision.findMany({ where: { overviewId: id, kind: { in: [...STATUS_KINDS] } }, orderBy: newest, include: withStory }),
     entryCounts([id]),
     overviewStepOn(),
   ])
   const versions = stands.map(v => ({ ...v, sentences: linesSchema.parse(v.sentences), doing: linesSchema.parse(v.doing) }))
   const resolve = resolveLine(await citedFacts([...new Set(versions.flatMap(v => [...v.sentences, ...v.doing].flatMap(l => l.facts)))]))
-  const names = await editorNames([...new Set(decisions.flatMap(d => [d.actor, d.undoneBy ?? '']).filter(Boolean))])
+  const names = await editorNames([...new Set([...decisions, ...history].flatMap(d => [d.actor, d.undoneBy ?? '']).filter(Boolean))])
+  const logEntry = ({ story, ...d }: (typeof decisions)[number]) => ({
+    id: d.id,
+    kind: d.kind,
+    outcome: d.outcome,
+    storyId: d.storyId,
+    storyTitle: story ? (story.title ?? story.sourceTitle) : null,
+    actor: d.actor,
+    actorName: names.get(d.actor) ?? null,
+    createdAt: d.createdAt,
+    undoneAt: d.undoneAt,
+    undoneByName: d.undoneBy ? (names.get(d.undoneBy) ?? d.undoneBy) : null,
+    costUsd: d.costUsd,
+    model: d.model,
+    confidence: d.confidence,
+    move: decisionMove(d.kind, d.inputs),
+    inputs: d.inputs,
+    answer: d.answer,
+    undoable: undoable(d),
+  })
   return {
     ...o,
     charter: parseCharter(o.charter) ?? { in: '', out: [], endEvent: '' },
     entries: counts.get(id) ?? 0,
-    public: isPublic(o),
+    public: isPublicOverview(o),
     on,
     members: entries.map(({ story, shared, ...e }) => ({
       ...e,
@@ -180,24 +204,10 @@ export async function adminOverview(id: string) {
         ...record,
       }
     }),
-    decisions: decisions.map(({ story, ...d }) => ({
-      id: d.id,
-      kind: d.kind,
-      outcome: d.outcome,
-      storyId: d.storyId,
-      storyTitle: story ? (story.title ?? story.sourceTitle) : null,
-      actor: d.actor,
-      actorName: names.get(d.actor) ?? null,
-      createdAt: d.createdAt,
-      undoneAt: d.undoneAt,
-      undoneByName: d.undoneBy ? (names.get(d.undoneBy) ?? d.undoneBy) : null,
-      costUsd: d.costUsd,
-      model: d.model,
-      confidence: d.confidence,
-      inputs: d.inputs,
-      answer: d.answer,
-      undoable: undoable(d),
-    })),
+    /** The newest `logSize` decisions, of `decisionsTotal`; the status history keeps every move. */
+    decisions: decisions.map(logEntry),
+    decisionsTotal,
+    statusHistory: history.map(logEntry),
   }
 }
 
@@ -212,18 +222,17 @@ const shownSchema = z
   .partial()
 const answerSchema = z.object({ candidates: z.array(z.object({ id: z.string(), belongs: z.string() })).catch([]) }).partial()
 
-/** How many overviews the attach picker lists, the newest last entry first. */
-const ATTACH_CHOICES = 200
-
 /**
  * A story's Overview block (the story page's Source tab): whether the step is on and any overview
  * exists, the overview it is in now, the ones it left, its newest link decision with the candidates
- * that call was shown and what the model said of each, and the overviews it can be attached to.
+ * that call was shown and what the model said of each, and the overviews it can be attached to: while
+ * it is in none, the `attachChoices` not closed (a closed one takes no story until reopened), the
+ * newest last entry first.
  */
 export async function storyOverview(storyId: string) {
   const story = await prisma.story.findUnique({ where: { id: storyId }, select: { id: true, status: true } })
   if (!story) throw new NotFoundError('Story not found')
-  const [state, entries, link, choices] = await Promise.all([
+  const [state, entries, link] = await Promise.all([
     overviewsAdminState(),
     prisma.overviewEntry.findMany({
       where: { storyId },
@@ -231,12 +240,16 @@ export async function storyOverview(storyId: string) {
       include: { overview: { select: { id: true, title: true, scope: true, status: true } } },
     }),
     prisma.overviewDecision.findFirst({ where: { storyId, kind: 'link' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
-    prisma.overview.findMany({
-      orderBy: [{ lastEntryAt: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
-      take: ATTACH_CHOICES,
-      select: { id: true, title: true, scope: true, status: true },
-    }),
   ])
+  const active = entries.find(e => e.status === 'active') ?? null
+  const choices = active
+    ? []
+    : await prisma.overview.findMany({
+        where: { status: { not: 'closed' } },
+        orderBy: [{ lastEntryAt: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
+        take: config.overviews.attachChoices,
+        select: { id: true, title: true, scope: true, status: true },
+      })
   const inputs = shownSchema.safeParse(link?.inputs).data ?? {}
   const answers = new Map((answerSchema.safeParse(link?.answer).data?.candidates ?? []).map(c => [c.id.trim(), c.belongs]))
   const shown = [
@@ -251,7 +264,6 @@ export async function storyOverview(storyId: string) {
     }),
   ])
   const titles = new Map([...overviewTitles.map(o => [o.id, o.title] as const), ...storyTitles.map(s => [s.id, s.title ?? s.sourceTitle] as const)])
-  const active = entries.find(e => e.status === 'active') ?? null
   return {
     ...state,
     published: story.status === 'published',
@@ -281,6 +293,6 @@ export async function storyOverview(storyId: string) {
           refusals: inputs.refusals ?? [],
         }
       : null,
-    attachable: active ? [] : choices,
+    attachable: choices,
   }
 }

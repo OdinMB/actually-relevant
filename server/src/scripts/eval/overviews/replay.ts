@@ -9,37 +9,22 @@
  * facts are given by the runner: the `pass-pool` step's pools, or the database's. Each run k ≥ 2 has
  * its own cache keys.
  */
-import { buildFoundCheckPrompt, buildFoundPrompt, buildLinkPromptParts } from '../../../prompts/overviews.js'
-import { foundCheckSchema, foundSchema, linkSchema } from '../../../schemas/overviews.js'
 import { config } from '../../../config.js'
 import type { Neighbour } from '../../../services/overviewCandidates.js'
 import { linkInOrder, type LinkDeps } from '../../../services/overviewLink.js'
 import { standsFacts, type MemberFact } from '../../../services/overviewStands.js'
 import type { LinkStory } from '../../../services/overviewTypes.js'
 import { runUpkeep } from '../../../services/overviewUpkeep.js'
-import { versionedSchemaName } from '../models.js'
 import { runNumbers } from '../repeats.js'
 import type { SuiteContext } from '../types.js'
 import { inDevelopmentHalf } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
-import { evalCall, replaySlugs, TIER_ARMS } from './link.js'
+import { evalCalls, replaySlugs } from './link.js'
 import { developmentOf, keyIndex } from './linkScore.js'
 import { activeEntries, createSandbox, roleOf, type Sandbox } from './overviewSandbox.js'
 import { checkpointsOf, scoreReplay, type CheckpointState, type Closure, type ReplayRunResult, type ReplayScore } from './replayScore.js'
-import { upkeepCalls } from './upkeepCalls.js'
 import { sandboxUpkeep } from './upkeepSandbox.js'
-
-const STEP_ARMS = {
-  link: TIER_ARMS[config.overviews.tiers.link],
-  found: TIER_ARMS[config.overviews.tiers.found],
-  foundCheck: TIER_ARMS[config.overviews.tiers.foundCheck],
-}
-const NAMES = {
-  link: versionedSchemaName('overview-link', linkSchema),
-  found: versionedSchemaName('overview-found', foundSchema),
-  foundCheck: versionedSchemaName('overview-found-check', foundCheckSchema),
-}
 
 /** Days the replay runs on past the last story and the last end: a closing's days, then time for its review and the 14-day bar. */
 export const TAIL_DAYS = config.overviews.closingDays + 14
@@ -151,7 +136,7 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
     const sandbox = createSandbox()
     let clock = new Date(0)
     const upkeep = sandboxUpkeep(sandbox, facts, () => clock)
-    const calls = upkeepCalls(o.ctx, run)
+    const { link: linkCalls, ...calls } = evalCalls(o.ctx, run)
     const safeguards: Record<string, number> = {}
     const add = (name: string, n: number) => {
       if (n > 0) safeguards[name] = (safeguards[name] ?? 0) + n
@@ -161,9 +146,7 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
       memberships: sandbox.memberships,
       overviews: sandbox.candidateOverviews,
       stories: async wanted => wanted.flatMap(id => (byId.has(id) ? [byId.get(id)!] : [])),
-      link: input => evalCall(o.ctx, STEP_ARMS.link, NAMES.link, linkSchema, buildLinkPromptParts(input), run),
-      found: input => evalCall(o.ctx, STEP_ARMS.found, NAMES.found, foundSchema, buildFoundPrompt(input), run),
-      foundCheck: input => evalCall(o.ctx, STEP_ARMS.foundCheck, NAMES.foundCheck, foundCheckSchema, buildFoundCheckPrompt(input), run),
+      ...linkCalls,
     }
     const keepGoing = async () => {
       if (o.ctx.spentUsd() < o.budgetUsd) return true

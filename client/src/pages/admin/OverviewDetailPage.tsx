@@ -131,8 +131,8 @@ function OverviewDetail({ overview: o }: { overview: AdminOverviewDetail }) {
 
       <OverviewEntries overview={o} />
       <OverviewStands versions={o.stands} />
-      <OverviewStatusHistory decisions={o.decisions} />
-      <OverviewDecisionLog decisions={o.decisions} />
+      <OverviewStatusHistory decisions={o.statusHistory} />
+      <OverviewDecisionLog decisions={o.decisions} total={o.decisionsTotal} />
     </div>
   )
 }

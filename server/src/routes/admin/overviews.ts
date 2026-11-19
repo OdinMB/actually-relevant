@@ -9,6 +9,7 @@
  */
 import { Router, type Request } from 'express'
 import { z } from 'zod'
+import { config } from '../../config.js'
 import { failsWith } from '../../middleware/routeErrors.js'
 import { validateBody, validateQuery } from '../../middleware/validate.js'
 import type { EditorAction } from '../../services/overviewEdits.js'
@@ -33,7 +34,7 @@ const roleSchema = z
   .transform((r): Role => ({ role: r.role, roleKind: r.role === 'routine' ? null : r.roleKind }))
 
 const attachSchema = z.object({ storyId: z.string().uuid(), role: roleSchema.default({ role: 'routine', roleKind: null }) })
-const titleSchema = z.object({ title: z.string().trim().min(1).max(200) })
+const titleSchema = z.object({ title: z.string().trim().min(1).max(config.overviews.maxTitleChars) })
 const frozenSchema = z.object({ frozen: z.boolean() })
 const hiddenSchema = z.object({ hidden: z.boolean() })
 const closedSchema = z.object({ closed: z.boolean() })

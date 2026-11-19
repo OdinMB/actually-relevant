@@ -27,8 +27,8 @@ describe('overview labels', () => {
   })
 
   it('describes a status move by its from and to, or else by its outcome', () => {
-    expect(describeStatus({ outcome: 'closed', inputs: { from: 'quiet', to: 'closed', reason: 'faded' } })).toBe('quiet to closed (faded)')
-    expect(describeStatus({ outcome: 'frozen', inputs: { anomaly: 'burst', joins: 6 } })).toBe('frozen')
-    expect(describeStatus({ outcome: 'not_happened', inputs: null })).toBe('not happened')
+    expect(describeStatus({ outcome: 'closed', move: { from: 'quiet', to: 'closed', reason: 'faded' } })).toBe('quiet to closed (faded)')
+    expect(describeStatus({ outcome: 'frozen', move: { from: null, to: null, reason: null } })).toBe('frozen')
+    expect(describeStatus({ outcome: 'not_happened', move: null })).toBe('not happened')
   })
 })

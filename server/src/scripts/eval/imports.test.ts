@@ -121,6 +121,8 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/overviewPlans.js': '*',
   'services/overviewState.js': '*',
   'services/overviewDecisions.js': '*',
+  // The step's model calls declared once (tier, effort, schema, prompt), pure (held below), so the evals call what the job calls.
+  'services/overviewSteps.js': '*',
   // The member stories' usable facts, read with SELECTs through the client it is given (held below), never written.
   'services/passRecords.js': ['loadMemberFacts'],
 }
@@ -140,6 +142,7 @@ const OVERVIEW_SERVICE_MODULES = [
   'overviewPlans.ts',
   'overviewState.ts',
   'overviewDecisions.ts',
+  'overviewSteps.ts',
 ]
 const OVERVIEW_READERS = ['overviewCandidates.ts', 'overviewInput.ts']
 

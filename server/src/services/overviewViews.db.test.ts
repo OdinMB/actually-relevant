@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { editorAction } from './overviewLifecycle.js'
@@ -16,7 +17,7 @@ describeDb('the overview admin reads', () => {
     )
     const overview = (title: string, over: object = {}) =>
       prisma.overview.create({ data: { title, charter, charterModel: 'm', charterPromptVersion: 'v', foundedAt: new Date(Date.UTC(2026, 10, 1)), ...over } })
-    const o = await overview('Ebola in Ituri', { scope: 'ongoing', lastEntryAt: new Date(Date.UTC(2026, 10, 2)) })
+    const o = await overview('Ebola in Ituri', { scope: 'ongoing', slug: 'ebola-in-ituri', lastEntryAt: new Date(Date.UTC(2026, 10, 2)) })
     const other = await overview('Cholera in Kasai', { frozen: true, lastEntryAt: new Date(Date.UTC(2026, 9, 1)) })
     for (const s of [a!, b!]) await prisma.overviewEntry.create({ data: { overviewId: o.id, storyId: s.id, role: 'routine', joinedBy: 'pipeline' } })
     return { a: a!, b: b!, c: c!, o, other }
@@ -76,6 +77,20 @@ describeDb('the overview admin reads', () => {
       ['stands', false],
       ['editor_retitle', true],
     ])
+    expect(detail).toMatchObject({ decisionsTotal: 2, statusHistory: [] })
+  })
+
+  it('shows the newest decisions up to the log size, the total, and every status move with what it moved', async () => {
+    const { o } = await setUp()
+    const move = { from: 'open', to: 'quiet', reason: 'quiet', changes: [], created: [] }
+    await prisma.overviewDecision.create({ data: { kind: 'status', overviewId: o.id, outcome: 'quiet', inputs: move, actor: 'pipeline' } })
+    await prisma.overviewDecision.createMany({
+      data: Array.from({ length: config.overviews.logSize + 4 }, () => ({ kind: 'stands' as const, overviewId: o.id, outcome: 'written', actor: 'pipeline' })),
+    })
+    const detail = await adminOverview(o.id)
+    expect(detail.decisions).toHaveLength(config.overviews.logSize)
+    expect(detail.decisionsTotal).toBe(config.overviews.logSize + 5)
+    expect(detail.statusHistory.map(d => [d.kind, d.move])).toEqual([['status', { from: 'open', to: 'quiet', reason: 'quiet' }]])
   })
 
   it("gives a story's block: its overview, its last link's candidates with the answers, and nothing to attach to while it is in one", async () => {
@@ -97,6 +112,9 @@ describeDb('the overview admin reads', () => {
       { ref: 'F1', id: a.id, distance: 0.3, kind: 'story', title: 'Story 1', belongs: null },
     ])
     expect(alone.attachable.map(x => x.id)).toEqual([o.id, other.id])
+    // A closed overview takes no story until it is reopened, so the picker leaves it out
+    await prisma.overview.update({ where: { id: other.id }, data: { status: 'closed', closedReason: 'editor', closedAt: new Date() } })
+    expect((await storyOverview(c.id)).attachable.map(x => x.id)).toEqual([o.id])
     const member = await storyOverview(a.id)
     expect(member.membership).toMatchObject({ overview: { id: o.id }, joinedBy: 'pipeline' })
     expect(member.attachable).toEqual([])
