@@ -1,6 +1,6 @@
 /**
- * `overview-eval.md` for `eval:overviews`: a section per step that ran (the answer keys, the gap keys
- * and their drafts, story context against its bars, a later pass's updates against theirs, overview linking against its bars, the fact check under planted errors, research's
+ * `overview-eval.md` for `eval:overviews`: a section per step that ran (the answer keys and their
+ * drafted responses and ends, the gap keys and their drafts, story context against its bars, a later pass's updates against theirs, overview linking against its bars, the fact check under planted errors, research's
  * cost baseline), what was skipped and why, then the spend and the fixtures' anchor. The name
  * carries a tag for every departure from the default run, so a trial never overwrites the report of
  * record. Pure.
@@ -19,6 +19,8 @@ import { CATCH_BAR, FALSE_REJECTION_BAR, MAX_LISTED, type ArmScore, type Listed 
 import type { GapDraftReport } from './gapDraft.js'
 import type { GapKeyResult } from './gapKeyCheck.js'
 import type { KeyResult } from './keyCheck.js'
+import type { KeyDraftReport } from './keyDraft.js'
+import { keyDraftLines } from './keyDraftReport.js'
 import { expectedSupported, FIELD_KINDS, VARIANT_KINDS, type VariantKind } from './plant.js'
 import { cell, metText, quoted, spreadText, usd } from './reportText.js'
 import type { UpdateStepReport } from './update.js'
@@ -74,6 +76,7 @@ export interface OverviewReportInput {
   generatedAt: string
   steps: OverviewStep[]
   keys?: KeyResult[]
+  keyDraft?: KeyDraftReport
   gapKeys?: GapKeyResult[]
   gapDraft?: GapDraftReport
   context?: ContextStepReport
@@ -101,15 +104,16 @@ function keyLines(keys: KeyResult[]): string[] {
   if (keys.length === 0) return ['No answer keys committed yet (`server/src/scripts/eval/overviews/keys/`).']
   const row = (k: KeyResult) => {
     const s = k.summary
-    if (!s) return `| ${k.file} | (does not parse) | | | | | | | ${k.errors.length} |`
-    return `| ${cell(s.title)} | ${k.file} | ${s.must} / ${s.optional} | ${s.nearMisses} | ${s.figures} | ${s.values} | ${s.closed ?? 'open'} | ${s.withResearchRun} | ${k.errors.length} |`
+    if (!s) return `| ${k.file} | (does not parse) | | | | | | | | | ${k.errors.length} |`
+    return `| ${cell(s.title)} | ${k.file} | ${s.must} / ${s.optional} | ${s.nearMisses} | ${s.figures} | ${s.values} | ${s.responses} | ${s.closed ?? 'open'} | ${s.withResearchRun} | ${s.toReview} | ${k.errors.length} |`
   }
   const withErrors = keys.filter(k => k.errors.length > 0)
+  const toReview = keys.reduce((sum, k) => sum + (k.summary?.toReview ?? 0), 0)
   return [
-    `${keys.length} keys. An error is a mistake in the key, to fix there; it passes or fails nothing in production.`,
+    `${keys.length} keys. An error is a mistake in the key, to fix there; it passes or fails nothing in production.${toReview > 0 ? ` ${toReview} drafted responses and ends are not reviewed yet (\`"reviewed": false\`): \`stands\`, \`closure\` and \`replay\` refuse a half that holds one.` : ''}`,
     '',
-    '| Development | File | Entries (must / optional) | Near misses | Figures | Values | Closed | Entries with a research run | Errors |',
-    '|---|---|---|---|---|---|---|---|---|',
+    '| Development | File | Entries (must / optional) | Near misses | Figures | Values | Responses | Closed | Entries with a research run | To review | Errors |',
+    '|---|---|---|---|---|---|---|---|---|---|---|',
     ...keys.map(row),
     ...(withErrors.length > 0 ? ['', '### Key errors', '', ...withErrors.flatMap(k => [`**${k.file}**`, '', ...k.errors.map(e => `- ${e}`), ''])] : []),
   ]
@@ -256,6 +260,7 @@ export function renderOverviewReport(input: OverviewReportInput): string {
     `Generated ${input.generatedAt}. Steps: ${input.steps.join(', ')}.`,
     '',
     ...(input.keys ? ['## Answer keys', '', ...keyLines(input.keys), ''] : []),
+    ...(input.keyDraft ? ["## Answer-key drafts: responses and ends for the owner's review", '', ...keyDraftLines(input.keyDraft), ''] : []),
     ...(input.gapKeys ? ['## Gap keys', '', ...gapKeyLines(input.gapKeys), ''] : []),
     ...(input.gapDraft ? ['## Gap-key drafts', '', ...gapDraftLines(input.gapDraft), ''] : []),
     ...(input.context ? ['## Story context against the bars', '', ...contextLines(input.context), ''] : []),

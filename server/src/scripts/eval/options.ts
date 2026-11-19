@@ -264,6 +264,7 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
  */
 export const OVERVIEW_STEPS = [
   'keys',
+  'key-draft',
   'gap-keys',
   'gap-draft',
   'context',
@@ -286,7 +287,8 @@ export const LINKING_STEPS: readonly OverviewStep[] = ['link', 'found', 'role']
 export const REPLAY_STEPS: readonly OverviewStep[] = ['closure', 'replay']
 /**
  * A run without `--steps`. Story context's, the research passes' and the overviews' steps run only
- * when named: `gap-draft` writes drafts for the check, `context` searches with Tavily and calls the
+ * when named: `key-draft` drafts the answer keys' responses and end into the committed keys, and
+ * runs on its own; `gap-draft` writes drafts for the check, `context` searches with Tavily and calls the
  * strong judge, `update` replays a later pass's article step on the answer keys' stories and judges
  * its notes, `link`, `found` and `role` replay the overview linking on the answer keys' stories,
  * `pass-pool` researches the half's stories in memory (Tavily), `stands` writes and judges the stands
@@ -367,6 +369,9 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
   if (repeat > MAX_REPEAT) throw new Error(`--repeat must be at most ${MAX_REPEAT}`)
   const limit = positiveInt('--limit', values.limit)
   const steps = listOf('--steps', values.steps, OVERVIEW_STEPS, OVERVIEW_DEFAULT_STEPS)
+  if (steps.includes('key-draft') && steps.length > 1) {
+    throw new Error('--steps key-draft runs on its own: it writes the answer keys the other steps read; review its drafts, then run the others')
+  }
   const facts = OVERVIEW_FACT_SOURCES.find(f => f === (values.facts ?? 'research'))
   if (!facts) throw new Error(`--facts must be one of ${OVERVIEW_FACT_SOURCES.join(', ')}`)
   if (facts === 'context' && !(steps.includes('context') && steps.includes('fact-check'))) {

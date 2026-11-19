@@ -7,7 +7,8 @@
  * at the step tiers. The days run on past the last story until every closing has had time to finish.
  * Each development is looked at on its checkpoint days; `replayScore.ts` scores the bars. The members'
  * facts are given by the runner: the `pass-pool` step's pools, or the database's. Each run k ≥ 2 has
- * its own cache keys.
+ * its own cache keys. It refuses, before any read or call, while a key of its half holds a drafted
+ * end no one has reviewed (`awaitingReview`).
  */
 import { config } from '../../../config.js'
 import type { Neighbour } from '../../../services/overviewCandidates.js'
@@ -19,7 +20,7 @@ import { runNumbers } from '../repeats.js'
 import type { SuiteContext } from '../types.js'
 import { inDevelopmentHalf } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
-import type { AnswerKey } from './keySchema.js'
+import { awaitingReview, type AnswerKey } from './keySchema.js'
 import { evalCalls, replaySlugs } from './link.js'
 import { developmentOf, keyIndex } from './linkScore.js'
 import { activeEntries, createSandbox, roleOf, type Sandbox } from './overviewSandbox.js'
@@ -102,6 +103,23 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
   const left: ReplayStepReport['left'] = o.files
     .filter(f => !f.key || f.errors.length > 0)
     .map(f => ({ what: f.file, reason: `${f.errors.length} format errors: fix the key` }))
+  // The closures are scored against the keys' ends: none may be a draft no one checked
+  const refused = awaitingReview(keys, 'closed')
+  if (refused) {
+    const score = scoreReplay(keys, [], config.overviews.minStandsFacts, 0)
+    return {
+      half: o.half,
+      repeat: o.repeat,
+      ...(o.limit !== undefined ? { limit: o.limit } : {}),
+      keys: keys.map(k => k.id),
+      stories: 0,
+      left,
+      runs: [],
+      score,
+      costUsd: 0,
+      stopped: refused,
+    }
+  }
   const loaded = await o.stories(replaySlugs(keys))
   const slugById = new Map<string, string>()
   const stories: LinkStory[] = []

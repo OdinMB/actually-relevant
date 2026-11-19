@@ -7,7 +7,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseKey, validateKey, type AnswerKey } from './keySchema.js'
+import { awaitingReview, parseKey, unreviewed, validateKey, type AnswerKey } from './keySchema.js'
 import { KEYS_DIR, keyFileNames, readKeyFile } from './keyFiles.js'
 
 describe('the committed answer keys', () => {
@@ -142,6 +142,11 @@ describe('validateKey', () => {
     expect(rule(k => (k.closed = { slug: null, date: '2026-07-01' }))).toEqual([])
   })
 
+  it("wants the end's quote only beside the story it quotes", () => {
+    expect(rule(k => (k.closed = { slug: 'c', date: '2026-07-01', quote: 'declared over' }))).toEqual([])
+    expect(rule(k => (k.closed = { slug: null, date: '2026-07-01', quote: 'declared over' }))).toEqual(['closed.quote is set without closed.slug'])
+  })
+
   describe('responses (version 2)', () => {
     const response = (extra: Record<string, unknown> = {}) => ({
       date: '2026-06-02',
@@ -169,6 +174,56 @@ describe('validateKey', () => {
       expect(rule(k => v2(k, [response({ slug: 'x' })]))).toEqual(['response "WHO ring vaccination": slug x is not an entry'])
       expect(rule(k => v2(k, [response({ quote: null })]))).toEqual(['response "WHO ring vaccination": a quote goes with a slug, and none without one'])
       expect(rule(k => v2(k, [response({ slug: null })]))).toEqual(['response "WHO ring vaccination": a quote goes with a slug, and none without one'])
+    })
+  })
+
+  describe('drafts awaiting review', () => {
+    const drafted = (edit: (k: ReturnType<typeof key>) => void) => {
+      const k = key()
+      edit(k)
+      return parseKey(k).key!
+    }
+    const response = (reviewed?: boolean) => ({
+      date: '2026-06-02',
+      what: 'Vaccination',
+      slug: 'a',
+      quote: 'ring vaccination',
+      ...(reviewed === undefined ? {} : { reviewed }),
+    })
+
+    it('counts a response or an end as reviewed only where it says so', () => {
+      const k = drafted(k =>
+        Object.assign(k, { schemaVersion: 2, responses: [response(), response(false), response(true)], closed: { slug: 'c', date: '2026-07-01' } }),
+      )
+      expect(k.responses.map(r => r.reviewed)).toEqual([false, false, true])
+      expect(unreviewed(k, 'responses')).toBe(2)
+      expect(unreviewed(k, 'closed')).toBe(1)
+      expect(
+        unreviewed(
+          drafted(k => (k.closed = { slug: 'c', date: '2026-07-01', reviewed: true })),
+          'closed',
+        ),
+      ).toBe(0)
+      expect(
+        unreviewed(
+          drafted(() => undefined),
+          'closed',
+        ),
+      ).toBe(0)
+    })
+
+    it('refuses a step while a key it reads holds a draft of its field, naming the keys', () => {
+      const open = drafted(k =>
+        Object.assign(k, { schemaVersion: 2, responses: [response(), response()], closed: { slug: 'c', date: '2026-07-01', reviewed: true } }),
+      )
+      const done = { ...open, id: 'el-nino-2026', responses: open.responses.map(r => ({ ...r, reviewed: true })) }
+      expect(awaitingReview([open, done], 'responses')).toBe(
+        'refused: 2 drafted responses are not reviewed yet (ebola-drc-2026: 2): in each key, mark every one "reviewed": true or delete it, then run again',
+      )
+      expect(awaitingReview([open, done], 'closed')).toBeNull()
+      expect(awaitingReview([done, { ...done, closed: { slug: 'c', date: '2026-07-01', quote: null, reviewed: false } }], 'closed')).toMatch(
+        /^refused: 1 drafted end is not reviewed yet \(el-nino-2026: 1\)/,
+      )
     })
   })
 

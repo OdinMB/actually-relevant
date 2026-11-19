@@ -6,7 +6,6 @@
  */
 import { num, pct } from '../checks.js'
 import type { Spread } from '../repeats.js'
-import type { CallEstimate } from './callBudget.js'
 import type { ContextStepReport } from './context.js'
 import { MAX_FIELD_FACTS } from './contextJudge.js'
 import {
@@ -25,9 +24,7 @@ import {
 } from './contextScore.js'
 import { GAP_SAMPLE_SIZE, GAP_WINDOW_MONTHS, type GapDraftReport } from './gapDraft.js'
 import type { GapKeyResult } from './gapKeyCheck.js'
-import { cell, metText, quoted, usd } from './reportText.js'
-
-const estimateText = (e: CallEstimate) => `${e.calls} calls (${e.uncached} uncached) ≈ ${usd(e.usd)}`
+import { cell, estimateText, metText, quoted, usd } from './reportText.js'
 
 const tally = (values: string[]) => {
   const counts = new Map<string, number>()

@@ -128,6 +128,21 @@ describe('checkKey', () => {
     expect(checkKey(responding('ring vaccination began'), stories)).toEqual([])
     expect(checkKey(responding('mass vaccination began'), stories)).toEqual(['response a: quote not found: "mass vaccination began"'])
   })
+
+  it("finds the end's quote in the story that reports it, and reports one it does not state", () => {
+    const ending = (q: string) =>
+      answerKey(k => {
+        k.entries[0].values[0].quote = '4,887 people'
+        k.closed = { slug: 'b', date: '2026-06-02', quote: q }
+      })
+    const stories = byslug(
+      story('a'),
+      story('b', { datePublished: new Date('2026-06-02T10:00:00Z'), summary: 'The outbreak was declared over on Tuesday.' }),
+      story('x'),
+    )
+    expect(checkKey(ending('declared over'), stories)).toEqual([])
+    expect(checkKey(ending('declared finished'), stories)).toEqual(['closed b: quote not found: "declared finished"'])
+  })
 })
 
 describe('keySlugs and summarizeKey', () => {
@@ -135,7 +150,7 @@ describe('keySlugs and summarizeKey', () => {
     expect(keySlugs(answerKey())).toEqual(['a', 'b', 'x'])
   })
 
-  it('counts the key and the entry stories with a stored research run', () => {
+  it('counts the key, the entry stories with a stored research run and the drafts left to review', () => {
     expect(summarizeKey(answerKey(), byslug(story('a', { hasResearchRun: true }), story('b')))).toEqual({
       id: 'ebola',
       title: 'Ebola',
@@ -144,9 +159,16 @@ describe('keySlugs and summarizeKey', () => {
       nearMisses: 1,
       figures: 1,
       values: 1,
+      responses: 0,
       closed: '2026-06-02',
       withResearchRun: 1,
+      toReview: 1,
     })
+    const reviewed = answerKey(k => {
+      k.closed.reviewed = true
+      Object.assign(k, { schemaVersion: 2, responses: [{ date: '2026-06-02', what: 'Vaccination', slug: 'a', quote: '4,887', reviewed: true }] })
+    })
+    expect(summarizeKey(reviewed, byslug())).toMatchObject({ responses: 1, toReview: 0 })
   })
 })
 

@@ -228,6 +228,12 @@ describe('parseOverviewOptions', () => {
     expect(OVERVIEW_DEFAULT_STEPS.some(s => ['pass-pool', 'stands', 'closure', 'review', 'replay'].includes(s))).toBe(false)
   })
 
+  it('runs key-draft only when named, and only on its own: it writes the answer keys the other steps read', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'key-draft', '--half', 'judge'])).toMatchObject({ steps: ['key-draft'], half: 'judge' })
+    expect(OVERVIEW_DEFAULT_STEPS).not.toContain('key-draft')
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'keys,key-draft'])).toThrow(/--steps key-draft runs on its own/)
+  })
+
   it('takes --facts stands only with the stands and fact-check steps', () => {
     expect(parseOverviewOptions(['--out', 'x', '--steps', 'stands,fact-check', '--facts', 'stands']).facts).toBe('stands')
     expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'stands'])).toThrow(/name both stands and fact-check/)

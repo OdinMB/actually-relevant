@@ -1,8 +1,9 @@
 /**
  * The answer keys against the database (the `keys` step of `eval:overviews`): every slug a key names
- * is a published story, each entry's date is its publication day (UTC), and every value's quote
- * occurs in that story's published text. A miss is an error in the key, to fix there, never a pass
- * or fail of anything in production. Also the per-development counts the report shows. The loader
+ * is a published story, each entry's date is its publication day (UTC), and every quote (a value's,
+ * a response's, the end's) occurs in that story's published text. A miss is an error in the key, to
+ * fix there, never a pass or fail of anything in production. Also the per-development counts the
+ * report shows, the drafts still to review among them. The loader
  * issues one SELECT through the read-only session; the rest is pure but for the loader it is given.
  */
 import { utcDay } from '../../../lib/days.js'
@@ -10,7 +11,7 @@ import { normalizeQuote } from '../../../lib/quoteMatch.js'
 import { storedResearchText } from '../../../services/researchedStory.js'
 import type { SelectDb } from '../readOnlyDb.js'
 import type { KeyFile } from './keyFiles.js'
-import type { AnswerKey } from './keySchema.js'
+import { unreviewed, type AnswerKey } from './keySchema.js'
 
 /** A story an answer key or a gap key names, as the checks read it. */
 export interface KeyStory {
@@ -49,9 +50,23 @@ export async function loadKeyStories(db: SelectDb, slugs: string[]): Promise<Map
   return new Map(rows.map(r => [r.slug, r]))
 }
 
+type PublishedStory = Pick<KeyStory, 'title' | 'summary' | 'relevanceReasons' | 'antifactors' | 'research'>
+
+/** The story's published text, field by field and named as the drafting prompt shows it; empty fields left out. */
+export function publishedFields(story: PublishedStory): { name: string; text: string }[] {
+  const fields: [string, string | null][] = [
+    ['TITLE', story.title],
+    ['SUMMARY', story.summary],
+    ['WHY_IT_MATTERS', story.relevanceReasons],
+    ['CAVEATS', story.antifactors],
+    ['RESEARCHED_TEXT', storedResearchText(story.research)],
+  ]
+  return fields.flatMap(([name, text]) => (text ? [{ name, text }] : []))
+}
+
 /** The story's published text, field by field: title, summary, relevance reasons, antifactors, and the applied research's paragraphs. */
-export function publishedTexts(story: Pick<KeyStory, 'title' | 'summary' | 'relevanceReasons' | 'antifactors' | 'research'>): string[] {
-  return [story.title, story.summary, story.relevanceReasons, story.antifactors, storedResearchText(story.research)].filter((t): t is string => !!t)
+export function publishedTexts(story: PublishedStory): string[] {
+  return publishedFields(story).map(f => f.text)
 }
 
 /** What the database contradicts in the key; empty when it holds. */
@@ -75,13 +90,19 @@ export function checkKey(key: AnswerKey, stories: ReadonlyMap<string, KeyStory>)
     }
   }
   for (const n of key.nearMisses) published('near miss', n.slug)
-  for (const r of key.responses) {
-    const s = r.slug && r.quote ? stories.get(r.slug) : undefined
-    if (!s || !r.quote) continue
-    const quote = normalizeQuote(r.quote)
-    if (!publishedTexts(s).some(t => normalizeQuote(t).includes(quote))) errors.push(`response ${r.slug}: quote not found: "${r.quote}"`)
+  const quoted = [...key.responses.map(r => ({ field: 'response', ...r })), ...(key.closed ? [{ field: 'closed', ...key.closed }] : [])]
+  for (const q of quoted) {
+    const s = q.slug && q.quote ? stories.get(q.slug) : undefined
+    if (!s || !q.quote) continue
+    if (!statesQuote(s, q.quote)) errors.push(`${q.field} ${q.slug}: quote not found: "${q.quote}"`)
   }
   return errors
+}
+
+/** Whether one field of the story's published text holds the quote, after `normalizeQuote` on both. */
+export function statesQuote(story: PublishedStory, quote: string): boolean {
+  const wanted = normalizeQuote(quote)
+  return publishedTexts(story).some(t => normalizeQuote(t).includes(wanted))
 }
 
 export interface KeySummary {
@@ -92,10 +113,13 @@ export interface KeySummary {
   nearMisses: number
   figures: number
   values: number
+  responses: number
   /** The day it ended, or null while open. */
   closed: string | null
   /** Entry stories with a stored research run. */
   withResearchRun: number
+  /** Drafted responses and end a person has not reviewed yet (`unreviewed`). */
+  toReview: number
 }
 
 export function summarizeKey(key: AnswerKey, stories: ReadonlyMap<string, KeyStory>): KeySummary {
@@ -107,8 +131,10 @@ export function summarizeKey(key: AnswerKey, stories: ReadonlyMap<string, KeySto
     nearMisses: key.nearMisses.length,
     figures: key.figures.length,
     values: key.entries.reduce((sum, e) => sum + e.values.length, 0),
+    responses: key.responses.length,
     closed: key.closed?.date ?? null,
     withResearchRun: key.entries.filter(e => stories.get(e.slug)?.hasResearchRun).length,
+    toReview: unreviewed(key, 'responses') + unreviewed(key, 'closed'),
   }
 }
 

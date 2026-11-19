@@ -34,7 +34,7 @@ const KEY: AnswerKey = {
   id: ID,
   title: 'Ebola in eastern DR Congo',
   charter: { in: 'The Ebola outbreak in eastern DR Congo.', out: [], endEvent: 'The outbreak is declared over.' },
-  closed: { slug: 'e3', date: DAYS[2]! },
+  closed: { slug: 'e3', date: DAYS[2]!, quote: null, reviewed: true },
   figures: [],
   entries: [
     entry('e1', DAYS[0]!, { values: [{ figure: 'cases', value: 120, approx: 'exact', asOf: DAYS[0]!, matches: true, countedAs: null, quote: '120' }] }),
@@ -42,9 +42,17 @@ const KEY: AnswerKey = {
     entry('e3', DAYS[2]!),
   ],
   nearMisses: [{ slug: 'n1', date: DAYS[1]!, title: 'n1', why: 'same province' }],
-  responses: [{ date: DAYS[0]!, what: 'WHO ring vaccination', slug: 'e1', quote: 'vaccination' }],
+  responses: [{ date: DAYS[0]!, what: 'WHO ring vaccination', slug: 'e1', quote: 'vaccination', reviewed: true }],
   notes: '',
 }
+/** The key as `key-draft` leaves it: its response and its end drafted, neither reviewed yet. */
+const DRAFTED: KeyFile[] = [
+  {
+    file: `${ID}.json`,
+    key: { ...KEY, responses: KEY.responses.map(r => ({ ...r, reviewed: false })), closed: { ...KEY.closed!, reviewed: false } },
+    errors: [],
+  },
+]
 const FILES: KeyFile[] = [
   { file: `${ID}.json`, key: KEY, errors: [] },
   { file: 'broken.json', key: null, errors: ['not JSON'] },
@@ -183,6 +191,30 @@ describe('runStandsStep', () => {
     expect(spent.runs).toEqual([])
     expect(spent.stopped).toMatch(/the budget ran out in run 1/)
   })
+
+  it('refuses, before reading a story or making a call, while a response of its half is a draft no one reviewed', async () => {
+    const ctx = fakeEvalContext(standsAnswer)
+    let asked = 0
+    const report = await runStandsStep({
+      ctx,
+      files: DRAFTED,
+      half: 'judge',
+      stories: async slugs => {
+        asked += slugs.length
+        return stories(slugs)
+      },
+      facts,
+      repeat: 1,
+      budgetUsd: 5,
+    })
+    expect(report.stopped).toBe(
+      `refused: 1 drafted response is not reviewed yet (${ID}: 1): in each key, mark every one "reviewed": true or delete it, then run again`,
+    )
+    expect([report.runs, ctx.calls, asked]).toEqual([[], [], 0])
+    expect(standsLines(report).join('\n')).toContain('- Stopped: refused: 1 drafted response')
+    // Another half's drafts do not stop it
+    expect((await runStandsStep({ ctx, files: DRAFTED, half: 'tune', stories, facts, repeat: 1, budgetUsd: 5 })).stopped).toBeUndefined()
+  })
 })
 
 describe('runReviewStep', () => {
@@ -271,6 +303,28 @@ describe('runReplayStep', () => {
     })
     expect(none.runs).toEqual([])
     expect(none.left.filter(l => l.reason === 'not published in this database').map(l => l.what)).toEqual(['e1', 'e2', 'e3', 'n1'])
+  })
+
+  it('refuses, before reading a story or making a call, while the end of a development of its half is a draft no one reviewed', async () => {
+    const ctx = fakeEvalContext(() => null)
+    let asked = 0
+    const report = await runReplayStep({
+      ctx,
+      files: DRAFTED,
+      half: 'judge',
+      stories: async slugs => {
+        asked += slugs.length
+        return stories(slugs)
+      },
+      neighbours: async () => [],
+      facts,
+      repeat: 1,
+      concurrency: 1,
+      budgetUsd: 5,
+    })
+    expect(report.stopped).toMatch(new RegExp(`^refused: 1 drafted end is not reviewed yet \\(${ID}: 1\\)`))
+    expect([report.runs, ctx.calls, asked, report.stories]).toEqual([[], [], 0, 0])
+    expect(report.score.closure.map(b => b.value)).toEqual([null, null])
   })
 })
 

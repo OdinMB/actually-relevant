@@ -1,6 +1,7 @@
 /**
  * The overview evals' own prompts and output schemas, never production's: drafting a gap key
- * (`gapDraft.ts`), the strong judge's three questions on story context (`contextJudge.ts`):
+ * (`gapDraft.ts`) and an answer key's responses and end (`keyDraft.ts`), the strong judge's three
+ * questions on story context (`contextJudge.ts`):
  * which key needs the kept cards meet, whether a figure fact's structured fields are right, and
  * whether a note beside a paragraph or point adds to it; and its question on a later pass's Update
  * note (`update.ts`): whether it says what changed and why; and its question on a founded overview
@@ -115,6 +116,98 @@ ${facts}
 - inStory quotes <STORY> exactly where the story already states what the need asks; null otherwise.
 - accepts decides yes or no from the context alone: it names the figure with its unit and scope, or the fact, and asks that it names its source. A need that any loosely related sentence would meet is too vague.
 - Your own knowledge of the subject is welcome in the needs and examples: the key is the answer, not the step it checks. Never take a need from what a system might find; take it from what a reader needs.
+</REQUIREMENTS>`
+}
+
+// ---------------------------------------------------------------------------
+// Drafting an answer key's responses and end
+// ---------------------------------------------------------------------------
+
+export const keyDraftSchema = z.object({
+  responses: z
+    .array(
+      z.object({
+        story: z.string().describe('The id of a story in <STORIES> marked join="must", exactly as given, e.g. "S4".'),
+        what: z.string().describe('What is being done about the development and by whom, in one line, e.g. "WHO ring vaccination of contacts in Bunia".'),
+        quote: z
+          .string()
+          .describe(
+            'The words of that story that report it under way, copied exactly from one of its fields: a phrase or a sentence, never joined across fields.',
+          ),
+      }),
+    )
+    .describe(
+      'The responses under way that stories marked join="must" report, as <REQUIREMENTS> asks, in the order of <STORIES>. Empty when none reports one.',
+    ),
+  end: z.object({
+    happened: z.enum(['yes', 'no']).describe('yes: a story in <STORIES> reports <END_EVENT> as having happened. no: none does.'),
+    story: z.string().describe('yes: the id of the first story that reports it, e.g. "S31". no: empty.'),
+    date: z.string().describe("yes: the day it happened as that story gives it, written YYYY-MM-DD, else that story's date. no: empty."),
+    quote: z.string().describe('yes: the words of that story that report it, copied exactly from one of its fields. no: empty.'),
+    why: z
+      .string()
+      .describe(
+        'One or two sentences. yes: why this is the end event itself and not a step toward it. no: the latest state the stories report, and why it is not the end event.',
+      ),
+  }),
+})
+
+export type KeyDraftAnswer = z.infer<typeof keyDraftSchema>
+
+/** A story of a development key as the drafting prompt shows it: its id there, its join, its day and its published fields by name. */
+export interface KeyDraftStory {
+  id: string
+  join: 'must' | 'optional'
+  date: string
+  fields: { name: string; text: string }[]
+}
+
+export interface KeyDraftInput {
+  title: string
+  charter: { in: string; out: string[]; endEvent: string }
+  notes: string
+  stories: KeyDraftStory[]
+  /** Responses a story may give. */
+  perStory: number
+}
+
+export function buildKeyDraftPrompt(input: KeyDraftInput): string {
+  const perStory = input.perStory === 1 ? 'at most 1 a story, the most substantial' : `at most ${input.perStory} a story, the most substantial first`
+  const stories = input.stories.map(s =>
+    [`<STORY id="${escapeXml(s.id)}" join="${s.join}" date="${escapeXml(s.date)}">`, ...s.fields.map(f => tag(f.name, f.text)), '</STORY>'].join('\n'),
+  )
+  return `<ROLE>
+You are a senior news editor. You keep the answer keys our system for ongoing developments is checked against: for each development, what a perfect system would have done with our published stories.
+</ROLE>
+
+<GOAL>
+For the development in <DEVELOPMENT>, read <STORIES>, our published stories on it in date order, and write down two things: what each story marked join="must" reports as being done about the development, and whether any story reports <END_EVENT> as having happened.
+</GOAL>
+
+<DEVELOPMENT>
+${tag('TITLE', input.title)}
+${tag('IN', input.charter.in)}
+<OUT>
+${input.charter.out.map(o => tag('ITEM', o)).join('\n')}
+</OUT>
+${tag('END_EVENT', input.charter.endEvent)}
+<NOTES>
+Written by the editors who drafted this key with every story in view.
+${escapeXml(input.notes)}
+</NOTES>
+</DEVELOPMENT>
+
+<STORIES>
+Our published stories, written by us from their sources. Each field is one part of the published story: TITLE, SUMMARY, WHY_IT_MATTERS, CAVEATS and RESEARCHED_TEXT.
+${stories.join('\n')}
+</STORIES>
+
+<REQUIREMENTS>
+- A response is something being done about the development, under way on the story's date, by a named actor: aid delivered, a vaccination campaign, a ceasefire mission, a court case, a funding pledge, a ban in force, troops or teams deployed, a plan being carried out.
+- Not a response: a call or appeal for action, a warning, a forecast, a plan or proposal not yet acted on, a meeting only scheduled, a study or report, or the development's own events (a case count, a strike, a vote).
+- Responses come only from stories marked join="must", ${perStory}. A response that several stories report under way is listed for each of them, once a story.
+- Each quote is copied exactly from one field of its story and shows the response under way; never joined across fields or shortened.
+- The end is <END_EVENT> itself. A step toward it, a provisional or partial end, an end in one place or country of a wider development, a truce our later stories show broken, or an end only expected is not the end; <NOTES> names this development's traps. When no story reports the end event, happened is "no": never infer an end the stories do not report.
 </REQUIREMENTS>`
 }
 

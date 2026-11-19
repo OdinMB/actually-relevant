@@ -13,6 +13,7 @@
  *
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_key-drafts --steps key-draft --half judge
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps fact-check --repeat 3 --budget 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps gap-draft
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps context,fact-check --facts context --half judge --repeat 3
@@ -24,7 +25,8 @@
  *
  * Reads the database through the read-only session and writes nothing to any database; its only
  * HTTP is OpenAI, and Tavily for the `context` and `pass-pool` steps. Writes overview-eval[-tags].md into --out, the
- * gap-key drafts into --out/gap-drafts and its caches into --out/.cache. Prints only
+ * gap-key drafts into --out/gap-drafts and its caches into --out/.cache; `key-draft`, run on its
+ * own, writes its drafts into the committed answer keys for the owner's review. Prints only
  * present/missing for the keys and local/remote for the database. See .context/model-eval.md.
  */
 import 'dotenv/config'
@@ -53,7 +55,8 @@ import { loadFactFixtures, reusableFixtures, type FactFixture, type FactFixtures
 import { loadGapCandidates, runGapDraftStep, type GapDraftStepOptions } from './overviews/gapDraft.js'
 import { checkGapKeyFiles } from './overviews/gapKeyCheck.js'
 import { checkKeyFiles, loadKeyStories } from './overviews/keyCheck.js'
-import { readGapKeyFiles, readKeyFiles } from './overviews/keyFiles.js'
+import { runKeyDraftStep, type KeyDraftStepOptions } from './overviews/keyDraft.js'
+import { KEYS_DIR, readGapKeyFiles, readKeyFiles } from './overviews/keyFiles.js'
 import { overviewReportName, renderOverviewReport, type FactCheckReport, type FactSample, type OverviewReportInput } from './overviews/report.js'
 import { runUpdateStep, type UpdateStepOptions } from './overviews/update.js'
 import type { UpdateStory } from './overviews/updateFixtures.js'
@@ -76,6 +79,7 @@ const pct = (v: number | null) => (v === null ? 'n/a' : `${(v * 100).toFixed(1)}
 const presence = (v: string | undefined) => (v ? 'present' : 'missing')
 /** The steps that call a model; a run of none of them, or a dry run, is offline. */
 const CALLING_STEPS: OverviewStep[] = [
+  'key-draft',
   'gap-draft',
   'context',
   'update',
@@ -237,13 +241,23 @@ async function main(): Promise<void> {
     const linking = LINKING_STEPS.some(runs)
     const replaying = REPLAY_STEPS.some(runs)
     const upkeep = replaying || runs('pass-pool') || runs('stands') || runs('review')
-    const keyFiles = runs('keys') || runs('gap-draft') || runs('update') || linking || upkeep ? readKeyFiles() : []
+    const keyFiles = runs('keys') || runs('key-draft') || runs('gap-draft') || runs('update') || linking || upkeep ? readKeyFiles() : []
     if (runs('keys')) for (const k of keyFiles) console.log(`${k.file}: ${k.errors.length === 0 ? 'format ok' : `${k.errors.length} format errors`}`)
     const gapKeyFiles = runs('gap-keys') || runs('context') ? readGapKeyFiles() : []
     if (runs('gap-keys')) {
       console.log(`gap keys: ${gapKeyFiles.length} committed`)
       for (const k of gapKeyFiles) console.log(`${k.file}: ${k.errors.length === 0 ? 'format ok' : `${k.errors.length} format errors`}`)
     }
+    const keyDraftOptions = (dryRun: boolean): KeyDraftStepOptions => ({
+      ctx,
+      files: keyFiles,
+      half: opts.half,
+      ...limit,
+      stories: async slugs => (await session.get()).read(q => loadKeyStories(q, slugs)),
+      keysDir: KEYS_DIR,
+      dryRun,
+      gate: { budgetUsd: opts.budget, canCall },
+    })
     const gapDraftOptions = (dryRun: boolean): GapDraftStepOptions => ({
       ctx,
       sampleFile: join(cacheDir, 'gap-sample.json'),
@@ -298,6 +312,10 @@ async function main(): Promise<void> {
       console.log("fact-check: --facts context samples the facts the context step's run 1 keeps; each pass is checked against the budget once they are known")
     }
     if (opts.dryRun) {
+      if (runs('key-draft')) {
+        const d = await runKeyDraftStep(keyDraftOptions(true))
+        console.log(`key-draft: ${d.keys.length} version 1 keys of half ${d.half} to draft (${d.keys.join(', ') || 'none'}); ${estimateText(d.estimate)}`)
+      }
       if (runs('gap-draft')) {
         const d = await runGapDraftStep(gapDraftOptions(true))
         console.log(`gap-draft: ${d.sample.length} stories sampled of ${d.candidates} candidates; drafts ${estimateText(d.estimate)}`)
@@ -341,6 +359,20 @@ async function main(): Promise<void> {
         for (const k of report.keys) console.log(`keys: ${k.file}: ${k.errors.length === 0 ? 'ok' : `${k.errors.length} errors`}`)
       } catch (err) {
         failed('keys', err)
+      }
+    }
+    if (runs('key-draft')) {
+      try {
+        const d = await runKeyDraftStep(keyDraftOptions(false))
+        report.keyDraft = d
+        if (d.stopped) skipped.push({ step: 'key-draft', reason: d.stopped })
+        for (const k of d.drafts)
+          console.log(
+            `key-draft: ${k.file}: ${k.written ? `${k.responses.length} responses${k.closed ? ' and the end' : ''} drafted` : `nothing drafted (${k.outcome})`}`,
+          )
+        if (d.written.length > 0) console.log('key-draft: run `npm run format --prefix server`, then review the drafts in the keys (the report lists them)')
+      } catch (err) {
+        failed('key-draft', err)
       }
     }
     if (runs('gap-keys')) {

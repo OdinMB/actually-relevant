@@ -83,8 +83,8 @@ const replayRun = (closures: ReplayRunResult['closures'], over: Partial<ReplayRu
 
 describe('the closure bars', () => {
   const KEYS = [
-    key('ended', [entry('a', '2026-05-01')], { closed: { slug: 'a', date: '2026-05-10' } }),
-    key('unreported', [entry('b', '2026-05-01')], { closed: { slug: null, date: '2026-05-10' } }),
+    key('ended', [entry('a', '2026-05-01')], { closed: { slug: 'a', date: '2026-05-10', quote: null, reviewed: true } }),
+    key('unreported', [entry('b', '2026-05-01')], { closed: { slug: null, date: '2026-05-10', quote: null, reviewed: true } }),
     key('open', [entry('c', '2026-05-01')]),
   ]
 

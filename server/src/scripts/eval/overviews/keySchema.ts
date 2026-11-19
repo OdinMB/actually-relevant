@@ -3,7 +3,9 @@
  * file per past development in `keys/`, saying what a perfect ongoing-story system would have done
  * with our published stories. The Zod schema holds the shape and the format rules (in its
  * `.describe()`s, from the drafting brief's "Field rules"); `validateKey` holds the rules across
- * fields. Every later overview eval scores against these keys. Pure.
+ * fields. A drafted response or end carries `reviewed: false` until a person has checked it, and
+ * the steps that read it refuse while one is left (`awaitingReview`). Every later overview eval
+ * scores against these keys. Pure.
  */
 import { z } from 'zod'
 
@@ -74,8 +76,14 @@ const entrySchema = z.object({
   why: text('One line: why it belongs, or for an optional join why it is borderline.'),
 })
 
+/** A drafted item counts only once a person has checked it: absent means not reviewed (`awaitingReview`). */
+const reviewed = z
+  .boolean()
+  .default(false)
+  .describe('True once a person has checked the item against its story; false (or absent) for a draft, which the steps that read it refuse.')
+
 const responseSchema = z.object({
-  date: date('When the response was reported as under way'),
+  date: date('When the response was reported as under way: the date of the story that reports it'),
   what: text('What is being done about the development, by whom, in one line, e.g. "WHO ring vaccination in Bunia".'),
   slug: z.string().nullable().default(null).describe('The entry that reports it; null when none of our stories does.'),
   quote: z
@@ -83,6 +91,7 @@ const responseSchema = z.object({
     .nullable()
     .default(null)
     .describe('The exact words from that story that report it, so a checker can find them; null exactly when `slug` is null.'),
+  reviewed,
 })
 
 const nearMissSchema = z.object({
@@ -107,6 +116,12 @@ export const answerKeySchema = z.object({
     .object({
       slug: z.string().nullable().default(null).describe('The story that reports the end event; null when our stories never report it.'),
       date: date('When it ended'),
+      quote: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('The exact words from that story that report the end, so a checker can find them; null without a slug.'),
+      reviewed,
     })
     .nullable()
     .describe(
@@ -127,7 +142,7 @@ export const answerKeySchema = z.object({
     .array(responseSchema)
     .default([])
     .describe(
-      'Version 2 only: each response under way that a reader of the overview should learn of, in date order, sourced by one of our stories where one reports it.',
+      'Version 2 only: each response under way that a reader of the overview should learn of, in date order, one row for each story that reports it under way (a response three stories report is three rows), so the stands of any day can be held to the stories of that time; a row with no slug where none of our stories reports it.',
     ),
   notes: z
     .string()
@@ -169,8 +184,31 @@ export function validateKey(key: AnswerKey): string[] {
   }
   for (const n of key.nearMisses) if (entrySlugs.has(n.slug)) errors.push(`${n.slug} is both an entry and a near miss`)
   if (key.closed && hasText(key.closed.slug) && !entrySlugs.has(key.closed.slug)) errors.push(`closed.slug ${key.closed.slug} is not an entry`)
+  if (key.closed && hasText(key.closed.quote) && !hasText(key.closed.slug)) errors.push('closed.quote is set without closed.slug')
   errors.push(...responseErrors(key, entrySlugs))
   return errors
+}
+
+/** The drafted items of one field a person has not reviewed yet: the responses, or the end (0 or 1). */
+export function unreviewed(key: AnswerKey, field: 'responses' | 'closed'): number {
+  if (field === 'responses') return key.responses.filter(r => !r.reviewed).length
+  return key.closed && !key.closed.reviewed ? 1 : 0
+}
+
+/**
+ * Why a step that reads `field` refuses to run on these keys: drafts in it no person has reviewed
+ * (`key-draft` writes them with `reviewed: false`), so a reading would rest on unchecked key data.
+ * Null when nothing is left to review.
+ */
+export function awaitingReview(keys: readonly AnswerKey[], field: 'responses' | 'closed'): string | null {
+  const open = keys.flatMap(k => {
+    const n = unreviewed(k, field)
+    return n > 0 ? [`${k.id}: ${n}`] : []
+  })
+  if (open.length === 0) return null
+  const total = keys.reduce((sum, k) => sum + unreviewed(k, field), 0)
+  const what = field === 'responses' ? (total === 1 ? 'drafted response is' : 'drafted responses are') : total === 1 ? 'drafted end is' : 'drafted ends are'
+  return `refused: ${total} ${what} not reviewed yet (${open.join(', ')}): in each key, mark every one "reviewed": true or delete it, then run again`
 }
 
 /** `responses` only in a version 2 key, in date order, each sourced by an entry with its quote or by none. */
