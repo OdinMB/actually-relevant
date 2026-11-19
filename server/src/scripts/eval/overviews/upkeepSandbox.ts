@@ -11,7 +11,7 @@
 import { config } from '../../../config.js'
 import type { CloseCase } from '../../../services/overviewClose.js'
 import { linkInputs, readInputs } from '../../../services/overviewDecisions.js'
-import { planAudit, planBurst, planClosing, planReview, planStatus } from '../../../services/overviewPlans.js'
+import { STALE_REVIEW, planAudit, planBurst, planClosing, planReview, planStatus } from '../../../services/overviewPlans.js'
 import type { ReviewCase } from '../../../services/overviewReview.js'
 import { overviewStateOf } from '../../../services/overviewState.js'
 import type { MemberFact } from '../../../services/overviewStands.js'
@@ -35,6 +35,7 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
   const story = (id: string) => sandbox.stories.get(id)!
   const ctx = () => ({ ...sandbox.context(), now: now() })
 
+  /** Production's `reviewCase` over memory: the active entries of published stories, oldest first. */
   const reviewCase = async (id: string): Promise<ReviewCase | null> => {
     const o = get(id)
     if (!o) return null
@@ -45,6 +46,7 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
       scope: o.scope,
       frozen: o.frozen,
       entries: activeEntries(o)
+        .filter(e => e.published && e.datePublished !== null)
         .sort(byDate)
         .map(e => ({
           entryId: e.id,
@@ -129,9 +131,13 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
       const p = rows ? planBurst(rows.overview, s, ctx()) : null
       if (rows && p) sandbox.write(rows, p)
     },
+    // Stale, applying nothing, when the rows no longer hold what the call was shown, as in production
     applyReview: async (c, result) => {
       const rows = sandbox.rowsOf(c.overviewId)
-      if (rows) sandbox.write(rows, planReview(rows, c, result, ctx()))
+      if (!rows) return 'stale'
+      const p = planReview(rows, c, result, ctx())
+      sandbox.write(rows, p)
+      return p.decision.outcome === STALE_REVIEW ? 'stale' : 'written'
     },
     applyAudit: async (c, result) => sandbox.write(null, planAudit(c, result, ctx())),
     applyStands: async (c, result, record, today) => {

@@ -1,8 +1,10 @@
 /**
- * Link results as the linking step returns them, for the overview db tests: a story left alone, a
- * join, a founding. Test-only.
+ * Link results as the linking step returns them, for the overview tests: a story left alone, a join,
+ * a founding; and the case a review reads of an overview's rows. Test-only.
  */
+import type { Rows } from '../../services/overviewChanges.js'
 import type { LinkResult } from '../../services/overviewLink.js'
+import type { ReviewCase } from '../../services/overviewReview.js'
 import type { Charter, LinkStory, Shared } from '../../services/overviewTypes.js'
 
 export const fixtureCharter: Charter = { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda'], endEvent: 'The ministry declares it over' }
@@ -51,6 +53,30 @@ export const joinResult = (story: LinkStory, overviewId: string, reportsEndEvent
     },
     shown: { overviews: [{ ref: 'O1', id: overviewId, distance: 0.2 }], partners: [] },
   })
+
+/** The case a review is asked on, read from these rows as `reviewCase` reads the tables: the active entries of published stories, oldest first (every role routine). */
+export const reviewCaseOf = ({ overview: o, entries }: Rows): ReviewCase => ({
+  overviewId: o.id,
+  title: o.title,
+  charter: o.charter,
+  scope: o.scope,
+  frozen: o.frozen,
+  entries: entries
+    .filter(e => e.status === 'active' && e.published && e.datePublished !== null)
+    .sort((a, b) => a.datePublished!.getTime() - b.datePublished!.getTime())
+    .map(e => ({
+      entryId: e.id,
+      storyId: e.storyId ?? '',
+      title: 'Title',
+      label: '',
+      summary: 'Summary.',
+      date: e.datePublished!.toISOString().slice(0, 10),
+      role: { role: 'routine', roleKind: null },
+      locked: e.locked,
+    })),
+  closingStoryId: o.status === 'closing' ? o.closingStoryId : null,
+  lockedOut: o.lockedOut,
+})
 
 export const foundResult = (
   story: LinkStory,

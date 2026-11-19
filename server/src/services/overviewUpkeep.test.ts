@@ -152,7 +152,10 @@ function fakes(over: Partial<UpkeepDeps> = {}): UpkeepDeps & { writes: string[] 
     applyClosing: async (c, r) => void writes.push(`closing:${c.overviewId}:${r.outcome}`),
     applyStatus: async (s, moves) => void writes.push(`status:${s.id}:${moves.map(m => (m.kind === 'status' ? m.to : m.kind)).join(',')}`),
     applyBurst: async s => void writes.push(`burst:${s.id}`),
-    applyReview: async (c, r) => void writes.push(`review:${c.overviewId}:${r.trigger}:${r.outcome}`),
+    applyReview: async (c, r) => {
+      writes.push(`review:${c.overviewId}:${r.trigger}:${r.outcome}`)
+      return 'written'
+    },
     applyAudit: async (c, r) => void writes.push(`audit:${c.overviewId}:${r.outcome}`),
     applyStands: async (c, r, record) => void writes.push(`stands:${c.overviewId}:${r.outcome}:${record.signature === null ? 'none' : 'signed'}`),
     ...over,
@@ -229,6 +232,17 @@ describe('the upkeep after linking', () => {
       { overviewId: 'o1', title: 'Ebola', cause: 'burst', count: 6 },
       { overviewId: 'o2', title: 'Ebola', cause: 'brake', count: 2 },
     ])
+  })
+
+  it('lists no freeze and counts no action of a review whose overview changed during its call: it is stale, and tried again next run', async () => {
+    const cut: ReviewAnswer = { ...keepAll, entries: keepAll.entries.map((e, i) => (i > 0 ? { ...e, belongs: 'no' as const } : e)) }
+    const deps = fakes({
+      states: async () => [state('o2', { activeEntries: 6, title: 'Mpox' })],
+      review: { review: async () => call(cut, 0.1) },
+      applyReview: async () => 'stale',
+    })
+    const tally = await runUpkeep(deps, AT)
+    expect(tally).toMatchObject({ reviews: 1, reviewsStale: 1, reviewActions: 0, reviewRefusals: 0, freezes: [], failed: 0, costUsd: 0.1 })
   })
 
   it('goes on past an overview that throws, and starts nothing once switched off', async () => {

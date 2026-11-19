@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { joinResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
 import { ConflictError } from '../utils/errors.js'
 import { applied, merged, newOverviewRow, removesLink, settle, type EntryRow, type OverviewRow, type Plan, type Rows } from './overviewChanges.js'
 import { planEdit, planUndo, undoable, type AttachStory, type UndoTarget } from './overviewEdits.js'
 import { planBurst, planClosing, planJoin, planReview, planStatus } from './overviewPlans.js'
+import type { ReviewResult } from './overviewReview.js'
 
 const NOW = new Date('2026-11-18T12:00:00Z')
 const LATER = new Date('2026-11-19T12:00:00Z')
@@ -68,6 +70,21 @@ const refusal = (f: () => unknown): string => {
 }
 
 const story = (over: Partial<AttachStory> = {}): AttachStory => ({ id: 's9', published: true, datePublished: day(9), activeIn: null, rowHere: null, ...over })
+const review = (over: Partial<ReviewResult> = {}): ReviewResult => ({
+  trigger: 'burst',
+  outcome: 'reviewed',
+  actions: [],
+  refusals: [],
+  kept: 3,
+  scope: 'ongoing',
+  cancelsClosing: false,
+  brake: null,
+  answer: null,
+  model: 'm',
+  promptVersion: 'v',
+  costUsd: 0,
+  ...over,
+})
 const turning = { role: 'turning_point' as const, roleKind: 'spread' as const }
 
 describe('planEdit', () => {
@@ -172,12 +189,67 @@ describe('planEdit', () => {
 describe('planUndo', () => {
   it("undoes an editor's action by its changes the other way round, and an undo of that undo restores it again", () => {
     const first = run(rows(), planEdit({ kind: 'detach', overviewId: 'o1', entryId: 'e3' }, rows(), null, 'e3', ctx()))
-    const undo = run(first.rows, planUndo(first.decision, first.rows, ctx(LATER)))
+    const undo = run(first.rows, planUndo(first.decision, first.rows, [], ctx(LATER)))
     expect(undo.rows.entries[2]).toMatchObject({ status: 'active', detachedBy: null, locked: false })
     expect(undo.rows.overview.lastEntryAt).toEqual(day(3))
-    const p = planUndo(undo.decision, undo.rows, ctx(LATER))
-    expect(p.relive).toBe(first.decision.id)
+    const p = planUndo(undo.decision, undo.rows, [undo.decision], ctx(LATER))
+    expect(p.chain).toEqual([{ decisionId: first.decision.id, undone: false }])
     expect(applied(undo.rows, settle(undo.rows, p)).entries[2]).toMatchObject({ status: 'detached', detachReason: 'editor', locked: true })
+  })
+
+  /** Undo upon undo as the lifecycle writes them: the decision undone marked so, and the chain below it as the plan says. */
+  function chainFrom(first: { rows: Rows; decision: UndoTarget }) {
+    let at = first.rows
+    const decisions: UndoTarget[] = [first.decision]
+    const byId = (id: string) => decisions.find(x => x.id === id)!
+    return {
+      undo(id: string): string {
+        const d = byId(id)
+        const p = planUndo(d, at, decisions, ctx(LATER))
+        const next = run(at, p)
+        d.undoneAt = LATER
+        for (const m of p.chain) byId(m.decisionId).undoneAt = m.undone ? LATER : null
+        decisions.push(next.decision)
+        at = next.rows
+        return next.decision.id
+      },
+      /** Whether each decision is undone, oldest first. */
+      undone: () => decisions.map(d => d.undoneAt !== null),
+      rows: () => at,
+      decision: byId,
+    }
+  }
+
+  it('keeps a chain of undos consistent at depth 3 and 4, for a join and a review: each undo’s target is undone exactly while the undo is live', () => {
+    const at = rows({ scope: 'forming' }, [entry(1), entry(2)])
+    const joined = run(at, planJoin(at.overview, joinResult(linkStory({ id: 's3', datePublished: day(3) }), 'o1'), { now: NOW, newId: () => `id-${++n}` }).plan)
+    const join = chainFrom(joined)
+    const u3 = join.undo(join.undo(join.undo(joined.decision.id)))
+    expect(join.undone()).toEqual([true, false, true, false])
+    expect(join.rows().entries[2]).toMatchObject({ status: 'detached', detachReason: 'undone', locked: true })
+    expect(refusal(() => planUndo(join.decision(joined.decision.id), join.rows(), [], ctx(LATER)))).toMatch(/already undone/)
+    join.undo(u3)
+    expect(join.undone()).toEqual([false, true, false, true, false])
+    expect(join.rows().entries[2]).toMatchObject({ status: 'active', locked: false })
+
+    const four = rows({}, [entry(1), entry(2), entry(3), entry(4)])
+    const narrow = { ...charter, out: [...charter.out, 'Mpox'] }
+    const result = review({
+      actions: [
+        { kind: 'detach', entryId: 'e4', storyId: 's4', reason: 'Elsewhere.' },
+        { kind: 'narrow', added: ['Mpox'], charter: narrow },
+      ],
+    })
+    const reviewed = run(four, planReview(four, reviewCaseOf(four), result, ctx()))
+    const chain = chainFrom(reviewed)
+    const r3 = chain.undo(chain.undo(chain.undo(reviewed.decision.id)))
+    expect(chain.undone()).toEqual([true, false, true, false])
+    expect(chain.rows().entries[3]).toMatchObject({ status: 'active', locked: true })
+    expect(chain.rows().overview).toMatchObject({ charter, lockedOut: ['Mpox'] })
+    chain.undo(r3)
+    expect(chain.undone()).toEqual([false, true, false, true, false])
+    expect(chain.rows().entries[3]).toMatchObject({ status: 'detached', detachReason: 'review', locked: false })
+    expect(chain.rows().overview).toMatchObject({ charter: narrow, lockedOut: [] })
   })
 
   it('undoes a join by detaching its entry, undone and locked as the editor’s, and settles what follows the entries', () => {
@@ -196,7 +268,7 @@ describe('planUndo', () => {
     } as never
     const joined = run(at, planJoin(at.overview, result, { now: NOW, newId: () => `id-${++n}` }).plan)
     expect(joined.rows.entries).toHaveLength(3)
-    const undo = run(joined.rows, planUndo(joined.decision, joined.rows, ctx(LATER)))
+    const undo = run(joined.rows, planUndo(joined.decision, joined.rows, [], ctx(LATER)))
     expect(undo.rows.entries[2]).toMatchObject({ status: 'detached', detachedBy: 'ed-1', detachReason: 'undone', detachedAt: LATER, locked: true })
     expect(undo.rows.overview).toMatchObject({ scope: 'forming', lastEntryAt: day(2) })
   })
@@ -207,11 +279,11 @@ describe('planUndo', () => {
     const closed = run(at, close!)
     expect(closed.rows.overview).toMatchObject({ status: 'closed', closedReason: 'faded', closedAt: day(30) })
     expect(undoable({ kind: 'status', outcome: 'closed', undoneAt: null })).toBe(true)
-    const undo = run(closed.rows, planUndo(closed.decision, closed.rows, ctx(LATER)))
+    const undo = run(closed.rows, planUndo(closed.decision, closed.rows, [], ctx(LATER)))
     expect(undo.rows.overview).toMatchObject({ status: 'open', closedAt: null, closedReason: null, reopenedAt: LATER })
     // An editor reopened it and closed it again since: that closure is not this one
     const again = { ...closed.rows, overview: { ...closed.rows.overview, closedAt: LATER, closedReason: 'editor' } }
-    expect(refusal(() => planUndo(closed.decision, again, ctx(LATER)))).toMatch(/its closure changed after it\. Undo the later change first/)
+    expect(refusal(() => planUndo(closed.decision, again, [], ctx(LATER)))).toMatch(/its closure changed after it\. Undo the later change first/)
   })
 
   it('opens a closing again only while it is the closing the overview is in, and clears a burst freeze only while it stands', () => {
@@ -219,23 +291,20 @@ describe('planUndo', () => {
     const c = { overviewId: 'o1', charter, story: { id: 's3', datePublished: day(3) }, entries: [] } as never
     const closing = run(at, planClosing(at.overview, c, { outcome: 'closing', answers: {}, model: 'm', promptVersion: 'v', costUsd: 0 } as never, ctx()))
     expect(closing.rows.overview).toMatchObject({ status: 'closing', closingStoryId: 's3', closingSince: day(3) })
-    const undone = run(closing.rows, planUndo(closing.decision, closing.rows, ctx(LATER)))
+    const undone = run(closing.rows, planUndo(closing.decision, closing.rows, [], ctx(LATER)))
     expect(undone.rows.overview).toMatchObject({ status: 'open', closingSince: null, closingStoryId: null })
 
     const burst = run(at, planBurst(at.overview, { burstJoins: 7 }, ctx())!)
     expect(burst.rows.overview).toMatchObject({ frozen: true, frozenBy: 'burst', frozenAt: NOW })
-    const cleared = run(burst.rows, planUndo(burst.decision, burst.rows, ctx(LATER)))
+    const cleared = run(burst.rows, planUndo(burst.decision, burst.rows, [], ctx(LATER)))
     expect(cleared.rows.overview).toMatchObject({ frozen: false, frozenBy: null, frozenAt: null, joinsCountedFrom: NOW })
     const refrozen = { ...burst.rows, overview: { ...burst.rows.overview, frozenBy: 'editor', frozenAt: LATER } }
-    expect(refusal(() => planUndo(burst.decision, refrozen, ctx(LATER)))).toMatch(/its freeze changed after it/)
+    expect(refusal(() => planUndo(burst.decision, refrozen, [], ctx(LATER)))).toMatch(/its freeze changed after it/)
   })
 
   it('undoes a review whole: its detaches back and locked, its relabel, narrowing and title restored, a freeze it cleared the editor’s again', () => {
     const at = rows({ frozen: true, frozenBy: 'burst', frozenAt: day(4) }, [entry(1), entry(2), entry(3), entry(4)])
-    const c = { overviewId: 'o1', title: 'Ebola in Ituri', charter, scope: 'ongoing', frozen: true, entries: [], closingStoryId: null, lockedOut: [] } as never
-    const result = {
-      trigger: 'burst',
-      outcome: 'reviewed',
+    const result = review({
       actions: [
         { kind: 'detach', entryId: 'e4', storyId: 's4', reason: 'Elsewhere.' },
         { kind: 'relabel', entryId: 'e1', storyId: 's1', from: { role: 'routine', roleKind: null }, to: turning },
@@ -243,18 +312,10 @@ describe('planUndo', () => {
         { kind: 'retitle', from: 'Ebola in Ituri', to: 'Ebola in eastern Congo' },
         { kind: 'unfreeze' },
       ],
-      refusals: [],
-      kept: 3,
-      scope: 'ongoing',
-      brake: null,
-      answer: null,
-      model: 'm',
-      promptVersion: 'v',
-      costUsd: 0,
-    } as never
-    const reviewed = run(at, planReview(at, c, result, ctx()))
+    })
+    const reviewed = run(at, planReview(at, reviewCaseOf(at), result, ctx()))
     expect(reviewed.rows.overview).toMatchObject({ title: 'Ebola in eastern Congo', frozen: false, reviewedAt: NOW, entriesAtLastReview: 3 })
-    const undo = run(reviewed.rows, planUndo(reviewed.decision, reviewed.rows, ctx(LATER)))
+    const undo = run(reviewed.rows, planUndo(reviewed.decision, reviewed.rows, [], ctx(LATER)))
     expect(undo.rows.entries[3]).toMatchObject({ status: 'active', locked: true })
     expect(undo.rows.entries[0]).toMatchObject({ role: 'routine', locked: true })
     expect(undo.rows.overview).toMatchObject({ title: 'Ebola in Ituri', charter, lockedOut: ['Mpox'], frozen: true, frozenBy: 'editor', frozenAt: LATER })
@@ -266,25 +327,27 @@ describe('planUndo', () => {
       forming,
       planReview(
         forming,
-        c,
-        { ...(result as object), actions: [{ kind: 'detach', entryId: 'e2', storyId: 's2', reason: 'No.' }], kept: 1, scope: 'single' } as never,
+        reviewCaseOf(forming),
+        review({ actions: [{ kind: 'detach', entryId: 'e2', storyId: 's2', reason: 'No.' }], kept: 1, scope: 'single' }),
         ctx(),
       ),
     )
-    const restored = run(cut.rows, planUndo(cut.decision, cut.rows, ctx(LATER)))
+    const restored = run(cut.rows, planUndo(cut.decision, cut.rows, [], ctx(LATER)))
     expect(restored.rows.overview).toMatchObject({ scope: 'forming', entriesAtLastReview: 1 })
 
     // An editor retitled it since: the review is undone whole or not at all
     const retitled = { ...reviewed.rows, overview: { ...reviewed.rows.overview, title: 'Mine' } }
-    expect(refusal(() => planUndo(reviewed.decision, retitled, ctx(LATER)))).toMatch(/its title changed after it, and a review is undone whole or not at all/)
+    expect(refusal(() => planUndo(reviewed.decision, retitled, [], ctx(LATER)))).toMatch(
+      /its title changed after it, and a review is undone whole or not at all/,
+    )
   })
 
   it('refuses a decision undone already, one it cannot reverse, a founding’s link and one that recorded no change set', () => {
     const d = (over: Partial<UndoTarget>): UndoTarget => ({ id: 'd', kind: 'status', outcome: 'quiet', storyId: null, inputs: {}, undoneAt: null, ...over })
-    expect(refusal(() => planUndo(d({ undoneAt: NOW }), rows(), ctx()))).toMatch(/already undone/)
-    expect(refusal(() => planUndo(d({}), rows(), ctx()))).toMatch(/cannot be undone/)
-    expect(refusal(() => planUndo(d({ kind: 'link', outcome: 'founded' }), rows(), ctx()))).toMatch(/Undo the founding instead/)
-    expect(refusal(() => planUndo(d({ kind: 'editor_hide', outcome: 'hidden', inputs: { target: null } }), rows(), ctx()))).toMatch(
+    expect(refusal(() => planUndo(d({ undoneAt: NOW }), rows(), [], ctx()))).toMatch(/already undone/)
+    expect(refusal(() => planUndo(d({}), rows(), [], ctx()))).toMatch(/cannot be undone/)
+    expect(refusal(() => planUndo(d({ kind: 'link', outcome: 'founded' }), rows(), [], ctx()))).toMatch(/Undo the founding instead/)
+    expect(refusal(() => planUndo(d({ kind: 'editor_hide', outcome: 'hidden', inputs: { target: null } }), rows(), [], ctx()))).toMatch(
       /did not record what it changed/,
     )
   })

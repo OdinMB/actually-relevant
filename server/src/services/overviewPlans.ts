@@ -21,6 +21,7 @@ import {
   overviewChange,
   plan,
   publicBefore,
+  sameValue,
   settle,
   type Change,
   type DecisionDraft,
@@ -42,6 +43,8 @@ import type { LinkOutcome, OverviewState, Role } from './overviewTypes.js'
 export const PIPELINE = 'pipeline'
 /** Who a review's writes name. */
 export const REVIEWER = 'review'
+/** The outcome of a review whose overview changed while its call ran: recorded, nothing applied. */
+export const STALE_REVIEW = 'stale'
 
 /** What a plan is made with: the write's time and fresh row ids (`randomUUID` in production, a counter in the sandbox). */
 export interface PlanContext {
@@ -318,16 +321,38 @@ export function planBurst(o: OverviewRow, state: Pick<OverviewState, 'burstJoins
 }
 
 /**
+ * Whether the overview changed while a review's call ran (`.context/overviews.md`, "Reviews"): what the
+ * call was shown (`c`) against the rows locked for its write. The title, the charter, the scope and
+ * the freeze, and which active entries of published stories it has and which of them are locked.
+ */
+function changedSinceCase(c: ReviewCase, { overview: o, entries }: Rows): boolean {
+  const shown = entries.filter(e => e.status === 'active' && e.published && e.datePublished !== null)
+  const locked = new Map(shown.map(e => [e.id, e.locked]))
+  return (
+    o.title !== c.title ||
+    !sameValue(o.charter, c.charter) ||
+    o.scope !== c.scope ||
+    o.frozen !== c.frozen ||
+    locked.size !== c.entries.length ||
+    c.entries.some(e => locked.get(e.entryId) !== e.locked)
+  )
+}
+
+/**
  * A review's result (`.context/overviews.md`, "Reviews") as its `review` decision with its trigger,
  * actions, refusals and brake (and for a closure's, the closing it was for). A failed review changes
- * nothing. Otherwise: each detach of an active, unlocked entry (`review`; its story's link decision
- * stays live, so it is not linked again), each relabel of one, the narrowed charter, the title, a
- * freeze cleared, or, when the detach brake tripped, the overview frozen by the review for an editor;
+ * nothing, and so does one whose overview changed while its call ran (`changedSinceCase`): it is
+ * recorded `stale`, so the review stays due and the next run asks again, and a change made meanwhile
+ * is never overwritten. Otherwise: each detach of an active, unlocked entry (`review`; its story's link
+ * decision stays live, so it is not linked again), each relabel of one, the narrowed charter, the title,
+ * a freeze cleared, or, when the detach brake tripped, the overview frozen by the review for an editor;
  * the scope it leaves, the entries kept and the review's time; for a closure's, the closure reviewed;
  * a closing whose end-event story it detached cancelled (`leaving`, with a `status` record of it); and
  * the slug the first time it makes the overview public.
  */
-export function planReview({ overview: o, entries }: Rows, c: ReviewCase, result: ReviewResult, ctx: PlanContext): Plan {
+export function planReview(rows: Rows, c: ReviewCase, result: ReviewResult, ctx: PlanContext): Plan {
+  const { overview: o, entries } = rows
+  const stale = result.outcome === 'reviewed' && changedSinceCase(c, rows)
   const inputs: ReviewInputs = {
     trigger: result.trigger,
     closingSince: result.trigger === 'closure' ? o.closingSince : null,
@@ -340,7 +365,7 @@ export function planReview({ overview: o, entries }: Rows, c: ReviewCase, result
   const decision = draft({
     id: ctx.newId(),
     kind: 'review',
-    outcome: result.outcome,
+    outcome: stale ? STALE_REVIEW : result.outcome,
     overviewId: c.overviewId,
     storyId: null,
     inputs,
@@ -350,7 +375,7 @@ export function planReview({ overview: o, entries }: Rows, c: ReviewCase, result
     costUsd: result.costUsd,
     actor: REVIEWER,
   })
-  if (result.outcome !== 'reviewed') return plan(decision)
+  if (result.outcome !== 'reviewed' || stale) return plan(decision)
   const byId = new Map(entries.map(e => [e.id, e]))
   const changes: Change[] = []
   const left: (string | null)[] = []

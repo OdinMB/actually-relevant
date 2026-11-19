@@ -3,11 +3,12 @@
  * "Overview evals"): scripted nights of stories run through the job (`runLinkOverviewsJob`: the real
  * queue, reads and lifecycle writes) with scripted model calls, and through the sandbox
  * (`overviewSandbox.ts`, `upkeepSandbox.ts`, as the `replay` step drives it) with the same calls and
- * production's neighbours; after every run both hold the same overviews, entries and decisions. The
- * nights cover a founding, joins, the first review making it public, an end-event closing, the closing
- * story unpublished (its entry detached, the closing cancelled, the last entry recomputed), a burst
- * frozen and cleared by its review and not counted again an hour later, and a review detaching the
- * newest entry.
+ * production's neighbours; after every run both hold the same overviews, entries and decisions, each
+ * decision with the same change set. The nights cover a founding, joins, the first review making it
+ * public, an end-event closing, the closing story unpublished (its entry detached, the closing
+ * cancelled, the last entry recomputed), a burst frozen and cleared by its review and not counted
+ * again an hour later, a review detaching the newest entry, and a review whose overview is retitled
+ * during its call, recorded stale and asked again.
  */
 import { beforeEach, expect, it, vi } from 'vitest'
 import prisma from '../lib/prisma.js'
@@ -16,6 +17,15 @@ import type { Sandbox } from '../scripts/eval/overviews/overviewSandbox.js'
 import type { OverviewCalls } from '../services/overviewSteps.js'
 import { createFeed, createIssue, createStory, describeDb, setEmbedding, useTestDatabase } from '../test/db/harness.js'
 
+// One link call in flight at a time, in the job and the sandbox alike. With more, whether a result goes
+// stale (its partner joined meanwhile) depends on whether its reads land before or after the write
+// before it, which memory reaches sooner than the tables: both write by the same rules and end alike,
+// but in another order, so their change sets differ
+vi.mock('../config.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../config.js')>()
+  Object.defineProperty(actual.config.overviews, 'concurrency', { value: 1 })
+  return actual
+})
 vi.mock('../services/overviewGate.js', () => ({ OVERVIEW_EVAL_GATE: null }))
 vi.mock('../services/researchPassGate.js', () => ({ PASS_EVAL_GATE: null }))
 const notices = vi.hoisted(() => [] as { title: string; dedupeKey?: string; link?: string }[])
@@ -39,6 +49,8 @@ const call = <T>(parsed: T, model = 'scripted') => Promise.resolve({ parsed, cos
 const both = (s: string) => ({ story: s, other: s })
 const belongs = (title: string) => title.includes('Ebola') && title.includes('Ituri')
 const offTopic = (title: string) => title.includes('trial')
+/** What happens to the overview while a review's call runs, one per review call: the sandbox's review is asked first, then the job's. */
+const duringReview: (() => unknown)[] = []
 
 /** The model as the scenario scripts it: Ebola-in-Ituri stories belong together, a vaccine trial does not, "declares … over" reports the end event. */
 const calls: OverviewCalls = {
@@ -76,8 +88,9 @@ const calls: OverviewCalls = {
     closeCheck: ({ story }) => call({ happened: story.title.includes('declares') ? ('yes' as const) : ('no' as const), reason: 'Checked.' }),
   },
   review: {
-    review: input =>
-      call({
+    review: async (input, { audit }) => {
+      if (!audit) await duringReview.shift()?.()
+      return call({
         entries: input.entries.map(e => ({
           id: e.ref,
           belongs: offTopic(e.title) ? ('no' as const) : ('yes' as const),
@@ -88,7 +101,8 @@ const calls: OverviewCalls = {
         charter: input.charter,
         title: '',
         clearFreeze: input.frozen && input.entries.every(e => !offTopic(e.title)),
-      }),
+      })
+    },
   },
   // No member has pool facts: every refresh has too few, and neither call is made
   stands: {
@@ -190,25 +204,51 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
       closingStoryId: name(o.closingStoryId as string | null),
       entries: entriesView(entries),
     })
-    /** Decisions as `kind:outcome:story`, sorted, undone ones marked; the monthly audit and the stands refreshes, which the sandbox does not keep as decisions, left out. */
-    const decisionsView = (ds: { kind: string; outcome: string; storyId: string | null; undone: boolean }[]) =>
+    /**
+     * A decision's change set as both keep it, its rows named rather than by id (an entry by its story,
+     * the one overview as `overview`, a closing's story by its name) and its dates as JSON writes them.
+     */
+    type StoredSet = { changes?: { table: string; id: string; before: View; after: View }[]; created?: { table: string; id: string }[] }
+    const changeSetView = (inputs: unknown, storyOf: ReadonlyMap<string, string | null>) => {
+      const { changes = [], created = [] } = JSON.parse(JSON.stringify(inputs ?? {})) as StoredSet
+      const row = (table: string, id: string) => (table === 'entry' ? `entry:${name(storyOf.get(id) ?? null)}` : 'overview')
+      const fields = (f: View) => ('closingStoryId' in f ? { ...f, closingStoryId: name(f.closingStoryId as string | null) } : f)
+      return {
+        changes: changes.map(c => ({ table: c.table, row: row(c.table, c.id), before: fields(c.before), after: fields(c.after) })),
+        created: created.map(c => row(c.table, c.id)),
+      }
+    }
+    /** Sorting by JSON with keys sorted: jsonb hands objects back in its own key order. */
+    const sortedJson = (v: unknown) =>
+      JSON.stringify(v, (_k, x: unknown) =>
+        x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x as View).sort(([a], [b]) => a.localeCompare(b))) : x,
+      )
+    /** Decisions as `kind:outcome:story`, undone ones marked, each with its change set, sorted; the monthly audit and the stands refreshes, which the sandbox does not keep as decisions, left out. */
+    const decisionsView = (
+      ds: { kind: string; outcome: string; storyId: string | null; undone: boolean; inputs: unknown }[],
+      storyOf: ReadonlyMap<string, string | null>,
+    ) =>
       ds
         .filter(d => d.kind !== 'stands' && !d.outcome.startsWith('audit'))
-        .map(d => `${d.kind}:${d.outcome}:${name(d.storyId) ?? '-'}${d.undone ? ':undone' : ''}`)
-        .sort()
+        .map(d => ({ decision: `${d.kind}:${d.outcome}:${name(d.storyId) ?? '-'}${d.undone ? ':undone' : ''}`, ...changeSetView(d.inputs, storyOf) }))
+        .sort((a, b) => sortedJson(a).localeCompare(sortedJson(b)))
+    const storiesOf = (entries: { id: string; storyId: string | null }[]) => new Map(entries.map(e => [e.id, e.storyId]))
 
     async function tablesView(): Promise<View> {
       const overviews = await prisma.overview.findMany({ include: { entries: true } })
       const decisions = await prisma.overviewDecision.findMany()
       return {
         overviews: overviews.map(o => overviewView(o as unknown as Record<string, unknown>, o.entries)),
-        decisions: decisionsView(decisions.map(d => ({ ...d, undone: d.undoneAt !== null }))),
+        decisions: decisionsView(
+          decisions.map(d => ({ ...d, undone: d.undoneAt !== null })),
+          storiesOf(overviews.flatMap(o => o.entries)),
+        ),
       }
     }
     function sandboxView(sb: Sandbox): View {
       return {
         overviews: [...sb.overviews.values()].map(o => overviewView(o as unknown as Record<string, unknown>, o.entries)),
-        decisions: decisionsView(sb.decisions),
+        decisions: decisionsView(sb.decisions, storiesOf([...sb.overviews.values()].flatMap(o => o.entries))),
       }
     }
     type OverviewView = Record<string, unknown> & { entries: Record<string, Record<string, unknown>> }
@@ -274,5 +314,24 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
     expect(o.entries.E9).toMatchObject({ status: 'detached', detachedBy: 'review' })
     expect(o).toMatchObject({ lastEntryAt: e8.datePublished, entriesAtLastReview: 11 })
     expect(notices).toEqual([])
+
+    // Night 7: E10 makes twelve and a review is due, but the overview is retitled while its call runs: it is recorded stale and applies nothing
+    await story('E10', 'Ebola update 10 from Ituri', at(8, 9))
+    const retitled = 'Ebola in Ituri and North Kivu'
+    duringReview.push(
+      () => {
+        for (const ov of sandbox.overviews.values()) ov.title = retitled
+      },
+      () => prisma.overview.updateMany({ data: { title: retitled } }),
+    )
+    o = only(await run(at(9, 2)))
+    expect(duringReview).toEqual([])
+    expect(o).toMatchObject({ title: retitled, entriesAtLastReview: 11, reviewedAt: at(8, 2) })
+    expect(await prisma.overviewDecision.count({ where: { kind: 'review', outcome: 'stale' } })).toBe(1)
+
+    // An hour later the review is asked again on the overview as it stands, and the title stays
+    const later = new Date(at(9, 2).getTime() + HOUR)
+    o = only(await run(later))
+    expect(o).toMatchObject({ title: retitled, entriesAtLastReview: 12, reviewedAt: later })
   })
 })

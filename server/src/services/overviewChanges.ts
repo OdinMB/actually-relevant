@@ -155,12 +155,18 @@ export interface Plan {
   changes: Change[]
   /** The story whose live link decisions the write undoes (an unpublished member detached), so it is linked afresh once published again. */
   undoesLinksOf: string | null
-  /** An undo of an undo: the decision that undo had undone, live again. */
-  relive: string | null
+  /** An undo of an undo: the decisions below it in the chain of undos, each live or undone again (`undoChain`). */
+  chain: ChainMark[]
   /** The overview was public before the write: a write taking a link away then empties the caches holding links. */
   wasPublic: boolean
   /** The write makes the overview public for the first time: the applier gives it its slug (`freeSlug`). */
   needsSlug: boolean
+}
+
+/** A decision an undo makes live again (`undone` false) or undone again. */
+export interface ChainMark {
+  decisionId: string
+  undone: boolean
 }
 
 /** A decision with no model call and nothing to undo but its change set. */
@@ -183,7 +189,7 @@ export const plan = (decision: DecisionDraft, over: Partial<Omit<Plan, 'decision
   newEntries: [],
   changes: [],
   undoesLinksOf: null,
-  relive: null,
+  chain: [],
   wasPublic: false,
   needsSlug: false,
   ...over,
@@ -402,4 +408,13 @@ export function merged(changes: readonly Change[]): Change[] {
     out.set(key, had ? ({ ...had, before: { ...c.before, ...had.before }, after: { ...had.after, ...c.after } } as Change) : c)
   }
   return [...out.values()]
+}
+
+/** The change set a plan's decision keeps, which Undo inverts: its changes, one per row (`merged`), and the rows it created. */
+export function changeSet(p: Plan): { changes: Change[]; created: { table: Change['table']; id: string }[] } {
+  const created = [
+    ...(p.newOverview ? [{ table: 'overview' as const, id: p.newOverview.id }] : []),
+    ...p.newEntries.map(e => ({ table: 'entry' as const, id: e.id })),
+  ]
+  return { changes: merged(p.changes), created }
 }

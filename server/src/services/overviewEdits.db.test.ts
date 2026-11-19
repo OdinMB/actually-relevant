@@ -143,6 +143,41 @@ describeDb("an editor's actions and undo", () => {
     expect(await owed()).not.toContain(s!.id)
   })
 
+  /** Whether each decision is undone, in the order given. */
+  const undone = async (...ids: string[]) => {
+    const rows = await prisma.overviewDecision.findMany({ where: { id: { in: ids } }, select: { id: true, undoneAt: true } })
+    return ids.map(id => rows.find(r => r.id === id)!.undoneAt !== null)
+  }
+
+  it('keeps a join’s chain of undos consistent at depth 3 and 4: each undo’s target is undone exactly while the undo is live', async () => {
+    const [a, b, s] = await stories(3)
+    const o = await overview([a!.id, b!.id], { scope: 'ongoing' })
+    await applyLink(joinResult(linkStory(s!), o.id), false)
+    const join = (await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'link', storyId: s!.id } })).id
+    const owed = async () => {
+      const slices = await owedStories(new Date())
+      return [...slices.backlog, ...slices.night]
+    }
+    const u1 = (await undoDecision(join, EDITOR)).decisionId
+    const u2 = (await undoDecision(u1, EDITOR)).decisionId
+    const u3 = (await undoDecision(u2, EDITOR)).decisionId
+    // U3 makes U1 live again, so the join U1 undid is undone again: the story is owed, its entry out and locked
+    expect(await undone(join, u1, u2, u3)).toEqual([true, false, true, false])
+    expect(await entryOf(s!.id)).toMatchObject({ status: 'detached', detachReason: 'undone', locked: true })
+    expect(await owed()).toContain(s!.id)
+    await expect(undoDecision(join, EDITOR)).rejects.toThrow('already undone')
+    expect((await prisma.overviewDecision.findUniqueOrThrow({ where: { id: join } })).undoneBy).toBe(EDITOR)
+
+    const u4 = (await undoDecision(u3, EDITOR)).decisionId
+    expect(await undone(join, u1, u2, u3, u4)).toEqual([false, true, false, true, false])
+    expect(await entryOf(s!.id)).toMatchObject({ status: 'active', locked: false })
+    expect(await owed()).not.toContain(s!.id)
+    // The chain stays undoable from its top: undoing U4 takes the join out again
+    await undoDecision(u4, EDITOR)
+    expect(await undone(join, u1, u2, u3, u4)).toEqual([true, false, true, false, true])
+    expect(await owed()).toContain(s!.id)
+  })
+
   it('undoes a founding by detaching both its entries, leaving the pair settled; an undo is refused once the story is elsewhere', async () => {
     const [a, b] = await stories(2)
     await applyLink(foundResult(linkStory(b!), linkStory(a!)), false)
@@ -205,8 +240,23 @@ describeDb("an editor's actions and undo", () => {
     expect((await reviewCase(prisma, o.id))!.lockedOut).toEqual(['cholera'])
 
     // Undone in turn, the lock goes with it; the count is one-way and stays
-    await undoDecision(undo.decisionId, EDITOR)
+    const again = await undoDecision(undo.decisionId, EDITOR)
     expect(await row(o.id)).toMatchObject({ charter: narrowed, entriesAtLastReview: 4 })
+    expect((await reviewCase(prisma, o.id))!.lockedOut).toEqual([])
+
+    // Depth 3: the first undo is live again, so the review is undone again, and nothing offers its Undo
+    const third = await undoDecision(again.decisionId, EDITOR)
+    expect(await undone(review.id, undo.decisionId, again.decisionId, third.decisionId)).toEqual([true, false, true, false])
+    expect(await entryOf(members[3]!.id)).toMatchObject({ status: 'active', locked: true })
+    expect(await row(o.id)).toMatchObject({ charter })
+    expect((await reviewCase(prisma, o.id))!.lockedOut).toEqual(['cholera'])
+    await expect(undoDecision(review.id, EDITOR)).rejects.toThrow('already undone')
+
+    // Depth 4: the review is live again, as it left the overview
+    const fourth = await undoDecision(third.decisionId, EDITOR)
+    expect(await undone(review.id, undo.decisionId, again.decisionId, third.decisionId, fourth.decisionId)).toEqual([false, true, false, true, false])
+    expect(await entryOf(members[3]!.id)).toMatchObject({ status: 'detached', detachReason: 'review', locked: false })
+    expect(await row(o.id)).toMatchObject({ charter: narrowed })
     expect((await reviewCase(prisma, o.id))!.lockedOut).toEqual([])
   })
 

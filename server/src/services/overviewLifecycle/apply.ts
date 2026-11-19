@@ -10,7 +10,7 @@ import { slugify } from '../../utils/slugify.js'
 import { ConflictError } from '../../utils/errors.js'
 import {
   applied,
-  merged,
+  changeSet,
   overviewChange,
   removesLink,
   settle,
@@ -157,10 +157,11 @@ export interface Applied {
 /**
  * Writes a plan: settled first (the scope and the last entry its entries leave), given its slug when it
  * makes the overview public for the first time; then the overview it founds, its decision with the
- * change set (one change per row, `merged`) and the rows it created, the decisions written with it, the
- * entries it creates, and its changes, each only while its row holds `before`; then the live link
- * decisions it undoes and the decision it makes live again. `rows` are what it was planned on (null
- * for a founding).
+ * change set (`changeSet`: one change per row and the rows it created), the decisions written with it,
+ * the entries it creates, and its changes, each only while its row holds `before`; then the live link
+ * decisions it undoes, and for an undo of an undo the decisions below it in the chain live or undone
+ * again, an undone one by the plan's actor (one undone already keeps who undid it). `rows` are what it
+ * was planned on (null for a founding).
  */
 export async function applyPlan(tx: Tx, rows: Rows | null, planned: Plan, now: Date): Promise<Applied> {
   let p = settle(rows, planned)
@@ -168,7 +169,7 @@ export async function applyPlan(tx: Tx, rows: Rows | null, planned: Plan, now: D
     const after = applied(rows, p).overview
     if (after.slug === null) p = { ...p, changes: [...p.changes, ...overviewChange(after, { slug: await freeSlug(tx, after.title) })] }
   }
-  const changes = merged(p.changes)
+  const { changes, created } = changeSet(p)
   const n = p.newOverview
   if (n)
     await tx.overview.create({
@@ -184,7 +185,6 @@ export async function applyPlan(tx: Tx, rows: Rows | null, planned: Plan, now: D
         foundedAt: n.foundedAt,
       },
     })
-  const created = [...(n ? [{ table: 'overview', id: n.id }] : []), ...p.newEntries.map(e => ({ table: 'entry', id: e.id }))]
   await createDecision(tx, p.decision, { ...p.decision.inputs, changes, created })
   for (const d of p.also) await createDecision(tx, d, d.inputs)
   for (const e of p.newEntries)
@@ -206,7 +206,10 @@ export async function applyPlan(tx: Tx, rows: Rows | null, planned: Plan, now: D
   for (const c of changes) await applyChange(tx, c)
   if (p.undoesLinksOf)
     await tx.overviewDecision.updateMany({ where: { storyId: p.undoesLinksOf, kind: 'link', undoneAt: null }, data: { undoneAt: now, undoneBy: PIPELINE } })
-  if (p.relive) await tx.overviewDecision.updateMany({ where: { id: p.relive }, data: { undoneAt: null, undoneBy: null } })
+  for (const m of p.chain) {
+    if (m.undone) await tx.overviewDecision.updateMany({ where: { id: m.decisionId, undoneAt: null }, data: { undoneAt: now, undoneBy: p.decision.actor } })
+    else await tx.overviewDecision.updateMany({ where: { id: m.decisionId }, data: { undoneAt: null, undoneBy: null } })
+  }
   return { decisionId: p.decision.id, removed: removesLink(p.wasPublic, changes) }
 }
 

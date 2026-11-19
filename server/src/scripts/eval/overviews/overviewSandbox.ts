@@ -11,7 +11,7 @@
 import { slugify } from '../../../utils/slugify.js'
 import {
   applied,
-  merged,
+  changeSet,
   overviewChange,
   settle,
   type DecisionDraft,
@@ -163,10 +163,7 @@ export function createSandbox(): Sandbox {
         o.entries.push({ ...e, storyId: e.storyId!, title: s?.title ?? '', date: s?.date ?? '' })
       }
     }
-    decisions.push(
-      { ...p.decision, inputs: { ...p.decision.inputs, changes: merged(p.changes) }, undone: false },
-      ...p.also.map(d => ({ ...d, undone: false })),
-    )
+    decisions.push({ ...p.decision, inputs: { ...p.decision.inputs, ...changeSet(p) }, undone: false }, ...p.also.map(d => ({ ...d, undone: false })))
     if (p.undoesLinksOf) for (const d of decisions) if (d.kind === 'link' && d.storyId === p.undoesLinksOf) d.undone = true
   }
 

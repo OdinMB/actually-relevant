@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import type { CloseResult } from './overviewClose.js'
-import { applyAudit, applyBurst, applyClosing, applyReview, applyStands, applyStatus } from './overviewLifecycle.js'
+import { applyAudit, applyBurst, applyClosing, applyReview, applyStands, applyStatus, editorAction } from './overviewLifecycle.js'
 import type { AuditResult, ReviewResult } from './overviewReview.js'
 import type { StandsResult } from './overviewStands.js'
 import { owedStories } from './overviewQueue.js'
@@ -274,6 +274,29 @@ describeDb('the overview upkeep records', () => {
     expect(await prisma.overviewEntry.count({ where: { overviewId: o.id, status: 'active' } })).toBe(4)
     // No burst review clears it: it waits for an editor
     expect((await overviewStates(prisma, NOW))[0]!.burstAt).toBeNull()
+  })
+
+  it('records a review stale and applies none of it when the overview changed during its call: never public on two entries, an editor’s title kept', async () => {
+    const members = await stories([-3, -2, -1])
+    const o = await overview(members.map(s => s.id))
+    const c = (await reviewCase(prisma, o.id))!
+    // While the call runs, an editor detaches a story and retitles the overview
+    const third = await prisma.overviewEntry.findFirstOrThrow({ where: { storyId: members[2]!.id } })
+    await editorAction({ kind: 'detach', overviewId: o.id, entryId: third.id }, 'editor-1')
+    await editorAction({ kind: 'retitle', overviewId: o.id, title: 'Mine' }, 'editor-1')
+    const asked = review({ scope: 'ongoing', kept: 3, actions: [{ kind: 'retitle', from: 'Ebola in Ituri', to: 'Ebola' }] })
+    expect(await applyReview(c, asked, NOW)).toBe('stale')
+    expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({
+      title: 'Mine',
+      scope: 'forming',
+      slug: null,
+      reviewedAt: null,
+      entriesAtLastReview: 0,
+    })
+    expect(await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'review' } })).toMatchObject({ outcome: 'stale', costUsd: 0.2 })
+    // Read again, the case matches the rows and the review is written
+    expect(await applyReview((await reviewCase(prisma, o.id))!, review({ scope: 'forming', kept: 2 }), NOW)).toBe('written')
+    expect((await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).reviewedAt).toEqual(NOW)
   })
 
   it('a failed review acts on nothing and leaves the review due', async () => {

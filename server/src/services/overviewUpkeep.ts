@@ -46,6 +46,9 @@ export interface UpkeepFreeze {
   count: number
 }
 
+/** What a review's write did: `written` as its result says, or `stale` when its overview changed while the call ran (or is gone), so nothing of it applied and the review stays due. */
+export type ReviewWrite = 'written' | 'stale'
+
 export interface UpkeepDeps {
   /** Joined stories flagged as reporting their overview's end event, not yet judged. */
   closings(): Promise<CloseCase[]>
@@ -62,7 +65,7 @@ export interface UpkeepDeps {
   applyClosing(c: CloseCase, result: CloseResult): Promise<void>
   applyStatus(state: OverviewState, moves: StatusMove[], clock: Date): Promise<void>
   applyBurst(state: OverviewState): Promise<void>
-  applyReview(c: ReviewCase, result: ReviewResult): Promise<void>
+  applyReview(c: ReviewCase, result: ReviewResult): Promise<ReviewWrite>
   applyAudit(c: ReviewCase, result: AuditResult): Promise<void>
   /** The record's `signature` is null for a failed refresh, which the next run tries again. */
   applyStands(
@@ -94,7 +97,9 @@ export interface UpkeepTally {
   detached: number
   bursts: number
   reviews: number
-  /** Actions reviews applied, and answers or parts code refused. */
+  /** Reviews whose overview changed while their call ran: recorded `stale`, nothing applied, asked again next run. */
+  reviewsStale: number
+  /** Actions reviews applied, and answers or parts code refused, of the reviews written. */
   reviewActions: number
   reviewRefusals: number
   audits: number
@@ -124,6 +129,7 @@ const emptyTally = (): UpkeepTally => ({
   detached: 0,
   bursts: 0,
   reviews: 0,
+  reviewsStale: 0,
   reviewActions: 0,
   reviewRefusals: 0,
   audits: 0,
@@ -214,9 +220,12 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
       tally.costUsd += result.costUsd
       tally.reviews++
       if (result.outcome === 'failed') tally.failed++
+      if ((await deps.applyReview(c, result)) === 'stale') {
+        tally.reviewsStale++
+        return
+      }
       tally.reviewActions += result.actions.length
       tally.reviewRefusals += result.refusals.length
-      await deps.applyReview(c, result)
       if (result.brake) tally.freezes.push({ overviewId: c.overviewId, title: c.title, cause: 'brake', count: result.brake.asked })
     },
   )

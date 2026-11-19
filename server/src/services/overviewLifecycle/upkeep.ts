@@ -8,12 +8,12 @@ import prisma from '../../lib/prisma.js'
 import { applied, type Rows } from '../overviewChanges.js'
 import type { CloseCase, CloseResult } from '../overviewClose.js'
 import type { StandsInputs } from '../overviewDecisions.js'
-import { PIPELINE, planAudit, planBurst, planClosing, planReview, planStatus, type PlanContext } from '../overviewPlans.js'
+import { PIPELINE, STALE_REVIEW, planAudit, planBurst, planClosing, planReview, planStatus, type PlanContext } from '../overviewPlans.js'
 import type { AuditResult, ReviewCase, ReviewResult } from '../overviewReview.js'
 import type { StandsResult } from '../overviewStands.js'
 import type { StatusMove } from '../overviewStatus.js'
 import type { OverviewState } from '../overviewTypes.js'
-import type { StandsCase } from '../overviewUpkeep.js'
+import type { ReviewWrite, StandsCase } from '../overviewUpkeep.js'
 import { forgetOverviewLinks } from '../overviewCaches.js'
 import { applyPlan, json, readRows } from './apply.js'
 
@@ -57,14 +57,21 @@ export async function applyBurst(state: OverviewState, now: Date = new Date(), d
   })
 }
 
-/** A review's result (`planReview`), as its `review` decision; nothing for an overview gone meanwhile. */
-export async function applyReview(c: ReviewCase, result: ReviewResult, now: Date = new Date(), db: typeof prisma = prisma): Promise<void> {
-  const removed = await db.$transaction(async tx => {
+/**
+ * A review's result (`planReview`), as its `review` decision, planned on the rows locked here: `stale`,
+ * applying nothing, when they no longer hold what the review's call was shown; nothing for an overview
+ * gone meanwhile.
+ */
+export async function applyReview(c: ReviewCase, result: ReviewResult, now: Date = new Date(), db: typeof prisma = prisma): Promise<ReviewWrite> {
+  const { write, removed } = await db.$transaction(async (tx): Promise<{ write: ReviewWrite; removed: boolean }> => {
     const rows = await readRows(tx, c.overviewId)
-    if (!rows) return false
-    return (await applyPlan(tx, rows, planReview(rows, c, result, context(now)), now)).removed
+    if (!rows) return { write: 'stale', removed: false }
+    const p = planReview(rows, c, result, context(now))
+    const done = await applyPlan(tx, rows, p, now)
+    return { write: p.decision.outcome === STALE_REVIEW ? 'stale' : 'written', removed: done.removed }
   })
   if (removed) forgetOverviewLinks()
+  return write
 }
 
 /** The monthly audit's findings (`planAudit`), never applied. */

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { joinResult, linkStory } from '../test/db/overviewFixtures.js'
+import { joinResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
 import { applied, newOverviewRow, settle, type EntryRow, type OverviewRow, type Rows } from './overviewChanges.js'
 import { planBurst, planJoin, planReview, planStatus } from './overviewPlans.js'
-import type { ReviewCase, ReviewResult } from './overviewReview.js'
+import type { ReviewResult } from './overviewReview.js'
 
 const NOW = new Date('2026-11-18T03:00:00Z')
 let n = 0
@@ -117,25 +117,6 @@ describe('planBurst', () => {
 })
 
 describe('planReview', () => {
-  const reviewCase = (r: Rows): ReviewCase => ({
-    overviewId: 'o1',
-    title: r.overview.title,
-    charter,
-    scope: r.overview.scope,
-    frozen: r.overview.frozen,
-    entries: r.entries.map(e => ({
-      entryId: e.id,
-      storyId: e.storyId!,
-      title: 'T',
-      label: '',
-      summary: 'S.',
-      date: '2026-11-01',
-      role: { role: 'routine', roleKind: null },
-      locked: e.locked,
-    })),
-    closingStoryId: r.overview.closingStoryId,
-    lockedOut: [],
-  })
   const result = (over: Partial<ReviewResult> = {}): ReviewResult => ({
     trigger: 'entries',
     outcome: 'reviewed',
@@ -154,17 +135,17 @@ describe('planReview', () => {
 
   it('makes it public the first time with its slug to come, and records the review’s time and the entries kept', () => {
     const r = rows()
-    const p = planReview(r, reviewCase(r), result(), ctx)
+    const p = planReview(r, reviewCaseOf(r), result(), ctx)
     expect(p.needsSlug).toBe(true)
     expect(applied(r, p).overview).toMatchObject({ scope: 'ongoing', reviewedAt: NOW, entriesAtLastReview: 3, joinsCountedFrom: NOW })
-    expect(planReview(rows({ slug: 'ebola' }), reviewCase(r), result(), ctx).needsSlug).toBe(false)
+    expect(planReview(rows({ slug: 'ebola' }), reviewCaseOf(r), result(), ctx).needsSlug).toBe(false)
   })
 
   it('cancels the closing whose story it detached, logging the cancellation, and settles the last entry', () => {
     const r = rows({ scope: 'ongoing', slug: 'ebola', status: 'closing', closingSince: day(3), closingStoryId: 's3' })
     const p = planReview(
       r,
-      reviewCase(r),
+      reviewCaseOf(r),
       result({ actions: [{ kind: 'detach', entryId: 'e3', storyId: 's3', reason: 'Off topic.' }], kept: 2, scope: 'forming' }),
       ctx,
     )
@@ -176,11 +157,40 @@ describe('planReview', () => {
 
   it('freezes for an editor when the brake tripped, and changes nothing for a failed review', () => {
     const r = rows({ scope: 'ongoing', slug: 'ebola' })
-    const braked = planReview(r, reviewCase(r), result({ brake: { asked: 3, unlocked: 3 } }), ctx)
+    const braked = planReview(r, reviewCaseOf(r), result({ brake: { asked: 3, unlocked: 3 } }), ctx)
     expect(applied(r, braked).overview).toMatchObject({ frozen: true, frozenBy: 'review', frozenAt: NOW })
     expect(applied(r, braked).entries.every(e => e.status === 'active')).toBe(true)
-    const failed = planReview(r, reviewCase(r), result({ outcome: 'failed' }), ctx)
+    const failed = planReview(r, reviewCaseOf(r), result({ outcome: 'failed' }), ctx)
     expect(failed.changes).toEqual([])
     expect(failed.decision.outcome).toBe('failed')
+  })
+
+  it('records a review stale, changing nothing, when what its call read changed meanwhile: title, charter, scope, freeze, entries or their locks', () => {
+    // An unpublished member is in neither the case nor the comparison
+    const r = rows({ scope: 'ongoing', slug: 'ebola' }, [entry(1), entry(2), entry(3), entry(4, { published: false })])
+    const asked = reviewCaseOf(r)
+    const detach = result({ actions: [{ kind: 'detach', entryId: 'e3', storyId: 's3', reason: 'Off topic.' }], kept: 2, scope: 'forming' })
+    expect(planReview(r, asked, detach, ctx).decision.outcome).toBe('reviewed')
+
+    const meanwhile: Record<string, Rows> = {
+      retitled: { ...r, overview: { ...r.overview, title: 'Mine' } },
+      narrowed: { ...r, overview: { ...r.overview, charter: { ...charter, out: [...charter.out, 'cholera'] } } },
+      'scope moved': { ...r, overview: { ...r.overview, scope: 'forming' } },
+      frozen: { ...r, overview: { ...r.overview, frozen: true, frozenBy: 'editor', frozenAt: NOW } },
+      'a story joined': { ...r, entries: [...r.entries, entry(5)] },
+      'an entry left': { ...r, entries: r.entries.map(e => (e.id === 'e2' ? { ...e, status: 'detached' as const } : e)) },
+      'an entry locked': { ...r, entries: r.entries.map(e => (e.id === 'e3' ? { ...e, locked: true } : e)) },
+      'a member published again': { ...r, entries: r.entries.map(e => (e.id === 'e4' ? { ...e, published: true } : e)) },
+    }
+    for (const [what, now] of Object.entries(meanwhile)) {
+      const p = planReview(now, asked, detach, ctx)
+      expect([what, p.decision.outcome, p.changes, p.also, p.needsSlug]).toEqual([what, 'stale', [], [], false])
+      // Its record keeps what it asked and what it cost
+      expect(p.decision).toMatchObject({ costUsd: 0.01, inputs: { actions: detach.actions } })
+    }
+    // A tripped brake freezes nothing on a stale review; a failed one stays failed
+    const braked = planReview(meanwhile.retitled!, asked, result({ brake: { asked: 3, unlocked: 3 } }), ctx)
+    expect([braked.decision.outcome, braked.changes]).toEqual(['stale', []])
+    expect(planReview(meanwhile.retitled!, asked, result({ outcome: 'failed' }), ctx).decision.outcome).toBe('failed')
   })
 })

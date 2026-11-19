@@ -66,7 +66,8 @@ export async function editorAction(action: EditorAction, editorId: string, db: t
 /**
  * Undo of one decision (`planUndo`): the decision marked undone by the editor, the undo logged as an
  * `undo` decision with its changes (so it can itself be undone, which makes the decision it undid live
- * again), applied whole or refused.
+ * again and keeps the chain below it consistent, read from the overview's undos once its rows are
+ * locked), applied whole or refused.
  */
 export async function undoDecision(decisionId: string, editorId: string, db: typeof prisma = prisma): Promise<{ decisionId: string }> {
   const now = new Date()
@@ -78,7 +79,11 @@ export async function undoDecision(decisionId: string, editorId: string, db: typ
     if (!d) throw new NotFoundError('Decision not found')
     if (!d.overviewId) throw new ConflictError('The overview this decision was about is gone')
     const rows = await overviewRows(tx, d.overviewId)
-    const plan = planUndo(d, rows, context(editorId, now))
+    const undos =
+      d.kind === 'undo'
+        ? await tx.overviewDecision.findMany({ where: { overviewId: d.overviewId, kind: 'undo' }, select: { id: true, kind: true, inputs: true } })
+        : []
+    const plan = planUndo(d, rows, undos, context(editorId, now))
     const marked = await tx.overviewDecision.updateMany({ where: { id: d.id, undoneAt: null }, data: { undoneAt: now, undoneBy: editorId } })
     if (marked.count === 0) throw new ConflictError('This decision is already undone')
     return applyPlan(tx, rows, plan, now)

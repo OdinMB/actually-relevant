@@ -22,6 +22,7 @@ import {
   plan,
   publicBefore,
   type Change,
+  type ChainMark,
   type EntryFields,
   type EntryRow,
   type NewEntry,
@@ -246,17 +247,42 @@ function stamped(changes: readonly Change[], rows: Rows, lockedOut: readonly str
   })
 }
 
+/** A decision as an undo chain is read: an `undo` names the decision it undid (`inputs.target`). */
+export type UndoLink = Pick<UndoTarget, 'id' | 'kind' | 'inputs'>
+
+/**
+ * What undoing `d` does below it (`.context/overviews.md`, "Editor actions and undo"): each undo's
+ * target is undone exactly while the undo is live, at any depth. So when `d` is an undo, the decision it
+ * undid is live again; when that one was itself an undo, the decision it undid is undone again; and so
+ * on down to the first decision that is not an undo. `undos` are the overview's undo decisions.
+ */
+export function undoChain(d: UndoLink, undos: readonly UndoLink[]): ChainMark[] {
+  const byId = new Map(undos.map(u => [u.id, u]))
+  const marks: ChainMark[] = []
+  const seen = new Set([d.id])
+  let at: UndoLink | undefined = d
+  while (at?.kind === 'undo') {
+    const target = readTarget(at.inputs)
+    if (target === null || seen.has(target)) break
+    seen.add(target)
+    marks.push({ decisionId: target, undone: marks.length % 2 === 1 })
+    at = byId.get(target)
+  }
+  return marks
+}
+
 /**
  * The plan undoing one decision (`.context/overviews.md`, "Editor actions and undo"): the change set it
  * stored the other way round (`inverted`), applied only while every row still holds what the decision
  * left; otherwise refused whole, naming what changed after it, so a later change is undone first. An
- * undo of an undo makes the decision it had undone live again. Undoing an automated decision (a join, a
- * founding, a closure or a closing begun, a burst's freeze, a review) also makes what it restores the
- * editor's (`stamped`). The fields that follow the entries, a given slug and a review's run are never
- * put back (`inverted`). A join's undo makes its story owed again (the lifecycle marks the decision
- * undone): it may join another overview, never this one, where its entry is locked.
+ * undo of an undo makes the decision it had undone live again, and the chain below it consistent
+ * (`undoChain`, read from the overview's `undos`). Undoing an automated decision (a join, a founding, a
+ * closure or a closing begun, a burst's freeze, a review) also makes what it restores the editor's
+ * (`stamped`). The fields that follow the entries, a given slug and a review's run are never put back
+ * (`inverted`). A join's undo makes its story owed again (the lifecycle marks the decision undone): it
+ * may join another overview, never this one, where its entry is locked.
  */
-export function planUndo(d: UndoTarget, rows: Rows, ctx: EditContext): Plan {
+export function planUndo(d: UndoTarget, rows: Rows, undos: readonly UndoLink[], ctx: EditContext): Plan {
   if (d.undoneAt) throw new ConflictError('This decision is already undone')
   if (!undoable(d)) throw new ConflictError(d.kind === 'link' && d.outcome === 'founded' ? 'Undo the founding instead' : 'This decision cannot be undone')
   const stored = storedChanges(d.kind, d.outcome, d.inputs)
@@ -271,13 +297,19 @@ export function planUndo(d: UndoTarget, rows: Rows, ctx: EditContext): Plan {
   const automated = !isEditorKind(d.kind) && d.kind !== 'undo'
   const narrowed = d.kind === 'review' ? (readInputs(reviewInputs, d.inputs)?.actions ?? []).flatMap(a => (a.kind === 'narrow' ? a.added : [])) : []
   const changes = automated ? stamped(back, rows, narrowed, ctx) : back
-  const target = d.kind === 'undo' ? readTarget(d.inputs) : null
-  const storyId = d.storyId
   const p = plan(
-    draft({ id: ctx.newId(), kind: 'undo', outcome: 'undone', overviewId: rows.overview.id, storyId, inputs: { target: d.id }, actor: ctx.editorId }),
+    draft({
+      id: ctx.newId(),
+      kind: 'undo',
+      outcome: 'undone',
+      overviewId: rows.overview.id,
+      storyId: d.storyId,
+      inputs: { target: d.id },
+      actor: ctx.editorId,
+    }),
     {
       changes,
-      relive: target,
+      chain: undoChain(d, undos),
       wasPublic: publicBefore(rows.overview),
     },
   )
@@ -297,7 +329,7 @@ function recounted(rows: Rows, p: Plan): Change[] {
   return overviewChange(after.overview, { entriesAtLastReview: Math.max(active, after.overview.entriesAtLastReview) })
 }
 
-/** The decision an undo undid. */
+/** The decision an undo undid (`inputs.target`). */
 function readTarget(inputs: unknown): string | null {
   const t = (inputs as { target?: unknown } | null)?.target
   return typeof t === 'string' ? t : null
