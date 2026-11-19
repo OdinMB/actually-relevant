@@ -5,11 +5,14 @@
  * checks (none); each figure's latest key value as of the checkpoint stated when an offered fact holds
  * it (≥90%); "What's being done" present where the key has a sourced response by then that an offered
  * fact reports (≥70%), and never unsupported. Below `STANDS_MIN_CHECKPOINTS` such checkpoints the
- * bars report "not enough evidence" and none is met. Pure.
+ * bars report "not enough evidence" and none is met. The two rates decide only on `MIN_RATE_SAMPLE`
+ * judgments over all runs; below it they are reported for the owner (`rateBar`): one run on the
+ * judged half gives the latest value at most 21 (its three developments with figures), and the
+ * keys list no responses yet, so neither decides on its own today. Pure.
  */
 import type { StandsOutcome } from '../../../services/overviewStands.js'
 import type { AnswerKey } from './keySchema.js'
-import { bar, mean, ratio, type Bar } from './linkScore.js'
+import { bar, mean, rateBar, ratio, type Bar } from './linkScore.js'
 import type { CheckpointName } from './replayScore.js'
 
 export const STANDS_MIN_CHECKPOINTS = 15
@@ -82,6 +85,7 @@ export function scoreStands(runs: readonly StandsCheckpointRun[], minCheckpoints
   const byRun = [...new Set(runs.map(r => r.run))].map(n => runs.filter(r => r.run === n && r.enough))
   const unsupported = (part: 'sentence' | 'doing') =>
     mean(byRun.map(rs => rs.reduce((s, r) => s + r.lines.filter(l => l.part === part && l.supported === false).length, 0)))
+  const enoughRuns = byRun.flat()
   const latest = mean(
     byRun.map(rs =>
       ratio(
@@ -93,15 +97,20 @@ export function scoreStands(runs: readonly StandsCheckpointRun[], minCheckpoints
   const present = mean(byRun.map(rs => ratio(rs.filter(r => r.responseDue && r.doingPresent).length, rs.filter(r => r.responseDue).length)))
   const bars = [
     bar('unsupported sentences', unsupported('sentence'), 0, 'atMost'),
-    bar('latest value stated', latest, LATEST_VALUE_BAR),
-    bar("what's being done present", present, DOING_PRESENT_BAR),
+    rateBar(
+      'latest value stated',
+      latest,
+      LATEST_VALUE_BAR,
+      enoughRuns.reduce((s, r) => s + r.latest.length, 0),
+    ),
+    rateBar("what's being done present", present, DOING_PRESENT_BAR, enoughRuns.filter(r => r.responseDue).length),
     bar("what's being done unsupported", unsupported('doing'), 0, 'atMost'),
   ]
   const short = enoughPoints.size < minCheckpoints
   return {
     checkpoints: points.size,
     enough: enoughPoints.size,
-    bars: short ? bars.map(b => ({ ...b, met: null })) : bars,
+    bars: short ? bars.map(({ forOwner: _forOwner, ...b }) => ({ ...b, met: null })) : bars,
     note: short ? `not enough evidence: ${enoughPoints.size} of the ${minCheckpoints} checkpoints with enough offerable facts the bars need` : null,
   }
 }

@@ -18,8 +18,9 @@
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps context,fact-check --facts context --half judge --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval --steps update --half judge --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --repeat 3
- *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_upkeep-eval --steps pass-pool,stands,fact-check --facts stands --half judge --repeat 3
- *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_upkeep-eval --steps pass-pool,closure,review,replay --half judge --repeat 3
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool --half judge --dry-run
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,stands,fact-check --facts stands --half judge --budget 13
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,closure,replay --half judge --budget 18
  *
  * Reads the database through the read-only session and writes nothing to any database; its only
  * HTTP is OpenAI, and Tavily for the `context` and `pass-pool` steps. Writes overview-eval[-tags].md into --out, the
@@ -36,7 +37,7 @@ import { classifyDb, openReadOnlyDb, readOnlyStatus, type ReadOnlyDb } from './r
 import { createTavilyClient, TAVILY_USD_PER_CREDIT } from './research/tavily.js'
 import { loadBaselineRuns, summarizeBaseline, type Baseline } from './overviews/baseline.js'
 import type { CallEstimate } from './overviews/callBudget.js'
-import { runContextStep, type ContextStepOptions, type ContextStepRun } from './overviews/context.js'
+import { FIRST_PASS_RESERVE_USD, runContextStep, type ContextStepOptions, type ContextStepRun } from './overviews/context.js'
 import { contextFactFixtures } from './overviews/contextFacts.js'
 import {
   contextInputsFor,
@@ -57,7 +58,8 @@ import { overviewReportName, renderOverviewReport, type FactCheckReport, type Fa
 import { runUpdateStep, type UpdateStepOptions } from './overviews/update.js'
 import type { UpdateStory } from './overviews/updateFixtures.js'
 import { runLinkStep } from './overviews/link.js'
-import { runPassPool } from './overviews/passPool.js'
+import { verdict } from './overviews/linkReport.js'
+import { MEMBERS_PER_CHECKPOINT, passPoolStories, runPassPool } from './overviews/passPool.js'
 import { runReplayStep } from './overviews/replay.js'
 import { runReviewStep } from './overviews/review.js'
 import { runStandsStep, standsFactFixtures, type StandsStepReport } from './overviews/stands.js'
@@ -313,6 +315,12 @@ async function main(): Promise<void> {
           `update: ${cases} cases from ${report.stories} stories × ${report.repeat} run(s); desk estimate up to ${usd(report.deskUsd ?? 0)} (each case's reserve and the note judge)`,
         )
       }
+      if (runs('pass-pool')) {
+        const { slugs, mustEntries } = passPoolStories(keyFiles, opts.half, opts.limit)
+        console.log(
+          `pass-pool: ${slugs.length} of the half's ${mustEntries} must entries (the newest ${MEMBERS_PER_CHECKPOINT} at each stands checkpoint), one first pass each; at most ${usd(slugs.length * FIRST_PASS_RESERVE_USD)} at a first pass's ceiling`,
+        )
+      }
       console.log(`folder spend so far ${usd(ctx.spentUsd())}; budget ${usd(opts.budget)} (a cap on the folder's model ledger plus Tavily credits)`)
       console.log('dry run: no API call made; wrote only the samples and inputs under .cache/')
       return
@@ -416,7 +424,7 @@ async function main(): Promise<void> {
           })
           if (report.link.stopped) skipped.push({ step: steps, reason: report.link.stopped })
           for (const b of [...report.link.score.link, ...report.link.score.found, ...report.link.score.role])
-            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no data' : b.met ? 'met' : 'not met'})`)
+            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
         } catch (err) {
           failed(steps, err)
         }
@@ -479,8 +487,7 @@ async function main(): Promise<void> {
           })
           report.stands = standsRun
           if (standsRun.stopped) skipped.push({ step: 'stands', reason: standsRun.stopped })
-          for (const b of standsRun.score.bars)
-            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no verdict' : b.met ? 'met' : 'not met'})`)
+          for (const b of standsRun.score.bars) console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
         } catch (err) {
           failed('stands', err)
         }
@@ -500,8 +507,7 @@ async function main(): Promise<void> {
             budgetUsd: opts.budget,
           })
           if (report.review.stopped) skipped.push({ step: 'review', reason: report.review.stopped })
-          for (const b of report.review.score.bars)
-            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no data' : b.met ? 'met' : 'not met'})`)
+          for (const b of report.review.score.bars) console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
         } catch (err) {
           failed('review', err)
         }
@@ -525,8 +531,7 @@ async function main(): Promise<void> {
             budgetUsd: opts.budget,
           })
           if (report.replay.stopped) skipped.push({ step: steps, reason: report.replay.stopped })
-          for (const b of report.replay.score.closure)
-            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no data' : b.met ? 'met' : 'not met'})`)
+          for (const b of report.replay.score.closure) console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
         } catch (err) {
           failed(steps, err)
         }

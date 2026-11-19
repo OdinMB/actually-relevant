@@ -1,11 +1,13 @@
 /**
  * The `pass-pool` step (`.context/model-eval.md`, "Overview evals"; plan "Evals and bars"): production's
- * first research pass (`passInEval`) run in memory on the must entries of the half's developments, so
- * the `stands` and `replay` steps have the evidence production would offer once passes have run on
- * those stories. Its searches end on each story's day, as the `context` step's do; it writes nothing.
- * The resulting pools' usable, structured page facts go to those steps as members' facts, each with
- * an id of its own (a fact a pass found in memory has none). Run 1 only: the pools are the steps'
- * input, not a measure. Stories start only while the budget covers one more first pass.
+ * first research pass (`passInEval`) run in memory on the must entries the stands' checkpoints read
+ * (`checkpointStories`: the newest few at each checkpoint, not every must entry, to keep the eval's
+ * research spend small), so the `stands` and `replay` steps have evidence of the kind production would
+ * offer once passes have run on those stories. Its searches end on each story's day, as the `context`
+ * step's do; it writes nothing. The resulting pools' usable, structured page facts go to those steps
+ * as members' facts, each with an id of its own (a fact a pass found in memory has none); the members
+ * not researched offer none. Run 1 only: the pools are the steps' input, not a measure. Stories start
+ * only while the budget covers one more first pass.
  */
 import type { PassInput } from '../../../services/researchPass.js'
 import type { MemberFact } from '../../../services/overviewStands.js'
@@ -16,6 +18,27 @@ import type { SuiteContext } from '../types.js'
 import { FIRST_PASS_RESERVE_USD } from './context.js'
 import { inDevelopmentHalf } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
+import type { AnswerKey } from './keySchema.js'
+import { checkpointsOf } from './replayScore.js'
+
+/**
+ * Must entries researched for each stands checkpoint: the newest this many published on or before
+ * its day. Three keep every checkpoint's evidence from more than one story (each first pass gives
+ * several facts) while the judged half needs 38 first passes instead of its 121 must entries.
+ */
+export const MEMBERS_PER_CHECKPOINT = 3
+
+/**
+ * The must entries a development's stands checkpoints read most (`checkpointsOf`): at each, the
+ * newest `perCheckpoint` published on or before its day, the key's order breaking a tie of days;
+ * each once, in the key's order. Pure.
+ */
+export function checkpointStories(key: AnswerKey, perCheckpoint: number = MEMBERS_PER_CHECKPOINT): string[] {
+  const musts = key.entries.filter(e => e.join === 'must')
+  const byDay = [...musts].sort((a, b) => a.date.localeCompare(b.date))
+  const read = new Set(checkpointsOf(key).flatMap(p => byDay.filter(e => e.date <= p.day).slice(-perCheckpoint)))
+  return musts.filter(e => read.has(e)).map(e => e.slug)
+}
 
 export interface PassPoolOptions {
   ctx: SuiteContext
@@ -32,6 +55,8 @@ export interface PassPoolOptions {
 }
 
 export interface PassPoolReport {
+  /** The must entries of the half's developments, of which `stories` are the ones the checkpoints read. */
+  mustEntries: number
   stories: number
   /** Stories whose pass gave at least one offerable fact. */
   withFacts: number
@@ -50,10 +75,18 @@ export function poolMemberFacts(storyId: string, pool: { sources: MemberFact['so
   })
 }
 
+/** The stories the step researches: every development's `checkpointStories` in the half, each once, the first `limit` of them; and the half's must entries, for scale. Pure. */
+export function passPoolStories(files: readonly KeyFile[], half: PassPoolOptions['half'], limit?: number): { slugs: string[]; mustEntries: number } {
+  const keys = files.flatMap(f => (f.key && f.errors.length === 0 && inDevelopmentHalf(f.key.id, half) ? [f.key] : []))
+  const all = [...new Set(keys.flatMap(k => checkpointStories(k)))]
+  return {
+    slugs: limit !== undefined ? all.slice(0, limit) : all,
+    mustEntries: new Set(keys.flatMap(k => k.entries.filter(e => e.join === 'must').map(e => e.slug))).size,
+  }
+}
+
 export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoolReport; facts: Map<string, MemberFact[]> }> {
-  const keys = o.files.flatMap(f => (f.key && f.errors.length === 0 && inDevelopmentHalf(f.key.id, o.half) ? [f.key] : []))
-  const all = [...new Set(keys.flatMap(k => k.entries.filter(e => e.join === 'must').map(e => e.slug)))]
-  const slugs = o.limit !== undefined ? all.slice(0, o.limit) : all
+  const { slugs, mustEntries } = passPoolStories(o.files, o.half, o.limit)
   const inputs = await o.inputs(slugs)
   const left = slugs.filter(s => !inputs.get(s)).map(s => ({ what: s, reason: 'no first-pass input: not published here, or no text' }))
   const queued = slugs.flatMap(s => {
@@ -75,6 +108,7 @@ export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoo
   return {
     facts,
     report: {
+      mustEntries,
       stories: queued.length,
       withFacts: done.results.filter(r => r.facts.length > 0).length,
       facts: done.results.reduce((s, r) => s + r.facts.length, 0),

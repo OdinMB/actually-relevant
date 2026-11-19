@@ -5,7 +5,7 @@
  */
 import type { OverviewStep } from '../options.js'
 import { rows } from './linkReport.js'
-import type { PassPoolReport } from './passPool.js'
+import { MEMBERS_PER_CHECKPOINT, type PassPoolReport } from './passPool.js'
 import type { ReplayStepReport } from './replay.js'
 import { cell, usd } from './reportText.js'
 import type { ReviewStepReport } from './review.js'
@@ -14,11 +14,24 @@ import type { StandsStepReport } from './stands.js'
 const table = ['| Measure | Bar | Mean | Verdict |', '|---|---|---|---|']
 
 export function passPoolLines(r: PassPoolReport): string[] {
+  const ran = r.stories - r.skipped.length
   return [
-    `Production's first pass on ${r.stories} must entries of the half, in memory: ${r.withFacts} gave offerable facts, ${r.facts} facts in all. Spend ${usd(r.costUsd)}.`,
+    `Production's first pass, in memory, on ${r.stories} of the half's ${r.mustEntries} must entries (the newest ${MEMBERS_PER_CHECKPOINT} at each stands checkpoint): ${r.withFacts} gave offerable facts, ${r.facts} facts in all. Spend this run ${usd(r.costUsd)}${ran > 0 ? `, ${usd(r.costUsd / ran)} a story (a story the cache answered costs nothing)` : ''}.`,
     ...r.skipped.map(s => `- Not run: ${s.storyId}: ${cell(s.reason)}`),
     ...r.left.map(x => `- Left out: ${x.what}: ${cell(x.reason)}`),
   ]
+}
+
+/** What the owner reads where a stands bar is not met or is left to them: each latest value not stated and each line the judge found unsupported. */
+function standsMisses(r: StandsStepReport): string[] {
+  const at = (x: StandsStepReport['runs'][number]) => `${x.key} ${x.day} run ${x.run}`
+  const misses = r.runs
+    .filter(x => x.enough)
+    .flatMap(x => [
+      ...x.latest.filter(l => !l.stated).map(l => `- ${at(x)}: ${l.figure} ${l.value} not stated`),
+      ...x.lines.filter(l => l.supported === false).map(l => `- ${at(x)}: unsupported: ${cell(l.text)}`),
+    ])
+  return misses.length === 0 ? [] : ['', '### Latest values not stated, lines judged unsupported', '', ...misses]
 }
 
 export function standsLines(r: StandsStepReport): string[] {
@@ -39,6 +52,7 @@ export function standsLines(r: StandsStepReport): string[] {
       x =>
         `| ${x.key} | ${x.day} | ${x.run} | ${x.offered}${x.enough ? '' : ' (too few)'} | ${x.outcome ?? 'not written'} | ${x.lines.length} (${x.lines.filter(l => l.supported === false).length}) | ${x.latest.filter(l => l.stated).length} of ${x.latest.length} | ${x.responseDue ? 'yes' : 'no'} / ${x.doingPresent ? 'yes' : 'no'} |`,
     ),
+    ...standsMisses(r),
   ]
 }
 

@@ -292,4 +292,26 @@ describe('runPassPool', () => {
     expect(report.left.map(l => l.what)).toEqual(['e1', 'e2'])
     expect(pools.size).toBe(0)
   })
+
+  it("asks only for the stories the stands' checkpoints read, and says of how many must entries", async () => {
+    const many: AnswerKey = { ...KEY, entries: Array.from({ length: 12 }, (_, i) => entry(`m${i + 1}`, `2026-05-${String(i + 1).padStart(2, '0')}`)) }
+    let asked: string[] = []
+    const { report } = await runPassPool({
+      ctx: fakeEvalContext(() => null),
+      tavily: { search: async () => ({ results: [] }) } as never,
+      files: [{ file: `${ID}.json`, key: many, errors: [] }],
+      half: 'judge',
+      inputs: async slugs => {
+        asked = slugs
+        return new Map(slugs.map(s => [s, null]))
+      },
+      relevanceMin: 5,
+      concurrency: 1,
+      budgetUsd: 5,
+      spentUsd: () => 0,
+    })
+    expect(asked).toEqual(['m2', 'm3', 'm4', 'm6', 'm7', 'm8', 'm10', 'm11', 'm12'])
+    expect(report).toMatchObject({ mustEntries: 12, stories: 0 })
+    expect(report.left).toHaveLength(9)
+  })
 })

@@ -26,7 +26,15 @@ export interface Bar {
   /** `atMost`: the value may not exceed the target (a count of wrong ones). */
   direction: 'atLeast' | 'atMost'
   met: boolean | null
+  /** Set when a rate rests on too few judgments to decide: the value is reported, `met` is null, and the owner reads the list and decides. */
+  forOwner?: string
 }
+
+/**
+ * Judgments a rate needs, over all its runs, before it decides on its own: with 20, one judgment
+ * moves the rate by at most 5 points. Below it the rate is reported for the owner to read.
+ */
+export const MIN_RATE_SAMPLE = 20
 
 export interface LinkRunScore {
   run: number
@@ -59,6 +67,13 @@ export const bar = (name: string, value: number | null, target: number, directio
   direction,
   met: value === null ? null : direction === 'atLeast' ? value >= target : value <= target,
 })
+
+/** A rate's bar from the judgments behind it (all runs together): below `MIN_RATE_SAMPLE` it is reported for the owner, not decided. */
+export function rateBar(name: string, value: number | null, target: number, judgments: number, direction: Bar['direction'] = 'atLeast'): Bar {
+  const b = bar(name, value, target, direction)
+  if (value === null || judgments >= MIN_RATE_SAMPLE) return b
+  return { ...b, met: null, forOwner: `${judgments} judgment${judgments === 1 ? '' : 's'}, fewer than the ${MIN_RATE_SAMPLE} an automatic verdict needs` }
+}
 
 /** Which development each slug is a must or optional entry of, and which it is a near miss of. */
 export function keyIndex(keys: readonly AnswerKey[]) {

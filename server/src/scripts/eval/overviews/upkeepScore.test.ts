@@ -3,7 +3,7 @@ import type { AnswerKey } from './keySchema.js'
 import { checkpointsOf, scoreClosures, scoreReplay, type CheckpointState, type ReplayRunResult } from './replayScore.js'
 import { scoreReviewRun, scoreReviews, type ReviewCaseRun } from './reviewScore.js'
 import { latestValues, numbersIn, scoreStands, statesValue, type StandsCheckpointRun } from './standsScore.js'
-import { replayLines, reviewLines, standsLines } from './upkeepReport.js'
+import { passPoolLines, replayLines, reviewLines, standsLines } from './upkeepReport.js'
 
 type Entry = AnswerKey['entries'][number]
 type Value = Entry['values'][number]
@@ -137,10 +137,13 @@ describe('the closure bars', () => {
       3,
       4,
     )
+    // One closable development a run: two judgments are too few to decide, so the owner reads them
     expect(s.closure.map(b => [b.name, b.value, b.met])).toEqual([
       ['premature closures', 0, true],
-      ['closed within 14 days of the end', 0.5, false],
+      ['closed within 14 days of the end', 0.5, null],
     ])
+    expect(s.closure[1]!.forOwner).toMatch(/2 judgments/)
+    expect(s.closure[0]!.forOwner).toBeUndefined()
     expect(s.evidenceShare).toBe(0.75)
     expect(s.safeguards).toEqual({ 'burst froze an overview': 1 })
     expect(s.costPerStoryUsd).toBe(0.5)
@@ -211,12 +214,26 @@ describe('the stands bars', () => {
     expect(short.bars.every(b => b.met === null)).toBe(true)
     const full = scoreStands(runs, 1)
     expect(full.note).toBeNull()
+    // The counts decide on any sample; the two rates rest on 2 and 1 judgments, too few, so the owner reads them
     expect(full.bars.map(b => [b.name, b.value, b.met])).toEqual([
       ['unsupported sentences', 1, false],
-      ['latest value stated', 0.5, false],
-      ["what's being done present", 1, true],
+      ['latest value stated', 0.5, null],
+      ["what's being done present", 1, null],
       ["what's being done unsupported", 0, true],
     ])
+    expect(full.bars.map(b => b.forOwner ?? null)).toEqual([null, expect.stringMatching(/2 judgments/), expect.stringMatching(/1 judgment/), null])
+  })
+
+  it('decides a rate on its own once it rests on enough judgments across the runs', () => {
+    const latest = (stated: number) => Array.from({ length: 5 }, (_, i) => ({ figure: `f${i}`, value: i, stated: i < stated }))
+    // 2 checkpoints × 2 runs × 5 values: 20 judgments, 19 stated
+    const runs = [1, 2].flatMap(run => [
+      point('a', run, { day: '2026-05-01', latest: latest(5) }),
+      point('a', run, { day: '2026-05-09', latest: latest(run === 1 ? 4 : 5) }),
+    ])
+    const bar = scoreStands(runs, 1).bars.find(b => b.name === 'latest value stated')!
+    expect(bar).toMatchObject({ value: 0.95, met: true })
+    expect(bar.forOwner).toBeUndefined()
   })
 })
 
@@ -296,6 +313,39 @@ describe('the upkeep report sections', () => {
     expect(stands).toContain('the gate stays closed for the stands')
     expect(stands).toContain('Stopped: the budget ran out in run 1')
     expect(stands).toContain('| ebola | 2026-05-01 | 1 | 2 (too few) | not written |')
+    const read: StandsCheckpointRun = {
+      key: 'ebola',
+      at: 'end',
+      day: '2026-05-09',
+      run: 1,
+      offered: 6,
+      enough: true,
+      outcome: 'written',
+      lines: [{ part: 'sentence', text: 'Cases passed 300.', supported: false }],
+      latest: [
+        { figure: 'cases', value: 320, stated: false },
+        { figure: 'deaths', value: 12, stated: true },
+      ],
+      responseDue: false,
+      doingPresent: false,
+      costUsd: 0,
+    }
+    const forOwner = standsLines({ half: 'judge', repeat: 1, keys: ['ebola'], runs: [read], kept: [], score: scoreStands([read], 1), costUsd: 0 }).join('\n')
+    expect(forOwner).toContain('| latest value stated | at least 90% | 50.0% | for the owner: 2 judgments')
+    expect(forOwner).toContain('- ebola 2026-05-09 run 1: cases 320 not stated')
+    expect(forOwner).toContain('- ebola 2026-05-09 run 1: unsupported: Cases passed 300.')
+    // A story's cost is over the stories run, never the ones the budget left
+    const pool = passPoolLines({
+      mustEntries: 121,
+      stories: 38,
+      withFacts: 30,
+      facts: 400,
+      skipped: Array.from({ length: 8 }, (_, i) => ({ storyId: `s${i}`, reason: 'budget' })),
+      left: [],
+      costUsd: 4.5,
+    }).join('\n')
+    expect(pool).toContain("on 38 of the half's 121 must entries")
+    expect(pool).toContain('Spend this run $4.50, $0.1500 a story')
     const review = reviewLines({ half: 'all', repeat: 1, keys: ['ebola'], cases: [], score: scoreReviews([]), costUsd: 0 }).join('\n')
     expect(review).toContain('| planted errors caught | at least 80% | n/a | no data |')
     const replay = replayLines({ half: 'all', repeat: 1, keys: ['ebola'], stories: 0, runs: [], score: scoreReplay([], [], 3, 0), costUsd: 0, left: [] }, [

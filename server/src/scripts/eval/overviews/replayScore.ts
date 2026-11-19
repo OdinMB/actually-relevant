@@ -3,7 +3,8 @@
  * scored on the sandbox's replay of the whole module per development (`replay.ts`): linking and the
  * upkeep day by day. `closure`: no premature closure at an end event (before the key's end, or of a
  * development the key says is open: Uganda's end for Congo's Ebola), and the developments whose end
- * our stories report closed within 14 days of it. `replay`: the linking bars on the end state, the
+ * our stories report closed within 14 days of it (a rate over a handful of developments, so it is
+ * reported for the owner below `MIN_RATE_SAMPLE` judgments). `replay`: the linking bars on the end state, the
  * three checkpoints of each development (at a third, two thirds and the last of its must entries)
  * with its overview's status, scope, members and stands, the share of checkpoints with enough
  * offerable facts for the stands, how often each safeguard fired, and the cost per story and per
@@ -11,7 +12,7 @@
  */
 import type { OverviewScope, OverviewStatus } from '../../../services/overviewTypes.js'
 import type { AnswerKey } from './keySchema.js'
-import { bar, mean, ratio, scoreLinking, type Bar, type LinkScore, type ReplayRun } from './linkScore.js'
+import { bar, mean, rateBar, ratio, scoreLinking, type Bar, type LinkScore, type ReplayRun } from './linkScore.js'
 
 /** Days after the key's end within which the overview must have closed. */
 export const CLOSED_WITHIN_DAYS = 14
@@ -122,7 +123,12 @@ export function scoreReplay(keys: readonly AnswerKey[], runs: readonly ReplayRun
     link: scoreLinking(keys, runs),
     closure: [
       bar('premature closures', mean(closureRuns.map(c => c.premature.length)), 0, 'atMost'),
-      bar(`closed within ${CLOSED_WITHIN_DAYS} days of the end`, mean(closureRuns.map(c => ratio(c.closedInTime, c.closable))), CLOSED_BAR),
+      rateBar(
+        `closed within ${CLOSED_WITHIN_DAYS} days of the end`,
+        mean(closureRuns.map(c => ratio(c.closedInTime, c.closable))),
+        CLOSED_BAR,
+        closureRuns.reduce((s, c) => s + c.closable, 0),
+      ),
     ],
     closureRuns,
     evidenceShare: mean(runs.map(r => ratio(r.checkpoints.filter(c => c.offerable >= minStandsFacts).length, r.checkpoints.length))),

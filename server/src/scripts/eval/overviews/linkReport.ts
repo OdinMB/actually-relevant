@@ -9,7 +9,8 @@ import type { Bar } from './linkScore.js'
 
 const value = (b: Bar) => (b.value === null ? 'n/a' : b.direction === 'atMost' ? b.value.toFixed(2) : `${(b.value * 100).toFixed(1)}%`)
 const target = (b: Bar) => (b.direction === 'atMost' ? `at most ${b.target}` : `at least ${Math.round(b.target * 100)}%`)
-const verdict = (b: Bar) => (b.met === null ? 'no data' : b.met ? 'met' : 'not met')
+/** A bar's verdict in words: met, not met, for the owner to read (too few judgments), or no data. */
+export const verdict = (b: Bar) => (b.forOwner ? `for the owner: ${b.forOwner}` : b.met === null ? 'no data' : b.met ? 'met' : 'not met')
 /** One table row per bar: its name, target, mean and verdict. */
 export const rows = (bars: Bar[]) => bars.map(b => `| ${b.name} | ${target(b)} | ${value(b)} | ${verdict(b)} |`)
 

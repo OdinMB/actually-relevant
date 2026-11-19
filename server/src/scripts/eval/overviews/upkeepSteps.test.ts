@@ -7,7 +7,7 @@ import { runUpkeep } from '../../../services/overviewUpkeep.js'
 import type { PoolFact, PoolSource } from '../../../services/researchPool.js'
 import type { AnswerKey } from './keySchema.js'
 import { createSandbox, type SandboxEntry, type SandboxOverview } from './overviewSandbox.js'
-import { poolMemberFacts } from './passPool.js'
+import { checkpointStories, poolMemberFacts } from './passPool.js'
 import { PLANTED_JOINS, plantedCase } from './review.js'
 import { keyRole, standsFactFixtures } from './stands.js'
 import { sandboxUpkeep } from './upkeepSandbox.js'
@@ -141,6 +141,54 @@ describe('plantedCase', () => {
 
   it('plants nothing in a development with fewer than 3 must entries published here', () => {
     expect(plantedCase(key, new Map([...stories, ['e3', null], ['e4', null]]))).toBeNull()
+  })
+})
+
+describe('checkpointStories', () => {
+  const days = (n: number) => Array.from({ length: n }, (_, i) => `2026-05-${String(i + 1).padStart(2, '0')}`)
+  const key = (id: string, entries: Entry[]): AnswerKey => ({
+    schemaVersion: 1,
+    id,
+    title: id,
+    charter: { in: 'In.', out: [], endEvent: 'End.' },
+    closed: null,
+    figures: [],
+    entries,
+    nearMisses: [],
+    responses: [],
+    notes: '',
+  })
+
+  it('takes the newest must entries on or before each checkpoint, once each, in key order', () => {
+    // Checkpoints at e4, e8 and e12; e1, e5 and e9 are read by none and never researched
+    const k = key(
+      'ebola',
+      days(12).map((d, i) => entry(`e${i + 1}`, d)),
+    )
+    expect(checkpointStories(k)).toEqual(['e2', 'e3', 'e4', 'e6', 'e7', 'e8', 'e10', 'e11', 'e12'])
+  })
+
+  it("counts a story of the checkpoint's day after the checkpoint's own entry, and never an optional entry", () => {
+    const k = key('ebola', [
+      entry('e1', '2026-05-01'),
+      entry('e2', '2026-05-02'),
+      entry('e3', '2026-05-03'),
+      entry('e4', '2026-05-04'),
+      entry('e5', '2026-05-04'),
+      entry('o1', '2026-05-04', { join: 'optional' }),
+      entry('e6', '2026-05-08'),
+    ])
+    // Checkpoints on 2026-05-02, 2026-05-04 (e4's day, which e5 shares) and 2026-05-08
+    expect(checkpointStories(k, 1)).toEqual(['e2', 'e5', 'e6'])
+    expect(checkpointStories(k, 2)).toEqual(['e1', 'e2', 'e4', 'e5', 'e6'])
+  })
+
+  it('takes every must entry of a development too small to leave any out', () => {
+    const k = key(
+      'pabs',
+      days(4).map((d, i) => entry(`p${i + 1}`, d)),
+    )
+    expect(checkpointStories(k)).toEqual(['p1', 'p2', 'p3', 'p4'])
   })
 })
 
