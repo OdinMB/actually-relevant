@@ -201,10 +201,20 @@ describe('OverviewDetailPage', () => {
     expect(await screen.findByText('The overview changed meanwhile: reload the page and try again')).toBeInTheDocument()
   })
 
-  it('sets an entry’s role with its kind, and detaches it after a confirmation', async () => {
+  it('sets an entry’s role only on its button, never on a change of the select, and detaches it after a confirmation', async () => {
     renderPage()
-    fireEvent.change(await screen.findByLabelText('Role of Cases rise in Bunia'), { target: { value: 'turning_point:response' } })
+    const select = await screen.findByLabelText('Role of Cases rise in Bunia')
+    const set = screen.getByRole('button', { name: /^Set role.*Cases rise in Bunia/ })
+    // Unchanged, the button says why it does nothing
+    fireEvent.click(set)
+    // Moving through the options (arrow keys fire change events) writes nothing
+    fireEvent.change(select, { target: { value: 'turning_point:setback' } })
+    fireEvent.change(select, { target: { value: 'turning_point:response' } })
+    expect(mockApi.overviews.setRole).not.toHaveBeenCalled()
+    fireEvent.click(set)
     await waitFor(() => expect(mockApi.overviews.setRole).toHaveBeenCalledWith('o1', 'e1', 'turning_point', 'response'))
+    expect(mockApi.overviews.setRole).toHaveBeenCalledTimes(1)
+    expect(select).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: /^Detach.*Cases rise in Bunia/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Detach' }))
     await waitFor(() => expect(mockApi.overviews.detach).toHaveBeenCalledWith('o1', 'e1'))

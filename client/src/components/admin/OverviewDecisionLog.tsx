@@ -28,11 +28,12 @@ export function describeStatus(d: Pick<AdminOverviewDecision, 'outcome' | 'input
 
 const UNDO_WHAT: Record<string, string> = {
   link: 'The story leaves the overview, and the pipeline never links it here again.',
-  found: 'Both founding stories leave the overview, which is left single and not public.',
+  found: 'Both founding stories leave the overview. Unless other stories joined it since, it is left single and not public.',
   'status:closed': 'The overview is open again, and counts as active from now.',
   'status:frozen': 'The overview is unfrozen.',
   close: 'The closing is cancelled and the overview is open again.',
-  review: 'What the review detached, relabeled, narrowed or retitled goes back, where it still stands.',
+  review:
+    'What the review detached, relabeled, narrowed or retitled goes back, where it still stands. The stories and OUT entries it restores are locked, so no later review takes them out again.',
   undo: 'What this undo reversed is restored.',
 }
 const undoWhat = (d: AdminOverviewDecision) =>

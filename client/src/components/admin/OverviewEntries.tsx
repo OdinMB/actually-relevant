@@ -12,9 +12,11 @@ import { actorLabel, detachLabel, parseRoleValue, ROLE_OPTIONS, roleLabel, roleV
 import { returnState, storyPath } from './storyReturn'
 
 /*
- * An overview's entries on its admin page: active first, each with its story, role (an editor sets
- * it here), who joined it and when, and the judgment the link confirmation recorded (shared cause,
- * place and end, each quoting both sides, confidence, model) behind a toggle; Detach on an active one.
+ * An overview's entries on its admin page: active first, each with its story, role (an editor picks
+ * one and sets it with its button: a change of the select alone writes nothing, since arrow keys
+ * change it option by option, WCAG 3.2.2), who joined it and when, and the judgment the link
+ * confirmation recorded (shared cause, place and end, each quoting both sides, confidence, model)
+ * behind a toggle; Detach on an active one.
  */
 
 const SELECT = `rounded-md border border-neutral-500 bg-white px-2 py-1 text-sm ${FIELD_FOCUS}`
@@ -29,12 +31,6 @@ export function OverviewEntries({ overview }: { overview: AdminOverviewDetail })
   const active = overview.members.filter(e => e.status === 'active')
   const detached = overview.members.filter(e => e.status === 'detached')
 
-  const setRole = (e: AdminOverviewEntry, value: string) => {
-    const to = parseRoleValue(value)
-    if (!to) return
-    action.mutate({ run: () => adminApi.overviews.setRole(overview.id, e.id, to.role, to.roleKind), done: `Role set: ${roleLabel(to.role, to.roleKind)}` })
-  }
-
   return (
     <section aria-labelledby="overview-entries" className="space-y-3">
       <h2 id="overview-entries" className="text-lg font-semibold text-neutral-900">
@@ -45,24 +41,7 @@ export function OverviewEntries({ overview }: { overview: AdminOverviewDetail })
         <ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white" aria-label="Active entries">
           {active.map(e => (
             <EntryRow key={e.id} entry={e}>
-              <label className="sr-only" htmlFor={`role-${e.id}`}>
-                Role of {storyName(e)}
-              </label>
-              <select
-                id={`role-${e.id}`}
-                value={roleValue(e.role, e.roleKind)}
-                onChange={ev => setRole(e, ev.target.value)}
-                disabled={action.isPending}
-                className={SELECT}
-              >
-                {/* A turning point stored without its kind still shows what it is */}
-                {e.role === 'turning_point' && !e.roleKind && <option value="turning_point:">Turning point</option>}
-                {ROLE_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <RoleSetter overviewId={overview.id} entry={e} />
               <Button type="button" variant="ghost" size="sm" onClick={() => setDetaching(e)}>
                 Detach<span className="sr-only">: {storyName(e)}</span>
               </Button>
@@ -96,6 +75,63 @@ export function OverviewEntries({ overview }: { overview: AdminOverviewDetail })
         loading={action.isPending}
       />
     </section>
+  )
+}
+
+/**
+ * An active entry's role: the select holds the editor's choice, and "Set role" writes it. The select
+ * stays usable while a request runs; the button says why it does nothing while the choice is the
+ * entry's role or a request is under way (it stays focusable, so focus never drops to the page).
+ */
+function RoleSetter({ overviewId, entry: e }: { overviewId: string; entry: AdminOverviewEntry }) {
+  const action = useOverviewAction()
+  const current = roleValue(e.role, e.roleKind)
+  const [choice, setChoice] = useState(current)
+  // The entry's role changed on the server (this button, an Undo, a reload): the choice follows it
+  const [seen, setSeen] = useState(current)
+  if (seen !== current) {
+    setSeen(current)
+    setChoice(current)
+  }
+  const to = parseRoleValue(choice)
+  const reason = action.isPending ? 'Setting the role…' : choice === current || !to ? 'Choose another role first' : null
+  const set = () => {
+    if (!to || reason) return
+    action.mutate({ run: () => adminApi.overviews.setRole(overviewId, e.id, to.role, to.roleKind), done: `Role set: ${roleLabel(to.role, to.roleKind)}` })
+  }
+  return (
+    <>
+      <label className="sr-only" htmlFor={`role-${e.id}`}>
+        Role of {storyName(e)}
+      </label>
+      <select id={`role-${e.id}`} value={choice} onChange={ev => setChoice(ev.target.value)} className={SELECT}>
+        {/* A turning point stored without its kind still shows what it is */}
+        {e.role === 'turning_point' && !e.roleKind && <option value="turning_point:">Turning point</option>}
+        {ROLE_OPTIONS.map(o => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {/* One element whatever its state (no swap into a tooltip wrapper), so focus stays on it after a click */}
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={set}
+        aria-disabled={reason ? 'true' : undefined}
+        aria-describedby={reason ? `role-why-${e.id}` : undefined}
+        title={reason ?? undefined}
+        className={reason ? 'opacity-50 cursor-not-allowed' : ''}
+      >
+        Set role<span className="sr-only">: {storyName(e)}</span>
+      </Button>
+      {reason && (
+        <span id={`role-why-${e.id}`} className="sr-only">
+          {reason}
+        </span>
+      )}
+    </>
   )
 }
 

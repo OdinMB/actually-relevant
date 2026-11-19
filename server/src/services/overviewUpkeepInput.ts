@@ -220,6 +220,12 @@ export async function reviewCase(db: OverviewDb, overviewId: string): Promise<Re
           ORDER BY created_at DESC LIMIT 1
         `
       : []
+  // The OUT entries a live undo of a review took back out: locked against the reviews to come
+  const locks = await db.$queryRaw<{ locked: unknown }[]>`
+    SELECT inputs->'lockedOut' AS locked FROM overview_decisions
+    WHERE overview_id = ${overviewId} AND kind = 'undo' AND undone_at IS NULL AND jsonb_typeof(inputs->'lockedOut') = 'array'
+  `
+  const lockedOut = locks.flatMap(l => (Array.isArray(l.locked) ? l.locked.filter((x): x is string => typeof x === 'string') : []))
   const entries: ReviewEntry[] = rows.map(r => ({
     entryId: r.id,
     storyId: r.story_id,
@@ -238,6 +244,7 @@ export async function reviewCase(db: OverviewDb, overviewId: string): Promise<Re
     frozen: o.frozen,
     entries,
     closingStoryId: closing?.story_id ?? null,
+    lockedOut,
   }
 }
 

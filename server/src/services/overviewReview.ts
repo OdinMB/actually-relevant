@@ -25,7 +25,7 @@ export interface ReviewEntry {
   /** Publication day, `YYYY-MM-DD`. */
   date: string
   role: Role
-  /** An editor's attach: automation never detaches it or changes its role. */
+  /** An editor attached it, set its role or restored it with an Undo: automation never detaches it or changes its role. */
   locked: boolean
 }
 
@@ -39,6 +39,8 @@ export interface ReviewCase {
   entries: ReviewEntry[]
   /** While closing: the story whose end-event report began it. */
   closingStoryId: string | null
+  /** OUT entries an editor's live undo of a review took back out: no review adds them again. */
+  lockedOut: string[]
 }
 
 export type ReviewAction =
@@ -65,11 +67,13 @@ const sameRole = (a: Role, b: Role) => a.role === b.role && a.roleKind === b.rol
 
 /**
  * The actions a review's answer may take (`.context/overviews.md`, "Reviews"), and what code refused:
- * - an entry judged not to belong is detached, unless an editor attached it; one judged to belong with
- *   another role is relabeled, unless an editor attached it; an id naming no shown entry (a story to
+ * - an entry judged not to belong is detached, unless an editor locked it (attached it, set its role or
+ *   restored it with an Undo); one judged to belong with another role is relabeled, unless an editor
+ *   locked it; an id naming no shown entry (a story to
  *   add or a detached one to restore) or naming one twice is refused; an entry left unjudged stays;
  * - the charter is narrowed only by the OUT entries it adds, onto the current charter, so a rewritten
- *   IN or END_EVENT and a dropped OUT entry are refused and never applied;
+ *   IN or END_EVENT and a dropped OUT entry are refused and never applied, as is an OUT entry an
+ *   editor's undo of an earlier review took out (`lockedOut`);
  * - a new title differing from the current one retitles;
  * - a freeze is cleared only on a frozen overview, and only when the answer judges every active entry,
  *   each by its own id and first judgment, to belong (an entry left unjudged keeps the freeze).
@@ -95,10 +99,10 @@ export function allowedActions(c: ReviewCase, answer: ReviewAnswer): { actions: 
     judged.set(id, a.belongs)
     const role = roleOf(a)
     if (a.belongs === 'no') {
-      if (entry.locked) refusals.push({ what: id, reason: 'an editor attached it' })
+      if (entry.locked) refusals.push({ what: id, reason: 'an editor attached, set or restored it' })
       else actions.push({ kind: 'detach', entryId: entry.entryId, storyId: entry.storyId, reason: a.reason.trim() })
     } else if (!sameRole(role, entry.role)) {
-      if (entry.locked) refusals.push({ what: id, reason: 'an editor attached it, so its role is theirs' })
+      if (entry.locked) refusals.push({ what: id, reason: 'an editor attached, set or restored it, so its role is theirs' })
       else actions.push({ kind: 'relabel', entryId: entry.entryId, storyId: entry.storyId, from: entry.role, to: role })
     }
   }
@@ -109,7 +113,11 @@ export function allowedActions(c: ReviewCase, answer: ReviewAnswer): { actions: 
   const dropped = c.charter.out.filter(o => !proposed.out.some(p => same(p, o)))
   if (dropped.length > 0) refusals.push({ what: 'charter', reason: `drops OUT entries, which would widen it: ${dropped.join('; ')}` })
   const added: string[] = []
-  for (const p of proposed.out.map(o => o.trim()).filter(Boolean)) if (![...c.charter.out, ...added].some(o => same(o, p))) added.push(p)
+  for (const p of proposed.out.map(o => o.trim()).filter(Boolean)) {
+    if ([...c.charter.out, ...added].some(o => same(o, p))) continue
+    if (c.lockedOut.some(o => same(o, p))) refusals.push({ what: 'charter', reason: `adds an OUT entry an editor took out: ${p}` })
+    else added.push(p)
+  }
   if (added.length > 0) actions.push({ kind: 'narrow', added, charter: { ...c.charter, out: [...c.charter.out, ...added] } })
 
   const title = answer.title.trim()

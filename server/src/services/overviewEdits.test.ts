@@ -17,8 +17,10 @@ const overview = (over: Partial<EditOverview> = {}): EditOverview => ({
   frozen: false,
   hidden: false,
   charter,
+  entriesAtLastReview: 3,
   activeEntries: 3,
   closingStoryId: null,
+  lastFreezeId: null,
   ...over,
 })
 
@@ -199,16 +201,43 @@ describe('planUndo', () => {
   })
 
   it('reopens a closure while it stands, opens a closing again and clears a burst freeze', () => {
-    const closure = decision({ kind: 'status', outcome: 'closed', inputs: { from: 'quiet', to: 'closed', reason: 'faded' } })
+    const closure = decision({
+      kind: 'status',
+      outcome: 'closed',
+      inputs: JSON.parse(JSON.stringify({ from: 'quiet', to: 'closed', reason: 'faded', clock: NOW })) as unknown,
+    })
     const undone = planUndo(closure, overview({ status: 'closed', closedReason: 'faded', closedAt: NOW }), [], ctx)
     expect(undone).toMatchObject({ reopens: true, changes: [{ after: { status: 'open', closedAt: null, closedReason: null } }] })
     expect(() => planUndo(closure, overview({ status: 'closed', closedReason: 'editor' }), [], ctx)).toThrow('no longer closed')
-    expect(planUndo(decision({ kind: 'close', outcome: 'closing' }), overview({ status: 'closing', closingSince: NOW }), [], ctx).changes[0]).toMatchObject({
+    expect(
+      planUndo(decision({ kind: 'close', outcome: 'closing' }), overview({ status: 'closing', closingSince: NOW, closingStoryId: 's1' }), [], ctx).changes[0],
+    ).toMatchObject({
       after: { status: 'open', closingSince: null },
     })
-    expect(planUndo(decision({ kind: 'status', outcome: 'frozen' }), overview({ frozen: true }), [], ctx).changes).toEqual([
+    expect(planUndo(decision({ kind: 'status', outcome: 'frozen' }), overview({ frozen: true, lastFreezeId: 'd1' }), [], ctx).changes).toEqual([
       { table: 'overview', id: 'o1', before: { frozen: true }, after: { frozen: false } },
     ])
+  })
+
+  it('undoes an old closing, closure or freeze only while it is the one the overview is in now', () => {
+    // A closing begun by another story since: its own was cancelled
+    const closing = decision({ kind: 'close', outcome: 'closing', storyId: 's1' })
+    expect(() => planUndo(closing, overview({ status: 'closing', closingSince: NOW, closingStoryId: 's2' }), [], ctx)).toThrow('no longer closing')
+    // Closed again by a later run, at another day
+    const closure = decision({ kind: 'status', outcome: 'closed', inputs: { reason: 'faded', clock: '2026-10-01T00:00:00.000Z' } })
+    expect(() => planUndo(closure, overview({ status: 'closed', closedReason: 'faded', closedAt: NOW }), [], ctx)).toThrow('no longer closed')
+    expect(() =>
+      planUndo(
+        decision({ kind: 'status', outcome: 'closed', inputs: { reason: 'faded' } }),
+        overview({ status: 'closed', closedReason: 'faded', closedAt: NOW }),
+        [],
+        ctx,
+      ),
+    ).toThrow('no longer closed')
+    // Frozen again since, by an editor or a later burst
+    expect(() => planUndo(decision({ kind: 'status', outcome: 'frozen' }), overview({ frozen: true, lastFreezeId: 'd-later' }), [], ctx)).toThrow(
+      'frozen again since',
+    )
   })
 
   it("restores what still stands of a review's demotions", () => {
@@ -231,19 +260,45 @@ describe('planUndo', () => {
       entry({ role: 'turning_point', roleKind: 'spread' }),
       entry({ id: 'e2', storyId: 's2', status: 'detached', detachReason: 'review', detachedBy: 'review', detachedAt: NOW }),
     ]
-    const plan = planUndo(review, overview({ charter: narrowed, scope: 'forming', activeEntries: 2 }), entries, ctx)
+    const plan = planUndo(review, overview({ charter: narrowed, scope: 'ongoing', activeEntries: 5, entriesAtLastReview: 5 }), entries, ctx)
+    // What it restores is the editor's now: locked, so the next review neither detaches nor relabels it again
     expect(plan.changes).toEqual([
       {
         table: 'entry',
         id: 'e2',
-        before: { status: 'detached', detachedBy: 'review', detachReason: 'review', detachedAt: NOW },
-        after: { status: 'active', detachedBy: null, detachReason: null, detachedAt: null },
+        before: { status: 'detached', detachedBy: 'review', detachReason: 'review', detachedAt: NOW, locked: false },
+        after: { status: 'active', detachedBy: null, detachReason: null, detachedAt: null, locked: true },
       },
-      { table: 'entry', id: 'e1', before: { role: 'turning_point', roleKind: 'spread' }, after: { role: 'routine', roleKind: null } },
-      { table: 'overview', id: 'o1', before: { charter: narrowed, title: 'Ebola in Ituri' }, after: { charter, title: 'Ebola' } },
+      {
+        table: 'entry',
+        id: 'e1',
+        before: { role: 'turning_point', roleKind: 'spread', locked: false },
+        after: { role: 'routine', roleKind: null, locked: true },
+      },
+      {
+        table: 'overview',
+        id: 'o1',
+        before: { charter: narrowed, title: 'Ebola in Ituri', entriesAtLastReview: 5 },
+        after: { charter, title: 'Ebola', entriesAtLastReview: 6 },
+      },
     ])
+    // The OUT entries it took back out are locked too, so no review adds them again
+    expect(plan.lockedOut).toEqual(['cholera'])
     // Nothing of it stands any more
     expect(() => planUndo(review, overview({ title: 'Other' }), [entry(), entry({ id: 'e2', storyId: 's2' })], ctx)).toThrow('Nothing this decision changed')
+  })
+
+  it('leaves the review count of an overview still forming, so a review decides whether it goes public', () => {
+    const review = decision({
+      kind: 'review',
+      outcome: 'reviewed',
+      storyId: null,
+      inputs: { actions: [{ kind: 'detach', entryId: 'e2', storyId: 's2', reason: 'No.' }] },
+    })
+    const entries = [entry(), entry({ id: 'e2', storyId: 's2', status: 'detached', detachReason: 'review', detachedBy: 'review', detachedAt: NOW })]
+    const plan = planUndo(review, overview({ scope: 'forming', activeEntries: 2, entriesAtLastReview: 2 }), entries, ctx)
+    expect(plan.changes.find(c => c.table === 'overview')).toBeUndefined()
+    expect(plan.lockedOut).toEqual([])
   })
 
   it('refuses what cannot be undone or already is', () => {

@@ -78,6 +78,8 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
           locked: false,
         })),
       closingStoryId: o.status === 'closing' ? o.closingStoryId : null,
+      // The sandbox has no editor, so no undo has locked an OUT entry
+      lockedOut: [],
     }
   }
 

@@ -488,6 +488,7 @@ const EDIT_OVERVIEW = {
   frozen: true,
   hidden: true,
   charter: true,
+  entriesAtLastReview: true,
 } as const
 
 const EDIT_ENTRY = {
@@ -508,7 +509,10 @@ const asEditEntry = ({ story, ...e }: Prisma.OverviewEntryGetPayload<{ select: t
   published: story?.status === 'published',
 })
 
-/** The overview as an edit reads it: its fields, its active entries of published stories, and while closing the story that began it. */
+/**
+ * The overview as an edit reads it: its fields, its active entries of published stories, while closing
+ * the story that began it, and its newest live freeze decision (a burst's, or an editor's freeze or unfreeze).
+ */
 async function editOverview(tx: Tx, id: string): Promise<EditOverview> {
   const o = await tx.overview.findUnique({ where: { id }, select: EDIT_OVERVIEW })
   if (!o) throw new NotFoundError('Overview not found')
@@ -523,7 +527,12 @@ async function editOverview(tx: Tx, id: string): Promise<EditOverview> {
           select: { storyId: true },
         })
       : null
-  return { ...o, charter, activeEntries, closingStoryId: closing?.storyId ?? null }
+  const lastFreeze = await tx.overviewDecision.findFirst({
+    where: { overviewId: id, undoneAt: null, OR: [{ kind: 'status', outcome: 'frozen' }, { kind: 'editor_freeze' }] },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  })
+  return { ...o, charter, activeEntries, closingStoryId: closing?.storyId ?? null, lastFreezeId: lastFreeze?.id ?? null }
 }
 
 /** What an attach reads of the story: published or not, the overview it is in now, and its newest detached row in this one. */
@@ -568,7 +577,7 @@ async function applyPlan(tx: Tx, plan: EditPlan, editorId: string, target: strin
       overviewId: plan.overviewId,
       storyId: plan.storyId,
       outcome: plan.outcome,
-      inputs: json({ changes: plan.changes, target, reopens: plan.reopens }),
+      inputs: json({ changes: plan.changes, target, reopens: plan.reopens, lockedOut: plan.lockedOut }),
       actor: editorId,
     },
     select: { id: true },

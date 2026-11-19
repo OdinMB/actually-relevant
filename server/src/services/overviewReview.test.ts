@@ -25,6 +25,7 @@ const base = (over: Partial<ReviewCase> = {}): ReviewCase => ({
   frozen: false,
   entries: [entry(1), entry(2), entry(3)],
   closingStoryId: null,
+  lockedOut: [],
   ...over,
 })
 
@@ -89,6 +90,23 @@ describe('what a review may do', () => {
     expect(actions).toEqual([])
     expect(kept).toBe(3)
     expect(refusals.map(r => r.what)).toEqual(['E2', 'E4', 'E1', 'charter', 'charter', 'charter'])
+  })
+
+  it('never adds again an OUT entry an editor’s undo took out, and keeps the others it adds', () => {
+    const { actions, refusals } = allowedActions(
+      base({ lockedOut: ['Cholera in DR Congo'] }),
+      answer({
+        charter: { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda', 'cholera in  DR Congo', 'Measles'], endEvent: 'The ministry declares it over' },
+      }),
+    )
+    expect(actions).toEqual([
+      {
+        kind: 'narrow',
+        added: ['Measles'],
+        charter: { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda', 'Measles'], endEvent: 'The ministry declares it over' },
+      },
+    ])
+    expect(refusals).toEqual([{ what: 'charter', reason: 'adds an OUT entry an editor took out: cholera in  DR Congo' }])
   })
 
   it('applies the OUT entries a widening answer adds, onto the current charter', () => {

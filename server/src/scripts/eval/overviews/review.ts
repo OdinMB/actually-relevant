@@ -88,6 +88,7 @@ export function plantedCase(
       frozen: false,
       entries,
       closingStoryId: null,
+      lockedOut: [],
     },
   }
 }
