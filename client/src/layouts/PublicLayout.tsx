@@ -9,6 +9,7 @@ import { PositivityProvider } from '../contexts/PositivityContext'
 import SiteHeader from './public/SiteHeader'
 import SiteFooter from './public/SiteFooter'
 import { CategoryColorStrip } from './public/icons'
+import { useOngoingOn } from '../hooks/usePublicOverviews'
 
 export default function PublicLayout() {
   return (
@@ -24,6 +25,8 @@ export default function PublicLayout() {
 
 function PublicLayoutInner() {
   const { pathname } = useLocation()
+  // The site's "Ongoing" links, only while the ongoing stories are switched on
+  const ongoing = useOngoingOn()
 
   // Scroll to top on route change
   useLayoutEffect(() => {
@@ -44,7 +47,7 @@ function PublicLayoutInner() {
         Skip to content
       </a>
 
-      <SiteHeader />
+      <SiteHeader ongoing={ongoing} />
 
       {/* Category color strip — mobile only */}
       <CategoryColorStrip className="lg:hidden" />
@@ -54,7 +57,7 @@ function PublicLayoutInner() {
         <Outlet />
       </main>
 
-      <SiteFooter />
+      <SiteFooter ongoing={ongoing} />
     </div>
   )
 }

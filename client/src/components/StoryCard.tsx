@@ -9,6 +9,7 @@ import { isRead } from '../lib/reading-history'
 import FeedFavicon from './FeedFavicon'
 import BookmarkButton from './BookmarkButton'
 import StoryTitleLabel from './StoryTitleLabel'
+import { OngoingChip } from './overview/OngoingLink'
 import { FOCUS_RING } from '../lib/control-classes'
 
 interface StoryCardProps {
@@ -16,7 +17,17 @@ interface StoryCardProps {
   variant?: 'featured' | 'compact' | 'horizontal' | 'equal'
 }
 
+/** The source line, and under it the chip of the ongoing story the story belongs to, while it is public. */
 function StoryMeta({ story, size = 'sm' }: { story: PublicStory; size?: 'sm' | 'xs' }) {
+  return (
+    <>
+      <SourceLine story={story} size={size} />
+      <OngoingChip overview={story.overview} className="mt-2" />
+    </>
+  )
+}
+
+function SourceLine({ story, size }: { story: PublicStory; size: 'sm' | 'xs' }) {
   const dateStr = story.datePublished ? formatDate(story.datePublished) : null
   return (
     <div className={`flex flex-wrap items-center gap-x-2 text-neutral-500 ${size === 'xs' ? 'text-xs' : 'text-sm'}`}>

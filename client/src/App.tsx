@@ -36,6 +36,8 @@ const NewsletterPage = lazy(() => import('./pages/NewsletterPage'))
 const NewsletterIssuePage = lazy(() => import('./pages/NewsletterIssuePage'))
 const PodcastPage = lazy(() => import('./pages/PodcastPage'))
 const PodcastTranscriptPage = lazy(() => import('./pages/PodcastTranscriptPage'))
+const OverviewsIndexPage = lazy(() => import('./pages/OverviewsIndexPage'))
+const OverviewPage = lazy(() => import('./pages/OverviewPage'))
 const FeedbackPagePublic = lazy(() => import('./pages/FeedbackPage'))
 const ThankYouPage = lazy(() => import('./pages/ThankYouPage'))
 const UpliftingPage = lazy(() => import('./pages/UpliftingPage'))
@@ -318,6 +320,23 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
         element={
           <LazyPage>
             <PodcastTranscriptPage />
+          </LazyPage>
+        }
+      />
+      {/* Ongoing stories: not prerendered, "not found" while overviews are switched off (.context/overviews.md, "Public") */}
+      <Route
+        path="/ongoing"
+        element={
+          <LazyPage>
+            <OverviewsIndexPage />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/ongoing/:slug"
+        element={
+          <LazyPage>
+            <OverviewPage />
           </LazyPage>
         }
       />

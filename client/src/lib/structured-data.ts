@@ -1,4 +1,4 @@
-import type { PublicPodcastEpisode, PublicStory, PublicStoryUpdate } from '@shared/types'
+import type { PublicOverview, PublicOverviewEntry, PublicPodcastEpisode, PublicStory, PublicStoryUpdate } from '@shared/types'
 import type { PublicIssue } from './api'
 import { markdownToPlainText } from './plainText'
 import { podcastTranscriptPath, PODCAST_SHOWS } from './podcast'
@@ -125,6 +125,41 @@ export function buildPodcastEpisodeSchema(
     publisher,
     // The page that explains that AI writes the episodes
     publishingPrinciples: `${SEO.siteUrl}/methodology`,
+  }
+}
+
+/**
+ * An ongoing story's page: a collection of our stories on one development, newest first, last
+ * changed when its last story, its "Where this stands" or its closing came.
+ */
+export function buildOverviewSchema(
+  overview: Pick<PublicOverview, 'slug' | 'title' | 'lastChange' | 'since'> & { entries: Pick<PublicOverviewEntry, 'slug' | 'title'>[] },
+  description: string,
+) {
+  const url = `${SEO.siteUrl}/ongoing/${encodeURIComponent(overview.slug)}`
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: overview.title,
+    description: description.slice(0, 200),
+    url,
+    dateCreated: overview.since,
+    dateModified: overview.lastChange,
+    isPartOf: { '@type': 'WebSite', name: SEO.siteName, url: SEO.siteUrl },
+    publisher,
+    // The page that explains that AI writes the summary and orders the timeline
+    publishingPrinciples: `${SEO.siteUrl}/methodology`,
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListOrder: 'https://schema.org/ItemListOrderDescending',
+      numberOfItems: overview.entries.length,
+      itemListElement: overview.entries.map((entry, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: entry.title,
+        url: `${SEO.siteUrl}/stories/${encodeURIComponent(entry.slug)}`,
+      })),
+    },
   }
 }
 

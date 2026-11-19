@@ -7,17 +7,18 @@ import IssueNav from './IssueNav'
 import MobileMenu from './MobileMenu'
 import SearchPanel from './SearchPanel'
 import UpliftingEditionRow from './UpliftingEditionRow'
-import { NewsletterIcon, PodcastIcon, SavedIcon, SearchIcon } from './icons'
+import { NewsletterIcon, OngoingIcon, PodcastIcon, SavedIcon, SearchIcon } from './icons'
 import { FOCUS_RING } from '../../lib/control-classes'
 
-/** Class for the desktop header actions (Newsletter, Podcast, Saved) beside the logo. */
+/** Class for the desktop header actions (Ongoing, Newsletter, Podcast, Saved) beside the logo. */
 const HEADER_ACTION_LINK = `inline-flex items-center gap-1.5 text-base font-normal tracking-wide transition-colors ${FOCUS_RING} rounded px-2 py-1 text-neutral-500 hover:text-brand-700`
 
 /**
  * The site header: logo bar with its actions, the Actually Uplifting row, the desktop
  * issue nav, the mobile menu dialog and the search panel. Owns the menu and search state.
+ * `ongoing`: the ongoing stories are switched on, so the header and the menu link to `/ongoing`.
  */
-export default function SiteHeader() {
+export default function SiteHeader({ ongoing = false }: { ongoing?: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -46,8 +47,19 @@ export default function SiteHeader() {
             <MoodDialPanel />
           </div>
 
-          {/* Desktop: newsletter, podcast, saved — vertically centered on logo */}
+          {/* Desktop: ongoing stories, newsletter, podcast, saved — vertically centered on logo */}
           <div className="hidden lg:flex items-center gap-1 absolute right-12 top-4 h-16">
+            {/*
+              Only while the ongoing stories are switched on (usePublicOverviews). Below `xl` its
+              label is for screen readers only: with "Saved (n)" beside it, the four labels would
+              reach the logo on a 1024px window.
+            */}
+            {ongoing && (
+              <Link to="/ongoing" className={HEADER_ACTION_LINK} title="Ongoing stories">
+                <OngoingIcon className="w-4 h-4 shrink-0" />
+                <span className="sr-only xl:not-sr-only">Ongoing</span>
+              </Link>
+            )}
             <Link to="/newsletter" className={HEADER_ACTION_LINK}>
               <NewsletterIcon className="w-4 h-4 shrink-0" />
               Newsletter
@@ -107,7 +119,7 @@ export default function SiteHeader() {
       <IssueNav searchOpen={searchOpen} onToggleSearch={() => setSearchOpen(!searchOpen)} />
 
       {/* Mobile nav — dialog for built-in focus trap */}
-      <MobileMenu open={menuOpen} onClose={closeMenu} savedCount={savedCount} />
+      <MobileMenu open={menuOpen} onClose={closeMenu} savedCount={savedCount} ongoing={ongoing} />
 
       {/* Search bar */}
       {searchOpen && <SearchPanel query={searchQuery} onQueryChange={setSearchQuery} onClose={closeSearch} />}

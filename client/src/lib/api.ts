@@ -10,6 +10,8 @@ import type {
   StoryContextView,
   NewsletterEdition,
   PodcastEdition,
+  PublicOverview,
+  PublicOverviewList,
 } from '@shared/types'
 
 export const API_BASE = (import.meta.env.VITE_API_URL || '') + '/api'
@@ -35,12 +37,12 @@ export interface OgImage {
 }
 
 /**
- * The card image of every newsletter issue or every podcast transcript page, and of `/newsletter`
- * and `/podcast` (1200x630 PNG, the logo and the section's name, the podcast's with the website's
- * "AI" badge, served by the API). The server's
+ * The card image of every newsletter issue, podcast transcript page or ongoing story, and of
+ * `/newsletter`, `/podcast` and `/ongoing` (1200x630 PNG, the logo and the section's name, the
+ * podcast's and the ongoing story's with the website's "AI" badge, served by the API). The server's
  * link-preview pages name the same (server/src/services/sectionPreview.ts).
  */
-export function sectionOgImage(section: 'newsletter' | 'podcast'): OgImage {
+export function sectionOgImage(section: 'newsletter' | 'podcast' | 'ongoing'): OgImage {
   return { image: `${API_BASE}/section-images/${section}.png`, imageType: 'image/png' }
 }
 
@@ -134,6 +136,13 @@ export const publicApi = {
     get: (slug: string) => request<PublicIssue>(`/issues/${slug}`),
   },
 
+  /** Ongoing stories (`.context/overviews.md`, "Public"): `on: false` and none while switched off. */
+  overviews: {
+    list: () => request<PublicOverviewList>('/overviews'),
+    /** 404 while switched off, or for one that is not public. */
+    get: (slug: string) => request<PublicOverview>(`/overviews/${encodeURIComponent(slug)}`),
+  },
+
   /** A podcast show (the main one by default): show information and published episodes, newest first. 404 for a show that is not public. */
   podcast: (edition: PodcastEdition = 'full') => request<PublicPodcastResponse>(`/podcast${edition === 'full' ? '' : toQueryString({ edition })}`),
 
@@ -180,13 +189,17 @@ export const publicApi = {
 
   getFeedbackToken: () => request<{ token: string }>('/feedback/token'),
 
-  /** `success: false` with a message when the human check refuses (`.context/public-website.md`, "Feedback"). */
+  /**
+   * `success: false` with a message when the human check refuses (`.context/public-website.md`,
+   * "Feedback"). A report names the story or the ongoing story it is about, at most one.
+   */
   submitFeedback: (data: {
     category: string
     message: string
     email?: string
     website?: string
     storyId?: string
+    overviewId?: string
     formToken?: string
     turnstileToken?: string
   }) =>

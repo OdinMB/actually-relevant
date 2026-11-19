@@ -1,8 +1,8 @@
-import type { ResearchedSource } from '@shared/types'
 import AiBadge from '../ai/AiBadge'
 import { SourceIcon } from './SourceIcon'
 import { SourceLink } from './SourceLink'
-import { EARLIER_LABEL, sourceDetails } from './sourceText'
+import { EARLIER_LABEL, sourceDetails, type ListedSource } from './sourceText'
+import { ViaStory } from './ViaStory'
 
 /** The `#sources` heading's id, for the section's name. */
 const HEADING_ID = 'sources-heading'
@@ -11,11 +11,12 @@ const HEADING_ID = 'sources-heading'
  * A researched story's sources, the `#sources` target of the header's "Sources:" link: per source its
  * icon, outlet, country, kind and date, and its own headline linked. The original article says
  * "initially found here"; our earlier stories come last as "Earlier on Actually Relevant", their AI
- * headline behind the "AI" badge. It takes over from "Also covered by".
+ * headline behind the "AI" badge. It takes over from "Also covered by". An ongoing story's sources
+ * (`marker` `stands`) each add the story of ours they came through.
  */
-export function SourcesList({ sources }: { sources: ResearchedSource[] }) {
+export function SourcesList({ sources, marker = 'research' }: { sources: ListedSource[]; marker?: 'research' | 'stands' }) {
   return (
-    <section id="sources" aria-labelledby={HEADING_ID} className="mb-10 scroll-mt-24" data-ai-generated="research">
+    <section id="sources" aria-labelledby={HEADING_ID} className="mb-10 scroll-mt-24" data-ai-generated={marker}>
       <h2 id={HEADING_ID} className="ruled-heading mb-6 !text-sm !tracking-wider">
         Sources
       </h2>
@@ -49,6 +50,7 @@ export function SourcesList({ sources }: { sources: ResearchedSource[] }) {
                     {source.title}
                   </SourceLink>
                 </p>
+                {source.via && <ViaStory story={source.via} className="mt-0.5 text-neutral-500" />}
               </div>
             </li>
           )

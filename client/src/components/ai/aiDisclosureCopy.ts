@@ -57,6 +57,18 @@ export const AI_DISCLOSURE_COPY = {
     linkText: 'Researched and written',
     href: '/methodology#researched-stories',
   },
+  /**
+   * An ongoing story's label, under its title on `/ongoing/<slug>`: "Summary and timeline by [AI],
+   * from our stories and their sources." The "AI" badge stands between lead and tail and is the
+   * label's only "AI". It covers the title, "Where this stands", "What's being done" and the
+   * timeline's labels. Owner's wording, decided 2026-11-18 (plan `2026-11-18_overviews-linking.md`,
+   * For Odin 3); the link preview's description ends with the same line (OVERVIEW_AI_LABEL in
+   * server/src/lib/aiLabelCopy.ts).
+   */
+  overviewLabel: {
+    lead: 'Summary and timeline by',
+    tail: ', from our stories and their sources.',
+  },
   /** Header of the /embed iframe (widget.js carries the same line). */
   embedHeader: 'AI-generated headlines from Actually Relevant',
   /** Appended to the AI blurb that the share buttons prefill. */

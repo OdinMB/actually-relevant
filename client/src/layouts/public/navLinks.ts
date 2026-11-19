@@ -30,6 +30,13 @@ export const FOOTER_NAV = [
   { label: 'Thank You', href: '/thank-you' },
 ]
 
+/** The footer's Navigate column: with "Ongoing Stories" after Topics while the ongoing stories are switched on. */
+export function footerNav(ongoing: boolean): { label: string; href: string }[] {
+  if (!ongoing) return FOOTER_NAV
+  const at = FOOTER_NAV.findIndex(link => link.href === '/issues') + 1
+  return [...FOOTER_NAV.slice(0, at), { label: 'Ongoing Stories', href: '/ongoing' }, ...FOOTER_NAV.slice(at)]
+}
+
 export const FOOTER_LEGAL = [
   { label: 'Legal notice / Impressum', href: '/imprint' },
   { label: 'Privacy', href: '/privacy' },

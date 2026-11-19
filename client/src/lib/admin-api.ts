@@ -69,6 +69,10 @@ export interface FeedbackItem {
   /** The story the report was sent from; null when none was given or the story was deleted */
   storyId: string | null
   story: { id: string; slug: string | null; title: string | null; sourceTitle: string; status: string } | null
+  /** The ongoing story whose page the report was sent from; null when none, or the overview was deleted. Absent from a backend before overviews. */
+  overview?: { id: string; title: string } | null
+  /** The report queued the overview's review (at most one per overview a week; `.context/overviews.md`, "Reviews") */
+  queuesReview?: boolean
 }
 
 export const ADMIN_NOTICE_SOURCES = ['jobs', 'newsletter', 'podcast', 'subscriptions', 'plunk'] as const

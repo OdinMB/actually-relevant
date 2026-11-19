@@ -3,7 +3,7 @@ import { getCategoryColor } from '../../lib/category-colors'
 import { API_BASE } from '../../lib/api'
 import { FOCUS_RING } from '../../lib/control-classes'
 import { APPLE_PODCASTS_URL, BRAND, BLUESKY_PROFILE_URL, GITHUB_REPO_URL, KOFI_URL, MASTODON_PROFILE_URL } from '../../config'
-import { FOOTER_LEGAL, FOOTER_NAV, ISSUE_LINKS } from './navLinks'
+import { FOOTER_LEGAL, ISSUE_LINKS, footerNav } from './navLinks'
 import { CategoryColorStrip, PodcastIcon } from './icons'
 import SimpleAnalyticsCredit from './SimpleAnalyticsCredit'
 
@@ -54,7 +54,8 @@ function Copyright({ className }: { className: string }) {
   return <p className={className}>&copy; {new Date().getFullYear()} Actually Relevant. All rights reserved.</p>
 }
 
-export default function SiteFooter() {
+/** `ongoing`: the ongoing stories are switched on, so the Navigate column links to `/ongoing`. */
+export default function SiteFooter({ ongoing = false }: { ongoing?: boolean }) {
   return (
     <footer className="bg-neutral-900 text-neutral-300">
       {/* Category color strip */}
@@ -119,7 +120,7 @@ export default function SiteFooter() {
               Navigate
             </p>
             <ul className="grid">
-              {FOOTER_NAV.map(link => (
+              {footerNav(ongoing).map(link => (
                 <li key={link.label} className="flex items-center">
                   <Link to={link.href} className={LIST_LINK}>
                     {link.label}

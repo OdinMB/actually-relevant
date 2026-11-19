@@ -34,6 +34,18 @@ export function SavedIcon({ className }: { className?: string }) {
   )
 }
 
+/** A timeline: three stories on one line (the "Ongoing" link). */
+export function OngoingIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M3 11h18v2H3z" />
+      <circle cx="5.5" cy="12" r="2.5" />
+      <circle cx="12" cy="12" r="2.5" />
+      <circle cx="18.5" cy="12" r="2.5" />
+    </svg>
+  )
+}
+
 export function SearchIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">

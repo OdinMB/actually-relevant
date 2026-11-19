@@ -193,6 +193,8 @@ export interface PublicOverviewEntry {
 }
 
 export interface PublicOverview extends PublicOverviewHead {
+  /** What a reader's "Report an error" names (`overviewId`, as a story's report names the story's id). */
+  id: string
   /** "Where this stands" and "What's being done" as served now; null when none is written or none of it stands. */
   stands: { asOf: string; writtenAt: Date; sentences: CitedText[]; doing: CitedText[] } | null
   /** The sources the stands cite, in first-cited order (`S1` …). */
@@ -313,6 +315,7 @@ export async function publicOverview(slug: string, now = new Date()): Promise<Pu
     ),
   ])
   return {
+    id: o.id,
     ...head(o, shown.length, stands?.writtenAt ?? null),
     stands,
     sources,

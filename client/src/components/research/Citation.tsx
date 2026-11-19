@@ -1,17 +1,18 @@
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
-import type { ResearchCitation, ResearchedSource } from '@shared/types'
+import type { ResearchCitation } from '@shared/types'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
 import AiBadge from '../ai/AiBadge'
 import { AI_DISCLOSURE_COPY } from '../ai/aiDisclosureCopy'
 import { SourceIcon } from './SourceIcon'
 import { SourceLink, sourceHref } from './SourceLink'
-import { outletName, sourceDetails } from './sourceText'
+import { outletName, sourceDetails, type ListedSource } from './sourceText'
+import { ViaStory } from './ViaStory'
 
-/** A researched story's sources by id, as the citations look them up. */
-export type SourcesById = ReadonlyMap<string, ResearchedSource>
+/** A researched story's (or an ongoing story's) sources by id, as the citations look them up. */
+export type SourcesById = ReadonlyMap<string, ListedSource>
 
 interface CitedSource {
-  source: ResearchedSource
+  source: ListedSource
   sentence: string | null
 }
 
@@ -42,6 +43,8 @@ function SourceCard({ source, sentence }: CitedSource) {
           </SourceLink>
         </p>
       )}
+      {/* An ongoing story's source: the story of ours it came through */}
+      {source.via && <ViaStory story={source.via} className="mt-1 text-neutral-500" />}
     </li>
   )
 }

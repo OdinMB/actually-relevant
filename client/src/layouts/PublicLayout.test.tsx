@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
-import { render, screen, within, act, fireEvent } from '@testing-library/react'
+import { render, screen, within, act, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom'
@@ -9,8 +9,9 @@ import { BRAND } from '../config'
 import { toggleSaved } from '../lib/preferences'
 import { focusRingProblems } from '../test/classes'
 
-// The layout holds the signup and feedback dialogs, whose forms fetch a form token when they mount
-const mockTokens = vi.hoisted(() => ({ getSubscribeToken: vi.fn(), getFeedbackToken: vi.fn() }))
+// The layout holds the signup and feedback dialogs, whose forms fetch a form token when they mount;
+// it asks whether the ongoing stories are switched on, for its "Ongoing" links
+const mockTokens = vi.hoisted(() => ({ getSubscribeToken: vi.fn(), getFeedbackToken: vi.fn(), overviews: { list: vi.fn(), get: vi.fn() } }))
 vi.mock('../lib/api', async importOriginal => {
   const actual = await importOriginal<typeof import('../lib/api')>()
   return { ...actual, publicApi: { ...actual.publicApi, ...mockTokens } }
@@ -47,6 +48,40 @@ describe('PublicLayout', () => {
   beforeEach(() => {
     mockTokens.getSubscribeToken.mockReset().mockResolvedValue({ token: 'form-token' })
     mockTokens.getFeedbackToken.mockReset().mockResolvedValue({ token: 'form-token' })
+    mockTokens.overviews.list.mockReset().mockResolvedValue({ on: false, overviews: [] })
+  })
+
+  describe('Ongoing link', () => {
+    const ongoingLinks = () => screen.queryAllByRole('link', { name: /^Ongoing/, hidden: true })
+
+    it('is absent from the header, the mobile menu and the footer while the ongoing stories are switched off', async () => {
+      renderLayout()
+      await waitFor(() => expect(mockTokens.overviews.list).toHaveBeenCalled())
+      await act(async () => {})
+      expect(ongoingLinks()).toEqual([])
+    })
+
+    it('is absent when the request fails, as when switched off', async () => {
+      mockTokens.overviews.list.mockReset().mockRejectedValue(new Error('offline'))
+      renderLayout()
+      await waitFor(() => expect(mockTokens.overviews.list).toHaveBeenCalled())
+      await act(async () => {})
+      expect(ongoingLinks()).toEqual([])
+    })
+
+    it('leads to /ongoing from the header, the mobile menu and the footer while they are on, first among the header actions', async () => {
+      mockTokens.overviews.list.mockResolvedValue({ on: true, overviews: [] })
+      renderLayout()
+      await waitFor(() => expect(ongoingLinks()).toHaveLength(3))
+      expect(ongoingLinks().map(link => link.getAttribute('href'))).toEqual(['/ongoing', '/ongoing', '/ongoing'])
+      expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Ongoing Stories' })).toBeInTheDocument()
+      const [header, menu] = ongoingLinks()
+      expect(header).toHaveAccessibleName('Ongoing')
+      expect(menu).toHaveTextContent('Ongoing Stories')
+      // Before Newsletter in the header's actions
+      const newsletter = within(screen.getByRole('banner')).getAllByRole('link', { name: 'Newsletter', hidden: true })[0]!
+      expect(header!.compareDocumentPosition(newsletter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
   })
 
   it('requests no form token on a page view while the signup and feedback dialogs stay closed', async () => {

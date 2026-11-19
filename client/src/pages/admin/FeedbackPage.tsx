@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../../lib/admin-api'
@@ -36,8 +36,23 @@ const CATEGORY_COLORS: Record<string, string> = {
   correction: 'bg-purple-100 text-purple-700',
 }
 
-/** The story a correction was reported from: its public page while published, else its title and status. */
+/**
+ * The story a correction was reported from: its public page while published, else its title and
+ * status. A report from an ongoing story's page names the overview instead, linking its admin page,
+ * and says whether it queued the overview's review.
+ */
 function LinkedStory({ item }: { item: FeedbackItem }) {
+  if (item.overview) {
+    return (
+      <span className="text-xs text-neutral-500">
+        Ongoing story:{' '}
+        <Link to={`/admin/overviews/${item.overview.id}`} onClick={e => e.stopPropagation()} className="text-brand-600 hover:text-brand-700 hover:underline">
+          {item.overview.title}
+        </Link>
+        {item.queuesReview && <span className="text-neutral-400"> (queued a review)</span>}
+      </span>
+    )
+  }
   if (!item.story) {
     return item.category === 'correction' ? <span className="text-xs text-neutral-400">Story deleted or not given</span> : null
   }

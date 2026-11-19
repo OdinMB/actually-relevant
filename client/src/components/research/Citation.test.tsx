@@ -108,6 +108,25 @@ describe('Citation', () => {
     expect(card.querySelector('[href]')).toBeNull()
   })
 
+  it("names the story of ours an ongoing story's source came through, its AI headline behind the badge, linked", async () => {
+    const via = { slug: 'cases-fall', title: 'Cases fall in Ituri' }
+    render(
+      <MemoryRouter>
+        <Citation citations={[{ sourceId: 'S1', sentence: 'Cases fell.' }]} sources={new Map([['S1', { ...SOURCES.get('S1')!, via }]])} />
+      </MemoryRouter>,
+    )
+    const { card } = await openCard('Source: Coverage Outlet')
+    const link = within(card).getByRole('link', { name: 'Cases fall in Ituri' })
+    expect(link).toHaveAttribute('href', '/stories/cases-fall')
+    expect(announcedText(link.closest('p')!)).toBe('via our story AI-generated Cases fall in Ituri')
+  })
+
+  it("names no story of ours for a researched story's source", async () => {
+    renderCitation([{ sourceId: 'S1', sentence: 'The coverage sentence.' }])
+    const { card } = await openCard('Source: Coverage Outlet')
+    expect(within(card).queryByText(/via our story/)).toBeNull()
+  })
+
   it('passes axe with its card open, the button and the card alike', async () => {
     const { container } = renderCitation([
       { sourceId: 'S1', sentence: 'The coverage sentence.' },

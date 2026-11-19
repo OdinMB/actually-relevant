@@ -152,6 +152,11 @@ export interface PublicStory extends Story {
       slug: string
     }
   }
+  /**
+   * The public ongoing story it belongs to (the story page's line, the card's chip); null while
+   * overviews are switched off or it belongs to none. Absent from a backend before overviews.
+   */
+  overview?: PublicOverviewLink | null
 }
 
 // --- Researched story (public; a hand-written mirror of server/src/services/researchedStory.ts) ---
@@ -288,6 +293,72 @@ export interface StoryContextView {
   sources: ResearchedSource[]
   asOf: string | null
   aiGenerated: { fields: string[]; model: string; digitalSourceType: string }
+}
+
+// --- Ongoing-story overviews (public; a hand-written mirror of server/src/services/overviewPublic.ts, .context/overviews.md, "Public") ---
+
+/** An ongoing story as a story names it: `/ongoing/<slug>`. */
+export interface PublicOverviewLink {
+  slug: string
+  title: string
+}
+
+export type PublicOverviewStatus = 'open' | 'quiet' | 'closing' | 'closed'
+
+/** An ongoing story as a list names it: the page's header, the index's row. */
+export interface PublicOverviewHead {
+  slug: string
+  title: string
+  /** Its issue, the area chip. */
+  area: { name: string; slug: string } | null
+  status: PublicOverviewStatus
+  /** `end_event`, `faded` or `editor`; null unless closed. */
+  closedReason: string | null
+  closedAt: string | null
+  /** The founding story's publication date. */
+  since: string
+  lastEntryAt: string | null
+  /** The newest of its last story, its current "Where this stands" and its closing. */
+  lastChange: string
+  /** Its stories readers see. */
+  stories: number
+}
+
+/** `GET /api/overviews` (not in the OpenAPI contract): `on` while overviews are switched on, the most recently changed first. */
+export interface PublicOverviewList {
+  on: boolean
+  overviews: PublicOverviewHead[]
+}
+
+/** A source "Where this stands" cites, with the story of ours it came through. */
+export interface PublicOverviewSource extends ResearchedSource {
+  via: PublicOverviewLink | null
+}
+
+/** One story of the timeline. */
+export interface PublicOverviewEntry {
+  slug: string
+  title: string
+  titleLabel: string | null
+  datePublished: string
+  role: 'turning_point' | 'routine'
+  /** A turning point's kind (`setback`, `response`, `spread` …); null for a routine story. */
+  roleKind: string | null
+  /** Its research Updates, newest first. */
+  updates: { date: string; note: string }[]
+}
+
+/** `GET /api/overviews/:slug` (not in the OpenAPI contract); 404 while switched off or not public. */
+export interface PublicOverview extends PublicOverviewHead {
+  /** What a reader's report names (`overviewId`). */
+  id: string
+  /** Null when none is written or none of it stands today. */
+  stands: { asOf: string; writtenAt: string; sentences: ResearchedCitedText[]; doing: ResearchedCitedText[] } | null
+  /** Ids `S1`… in first-cited order. */
+  sources: PublicOverviewSource[]
+  /** Newest first. */
+  entries: PublicOverviewEntry[]
+  aiGenerated: { fields: string[]; models: string[]; digitalSourceType: string }
 }
 
 export interface Feed {

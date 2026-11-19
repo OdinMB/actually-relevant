@@ -35,6 +35,22 @@ describe('StoryCard AI badge', () => {
   })
 })
 
+describe('StoryCard ongoing story chip', () => {
+  it.each(VARIANTS)('%s: links the ongoing story the story belongs to, its AI title behind the badge', variant => {
+    renderCard(variant, makeStory({ overview: { slug: 'ebola-in-ituri', title: 'Ebola in Ituri' } }))
+    const chip = screen.getByRole('link', { name: 'Ongoing: AI-generated Ebola in Ituri' })
+    expect(chip).toHaveAttribute('href', '/ongoing/ebola-in-ituri')
+    expect(chip).toHaveAttribute('data-ai-generated', 'overview')
+    expect(focusRingProblems(chip)).toEqual([])
+  })
+
+  it.each(VARIANTS)('%s: shows no chip while the story is in none (and while overviews are off, when the field is null)', variant => {
+    renderCard(variant, makeStory({ overview: null }))
+    expect(screen.queryByRole('link', { name: /^Ongoing:/ })).toBeNull()
+    expect(document.querySelector('[data-ai-generated="overview"]')).toBeNull()
+  })
+})
+
 describe('StoryCard focus', () => {
   it.each(VARIANTS)('%s: shows keyboard focus on the story link, the source link and the bookmark as the brand ring alone', variant => {
     renderCard(variant)

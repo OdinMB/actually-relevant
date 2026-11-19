@@ -19,11 +19,14 @@ interface FeedbackFormProps {
   story?: FeedbackStory
 }
 
-/** The story a "Report an error" is about. */
+/** The story a "Report an error" is about: one of our stories, or an ongoing story (an overview). */
 export interface FeedbackStory {
+  /** The story's id, or the overview's for an ongoing story */
   id: string
-  /** As the story page shows it (title label and headline) */
+  /** As the page shows it (a story's title label and headline, an ongoing story's title) */
   title: string
+  /** `overview`: an ongoing story's page, whose report names the overview (`overviewId`); a story by default */
+  kind?: 'story' | 'overview'
 }
 
 const CATEGORIES = [
@@ -106,7 +109,7 @@ export default function FeedbackForm({ onSuccess, autoFocus = false, idPrefix = 
         message: message.trim(),
         ...(email.trim() ? { email: email.trim() } : {}),
         ...(website ? { website } : {}),
-        ...(story ? { storyId: story.id } : {}),
+        ...(story ? (story.kind === 'overview' ? { overviewId: story.id } : { storyId: story.id }) : {}),
         formToken,
         ...(turnstileToken ? { turnstileToken } : {}),
       })

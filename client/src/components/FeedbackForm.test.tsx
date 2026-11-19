@@ -86,6 +86,22 @@ describe('FeedbackForm', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Thanks for your report!'))
   })
 
+  it("reports an error in an ongoing story: names it, and sends a correction with the overview's id, not a story's", async () => {
+    render(<FeedbackForm story={{ id: 'overview-1', title: 'Ebola in Ituri', kind: 'overview' }} />)
+    expect(screen.getByText('Ebola in Ituri')).toBeInTheDocument()
+    await ready()
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'What is wrong?' }), 'The count is old')
+    await userEvent.click(screen.getByRole('button', { name: 'Send report' }))
+
+    expect(mockApi.submitFeedback).toHaveBeenCalledWith({
+      category: 'correction',
+      message: 'The count is old',
+      overviewId: 'overview-1',
+      formToken: 'form-token',
+    })
+  })
+
   it('keeps submit disabled until the form token has loaded, without a message meanwhile', async () => {
     mockApi.getFeedbackToken.mockReturnValue(new Promise(() => {})) // never resolves
     render(<FeedbackForm />)

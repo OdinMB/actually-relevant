@@ -5,16 +5,18 @@ import { KOFI_URL } from '../../config'
 import { MoodDialPanel } from '../../components/PositivitySlider'
 import BrandLogo from '../../components/BrandLogo'
 import { ISSUE_LINKS, isActiveIssue } from './navLinks'
-import { CategoryColorStrip, HeartIcon, NewsletterIcon, PodcastIcon, SavedIcon } from './icons'
+import { CategoryColorStrip, HeartIcon, NewsletterIcon, OngoingIcon, PodcastIcon, SavedIcon } from './icons'
 import { FOCUS_RING } from '../../lib/control-classes'
 
-/** Class for each action link (Newsletter, Podcast, Saved, Support) in the mobile menu. */
+/** Class for each action link (Ongoing, Newsletter, Podcast, Saved, Support) in the mobile menu. */
 const MENU_ACTION_LINK = `flex items-center gap-2 py-2.5 text-sm font-bold text-brand-700 hover:text-brand-800 ${FOCUS_RING} rounded`
 
 interface MobileMenuProps {
   open: boolean
   onClose: () => void
   savedCount: number
+  /** The ongoing stories are switched on: the menu links to `/ongoing`. */
+  ongoing?: boolean
 }
 
 /**
@@ -22,7 +24,7 @@ interface MobileMenuProps {
  * signup and feedback dialogs (`ModalDialog`), its links stay in the page while it is closed, and
  * the dimmed tap area below the menu closes it instead of a backdrop click.
  */
-export default function MobileMenu({ open, onClose, savedCount }: MobileMenuProps) {
+export default function MobileMenu({ open, onClose, savedCount, ongoing = false }: MobileMenuProps) {
   const dialogProps = useModalDialog(open, onClose)
   const { pathname } = useLocation()
 
@@ -75,8 +77,14 @@ export default function MobileMenu({ open, onClose, savedCount }: MobileMenuProp
             })}
           </ul>
 
-          {/* Newsletter, Podcast, Saved & Support — each on its own line */}
+          {/* Ongoing stories (while switched on), Newsletter, Podcast, Saved & Support — each on its own line */}
           <div className="border-t border-neutral-100 pt-3 px-2 flex flex-col">
+            {ongoing && (
+              <Link to="/ongoing" onClick={onClose} className={MENU_ACTION_LINK}>
+                <OngoingIcon className="w-3.5 h-3.5 shrink-0" />
+                Ongoing Stories
+              </Link>
+            )}
             <Link to="/newsletter" onClick={onClose} className={MENU_ACTION_LINK}>
               <NewsletterIcon className="w-3.5 h-3.5 shrink-0" />
               Newsletter

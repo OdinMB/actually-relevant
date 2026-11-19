@@ -244,7 +244,7 @@ describeDb('public overviews (PostgreSQL)', () => {
     })
 
     const page = await publicOverview(o.slug!)
-    expect(page).toMatchObject({ slug: o.slug, title: 'Ebola in Ituri', status: 'open', stories: 3, closedReason: null })
+    expect(page).toMatchObject({ id: o.id, slug: o.slug, title: 'Ebola in Ituri', status: 'open', stories: 3, closedReason: null })
     expect(page!.entries.map(e => e.slug)).toEqual([c!.slug, b!.slug, a!.slug])
     expect(page!.entries[2]).toMatchObject({ role: 'turning_point', roleKind: 'response' })
     expect(page!.entries[0]!.updates).toEqual([{ date: expect.any(String), note: 'Officials revised the count.' }])

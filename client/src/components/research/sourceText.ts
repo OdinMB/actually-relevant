@@ -1,9 +1,15 @@
-import type { ResearchedSource } from '@shared/types'
+import type { PublicOverviewLink, ResearchedSource } from '@shared/types'
 
 /**
  * How a researched story's sources read (`.context/public-website.md`, "Researched stories"): the
  * date, the details line and the outlet's initial. News reports, the usual kind, carry no kind name.
  */
+
+/**
+ * A source as the citations and the sources list show it: a researched story's, or one an ongoing
+ * story's "Where this stands" cites, with `via`, the story of ours it came through.
+ */
+export type ListedSource = ResearchedSource & { via?: PublicOverviewLink | null }
 
 /** What our own earlier stories are called in the sources list and the citation cards. */
 export const EARLIER_LABEL = 'Earlier on Actually Relevant'

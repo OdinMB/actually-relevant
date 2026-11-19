@@ -42,6 +42,10 @@ describe('static routes (shared/routes.json)', () => {
     expect(routePaths).not.toContain('/podcast/uplifting')
   })
 
+  it('never prerenders the ongoing stories: no static file may show them while they are switched off (the server sitemap lists them once on)', () => {
+    expect(routePaths.filter(path => path === '/ongoing' || path.startsWith('/ongoing/'))).toEqual([])
+  })
+
   it('gives every route a path, a priority between 0 and 1 and a sitemap change frequency, once', () => {
     for (const route of routes) {
       expect(route.path.startsWith('/')).toBe(true)

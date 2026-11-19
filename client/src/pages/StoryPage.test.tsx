@@ -431,6 +431,23 @@ describe('StoryPage', () => {
     expect(screen.getByRole('link', { name: 'Find similar stories →' })).toHaveAttribute('href', `/search?q=${encodeURIComponent(AI_TEXT.title)}`)
   })
 
+  it('names the public ongoing story it belongs to under the header, its AI title behind the badge and marked', () => {
+    renderStory({ ...story, overview: { slug: 'ebola-in-ituri', title: 'Ebola in Ituri' } })
+    const link = screen.getByRole('link', { name: 'AI-generated Ebola in Ituri' })
+    expect(link).toHaveAttribute('href', '/ongoing/ebola-in-ituri')
+    expect(focusRingProblems(link)).toEqual([])
+    const line = link.closest('p')!
+    expect(announcedText(line)).toBe('Part of an ongoing story: AI-generated Ebola in Ituri')
+    expect(line).toHaveAttribute('data-ai-generated', 'overview')
+    expect(line.closest('header')).not.toBeNull()
+  })
+
+  it('shows no ongoing story line while the story is in none, or while overviews are off (the field null or absent)', () => {
+    renderStory({ ...story, overview: null })
+    expect(screen.queryByText(/Part of an ongoing story/)).toBeNull()
+    expect(document.querySelector('[data-ai-generated="overview"]')).toBeNull()
+  })
+
   it('follows the label with a separate "How it works" link to the methodology page', () => {
     renderStory(story)
     expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/methodology')

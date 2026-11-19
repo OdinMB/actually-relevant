@@ -55,6 +55,25 @@ describe('Admin FeedbackPage', () => {
     expect(screen.getByText('Story deleted or not given')).toBeInTheDocument()
   })
 
+  it("links a report from an ongoing story's page to the overview's admin page, saying whether it queued a review", async () => {
+    const overview = { id: 'o1', title: 'Ebola in Ituri' }
+    mockApi.feedback.list.mockResolvedValue({
+      items: [
+        item({ id: 'fb-4', category: 'correction', message: 'The count is old', overview, queuesReview: true }),
+        item({ id: 'fb-5', category: 'correction', message: 'Still old', overview: { ...overview }, queuesReview: false }),
+      ],
+      total: 2,
+      page: 1,
+      limit: 25,
+      unreadCount: 0,
+    })
+    renderPage()
+    const links = await screen.findAllByRole('link', { name: 'Ebola in Ituri' })
+    expect(links.map(l => l.getAttribute('href'))).toEqual(['/admin/overviews/o1', '/admin/overviews/o1'])
+    expect(screen.getAllByText('(queued a review)')).toHaveLength(1)
+    expect(screen.queryByText('Story deleted or not given')).toBeNull()
+  })
+
   it('filters by the correction category', async () => {
     renderPage()
     await screen.findByText('The date is wrong')
