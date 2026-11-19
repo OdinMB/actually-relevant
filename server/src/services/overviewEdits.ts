@@ -11,6 +11,7 @@ import {
   ACTIVE,
   OPEN,
   UNFROZEN,
+  applied,
   changesFrom,
   draft,
   entryChange,
@@ -272,7 +273,7 @@ export function planUndo(d: UndoTarget, rows: Rows, ctx: EditContext): Plan {
   const changes = automated ? stamped(back, rows, narrowed, ctx) : back
   const target = d.kind === 'undo' ? readTarget(d.inputs) : null
   const storyId = d.storyId
-  return plan(
+  const p = plan(
     draft({ id: ctx.newId(), kind: 'undo', outcome: 'undone', overviewId: rows.overview.id, storyId, inputs: { target: d.id }, actor: ctx.editorId }),
     {
       changes,
@@ -280,6 +281,20 @@ export function planUndo(d: UndoTarget, rows: Rows, ctx: EditContext): Plan {
       wasPublic: publicBefore(rows.overview),
     },
   )
+  return d.kind === 'review' ? { ...p, changes: [...p.changes, ...recounted(rows, p)] } : p
+}
+
+/**
+ * After a review's undo, an ongoing overview counts as reviewed at the active entries the undo leaves,
+ * so the count trigger does not review it again at once for the entries it restored (which are locked
+ * anyway). A forming one keeps its count: only a review makes an overview public (D-OV4), so it is
+ * reviewed when its count is due.
+ */
+function recounted(rows: Rows, p: Plan): Change[] {
+  const after = applied(rows, p)
+  if (after.overview.scope !== 'ongoing') return []
+  const active = after.entries.filter(e => e.status === 'active' && e.published).length
+  return overviewChange(after.overview, { entriesAtLastReview: Math.max(active, after.overview.entriesAtLastReview) })
 }
 
 /** The decision an undo undid. */

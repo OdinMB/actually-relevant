@@ -71,7 +71,7 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
       .flatMap(d => {
         const o = d.overviewId ? get(d.overviewId) : undefined
         const e = o && activeEntries(o).find(x => x.storyId === d.storyId)
-        if (!o || !e || judged.has(`${o.id}:${d.storyId}`) || !(o.status === 'open' || o.status === 'quiet') || o.frozen) return []
+        if (!o || !e || !e.published || judged.has(`${o.id}:${d.storyId}`) || !(o.status === 'open' || o.status === 'quiet') || o.frozen) return []
         return [
           {
             overviewId: o.id,

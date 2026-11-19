@@ -258,8 +258,21 @@ describe('planUndo', () => {
     expect(undo.rows.entries[3]).toMatchObject({ status: 'active', locked: true })
     expect(undo.rows.entries[0]).toMatchObject({ role: 'routine', locked: true })
     expect(undo.rows.overview).toMatchObject({ title: 'Ebola in Ituri', charter, lockedOut: ['Mpox'], frozen: true, frozenBy: 'editor', frozenAt: LATER })
-    // What the review ran stays run
-    expect(undo.rows.overview).toMatchObject({ reviewedAt: NOW, entriesAtLastReview: 3 })
+    // What the review ran stays run, counted at the entries the undo leaves, so the count trigger does not review it again at once
+    expect(undo.rows.overview).toMatchObject({ reviewedAt: NOW, entriesAtLastReview: 4 })
+    // A forming overview keeps its count: only a review makes it public
+    const forming = rows({ scope: 'forming' }, [entry(1), entry(2)])
+    const cut = run(
+      forming,
+      planReview(
+        forming,
+        c,
+        { ...(result as object), actions: [{ kind: 'detach', entryId: 'e2', storyId: 's2', reason: 'No.' }], kept: 1, scope: 'single' } as never,
+        ctx(),
+      ),
+    )
+    const restored = run(cut.rows, planUndo(cut.decision, cut.rows, ctx(LATER)))
+    expect(restored.rows.overview).toMatchObject({ scope: 'forming', entriesAtLastReview: 1 })
 
     // An editor retitled it since: the review is undone whole or not at all
     const retitled = { ...reviewed.rows, overview: { ...reviewed.rows.overview, title: 'Mine' } }

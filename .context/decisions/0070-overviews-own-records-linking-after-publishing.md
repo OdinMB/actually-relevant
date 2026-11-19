@@ -77,3 +77,20 @@ where linking runs and how it stays off; phases 1 and 2 (records, keys, linking)
   stands so a period overview can reuse them.
 - **Link inside the research pass, before publishing:** a linking failure would hold the edition,
   and a story's overview needs other published stories.
+
+## Amendment 2026-11-19: one write model, every write a change set Undo inverts
+
+Every write to the four tables, automated or an editor's, is now a plan of row changes made by pure
+code (`services/overviewChanges.ts`, `overviewPlans.ts`, `overviewEdits.ts`) and applied by one
+applier in one transaction that locks the overview row: the fields that follow the entries (the last
+entry, the scope) settled, each change applied only where its row still holds what the plan read,
+and the change set kept on the decision. **Undo of any decision is its change set inverted, whole or
+not at all**, and what an entry leaving does (a closing on its story cancelled) is one rule every
+writer applies. The one writer stays the lifecycle module, now `services/overviewLifecycle.ts` and its
+folder `services/overviewLifecycle/`, which the fence test covers. Decision inputs follow one schema
+per kind (`overviewDecisions.ts`), and the facts the upkeep and Undo once folded from the log at each
+read are columns on `overviews` (migration `20261119041008_overview_state`, additive). The eval's
+sandbox applies the same plans to memory, and a db test holds the two alike. Why: the automated writes
+and Undo kept separate rules for the same fields, and the sandbox copied the lifecycle's rules and had
+drifted from them (the last entry after a detach, the closing story, the burst's start); one model
+leaves one place for each rule. Everything else stands as written.

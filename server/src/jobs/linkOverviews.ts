@@ -94,7 +94,7 @@ export function upkeepSummary(t: UpkeepTally): string {
 /** Whether the technical failures pass the failure share: more than `share` of at least `failedStoriesMin` stories (or upkeep items). */
 const failing = (taken: number, failed: number) => taken >= config.overviews.failedStoriesMin && failed / taken > config.jobs.failureShare.share
 
-/** The owner's notice of an overview frozen this run: automation on it waits for a review (a burst's) or an editor (the brake's). */
+/** The owner's notice of an overview frozen this run: by a burst, whose review in the same run may have cleared it, or by the detach brake, for an editor. */
 export async function notifyFreeze(f: UpkeepFreeze): Promise<void> {
   const burst = f.cause === 'burst'
   await notify({
@@ -104,8 +104,9 @@ export async function notifyFreeze(f: UpkeepFreeze): Promise<void> {
       ? `Ongoing story frozen: ${f.count.toLocaleString('en-US')} stories joined "${f.title}" in a day`
       : `Ongoing story frozen: a review of "${f.title}" asked to detach ${countOf(f.count, 'story', 'stories')}`,
     message: burst
-      ? 'More stories joined it in one night than the burst limit allows, so nothing joins or changes it until its review runs at the next run. ' +
-        'Check its stories on its admin page; the review may unfreeze it.'
+      ? 'More stories joined it in one night than the burst limit allows, so it was frozen and its review checks every story (at the next run again if the AI service did not answer). ' +
+        'A review that finds they all belong unfreezes it; otherwise it stays frozen, and nothing joins or changes it, until an editor unfreezes it. ' +
+        'Check its stories and its decision log on its admin page.'
       : 'The review asked to detach more than half of its entries, so none was detached and the overview is frozen for an editor. ' +
         'Check its stories on its admin page, detach any that do not belong, then unfreeze it.',
     link: `/admin/overviews/${f.overviewId}`,

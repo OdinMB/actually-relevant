@@ -198,15 +198,15 @@ describeDb("an editor's actions and undo", () => {
 
     const undo = await undoDecision(review.id, EDITOR)
     expect(await entryOf(members[3]!.id)).toMatchObject({ status: 'active', locked: true, detachReason: null })
-    // What the review ran stays run: its count is the one it kept
-    expect(await row(o.id)).toMatchObject({ charter, entriesAtLastReview: 3 })
+    // What the review ran stays run: an ongoing overview counts as reviewed at the entries the undo leaves
+    expect(await row(o.id)).toMatchObject({ charter, entriesAtLastReview: 4 })
     const state = (await overviewStates(prisma, new Date()))[0]!
     expect(reviewDue(state, { clock: new Date(), now: new Date() })).toBeNull()
     expect((await reviewCase(prisma, o.id))!.lockedOut).toEqual(['cholera'])
 
-    // Undone in turn, the lock goes with it
+    // Undone in turn, the lock goes with it; the count is one-way and stays
     await undoDecision(undo.decisionId, EDITOR)
-    expect(await row(o.id)).toMatchObject({ charter: narrowed, entriesAtLastReview: 3 })
+    expect(await row(o.id)).toMatchObject({ charter: narrowed, entriesAtLastReview: 4 })
     expect((await reviewCase(prisma, o.id))!.lockedOut).toEqual([])
   })
 

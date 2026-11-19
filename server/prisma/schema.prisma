@@ -915,8 +915,9 @@ model PassBox {
 // --- Ongoing-story overviews (.context/overviews.md, ADR-0070) ---
 // A development's record: its charter, its entries (our stories), the versions of "Where this stands"
 // and the log of every automated or editor decision. Overviews hold no fact of their own: the stands
-// cite the members' pool facts by id. `services/overviewLifecycle.ts` is the only writer of the four
-// tables (a fence test holds it). Nothing is added to `stories`.
+// cite the members' pool facts by id. The lifecycle (`services/overviewLifecycle.ts` and its folder)
+// is the only writer of the four tables (a fence test holds it). Nothing is added to `stories` but the
+// relation back from `overviews.closing_story_id`.
 
 /// `single`: one active entry or none, not public; `forming`: two or more, waiting for its review at 3; `ongoing`: public
 enum OverviewScope {
