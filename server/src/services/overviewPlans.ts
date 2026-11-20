@@ -249,11 +249,16 @@ export function planFounding(result: LinkResult, ctx: PlanContext): LinkPlan {
   }
 }
 
-/** The story left alone (`none`, `rejected`, `held` with no overview row read, `failed`), with its founding attempt's decision when it made one. */
+/**
+ * The story left alone (`none`, `rejected`, `held` with no overview row read, `failed`), with its
+ * founding attempt's decision when it made one. A story held at its link names the frozen overview
+ * that holds it (`heldBy`), so the owed rule waits on that freeze rather than retrying it each night.
+ */
 export function planAlone(result: LinkResult, ctx: PlanContext): LinkPlan {
   const outcome = result.outcome === 'joined' || result.outcome === 'founded' ? 'conflict' : result.outcome
+  const overviewId = result.join?.candidate.id ?? (outcome === 'held' ? result.heldBy : null)
   return {
-    plan: plan(linkDecision(result, outcome, result.join?.candidate.id ?? null, ctx), { also: result.founding ? [foundDecision(result, null, ctx)] : [] }),
+    plan: plan(linkDecision(result, outcome, overviewId, ctx), { also: result.founding ? [foundDecision(result, null, ctx)] : [] }),
     outcome,
   }
 }

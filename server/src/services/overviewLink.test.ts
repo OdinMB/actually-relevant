@@ -274,7 +274,7 @@ describe('linkStory', () => {
     expect(got.promptVersion).toMatch(/\S/)
   })
 
-  it('holds a story whose nearest passing overview is frozen', async () => {
+  it('holds a story whose nearest passing overview is frozen, by that overview, with no join', async () => {
     const s = story('s', 10)
     const w = world({
       stories: [s, story('m', 8)],
@@ -283,7 +283,7 @@ describe('linkStory', () => {
       overviews: [overview('A')],
       link: () => answer([yes('O1')]),
     })
-    expect((await linkStory(s, w.deps)).outcome).toBe('held')
+    expect(await linkStory(s, w.deps)).toMatchObject({ outcome: 'held', heldBy: 'A', join: null })
   })
 
   it('never joins an overview closed at its end event, nor one an editor detached the story from', async () => {
@@ -493,6 +493,20 @@ describe('linkInOrder', () => {
     const run = await linkInOrder(stories, broken, memoryWriter(w.members, writes), { concurrency: 2 })
     expect(writes).toEqual(['a:failed', 'b:none'])
     expect((run.results[0] as LinkResult).error).toBeInstanceOf(Error)
+  })
+
+  it('keeps a story whose write stored nothing out of the stored outcomes, and names it unwritten', async () => {
+    const stories = [story('a', 1), story('b', 2)]
+    const w = world({ stories })
+    const writes: string[] = []
+    const write = memoryWriter(w.members, writes)
+    const run = await linkInOrder(stories, w.deps, async (result, lastTry) => (result.story.id === 'a' ? { kind: 'unwritten' } : write(result, lastTry)), {
+      concurrency: 1,
+    })
+    expect([...run.outcomes]).toEqual([['b', 'none']])
+    expect(run.unwritten).toEqual(['a'])
+    // Its call was made: its result counts for the item tally
+    expect(run.results.map(r => r.story.id)).toEqual(['a', 'b'])
   })
 
   it('a backfilled development is founded from its earliest stories, and the later ones join it', async () => {

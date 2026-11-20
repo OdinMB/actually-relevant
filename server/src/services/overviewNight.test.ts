@@ -80,6 +80,17 @@ describe('runNight', () => {
     expect(got.upkeep).not.toBeNull()
   })
 
+  it('gives up only a last try whose failure was stored: one whose write stored nothing is owed as before', async () => {
+    const { night } = deps(slices())
+    const got = await runNight(
+      { ...night, apply: async result => (result.story.id === 'r1' ? { kind: 'unwritten' } : { kind: 'written', outcome: result.outcome }) },
+      { now: NOW, today: '2026-11-18' },
+      { concurrency: 2, keepGoing: async () => true },
+    )
+    expect(got.run.unwritten).toEqual(['r1'])
+    expect(got.givenUp).toEqual([])
+  })
+
   it('counts in the newest linked story’s time while the backfill drains, and runs no upkeep once the step stopped', async () => {
     const draining = deps(slices({ backlogTotal: 900, night: [] }))
     const got = await runNight(draining.night, { now: NOW, today: '2026-11-18' }, { concurrency: 1, keepGoing: async () => true })

@@ -59,6 +59,12 @@ describe('planJoin', () => {
     expect(held.plan.newEntries).toEqual([])
   })
 
+  it('records a story held at its link by the frozen overview that holds it, so it waits on that freeze', () => {
+    const held = planAlone(linkResult(story, { outcome: 'held', heldBy: 'o1' }), ctx)
+    expect(held).toMatchObject({ outcome: 'held', plan: { decision: { kind: 'link', outcome: 'held', overviewId: 'o1' }, newEntries: [] } })
+    expect(planAlone(linkResult(story, { outcome: 'none' }), ctx).plan.decision.overviewId).toBeNull()
+  })
+
   it('keeps the end-event flag only for an overview that names an end event, so one with none never starts a closing', () => {
     const flagged = joinResult(story, 'o1', true)
     expect(planJoin(overview(), flagged, ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: true })

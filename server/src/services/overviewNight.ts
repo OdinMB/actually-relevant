@@ -29,7 +29,7 @@ export interface Night {
   clock: Date
   /** Null when the step stopped before the upkeep. */
   upkeep: UpkeepTally | null
-  /** The retries on their last try that failed or conflicted again: given up, nothing links them again by itself. */
+  /** The retries on their last try whose stored outcome failed or conflicted again: given up, nothing links them again by itself. */
   givenUp: string[]
 }
 
@@ -44,7 +44,10 @@ export function upkeepClock(slices: Pick<OwedSlices, 'backlog' | 'backlogTotal'>
   return new Date(Math.max(...linked.map(s => s.datePublished.getTime())))
 }
 
-/** The retries on their last try that failed or conflicted again. */
+/**
+ * The retries on their last try whose stored outcome failed or conflicted again. A write that threw
+ * stored nothing (`OrderedRun.unwritten`), so its story is owed as before and not given up.
+ */
 export const givenUpOf = (lastTries: readonly string[], outcomes: ReadonlyMap<string, LinkOutcome>): string[] =>
   lastTries.filter(id => outcomes.get(id) === 'failed' || outcomes.get(id) === 'conflict')
 

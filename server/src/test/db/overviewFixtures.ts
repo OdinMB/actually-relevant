@@ -36,6 +36,7 @@ export const linkResult = (story: LinkStory, over: Partial<LinkResult> = {}): Li
   proposed: 0,
   refusals: [],
   signals: [],
+  heldBy: null,
   model: 'small-model',
   promptVersion: 'v1',
   costUsd: 0.001,

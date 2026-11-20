@@ -179,6 +179,27 @@ describe('runLinkOverviewsJob', () => {
     )
   })
 
+  it('gives up no last try whose write threw: nothing was stored, so it is owed again, and the owner hears of it as not written', async () => {
+    gates.overview = null
+    gates.pass = null
+    const retries = [2, 3, 4, 5, 6].map(day => story(`r${day}`, day))
+    mocks.owedStories.mockResolvedValue({ ...owed, retries: retries.map(s => s.id), lastTries: ['r2'] })
+    mocks.linkStories.mockImplementation(async (_db: unknown, ids: string[]) => retries.filter(s => ids.includes(s.id)))
+    // r2, on its last try, and r3 settle alone, but their writes throw and are rolled back
+    mocks.applyLink.mockImplementation(async (result: { story: LinkStory; outcome: string }) => {
+      if (result.story.id === 'r2' || result.story.id === 'r3') throw new Error('db gone')
+      return { kind: 'written', outcome: result.outcome }
+    })
+    await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
+    const [notice] = mocks.notify.mock.calls.map(([n]) => n as { title: string; message: string })
+    expect(notice?.title).toMatch(/2 of 5 stories failed in the last run, 2 not written$/)
+    expect(notice?.message).toContain('2 stories could not be stored')
+    expect(notice?.message).not.toMatch(/last try/)
+    expect(mocks.reportRunResult).toHaveBeenCalledWith(
+      expect.stringMatching(/^Linked 3 stories: 0 joined, 0 founded, 3 alone, 2 not written \(tried again next run\);/),
+    )
+  })
+
   it('runs the upkeep when nothing is owed, its status moves in development time and its stands checks in the tally', async () => {
     gates.overview = null
     gates.pass = null

@@ -6,7 +6,7 @@ import type { LinkCandidateAnswer } from '../schemas/overviews.js'
 import { membershipsOf } from './overviewCandidates.js'
 import { candidateOverviews, linkStories } from './overviewInput.js'
 import { applyLink, applyStatus } from './overviewLifecycle.js'
-import { linkInOrder, type LinkDeps, type LinkResult } from './overviewLink.js'
+import { linkInOrder, linkStory as linkOne, type LinkDeps, type LinkResult } from './overviewLink.js'
 import { owedStories } from './overviewQueue.js'
 import { nextState } from './overviewStatus.js'
 import { overviewStates, pendingClosings } from './overviewUpkeepInput.js'
@@ -40,6 +40,7 @@ const result = (story: LinkStory, over: Partial<LinkResult> = {}): LinkResult =>
   proposed: 0,
   refusals: [],
   signals: [],
+  heldBy: null,
   model: 'small-model',
   promptVersion: 'v1',
   costUsd: 0.001,
@@ -236,6 +237,44 @@ describeDb('the overview lifecycle', () => {
     expect(await owedStories(NOW)).toMatchObject({ backlog: [], retries: [], frozenWaiting: 1 })
     await prisma.overview.update({ where: { id: frozen.id }, data: { frozen: false } })
     expect(await owedStories(daysFrom(1))).toMatchObject({ retries: [s!.id, t!.id], frozenWaiting: 0 })
+  })
+
+  it('a story whose overview was already frozen when it was linked waits on that freeze, not a retry each night', async () => {
+    const feed = await createFeed((await createIssue()).id)
+    const text = { title: 'Ebola cases rise in Ituri', summary: 'The Ebola outbreak in Ituri province grew.' }
+    const member = await createStory({ feedId: feed.id, status: 'published', datePublished: daysFrom(-3), ...text })
+    const s = await createStory({ feedId: feed.id, status: 'published', datePublished: daysFrom(-1), ...text })
+    const frozen = await overviewRow({ frozen: true })
+    await prisma.overviewEntry.create({ data: { overviewId: frozen.id, storyId: member.id, role: 'routine', joinedBy: 'pipeline' } })
+    const yes: LinkCandidateAnswer = {
+      id: 'O1',
+      belongs: 'yes',
+      ...shared,
+      end: { story: 'Ebola', other: 'Ebola' },
+      reportsEndEvent: false,
+      scope: 'inside',
+      centerMoved: false,
+      signalQuote: '',
+      confidence: 0.9,
+    }
+    const deps: LinkDeps = {
+      neighbours: async () => [{ id: member.id, datePublished: member.datePublished!, distance: 0.2, via: 'near' as const }],
+      memberships: (ids, asOf) => membershipsOf(prisma, ids, asOf),
+      overviews: (ids, asOf) => candidateOverviews(prisma, ids, asOf),
+      stories: ids => linkStories(prisma, ids),
+      link: async () => ({ parsed: { candidates: [yes], role: 'routine', roleKind: null }, costUsd: 0, model: 'small-model' }),
+      found: async () => ({ parsed: null, costUsd: 0, model: 'large-model' }),
+      foundCheck: async () => ({ parsed: null, costUsd: 0, model: 'large-model' }),
+    }
+    const [story] = await linkStories(prisma, [s.id])
+    const held = await linkOne(story!, deps)
+    expect(held).toMatchObject({ outcome: 'held', heldBy: frozen.id, join: null })
+    expect(await applyLink(held, false, daysFrom(-1))).toEqual({ kind: 'written', outcome: 'held' })
+    expect(await prisma.overviewDecision.findFirstOrThrow({ where: { storyId: s.id } })).toMatchObject({ kind: 'link', outcome: 'held', overviewId: frozen.id })
+    expect(await prisma.overviewEntry.count({ where: { storyId: s.id } })).toBe(0)
+    expect(await owedStories(daysFrom(1))).toMatchObject({ retries: [], frozenWaiting: 1 })
+    await prisma.overview.update({ where: { id: frozen.id }, data: { frozen: false } })
+    expect(await owedStories(daysFrom(1))).toMatchObject({ retries: [s.id], frozenWaiting: 0 })
   })
 
   it('owes published stories with no settling link decision, the new backlog and the night apart, each oldest first, then the retries due', async () => {

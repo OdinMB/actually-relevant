@@ -226,6 +226,8 @@ export interface LinkResult {
   /** The story's role, from the link answer (a join, or alone) or the founding draft. */
   role: Role | null
   join: (Accepted<ShownOverview> & { reportsEndEvent: boolean }) | null
+  /** For a `held` story, the frozen overview that passed first: its decision names it, so the story waits on that freeze. */
+  heldBy: string | null
   founding: FoundingAttempt | null
   /** The candidates shown, by ref; the stale check reads the partners' memberships again. */
   shown: { overviews: { ref: string; id: string; distance: number }[]; partners: { ref: string; id: string; distance: number }[] }
@@ -251,6 +253,7 @@ const blank = (story: LinkStory, outcome: LinkResult['outcome']): LinkResult => 
   outcome,
   role: null,
   join: null,
+  heldBy: null,
   founding: null,
   shown: { overviews: [], partners: [] },
   answer: null,
@@ -331,7 +334,7 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
   const settled = { ...base, answer, proposed: accepted.proposed, refusals: accepted.refusals, signals: accepted.signals, role }
   const alone = accepted.refusals.length > 0 ? 'rejected' : 'none'
   if (accepted.join) {
-    if (accepted.join.candidate.frozen) return { ...settled, outcome: 'held' }
+    if (accepted.join.candidate.frozen) return { ...settled, outcome: 'held', heldBy: accepted.join.candidate.id }
     return { ...settled, outcome: 'joined', join: { ...accepted.join, reportsEndEvent: accepted.join.answer.reportsEndEvent } }
   }
   if (!accepted.partner) return { ...settled, outcome: alone }
@@ -349,15 +352,21 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
  */
 export const isStale = (result: LinkResult, memberships: Memberships): boolean => result.shown.partners.some(p => memberships.active.has(p.id))
 
-/** What writing a result did: written (with the outcome stored), stale (asked again), or skipped (the story was linked meanwhile, as a founding partner). */
-export type ApplyOutcome = { kind: 'written'; outcome: LinkOutcome } | { kind: 'stale' } | { kind: 'skipped' }
+/**
+ * What writing a result did: written (with the outcome stored), stale (asked again), skipped (the story
+ * was linked meanwhile, as a founding partner), or unwritten (the write threw and was rolled back:
+ * nothing is stored, so the story is owed as it was before the run).
+ */
+export type ApplyOutcome = { kind: 'written'; outcome: LinkOutcome } | { kind: 'stale' } | { kind: 'skipped' } | { kind: 'unwritten' }
 
 /** The writer of one result: production's lifecycle, the sandbox's memory. `lastTry` turns a stale result into `conflict`. */
 export type ApplyLink = (result: LinkResult, lastTry: boolean) => Promise<ApplyOutcome>
 
 export interface OrderedRun {
-  /** Each story's stored outcome (none for a story skipped as linked meanwhile). */
+  /** Each story's stored outcome (none for a story skipped as linked meanwhile, or whose write stored nothing). */
   outcomes: Map<string, LinkOutcome>
+  /** The stories whose write threw and stored nothing, in the order written. */
+  unwritten: string[]
   /** Each story's final result, once: a stale answer asked again counts by its second answer only. */
   results: LinkResult[]
 }
@@ -377,6 +386,7 @@ export async function linkInOrder(
   { concurrency, keepGoing = async () => true }: { concurrency: number; keepGoing?: () => Promise<boolean> },
 ): Promise<OrderedRun> {
   const outcomes = new Map<string, LinkOutcome>()
+  const unwritten: string[] = []
   const results: LinkResult[] = []
   const pending: Promise<LinkResult>[] = new Array(stories.length)
   let next = 0
@@ -401,6 +411,7 @@ export async function linkInOrder(
     }
     results.push(result)
     if (done.kind === 'written') outcomes.set(result.story.id, done.outcome)
+    if (done.kind === 'unwritten') unwritten.push(result.story.id)
   }
   start()
   for (let i = 0; i < stories.length; i++) {
@@ -417,7 +428,7 @@ export async function linkInOrder(
   }
   // Calls already in flight finish inside the run, so their cost is the run's
   await Promise.all(pending.slice(written, next))
-  return { outcomes, results }
+  return { outcomes, unwritten, results }
 }
 
 /** `linkStory`, with a read that threw (the database, an injected dep) stored as `failed`, so the story is retried at the next run and the others go on. */

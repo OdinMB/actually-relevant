@@ -3,8 +3,9 @@ import { parseOverviewOptions } from '../options.js'
 import type { AnswerKey } from './keySchema.js'
 import { linkLines } from './linkReport.js'
 import { keyIndex, scoreLinking, scoreLinkRun, scoreSignals, type EndEventVerdict, type ReplayRun } from './linkScore.js'
-import { createSandbox } from './overviewSandbox.js'
+import { createSandbox, owedOf } from './overviewSandbox.js'
 import type { LinkResult } from '../../../services/overviewLink.js'
+import { owedStanding } from '../../../services/overviewOwed.js'
 
 const key = (id: string, entries: [string, 'must' | 'optional', 'turning_point' | 'routine'][], nearMisses: string[] = []): AnswerKey => ({
   schemaVersion: 1,
@@ -229,6 +230,7 @@ describe('the sandbox', () => {
     proposed: 0,
     refusals: [],
     signals: [],
+    heldBy: null,
     model: null,
     promptVersion: null,
     costUsd: 0,
@@ -266,6 +268,20 @@ describe('the sandbox', () => {
     expect(await sandbox.apply({ ...base(c), outcome: 'joined', join }, false)).toEqual({ kind: 'written', outcome: 'joined' })
     expect((await sandbox.candidateOverviews([id!]))[0]!.entries.map(e => e.title)).toEqual(['c', 'b', 'a'])
     expect(sandbox.results.get('a')).toEqual({ outcome: 'founded', role: role('turning_point') })
+  })
+
+  it('keeps a story held at its link waiting on the frozen overview that holds it, as production does', async () => {
+    const sandbox = createSandbox()
+    const [a, b, d] = [story('a', 1), story('b', 2), story('d', 4)]
+    const draft = { title: 'T', charter: { in: 'In.', out: [], endEvent: null }, roles: { a: role('turning_point'), b: role('routine') } }
+    const shared = { cause: { story: 'x', other: 'y' }, place: { story: 'x', other: 'y' }, end: { story: '', other: '' } } as never
+    const founding = { partner: a, outcome: 'founded' as const, draft, answers: { draft: null, check: null }, shared, confidence: 0.9, costUsd: 0, model: null }
+    await sandbox.apply({ ...base(b), outcome: 'founded', founding, shown: { overviews: [], partners: [{ ref: 'F1', id: 'a', distance: 0.1 }] } }, false)
+    const [id] = [...sandbox.overviews.keys()]
+    sandbox.overviews.get(id!)!.frozen = true
+    expect(await sandbox.apply({ ...base(d), outcome: 'held', heldBy: id! }, false)).toEqual({ kind: 'written', outcome: 'held' })
+    const [owed] = owedOf(sandbox, [{ id: 'd', datePublished: d.datePublished }])
+    expect(owedStanding(owed!.attempts, new Date(Date.UTC(2026, 4, 9)))).toEqual({ kind: 'frozen' })
   })
 })
 

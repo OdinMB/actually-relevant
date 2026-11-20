@@ -146,9 +146,11 @@ async function notifyFailedUpkeep(items: number, failed: number): Promise<void> 
 
 /**
  * The owner's notice of stories whose linking failed: past the failure share, or whenever a story was
- * given up (its last retry failed or conflicted too), which nothing links again by itself.
+ * given up (its last retry's stored outcome failed or conflicted too), which nothing links again by
+ * itself. `failed` and `givenUp` count stored outcomes; `unwritten` counts the stories whose write
+ * threw and stored nothing, technical failures too, which are owed again at the next run as before.
  */
-export async function notifyFailedStories(taken: number, failed: number, givenUp: number): Promise<void> {
+export async function notifyFailedStories(taken: number, failed: number, givenUp: number, unwritten = 0): Promise<void> {
   const days = config.overviews.retryAfterDays
   const last = countOf(days.at(-1) ?? 0, 'day', 'days')
   const retry = days.length > 1 ? `${days.slice(0, -1).join(', ')} and ${last}` : last
@@ -156,11 +158,15 @@ export async function notifyFailedStories(taken: number, failed: number, givenUp
     source: 'jobs',
     severity: 'warning',
     title:
-      `${jobDisplayName(LINK_OVERVIEWS_JOB)}: ${failed.toLocaleString('en-US')} of ${countOf(taken, 'story', 'stories')} failed in the last run` +
+      `${jobDisplayName(LINK_OVERVIEWS_JOB)}: ${(failed + unwritten).toLocaleString('en-US')} of ${countOf(taken, 'story', 'stories')} failed in the last run` +
+      (unwritten > 0 ? `, ${unwritten.toLocaleString('en-US')} not written` : '') +
       (givenUp > 0 ? `, ${givenUp.toLocaleString('en-US')} given up` : ''),
     message:
       'A technical problem stopped their linking: the AI service did not answer, a write conflicted, or an error of ours. ' +
       `Nothing paused, and published stories are untouched. Each is tried again ${retry} after it failed, then given up. ` +
+      (unwritten > 0
+        ? `${countOf(unwritten, 'story', 'stories')} could not be stored (an error of ours): nothing of ${unwritten === 1 ? 'its' : 'their'} linking was kept, and ${unwritten === 1 ? 'it is' : 'they are'} tried again at the next run. `
+        : '') +
       (givenUp > 0
         ? `${countOf(givenUp, 'story', 'stories')} failed on ${givenUp === 1 ? 'its' : 'their'} last try and ${givenUp === 1 ? 'is' : 'are'} no longer linked automatically: attach any that belong from the story's Overview block. `
         : '') +
@@ -170,11 +176,14 @@ export async function notifyFailedStories(taken: number, failed: number, givenUp
   })
 }
 
-/** "Linked 9 stories: 4 joined, 1 founded, 4 alone", with the outcomes that leave a story owed after it, the stories given up and those waiting on a freeze. */
+/**
+ * "Linked 9 stories: 4 joined, 1 founded, 4 alone", by stored outcome, with the outcomes that leave a
+ * story owed after it, the stories whose write stored nothing, those given up and those waiting on a freeze.
+ */
 export function linkSummary(
   outcomes: ReadonlyMap<string, LinkOutcome>,
   backlog: { taken: number; total: number } | null,
-  waits: { givenUp: number; frozenWaiting: number } = { givenUp: 0, frozenWaiting: 0 },
+  waits: { givenUp: number; frozenWaiting: number; unwritten?: number } = { givenUp: 0, frozenWaiting: 0 },
 ): string {
   const n = (...wanted: LinkOutcome[]) => [...outcomes.values()].filter(o => wanted.includes(o)).length
   const optional = (count: number, words: string) => (count > 0 ? `, ${count.toLocaleString('en-US')} ${words}` : '')
@@ -183,6 +192,7 @@ export function linkSummary(
     optional(n('held'), 'held by a frozen overview') +
     optional(n('conflict'), 'left for the next run') +
     optional(n('failed'), 'failed') +
+    optional(waits.unwritten ?? 0, 'not written (tried again next run)') +
     optional(waits.givenUp, 'given up after their last try') +
     optional(waits.frozenWaiting, 'waiting on a frozen overview')
   return backlog ? `${line}; backfill ${backlog.taken.toLocaleString('en-US')} of ${backlog.total.toLocaleString('en-US')}` : line
@@ -199,11 +209,11 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
   }
 
   let switchedOff = false
-  // A write that throws is rolled back: the story stays owed and the run goes on
+  // A write that throws is rolled back and stores nothing: the story stays owed as it was, and the run goes on
   const apply: ApplyLink = (result, lastTry) =>
     applyLink(result, lastTry, now).catch((err: unknown) => {
       log.error({ storyId: result.story.id, error: sanitizedError(err) }, 'writing the linking of a story failed; it is tried again next run')
-      return { kind: 'written', outcome: 'failed' } as const
+      return { kind: 'unwritten' } as const
     })
   const keepGoing = async () => {
     if (!switchedOff && !(await overviewStepOn())) {
@@ -236,10 +246,13 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
 
   const proposed = run.results.reduce((sum, r) => sum + r.proposed, 0)
   const refused = run.results.reduce((sum, r) => sum + r.refusals.length, 0)
+  // Stored failures, and the stories whose write stored nothing: both technical failures of this run
   const failed = [...run.outcomes.values()].filter(o => o === 'failed').length
+  const unwritten = run.unwritten.length
+  const taken = run.outcomes.size + unwritten
   for (const r of run.results)
     if (r.error) log.error({ storyId: r.story.id, error: sanitizedError(r.error) }, 'linking a story failed; it is tried again next run')
-  log.info({ stories: run.outcomes.size, proposed, refused, failed, givenUp: night.givenUp.length }, 'overview linking finished')
+  log.info({ stories: run.outcomes.size, proposed, refused, failed, unwritten, givenUp: night.givenUp.length }, 'overview linking finished')
   if (upkeep) {
     for (const e of upkeep.errors)
       log.error({ part: e.part, overviewId: e.id, error: sanitizedError(e.error) }, 'overview upkeep failed for an overview; it is tried again next run')
@@ -248,17 +261,18 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
   // Checked: joins proposed and stands lines written; failed: yeses code refused and stands lines dropped (each part never more than its checked)
   recordItems(proposed + (upkeep?.standsChecked ?? 0), refused + (upkeep?.standsDropped ?? 0))
   const givenUp = night.givenUp.length
-  if (failing(run.outcomes.size, failed) || givenUp > 0) await notifyFailedStories(run.outcomes.size, failed, givenUp).catch(() => {})
+  if (failing(taken, failed + unwritten) || givenUp > 0) await notifyFailedStories(taken, failed, givenUp, unwritten).catch(() => {})
   if (upkeep && failing(upkeep.items, upkeep.failed)) await notifyFailedUpkeep(upkeep.items, upkeep.failed).catch(() => {})
   for (const f of upkeep?.freezes ?? []) await notifyFreeze(f).catch(() => {})
   for (const r of upkeep?.recenters ?? []) await notifyRecenter(r).catch(() => {})
-  const left = stories.length - run.outcomes.size
+  const left = stories.length - taken
   const linked =
     stories.length === 0
       ? `Nothing to link${slices.frozenWaiting > 0 ? `, ${slices.frozenWaiting.toLocaleString('en-US')} waiting on a frozen overview` : ''}`
       : linkSummary(run.outcomes, slices.backlogTotal > 0 ? { taken: slices.backlog.length, total: slices.backlogTotal } : null, {
           givenUp,
           frozenWaiting: slices.frozenWaiting,
+          unwritten,
         })
   const summary = upkeep ? `${linked}; ${upkeepSummary(upkeep)}` : linked
   reportRunResult(left > 0 && switchedOff ? `${summary}; ${left} left for the next run` : summary)
