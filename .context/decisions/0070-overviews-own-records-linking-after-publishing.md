@@ -94,3 +94,13 @@ sandbox applies the same plans to memory, and a db test holds the two alike. Why
 and Undo kept separate rules for the same fields, and the sandbox copied the lifecycle's rules and had
 drifted from them (the last entry after a detach, the closing story, the burst's start); one model
 leaves one place for each rule. Everything else stands as written.
+
+## Amendment 2026-11-20: charters may be re-centered and may name no end event (ADR-0071)
+
+The owner reversed the roadmap's D7 "never widen" for charters on 2026-11-19
+(`.plans/2026-11-19_overview-recentering.md`). The consequence above, "a join never changes a
+charter or a title", still holds for joins, but a charter is no longer fixed to what founding drew:
+a **re-center**, an editor's or (once built) two agreeing automated calls, may rewrite the title, IN
+and END_EVENT, held to the overview's anchor and, for automation, to a limit of 2. And a charter may
+name no end event, so founding no longer requires one. Both are ADR-0071's; everything else here
+stands as written.
