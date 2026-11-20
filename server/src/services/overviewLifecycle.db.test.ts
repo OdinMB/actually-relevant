@@ -39,6 +39,7 @@ const result = (story: LinkStory, over: Partial<LinkResult> = {}): LinkResult =>
   answer: null,
   proposed: 0,
   refusals: [],
+  signals: [],
   model: 'small-model',
   promptVersion: 'v1',
   costUsd: 0.001,
@@ -268,6 +269,9 @@ describeDb('the overview lifecycle', () => {
       place: { story: 'Ituri', other: 'Ituri' },
       end: { story: 'declares it over', other: 'declares it over' },
       reportsEndEvent: false,
+      scope: 'inside',
+      centerMoved: false,
+      signalQuote: '',
       confidence: 0.9,
     })
     // Each story's neighbours: every other story of the development (the candidate code keeps only earlier ones); o and n nearest each other

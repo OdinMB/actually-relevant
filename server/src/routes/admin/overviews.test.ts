@@ -81,7 +81,9 @@ describe('admin overview routes', () => {
 
   it("hands an editor's re-center on with the charter trimmed, none for no end event, and refuses one past the limits", async () => {
     const put = (body: object) => request(app).put(`${base}/${O}/charter`).set(authHeader()).send(body)
-    const body = { title: ' Ebola in eastern Congo ', in: ' The outbreak. ', out: [' Mpox '], endEvent: null, anchorConfirmed: true }
+    // The form's charter as it opened, untrimmed: compared with the overview exactly as stored
+    const basedOn = { title: 'Ebola in Ituri', charter: { in: 'The outbreak in Ituri. ', out: [], endEvent: 'It is declared over' } }
+    const body = { title: ' Ebola in eastern Congo ', in: ' The outbreak. ', out: [' Mpox '], endEvent: null, anchorConfirmed: true, basedOn }
     expect((await put(body)).status).toBe(200)
     expect(mockLifecycle.editorAction).toHaveBeenCalledWith(
       {
@@ -90,6 +92,7 @@ describe('admin overview routes', () => {
         title: 'Ebola in eastern Congo',
         charter: { in: 'The outbreak.', out: ['Mpox'], endEvent: null },
         anchorConfirmed: true,
+        basedOn,
       },
       EDITOR,
     )
@@ -100,6 +103,7 @@ describe('admin overview routes', () => {
       { ...body, out: ['x'.repeat(121)] },
       { ...body, out: Array.from({ length: 13 }, (_, i) => `o${i}`) },
       { ...body, anchorConfirmed: undefined },
+      { ...body, basedOn: undefined },
       { title: 'T', in: 'I', out: [] },
     ]
     for (const b of refused) expect((await put(b)).status).toBe(400)

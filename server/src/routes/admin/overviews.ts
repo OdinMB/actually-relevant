@@ -36,13 +36,18 @@ const roleSchema = z
 const attachSchema = z.object({ storyId: z.string().uuid(), role: roleSchema.default({ role: 'routine', roleKind: null }) })
 const title = z.string().trim().min(1).max(config.overviews.maxTitleChars)
 const titleSchema = z.object({ title })
-/** An editor's re-center: the title and the whole charter, END_EVENT null for none (a named one not blank), and the anchor confirmed. */
+/**
+ * An editor's re-center: the title and the whole charter, END_EVENT null for none (a named one not
+ * blank), the anchor confirmed, and the title and charter the form was opened on (`basedOn`, as the
+ * page read them), so a change made since is refused rather than overwritten.
+ */
 const charterSchema = z.object({
   title,
   in: z.string().trim().min(1),
   out: z.array(z.string().trim().min(1).max(config.overviews.maxOutChars)).max(config.overviews.maxOutEntries),
   endEvent: z.string().trim().min(1).nullable(),
   anchorConfirmed: z.boolean(),
+  basedOn: z.object({ title: z.string(), charter: z.object({ in: z.string(), out: z.array(z.string()), endEvent: z.string().nullable() }) }),
 })
 const frozenSchema = z.object({ frozen: z.boolean() })
 const hiddenSchema = z.object({ hidden: z.boolean() })
@@ -88,8 +93,8 @@ router.put('/:id/title', failsWith('Failed to retitle the overview'), validateBo
 })
 
 router.put('/:id/charter', failsWith('Failed to re-center the overview'), validateBody(charterSchema), async (req, res) => {
-  const { title, in: within, out, endEvent, anchorConfirmed } = req.body
-  res.json(await act(req, { kind: 'recenter', overviewId: req.params.id!, title, charter: { in: within, out, endEvent }, anchorConfirmed }))
+  const { title, in: within, out, endEvent, anchorConfirmed, basedOn } = req.body
+  res.json(await act(req, { kind: 'recenter', overviewId: req.params.id!, title, charter: { in: within, out, endEvent }, anchorConfirmed, basedOn }))
 })
 
 router.put('/:id/frozen', failsWith('Failed to change the freeze'), validateBody(frozenSchema), async (req, res) => {

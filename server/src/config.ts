@@ -563,6 +563,20 @@ export const config = {
     anchorStandIns: 2,
     maxAutomatedRecenters: 2,
     editorRecenterLockDays: 180,
+    /**
+     * The automated re-center (D-RC3, D-RC4, D-RC6): an attempt fires on `recenterWiderSignal` stories
+     * linked `wider` than the charter, or one reporting that its center moved, since the last attempt;
+     * it offers the newest `maxRecenterStories` of the stories flagged or detached by a review in the
+     * `recenterLookbackDays` before the development clock; it applies only when both calls keep
+     * `recenterKeepShare` of the entries and take in at least `recenterMinJoins` of those stories.
+     */
+    recenterWiderSignal: 2,
+    recenterLookbackDays: 90,
+    maxRecenterStories: 10,
+    recenterKeepShare: 0.75,
+    recenterMinJoins: 2,
+    /** The newest active entries whose neighbours name the overviews a re-center must not swallow (`groupCandidates` at the development clock). */
+    recenterNeighbourEntries: 3,
     tiers: {
       link: 'small' as const,
       found: 'large' as const,
@@ -572,6 +586,8 @@ export const config = {
       close: 'large' as const,
       closeCheck: 'large' as const,
       review: 'large' as const,
+      recenter: 'large' as const,
+      recenterCheck: 'large' as const,
     },
   },
   embedding: {

@@ -47,8 +47,11 @@ export type EditorAction =
   | { kind: 'freeze'; overviewId: string; frozen: boolean }
   | { kind: 'hide'; overviewId: string; hidden: boolean }
   | { kind: 'close'; overviewId: string; closed: boolean }
-  /** A new title and whole charter (`.context/overviews.md`, "Re-centering"), with the editor's word that it still covers the anchor. */
-  | { kind: 'recenter'; overviewId: string; title: string; charter: Charter; anchorConfirmed: boolean }
+  /**
+   * A new title and whole charter (`.context/overviews.md`, "Re-centering"), with the editor's word that
+   * it still covers the anchor, and the title and charter the editor's form was opened on (`basedOn`).
+   */
+  | { kind: 'recenter'; overviewId: string; title: string; charter: Charter; anchorConfirmed: boolean; basedOn: { title: string; charter: Charter } }
 
 export const EDITOR_KINDS = [
   'editor_attach',
@@ -193,19 +196,26 @@ export function planEdit(action: EditorAction, rows: Rows, attach: AttachStory |
 
 const sameText = (a: string, b: string) => normalizeQuote(a).toLowerCase() === normalizeQuote(b).toLowerCase()
 
+/** An editor's re-center refused because the title or charter changed after the form was opened (a review's OUT addition, a retitle, another editor's save). */
+export const CHARTER_CHANGED =
+  'The title or charter changed after you opened the form (a review or another editor changed it): reload the page and make your edit again, so nothing it added is lost'
+
 /**
  * An editor's re-center (`.context/overviews.md`, "Re-centering"; D-RC7, D-RC10, D-RC11, D-RC14): the
  * title and the whole charter as given, so an editor may also drop OUT entries, name no end event and
  * re-admit an OUT entry a review's undo locked out (which leaves `lockedOut`); on any overview not
  * closed, frozen or not, past the limit of automated re-centers (which it neither raises nor resets).
- * It needs the editor's confirmation that the charter still covers the anchor (recorded, never judged)
- * and is the editor's (`recenteredBy`), which keeps automation from re-centering it for
+ * It applies only to the title and charter the editor's form was opened on (`basedOn`): the form sends
+ * the whole charter, so a review's OUT addition or a retitle made meanwhile would otherwise be
+ * overwritten unseen. It needs the editor's confirmation that the charter still covers the anchor
+ * (recorded, never judged) and is the editor's (`recenteredBy`), which keeps automation from re-centering it for
  * `editorRecenterLockDays` and queues a review (`reviewDue`). A changed END_EVENT, to none too, cancels
  * a closing, logged as an `open` status decision (`recentered`): the closing was begun on the old one.
  * The AI marker's model fields stay, as a retitle leaves them.
  */
 function editorRecenter(o: OverviewRow, action: Extract<EditorAction, { kind: 'recenter' }>, ctx: EditContext): { changes: Change[]; also: DecisionDraft[] } {
   if (o.status === 'closed') throw new ConflictError('The overview is closed: reopen it first')
+  if (action.basedOn.title !== o.title || !sameValue(action.basedOn.charter, o.charter)) throw new ConflictError(CHARTER_CHANGED)
   if (!action.anchorConfirmed) throw new ConflictError('Confirm the anchor first')
   if (action.title === o.title && sameValue(action.charter, o.charter)) throw new ConflictError('The overview already has that title and charter')
   const fields: Partial<OverviewFields> = {

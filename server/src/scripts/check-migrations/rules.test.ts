@@ -75,7 +75,7 @@ describe('findProblems', () => {
       expect(findProblems([{ name: '7_again', sql: again }], new Set()), index.name).toEqual([])
     }
     expect(UNMODELED_INDEXES.map(i => i.name)).toEqual(
-      expect.arrayContaining(['article_versions_one_current', 'overview_entries_one_active', 'overview_stands_one_current']),
+      expect.arrayContaining(['article_versions_one_current', 'overview_entries_one_active', 'overview_stands_one_current', 'overview_decisions_link_signals']),
     )
   })
 })

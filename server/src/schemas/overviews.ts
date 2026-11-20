@@ -11,14 +11,14 @@
 import { z } from 'zod'
 import { ENTRY_ROLES, ROLE_KINDS } from '../services/overviewTypes.js'
 
-const quotePair = (what: string) =>
+const quotePair = (what: string, none = '') =>
   z
     .object({
-      story: z.string().describe(`The words of <STORY> that state ${what}, copied exactly from its title, label or summary. Empty when it states none.`),
+      story: z.string().describe(`The words of <STORY> that state ${what}, copied exactly from its title, label or summary. Empty when it states none.${none}`),
       other: z
         .string()
         .describe(
-          `The words of the candidate that state ${what}, copied exactly: from an overview's TITLE, IN or END_EVENT (never its OUT entries or an END_EVENT of none), or from a story's title, label or summary. Empty when it states none.`,
+          `The words of the candidate that state ${what}, copied exactly: from an overview's TITLE, IN or END_EVENT (never its OUT entries or an END_EVENT of none), or from a story's title, label or summary. Empty when it states none.${none}`,
         ),
     })
     .describe(`Where both sides state ${what}.`)
@@ -39,11 +39,29 @@ export const linkSchema = z.object({
           ),
         cause: quotePair('the same cause: the event, outbreak, conflict, decision or process both are about'),
         place: quotePair('the same place or the same parties'),
-        end: quotePair('what would end both: the outcome whose arrival closes the development'),
+        end: quotePair(
+          'what would end both: the outcome whose arrival closes the development',
+          ' Always empty for an overview whose END_EVENT is none: there the cause and the place decide.',
+        ),
         reportsEndEvent: z
           .boolean()
           .describe(
             "For an overview: whether the story reports that its charter's END_EVENT has happened. Always false for a story candidate and for an overview whose END_EVENT is none.",
+          ),
+        scope: z
+          .enum(['inside', 'wider', 'unrelated'])
+          .describe(
+            'For an overview, as <SCOPE> defines it: inside (what its IN covers, the same as belongs yes), wider (the same broader development, outside its IN), unrelated (shares only place, vocabulary or theme). For a story candidate: inside when belongs is yes, unrelated otherwise.',
+          ),
+        centerMoved: z
+          .boolean()
+          .describe(
+            'For an overview: whether the story itself reports that this development has become part of, or a response to, a larger development, as <SCOPE> asks. Always false for a story candidate.',
+          ),
+        signalQuote: z
+          .string()
+          .describe(
+            'When scope is wider or centerMoved is true: the words of <STORY> that show it, copied exactly from its title, label or summary. Empty otherwise.',
           ),
         confidence: z.number().describe('Your probability, from 0 to 1, that the story belongs to the candidate.'),
       }),
@@ -158,3 +176,63 @@ export const reviewSchema = z.object({
 })
 
 export type ReviewAnswer = z.infer<typeof reviewSchema>
+
+const belongsUnder = (what: string) =>
+  z.enum(['yes', 'no']).describe(`yes: ${what} belongs to the development the new charter describes, as <JUDGING> asks. no: it does not.`)
+
+export const recenterSchema = z.object({
+  decision: z
+    .enum(['recenter', 'keep'])
+    .describe('recenter: the stories show the development has a wider or moved center, as <CENTER> asks. keep: the charter still fits.'),
+  title: z.string().describe('The development under its new center, as <TITLE_RULES> asks; empty for keep.'),
+  charter: z
+    .object({
+      in: z.string().describe('The new IN, as <CENTER> asks; empty for keep.'),
+      out: z.array(z.string()).describe("The charter's OUT entries as given, each kept, with any you add after them as <CENTER> allows."),
+      endEvent: z.string().describe('The new END_EVENT, as <END_EVENT> asks: empty when the development has none.'),
+    })
+    .describe('The charter under the new center; for keep, the current one.'),
+  entries: z
+    .array(z.object({ id: z.string().describe('An entry id from <ENTRIES>, e.g. "E3".'), belongs: belongsUnder('the entry') }))
+    .describe('One per entry in <ENTRIES>, in their order, judged under the new charter (for keep, under the current one).'),
+  stories: z
+    .array(
+      z.object({
+        id: z.string().describe('A story id from <STORIES>, e.g. "S2".'),
+        belongs: belongsUnder('the story'),
+        role,
+        roleKind,
+      }),
+    )
+    .describe('One per story in <STORIES>, in their order, with the role it would have in the development.'),
+  reason: z.string().describe('One or two sentences: what moved the center, or why the charter still fits.'),
+})
+
+export type RecenterAnswer = z.infer<typeof recenterSchema>
+
+const judged = (what: string) =>
+  z.object({
+    id: z.string().describe(`A ${what} id, exactly as given.`),
+    belongs: belongsUnder(`the ${what}`),
+    reason: z.string().describe('One sentence: why.'),
+  })
+
+export const recenterCheckSchema = z.object({
+  entries: z.array(judged('entry')).describe('One per entry in <ENTRIES>, in their order.'),
+  stories: z.array(judged('story')).describe('One per story in <STORIES>, in their order.'),
+  endEventConcrete: z
+    .enum(['yes', 'no', 'none'])
+    .describe(
+      "yes: the charter's END_EVENT is a concrete, observable event a news report could say has happened. no: it is vague, a trend, or never observable. none: the charter's END_EVENT is none.",
+    ),
+  neighbours: z
+    .array(
+      z.object({
+        id: z.string().describe('A neighbor id from <NEIGHBORS>, e.g. "N1".'),
+        covered: z.enum(['yes', 'no']).describe("yes: the charter's IN now takes in that development, as <NEIGHBOR_RULES> asks. no: it stays separate."),
+      }),
+    )
+    .describe('One per neighbor in <NEIGHBORS>, in their order; empty when there is none.'),
+})
+
+export type RecenterCheckAnswer = z.infer<typeof recenterCheckSchema>

@@ -16,7 +16,7 @@ import { undoable } from './overviewEdits.js'
 import { parseCharter } from './overviewInput.js'
 import { isPublicOverview } from './overviewPublicRule.js'
 import { overviewStepOn } from './overviewQueue.js'
-import { anchorOf, recenterLockedUntil } from './overviewRecenter.js'
+import { anchorOf, type AnchorEntry, recenterLockedUntil } from './overviewRecenter.js'
 import { usable } from './researchPool.js'
 
 /** The decisions the status history lists: the status machine's, end-event closings, an editor's close and freeze. */
@@ -37,6 +37,69 @@ function charterMove(d: { kind: string; outcome: string; inputs: unknown }) {
   return {
     title: typeof fromTitle === 'string' && typeof toTitle === 'string' ? { from: fromTitle, to: toTitle } : null,
     charter: from && to ? { from, to } : null,
+  }
+}
+
+type ViewedEntry = {
+  id: string
+  status: AnchorEntry['status']
+  role: AnchorEntry['role']
+  story: { id: string; title: string | null; sourceTitle: string; status: string; datePublished: Date | null } | null
+}
+type CharterDecision = { id: string; kind: string; outcome: string; actor: string; createdAt: Date; undoneAt: Date | null; inputs: unknown }
+
+/**
+ * An overview's re-centering for its admin page (`.context/overviews.md`, "Re-centering"): the
+ * anchor a new charter should still cover, the automated re-centers against the limit, the lock an
+ * editor's or an Undo's re-center set, the OUT entries an Undo locked out, the signals counted since
+ * automation last tried, and the charter history from the re-center decisions.
+ */
+function recenteringView(
+  o: { automatedRecenters: number; recenteredAt: Date | null; recenteredBy: string | null; lockedOut: unknown },
+  entries: ViewedEntry[],
+  charterDecisions: CharterDecision[],
+  names: ReadonlyMap<string, string>,
+) {
+  const founding = charterDecisions.filter(d => d.kind === 'found').flatMap(d => foundingEntries(d.inputs))
+  const anchor = anchorOf(
+    entries.map(e => ({
+      entryId: e.id,
+      status: e.status,
+      published: e.story?.status === 'published',
+      datePublished: e.story?.datePublished ?? null,
+      role: e.role,
+    })),
+    founding,
+  )
+  const byId = new Map(entries.map(e => [e.id, e]))
+  const lockedUntil = recenterLockedUntil(o)
+  const anchorEntry = (founding: boolean) => (entryId: string) => {
+    const story = byId.get(entryId)?.story
+    return { entryId, storyId: story?.id ?? null, title: story ? (story.title ?? story.sourceTitle) : null, founding }
+  }
+  return {
+    automated: o.automatedRecenters,
+    limit: config.overviews.maxAutomatedRecenters,
+    lockDays: config.overviews.editorRecenterLockDays,
+    recenteredAt: o.recenteredAt,
+    recenteredBy: o.recenteredBy,
+    /** No automated re-center before this, after an editor's or an Undo's re-center; null when no such lock holds now. */
+    lockedUntil: lockedUntil && lockedUntil.getTime() > Date.now() ? lockedUntil : null,
+    /** OUT entries an Undo took out, which no review adds again; an editor's charter that names one again lifts its lock. */
+    lockedOut: Array.isArray(o.lockedOut) ? o.lockedOut.filter((x): x is string => typeof x === 'string') : [],
+    anchor: { standIns: anchor.standIns, entries: [...anchor.founding.map(anchorEntry(true)), ...anchor.turningPoints.map(anchorEntry(false))] },
+    history: charterDecisions
+      .filter(d => RECENTER_KINDS.includes(d.kind))
+      .map(d => ({
+        id: d.id,
+        kind: d.kind,
+        actor: d.actor,
+        actorName: names.get(d.actor) ?? null,
+        createdAt: d.createdAt,
+        undoneAt: d.undoneAt,
+        anchorConfirmed: d.kind === 'editor_recenter' ? (readInputs(editorRecenterInputs, d.inputs)?.anchorConfirmed ?? false) : null,
+        ...charterMove(d),
+      })),
   }
 }
 
@@ -212,50 +275,10 @@ export async function adminOverview(id: string) {
     undoable: undoable(d),
   })
   const { lockedOut, automatedRecenters, recenteredAt, recenteredBy, ...fields } = o
-  const founding = charterDecisions.filter(d => d.kind === 'found').flatMap(d => foundingEntries(d.inputs))
-  const anchor = anchorOf(
-    entries.map(e => ({
-      entryId: e.id,
-      status: e.status,
-      published: e.story?.status === 'published',
-      datePublished: e.story?.datePublished ?? null,
-      role: e.role,
-    })),
-    founding,
-  )
-  const byId = new Map(entries.map(e => [e.id, e]))
-  const lockedUntil = recenterLockedUntil(o)
-  const anchorEntry = (founding: boolean) => (entryId: string) => {
-    const story = byId.get(entryId)?.story
-    return { entryId, storyId: story?.id ?? null, title: story ? (story.title ?? story.sourceTitle) : null, founding }
-  }
   return {
     ...fields,
     charter: parseCharter(o.charter) ?? { in: '', out: [], endEvent: null },
-    recentering: {
-      automated: automatedRecenters,
-      limit: config.overviews.maxAutomatedRecenters,
-      lockDays: config.overviews.editorRecenterLockDays,
-      recenteredAt,
-      recenteredBy,
-      /** No automated re-center before this, after an editor's or an Undo's re-center; null when no such lock holds now. */
-      lockedUntil: lockedUntil && lockedUntil.getTime() > Date.now() ? lockedUntil : null,
-      /** OUT entries an Undo took out, which no review adds again; an editor's charter that names one again lifts its lock. */
-      lockedOut: Array.isArray(lockedOut) ? lockedOut.filter((x): x is string => typeof x === 'string') : [],
-      anchor: { standIns: anchor.standIns, entries: [...anchor.founding.map(anchorEntry(true)), ...anchor.turningPoints.map(anchorEntry(false))] },
-      history: charterDecisions
-        .filter(d => RECENTER_KINDS.includes(d.kind))
-        .map(d => ({
-          id: d.id,
-          kind: d.kind,
-          actor: d.actor,
-          actorName: names.get(d.actor) ?? null,
-          createdAt: d.createdAt,
-          undoneAt: d.undoneAt,
-          anchorConfirmed: d.kind === 'editor_recenter' ? (readInputs(editorRecenterInputs, d.inputs)?.anchorConfirmed ?? false) : null,
-          ...charterMove(d),
-        })),
-    },
+    recentering: recenteringView({ lockedOut, automatedRecenters, recenteredAt, recenteredBy }, entries, charterDecisions, names),
     entries: counts.get(id) ?? 0,
     public: isPublicOverview(o),
     on,

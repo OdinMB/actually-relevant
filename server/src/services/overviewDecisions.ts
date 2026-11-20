@@ -32,7 +32,15 @@ const changeSet = {
 
 const shownSchema = z.object({ ref: z.string(), id: z.string(), distance: z.number() })
 
-/** `link`: the candidates shown, the yeses code refused, and whether a join reports its overview's end event (what `pendingClosings` reads). */
+/** A re-center signal a link decision keeps (`.context/overviews.md`, "Re-centering"). */
+export const signalSchema = z.object({ overviewId: z.string(), kind: z.enum(['wider', 'center_moved']), quote: z.string() })
+
+/**
+ * `link`: the candidates shown, the yeses code refused, whether a join reports its overview's end event
+ * (what `pendingClosings` reads), and the re-center signals that count (`countedSignals`) with the run
+ * time the story was linked at, which a re-center attempt compares with its overview's last attempt
+ * (`recenter_tried_at`, the run's time too).
+ */
 export const linkInputs = z.object({
   shown: z.object({ overviews: z.array(shownSchema).default([]), partners: z.array(shownSchema).default([]) }).default({}),
   proposed: z.number().default(0),
@@ -40,11 +48,15 @@ export const linkInputs = z.object({
   reportsEndEvent: z.boolean().default(false),
   /** A founding partner's own link decision: the story it founded with. */
   foundedWith: z.string().nullable().default(null),
+  signals: z.array(signalSchema).default([]),
+  linkedAt: storedDate.nullable().default(null),
   ...changeSet,
 })
 
-/** The key `pendingClosings` reads in SQL, held to the schema's name. */
+/** The keys `pendingClosings` and `recenterCases` read in SQL, held to the schema's names. */
 export const REPORTS_END_EVENT = 'reportsEndEvent' satisfies keyof z.infer<typeof linkInputs>
+export const SIGNALS = 'signals' satisfies keyof z.infer<typeof linkInputs>
+export const LINKED_AT = 'linkedAt' satisfies keyof z.infer<typeof linkInputs>
 
 /** `found`: the founding partner; on agreement the change set that made the overview and both entries. */
 export const foundInputs = z.object({ partnerId: z.string(), ...changeSet })

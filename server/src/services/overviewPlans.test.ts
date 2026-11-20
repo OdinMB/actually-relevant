@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { joinResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
+import { joinResult, linkResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
 import { applied, newOverviewRow, settle, type EntryRow, type OverviewRow, type Rows } from './overviewChanges.js'
-import { planBurst, planJoin, planReview, planStatus } from './overviewPlans.js'
+import { planAlone, planBurst, planClosing, planConflict, planJoin, planReview, planStatus } from './overviewPlans.js'
 import type { ReviewResult } from './overviewReview.js'
 
 const NOW = new Date('2026-11-18T03:00:00Z')
@@ -62,6 +62,53 @@ describe('planJoin', () => {
     const flagged = joinResult(story, 'o1', true)
     expect(planJoin(overview(), flagged, ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: true })
     expect(planJoin(overview({ charter: { ...charter, endEvent: null } }), flagged, ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: false })
+  })
+})
+
+describe('planClosing', () => {
+  const story = linkStory({ id: 's9', datePublished: day(9) })
+  const agreed = { outcome: 'closing' as const, answers: { close: null, check: null }, model: 'large', promptVersion: 'v', costUsd: 0.01 }
+  const check = (o: OverviewRow) => planClosing(o, { overviewId: 'o1', charter: { ...charter, endEvent: charter.endEvent }, story, entries: [] }, agreed, ctx)
+
+  it('begins the closing on the end event the calls judged', () => {
+    expect(check(overview()).decision.outcome).toBe('closing')
+    expect(check(overview()).changes[0]!.after).toMatchObject({ status: 'closing', closingStoryId: 's9' })
+  })
+
+  it('is stale, beginning nothing, when the end event changed during the calls (an editor re-centered it)', () => {
+    for (const endEvent of ['The WHO declares it over', null]) {
+      const p = check(overview({ charter: { ...charter, endEvent } }))
+      expect([p.decision.outcome, p.changes]).toEqual(['stale', []])
+    }
+  })
+})
+
+describe('the link record: which re-center signals count', () => {
+  const story = linkStory({ id: 's9', datePublished: day(9) })
+  const signals = [
+    { overviewId: 'o1', kind: 'center_moved' as const, quote: 'now national' },
+    { overviewId: 'o2', kind: 'wider' as const, quote: 'Goma' },
+    { overviewId: 'o2', kind: 'center_moved' as const, quote: 'now national' },
+  ]
+
+  it('keeps every flag of a story left alone, with the run time it was linked at', () => {
+    const none = planAlone(linkResult(story, { outcome: 'none', signals }), ctx).plan.decision.inputs
+    expect(none).toMatchObject({ signals, linkedAt: NOW })
+    expect(planAlone(linkResult(story, { outcome: 'rejected', signals }), ctx).plan.decision.inputs).toMatchObject({ signals })
+  })
+
+  it('keeps of a joined story only its centerMoved for the overview it joins: it is active in no other after its link', () => {
+    const joined = { ...joinResult(story, 'o1'), signals }
+    expect(planJoin(overview(), joined, ctx).plan.decision.inputs).toMatchObject({ signals: [signals[0]] })
+  })
+
+  it('keeps nothing of a story held, in conflict or failed, which is linked again, nor of a founding', () => {
+    for (const outcome of ['held', 'failed'] as const)
+      expect(planAlone(linkResult(story, { outcome, signals }), ctx).plan.decision.inputs).toMatchObject({ signals: [] })
+    expect(planConflict(linkResult(story, { outcome: 'none', signals }), ctx).plan.decision.inputs).toMatchObject({ signals: [] })
+    expect(planJoin(overview({ frozen: true, frozenBy: 'editor' }), { ...joinResult(story, 'o1'), signals }, ctx).plan.decision.inputs).toMatchObject({
+      signals: [],
+    })
   })
 })
 

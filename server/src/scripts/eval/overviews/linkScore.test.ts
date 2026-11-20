@@ -163,6 +163,7 @@ describe('the sandbox', () => {
     answer: null,
     proposed: 0,
     refusals: [],
+    signals: [],
     model: null,
     promptVersion: null,
     costUsd: 0,

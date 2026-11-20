@@ -43,7 +43,10 @@ const initial = (o: AdminOverviewDetail): FormState => ({
 })
 
 /** The charter the form sends; its errors in the editor's words. */
-function read(f: FormState): { body: Omit<OverviewRecenterBody, 'anchorConfirmed'>; errors: Partial<Record<'title' | 'in' | 'out' | 'endEvent', string>> } {
+function read(f: FormState): {
+  body: Omit<OverviewRecenterBody, 'anchorConfirmed' | 'basedOn'>
+  errors: Partial<Record<'title' | 'in' | 'out' | 'endEvent', string>>
+} {
   const title = f.title.trim()
   const out = lines(f.out)
   const endEvent = f.noEndEvent ? null : f.endEvent.trim()
@@ -68,6 +71,8 @@ export function OverviewCharterForm({ overview: o, open, onClose }: { overview: 
 function CharterForm({ overview: o, onClose }: { overview: AdminOverviewDetail; onClose: () => void }) {
   const action = useOverviewAction()
   const [form, setForm] = useState(() => initial(o))
+  // The title and charter the form was opened on, kept while the page re-reads the overview: the server refuses the save when they changed since
+  const [basedOn] = useState(() => ({ title: o.title, charter: o.charter }))
   const [confirmed, setConfirmed] = useState(false)
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm(f => ({ ...f, [key]: value }))
   const { body, errors } = read(form)
@@ -80,7 +85,7 @@ function CharterForm({ overview: o, onClose }: { overview: AdminOverviewDetail; 
   const save = (e: FormEvent) => {
     e.preventDefault()
     if (invalid || !confirmed || !dirty) return
-    action.mutate({ run: () => adminApi.overviews.recenter(o.id, { ...body, anchorConfirmed: true }), done: 'Charter saved' }, { onSuccess: onClose })
+    action.mutate({ run: () => adminApi.overviews.recenter(o.id, { ...body, anchorConfirmed: true, basedOn }), done: 'Charter saved' }, { onSuccess: onClose })
   }
 
   return (
@@ -163,7 +168,12 @@ function CharterForm({ overview: o, onClose }: { overview: AdminOverviewDetail; 
           </p>
         </section>
       </div>
-      <PanelFooter isPending={action.isPending} isDirty={dirty && confirmed && !invalid} onCancel={onClose} />
+      <PanelFooter
+        isPending={action.isPending}
+        isDirty={dirty && confirmed && !invalid}
+        onCancel={onClose}
+        hint={dirty && !invalid && !confirmed ? 'Saving needs the anchor box ticked.' : null}
+      />
     </form>
   )
 }

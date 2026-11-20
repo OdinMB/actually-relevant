@@ -72,12 +72,27 @@ export const activated = (e: Pick<NewEntry, 'id' | 'fields'>): Change[] => entry
 // One story's linking
 // ---------------------------------------------------------------------------
 
+/**
+ * The re-center signals a link decision keeps (`.context/overviews.md`, "Re-centering"): only a story
+ * active in no overview after its link raises one, since a story that joined one overview and is wider
+ * for another is the merge question, not a re-center's. So a story left alone (`none`, `rejected`) keeps
+ * every flag; a joined one only its centerMoved for the overview it joined; a story held, in conflict
+ * or failed keeps none, since it is linked again, and nor does a founding.
+ */
+export function countedSignals(result: LinkResult, outcome: LinkOutcome, overviewId: string | null): LinkResult['signals'] {
+  if (outcome === 'none' || outcome === 'rejected') return result.signals
+  if (outcome === 'joined') return result.signals.filter(s => s.kind === 'center_moved' && s.overviewId === overviewId)
+  return []
+}
+
 /** A link decision's record; `endEventNamed` false (the overview joined names none) drops the end-event flag, so it never starts a closing. */
-const linkRecord = (result: LinkResult, endEventNamed: boolean): LinkInputs => ({
+const linkRecord = (result: LinkResult, outcome: LinkOutcome, overviewId: string | null, endEventNamed: boolean, ctx: PlanContext): LinkInputs => ({
   shown: result.shown,
   proposed: result.proposed,
   refusals: result.refusals,
   reportsEndEvent: endEventNamed && (result.join?.reportsEndEvent ?? false),
+  signals: countedSignals(result, outcome, overviewId),
+  linkedAt: ctx.now,
 })
 
 const linkDecision = (
@@ -94,7 +109,7 @@ const linkDecision = (
     outcome,
     overviewId,
     storyId: result.story.id,
-    inputs: linkRecord(result, endEventNamed),
+    inputs: linkRecord(result, outcome, overviewId, endEventNamed, ctx),
     answer: result.answer,
     model: result.model,
     promptVersion: result.promptVersion,
@@ -250,14 +265,16 @@ const statusDecision = (overviewId: string, storyId: string | null, outcome: str
 
 /**
  * An end-event check's result as its `close` decision on the story, which settles the pair unless it
- * `failed`. On agreement an open or quiet, unfrozen overview starts closing from the story's
- * publication date, on that story, its closure review still to run; otherwise `stale`.
+ * `failed`. On agreement an open or quiet, unfrozen overview whose end event is still the one the calls
+ * judged starts closing from the story's publication date, on that story, its closure review still to
+ * run; otherwise `stale` (asked again on the overview as it stands, or passed by once it names none).
  */
 export function planClosing(o: OverviewRow | null, c: CloseCase, result: CloseResult, ctx: PlanContext): Plan {
   let outcome: string = result.outcome
   let changes: Change[] = []
   if (result.outcome === 'closing') {
-    if (o && (o.status === 'open' || o.status === 'quiet') && !o.frozen)
+    // The calls judged the end event the case was read with: one an editor's re-center changed since is no longer this overview's
+    if (o && (o.status === 'open' || o.status === 'quiet') && !o.frozen && sameValue(o.charter.endEvent, c.charter.endEvent))
       changes = overviewChange(o, { status: 'closing', closingSince: c.story.datePublished, closingStoryId: c.story.id, closureReviewedAt: null })
     else outcome = 'stale'
   }

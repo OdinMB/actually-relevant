@@ -44,10 +44,13 @@ const yes = (id: string, over: Partial<LinkCandidateAnswer> = {}): LinkCandidate
   place: { story: 'Ituri', other: 'Ituri' },
   end: { story: 'declares it over', other: 'declares the outbreak over' },
   reportsEndEvent: false,
+  scope: 'inside',
+  centerMoved: false,
+  signalQuote: '',
   confidence: 0.9,
   ...over,
 })
-const no = (id: string): LinkCandidateAnswer => ({ ...yes(id), belongs: 'no' })
+const no = (id: string, over: Partial<LinkCandidateAnswer> = {}): LinkCandidateAnswer => ({ ...yes(id), belongs: 'no', scope: 'unrelated', ...over })
 /** A yes for a founding partner: its quotes come from the partner's own texts. */
 const yesPartner = (id: string): LinkCandidateAnswer => yes(id, { end: { story: 'declares it over', other: 'declares it over' } })
 
@@ -110,11 +113,59 @@ describe('acceptLink', () => {
     expect(got.refusals).toEqual([{ id: 'O1', reason: "place: the candidate's quote is not in its text" }])
   })
 
-  it('takes the overview side of a quote from its title and IN alone when its charter names no end event', () => {
-    const none = { ...shownOverview('A', 'O1', 0.1), charter: { in: 'The Ebola outbreak in Ituri province, until it fades.', out: [], endEvent: null } }
-    expect(acceptLink(s, [none], [], answer([yes('O1', { end: { story: 'declares it over', other: 'until it fades' } })])).join).not.toBeNull()
-    expect(acceptLink(s, [none], [], answer([yes('O1', { end: { story: 'declares it over', other: 'reporting stops' } })])).refusals).toEqual([
-      { id: 'O1', reason: "end: the candidate's quote is not in its text" },
+  it('lets the cause and the place decide for an overview whose charter names no end event: its end quotes are left empty, or ignored', () => {
+    const none = { ...shownOverview('A', 'O1', 0.1), charter: { in: 'The Ebola outbreak in Ituri province.', out: [], endEvent: null } }
+    const emptyEnd = yes('O1', { end: { story: '', other: '' } })
+    expect(acceptLink(s, [none], [], answer([emptyEnd]))).toMatchObject({ join: { candidate: { id: 'A' } }, refusals: [] })
+    // An end quoted anyway, even from nowhere, neither helps nor hurts
+    expect(acceptLink(s, [none], [], answer([yes('O1', { end: { story: 'declares it over', other: 'reporting stops' } })])).join).not.toBeNull()
+    // The cause and the place are still checked
+    expect(acceptLink(s, [none], [], answer([{ ...emptyEnd, place: { story: 'Ituri', other: '' } }])).refusals).toEqual([
+      { id: 'O1', reason: 'no place on both sides' },
+    ])
+  })
+
+  it('still needs the end on both sides for an overview that names an end event, and for a founding partner', () => {
+    const emptyEnd = { end: { story: '', other: '' } }
+    expect(acceptLink(s, [shownOverview('A', 'O1', 0.1)], [], answer([yes('O1', emptyEnd)])).refusals).toEqual([{ id: 'O1', reason: 'no end on both sides' }])
+    const partner = shownPartner(story('p', 5), 'F1', 0.2)
+    expect(acceptLink(s, [], [partner], answer([yes('F1', emptyEnd)])).refusals).toEqual([{ id: 'F1', reason: 'no end on both sides' }])
+  })
+})
+
+describe('acceptLink: the re-center signal', () => {
+  const s = story('s', 10, { summary: 'The outbreak in Ituri province grew; Ebola has now reached North Kivu and Goma.' })
+  const shown = [shownOverview('A', 'O1', 0.1), shownOverview('B', 'O2', 0.2)]
+
+  it('keeps a wider or centerMoved flag for an overview only with its quote found in the story', () => {
+    const got = acceptLink(
+      s,
+      shown,
+      [],
+      answer([
+        no('O1', { scope: 'wider', signalQuote: 'has now reached North Kivu' }),
+        no('O2', { scope: 'wider', centerMoved: true, signalQuote: 'a national emergency' }),
+      ]),
+    )
+    expect(got.signals).toEqual([{ overviewId: 'A', kind: 'wider', quote: 'has now reached North Kivu' }])
+  })
+
+  it('takes centerMoved apart from the scope, on a join too; inside and unrelated add nothing; a story candidate never flags', () => {
+    const partner = shownPartner(story('p', 5), 'F1', 0.2)
+    const got = acceptLink(
+      s,
+      shown,
+      [partner],
+      answer([
+        yes('O1', { centerMoved: true, signalQuote: 'reached North Kivu and Goma' }),
+        no('O2', { scope: 'unrelated', signalQuote: 'Goma' }),
+        { ...no('F1'), scope: 'wider', centerMoved: true, signalQuote: 'Goma' },
+      ]),
+    )
+    expect(got.signals).toEqual([{ overviewId: 'A', kind: 'center_moved', quote: 'reached North Kivu and Goma' }])
+    expect(acceptLink(s, shown, [], answer([no('O1', { scope: 'wider', centerMoved: true, signalQuote: 'Goma' })])).signals).toEqual([
+      { overviewId: 'A', kind: 'wider', quote: 'Goma' },
+      { overviewId: 'A', kind: 'center_moved', quote: 'Goma' },
     ])
   })
 })

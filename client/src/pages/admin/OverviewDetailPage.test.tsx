@@ -330,11 +330,13 @@ describe('OverviewDetailPage', () => {
     expect(panel.getByText(/Name the end event, or tick/)).toBeInTheDocument()
     fireEvent.click(panel.getByLabelText('No end event: it closes only by fading'))
     expect(panel.getByLabelText('Ends when')).toBeDisabled()
-    // Unconfirmed, it does not save
+    // Unconfirmed, it does not save, and says why
     expect(save).toBeDisabled()
+    expect(save).toHaveAccessibleDescription(/needs the anchor box ticked/)
     fireEvent.click(panel.getByLabelText(/The new charter still covers them/))
     expect(save).toBeEnabled()
     fireEvent.click(save)
+    // With the title and charter the form was opened on, so the server refuses it when a review changed them since
     await waitFor(() =>
       expect(mockApi.overviews.recenter).toHaveBeenCalledWith('o1', {
         title: 'Ebola in Ituri',
@@ -342,6 +344,7 @@ describe('OverviewDetailPage', () => {
         out: ['Ebola in Uganda', 'Mpox'],
         endEvent: null,
         anchorConfirmed: true,
+        basedOn: { title: 'Ebola in Ituri', charter: detail().charter },
       }),
     )
     expect(await screen.findByText('Charter saved')).toBeInTheDocument()

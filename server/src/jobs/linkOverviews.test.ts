@@ -118,7 +118,20 @@ describe('runLinkOverviewsJob', () => {
     const quote = { story: 'Title', other: 'nothing like it' }
     mocks.structuredCall.mockResolvedValue({
       parsed: {
-        candidates: [{ id: 'F1', belongs: 'yes', cause: quote, place: quote, end: quote, reportsEndEvent: false, confidence: 0.7 }],
+        candidates: [
+          {
+            id: 'F1',
+            belongs: 'yes',
+            cause: quote,
+            place: quote,
+            end: quote,
+            reportsEndEvent: false,
+            scope: 'inside',
+            centerMoved: false,
+            signalQuote: '',
+            confidence: 0.7,
+          },
+        ],
         role: 'routine',
         roleKind: null,
       },

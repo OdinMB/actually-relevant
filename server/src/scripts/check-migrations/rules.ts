@@ -31,6 +31,8 @@ export const UNMODELED_INDEXES: readonly UnmodeledIndex[] = [
   // At most one active overview entry per story, and one current "Where this stands" per overview (20261118203742_overviews; ADR-0070)
   { name: 'overview_entries_one_active', table: 'overview_entries' },
   { name: 'overview_stands_one_current', table: 'overview_stands' },
+  // The link decisions' re-center signals, an expression index (20261120000620_overview_recenter; ADR-0071)
+  { name: 'overview_decisions_link_signals', table: 'overview_decisions', using: 'gin' },
 ]
 
 /** The line a destructive migration carries once someone has reviewed it, with a reason. */

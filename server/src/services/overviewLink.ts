@@ -71,6 +71,17 @@ export interface Refusal {
   reason: string
 }
 
+/**
+ * A re-center signal (`.context/overviews.md`, "Re-centering"): the link call judged the story `wider`
+ * than an overview's charter (the same broader development, outside its IN), or reporting that the
+ * development's center itself moved, quoting the story's words that show it.
+ */
+export interface Signal {
+  overviewId: string
+  kind: 'wider' | 'center_moved'
+  quote: string
+}
+
 export interface Acceptance {
   /** The nearest overview that passed; null when none did. */
   join: Accepted<ShownOverview> | null
@@ -79,9 +90,13 @@ export interface Acceptance {
   /** Candidates the model said yes to (joins proposed). */
   proposed: number
   refusals: Refusal[]
+  /** The re-center flags whose quote code found in the story, per overview shown; which of them count is the link record's (`countedSignals`). */
+  signals: Signal[]
 }
 
 const SIDES = ['cause', 'place', 'end'] as const
+/** An overview whose charter names no end event: the cause and the place decide, and the end is not asked. */
+const NO_END_SIDES = ['cause', 'place'] as const
 
 const sharedOf = (a: LinkCandidateAnswer): Shared => ({
   cause: { story: a.cause.story, other: a.cause.other },
@@ -93,9 +108,9 @@ const storyTexts = (s: LinkStory) => [s.title, s.label, s.summary]
 /** An overview's side of a quote: its title, its charter's IN and its END_EVENT when it names one. Never its OUT list, which names what does not belong. */
 const overviewTexts = (o: CandidateOverview) => [o.title, o.charter.in, ...(o.charter.endEvent === null ? [] : [o.charter.endEvent])]
 
-/** Why a yes is refused: a shared field left empty, or a quote not found on its side; null when it passes. */
-function refusalOf(answer: LinkCandidateAnswer, story: readonly string[], other: readonly string[]): string | null {
-  for (const side of SIDES) {
+/** Why a yes is refused: a shared field of `sides` left empty, or a quote not found on its side; null when it passes. */
+function refusalOf(answer: LinkCandidateAnswer, story: readonly string[], other: readonly string[], sides: readonly (typeof SIDES)[number][]): string | null {
+  for (const side of sides) {
     const pair = answer[side]
     if (!pair.story.trim() || !pair.other.trim()) return `no ${side} on both sides`
     if (!quoteFound(pair.story, story)) return `${side}: the story's quote is not in its text`
@@ -106,30 +121,48 @@ function refusalOf(answer: LinkCandidateAnswer, story: readonly string[], other:
 
 /**
  * Which candidate the story joins or may found with (`.context/overviews.md`, "How a story is linked",
- * step 2): a yes passes only with all three shared fields filled on both sides and each quote found in
- * its side's text (the story's title, label or summary; the overview's title, IN or END_EVENT; the
- * partner's title, label or summary). `unsure` is no. The nearest passing overview wins (a story joins one at
+ * step 2): a yes passes only with the shared fields filled on both sides and each quote found in its
+ * side's text (the story's title, label or summary; the overview's title, IN or END_EVENT; the
+ * partner's title, label or summary): all three, but for an overview whose charter names no end event,
+ * where the cause and the place decide. `unsure` is no. The nearest passing overview wins (a story joins one at
  * most); a founding partner is considered only when no overview passed, the nearest passing first.
+ * Also the re-center flags for each overview shown, `wider` and `centerMoved`, each kept only with its
+ * quote found in the story's text.
  */
 export function acceptLink(story: LinkStory, overviews: readonly ShownOverview[], partners: readonly ShownPartner[], answer: LinkAnswer): Acceptance {
   const byRef = new Map(answer.candidates.map(c => [c.id.trim(), c]))
   const refusals: Refusal[] = []
   let proposed = 0
-  const pick = <C extends { ref: string }>(candidates: readonly C[], texts: (c: C) => string[]): Accepted<C> | null => {
+  const pick = <C extends { ref: string }>(
+    candidates: readonly C[],
+    texts: (c: C) => string[],
+    sides: (c: C) => readonly (typeof SIDES)[number][],
+  ): Accepted<C> | null => {
     let chosen: Accepted<C> | null = null
     for (const candidate of candidates) {
       const a = byRef.get(candidate.ref)
       if (a?.belongs !== 'yes') continue
       proposed++
-      const reason = refusalOf(a, storyTexts(story), texts(candidate))
+      const reason = refusalOf(a, storyTexts(story), texts(candidate), sides(candidate))
       if (reason) refusals.push({ id: candidate.ref, reason })
       else chosen ??= { candidate, answer: a, shared: sharedOf(a) }
     }
     return chosen
   }
-  const join = pick(overviews, overviewTexts)
-  const partner = pick(partners, storyTexts)
-  return { join, partner: join ? null : partner, proposed, refusals }
+  const join = pick(overviews, overviewTexts, o => (o.charter.endEvent === null ? NO_END_SIDES : SIDES))
+  const partner = pick(partners, storyTexts, () => SIDES)
+  return { join, partner: join ? null : partner, proposed, refusals, signals: signalsOf(story, overviews, byRef) }
+}
+
+/** The re-center flags of each overview shown whose quote is found in the story's title, label or summary. */
+function signalsOf(story: LinkStory, overviews: readonly ShownOverview[], byRef: ReadonlyMap<string, LinkCandidateAnswer>): Signal[] {
+  return overviews.flatMap(o => {
+    const a = byRef.get(o.ref)
+    const quote = a?.signalQuote.trim() ?? ''
+    if (!a || !quote || !quoteFound(quote, storyTexts(story))) return []
+    const kinds: Signal['kind'][] = [...(a.scope === 'wider' ? ['wider' as const] : []), ...(a.centerMoved ? ['center_moved' as const] : [])]
+    return kinds.map(kind => ({ overviewId: o.id, kind, quote }))
+  })
 }
 
 /** A founding's charter, title and roles, on agreement. */
@@ -188,6 +221,8 @@ export interface LinkResult {
   answer: LinkAnswer | null
   proposed: number
   refusals: Refusal[]
+  /** The re-center flags code found quoted (`acceptLink`); the link record keeps those that count (`countedSignals`). */
+  signals: Signal[]
   /** The link call's model and the prompt's version; null with no call. */
   model: string | null
   promptVersion: string | null
@@ -210,6 +245,7 @@ const blank = (story: LinkStory, outcome: LinkResult['outcome']): LinkResult => 
   answer: null,
   proposed: 0,
   refusals: [],
+  signals: [],
   model: null,
   promptVersion: null,
   costUsd: 0,
@@ -284,7 +320,7 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
   const answer = unescapeXmlDeep(call.parsed)
   const accepted = acceptLink(story, overviews, partners, answer)
   const role = roleOf(answer)
-  const settled = { ...base, answer, proposed: accepted.proposed, refusals: accepted.refusals, role }
+  const settled = { ...base, answer, proposed: accepted.proposed, refusals: accepted.refusals, signals: accepted.signals, role }
   const alone = accepted.refusals.length > 0 ? 'rejected' : 'none'
   if (accepted.join) {
     if (accepted.join.candidate.frozen) return { ...settled, outcome: 'held' }

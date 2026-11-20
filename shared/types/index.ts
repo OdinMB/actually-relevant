@@ -1754,10 +1754,15 @@ export interface OverviewCharter {
   endEvent: string | null
 }
 
-/** `PUT /api/admin/overviews/:id/charter`: an editor's re-center, the title and the whole charter, with the anchor confirmed. */
+/**
+ * `PUT /api/admin/overviews/:id/charter`: an editor's re-center, the title and the whole charter, with
+ * the anchor confirmed and the title and charter the form was opened on (`basedOn`): the server
+ * refuses the save (409) when either changed since, so a review's OUT addition is never overwritten unseen.
+ */
 export interface OverviewRecenterBody extends OverviewCharter {
   title: string
   anchorConfirmed: boolean
+  basedOn: { title: string; charter: OverviewCharter }
 }
 
 /** An anchor entry: a founding one (or an oldest one standing in) or a turning point, which a new charter should still cover. */

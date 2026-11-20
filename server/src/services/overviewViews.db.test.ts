@@ -130,7 +130,17 @@ describeDb('the overview admin reads', () => {
     })
 
     const wider = { in: 'The Ebola outbreak in eastern Congo.', out: [], endEvent: null }
-    await editorAction({ kind: 'recenter', overviewId: o.id, title: 'Ebola in eastern Congo', charter: wider, anchorConfirmed: true }, 'editor-1')
+    await editorAction(
+      {
+        kind: 'recenter',
+        overviewId: o.id,
+        title: 'Ebola in eastern Congo',
+        charter: wider,
+        anchorConfirmed: true,
+        basedOn: { title: before.title, charter: before.charter },
+      },
+      'editor-1',
+    )
     const after = await adminOverview(o.id)
     expect(after.charter).toEqual(wider)
     const lockDays = (after.recentering.lockedUntil!.getTime() - after.recentering.recenteredAt!.getTime()) / 86_400_000

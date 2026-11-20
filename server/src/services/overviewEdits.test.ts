@@ -203,9 +203,17 @@ describe('planEdit', () => {
 })
 
 const wider: Charter = { in: 'The Ebola outbreak in eastern Congo.', out: ['Mpox'], endEvent: null }
-const recenter = (to: Charter, r: Rows, over: { title?: string; anchorConfirmed?: boolean } = {}, at = ctx()) =>
+const recenter = (to: Charter, r: Rows, over: { title?: string; anchorConfirmed?: boolean; basedOn?: { title: string; charter: Charter } } = {}, at = ctx()) =>
   planEdit(
-    { kind: 'recenter', overviewId: 'o1', title: over.title ?? 'Ebola in eastern Congo', charter: to, anchorConfirmed: over.anchorConfirmed ?? true },
+    {
+      kind: 'recenter',
+      overviewId: 'o1',
+      title: over.title ?? 'Ebola in eastern Congo',
+      charter: to,
+      anchorConfirmed: over.anchorConfirmed ?? true,
+      // The form was opened on the overview as it stands, unless a test says otherwise
+      basedOn: over.basedOn ?? { title: r.overview.title, charter: r.overview.charter },
+    },
     r,
     null,
     null,
@@ -264,6 +272,22 @@ describe("planEdit: an editor's re-center", () => {
     expect(refusal(() => recenter(charter, rows(), { title: 'Ebola in Ituri' }))).toMatch(/already has that title and charter/)
     // A retitle alone is a re-center too
     expect(recenter(charter, rows(), { title: 'Ebola' }).changes[0]!.after).toMatchObject({ title: 'Ebola', recenteredBy: 'editor' })
+  })
+
+  it('refuses a charter edited on a form opened before a review narrowed OUT or a retitle, so neither is overwritten unseen', () => {
+    const opened = { title: 'Ebola in Ituri', charter }
+    // A review added an OUT entry after the form was opened
+    const narrowed = rows({ charter: { ...charter, out: [...charter.out, 'Cholera in DR Congo'] } })
+    expect(refusal(() => recenter(wider, narrowed, { basedOn: opened }))).toMatch(/changed after you opened the form.*reload the page/)
+    // A retitle meanwhile
+    expect(refusal(() => recenter(wider, rows({ title: 'Ebola in Ituri province' }), { basedOn: opened }))).toMatch(/changed after you opened the form/)
+    // Opened on OUT [A, X]; an Undo of the review that added X took it out into locked_out meanwhile: the form's X would re-admit it unseen
+    const withX = { ...charter, out: [...charter.out, 'Cholera in DR Congo'] }
+    const undone = rows({ charter, lockedOut: ['Cholera in DR Congo'] })
+    expect(refusal(() => recenter(withX, undone, { basedOn: { title: 'Ebola in Ituri', charter: withX } }))).toMatch(/changed after you opened the form/)
+    // The same charter, its keys in another order as jsonb hands them back, is no change
+    const reordered = { charter: { endEvent: charter.endEvent, out: charter.out, in: charter.in }, title: 'Ebola in Ituri' }
+    expect(recenter(wider, rows(), { basedOn: reordered }).decision.outcome).toBe('recentered')
   })
 })
 
@@ -342,6 +366,7 @@ describe('planUndo', () => {
       shown: { overviews: [], partners: [] },
       proposed: 1,
       refusals: [],
+      signals: [],
       answer: null,
       model: 'm',
       promptVersion: 'v',

@@ -324,10 +324,12 @@ describeDb("an editor's actions and undo", () => {
     })
     const wider = { in: 'The Ebola outbreak in eastern Congo.', out: [], endEvent: null }
     const at = () => ({ clock: new Date(), now: new Date() })
-    const { decisionId } = await editorAction(
-      { kind: 'recenter', overviewId: o.id, title: 'Ebola in eastern Congo', charter: wider, anchorConfirmed: true },
-      EDITOR,
-    )
+    const recenter = (basedOn: { title: string; charter: typeof charter }) =>
+      editorAction({ kind: 'recenter', overviewId: o.id, title: 'Ebola in eastern Congo', charter: wider, anchorConfirmed: true, basedOn }, EDITOR)
+    // A form opened before a review added an OUT entry is refused, and nothing is written
+    await expect(recenter({ title: 'Ebola in Ituri', charter: { ...charter, out: [] } })).rejects.toThrow('changed after you opened the form')
+    // The charter as the page read it, compared with the jsonb as stored (its own key order)
+    const { decisionId } = await recenter({ title: 'Ebola in Ituri', charter })
     expect(await row(o.id)).toMatchObject({
       title: 'Ebola in eastern Congo',
       charter: wider,
