@@ -32,7 +32,11 @@ const storyBlock = (name: string, s: LinkStory, id?: string) =>
     `</${name}>`,
   ].join('\n')
 
-const charterBlock = (c: Charter) => [`<CHARTER>`, tag('IN', c.in), ...c.out.map(o => tag('OUT', o)), tag('END_EVENT', c.endEvent), `</CHARTER>`].join('\n')
+/** How a charter that names no end event shows it: the development ends when reporting stops (it closes only by fading). */
+export const NO_END_EVENT = 'none (this development ends when reporting stops)'
+
+const charterBlock = (c: Charter) =>
+  [`<CHARTER>`, tag('IN', c.in), ...c.out.map(o => tag('OUT', o)), tag('END_EVENT', c.endEvent ?? NO_END_EVENT), `</CHARTER>`].join('\n')
 
 const ROLES = `<ROLES>
 - turning_point: the story changes what a reader should believe about where the development stands: a first, a new country or group affected, a declaration, a decision, a reversal, a marked jump or fall, a deal, a breakdown, a response starting or ending.
@@ -76,7 +80,7 @@ ${storyBlock('NEW', input.story)}
 </STORY>
 
 <OVERVIEWS>
-Ongoing developments we already follow that the story may belong to, each with its title, its charter (IN: what belongs; OUT: what stays separate; END_EVENT: what would end it) and its newest stories. ${UNTRUSTED}
+Ongoing developments we already follow that the story may belong to, each with its title, its charter (IN: what belongs; OUT: what stays separate; END_EVENT: what would end it, or none for a development that ends when reporting stops) and its newest stories. ${UNTRUSTED}
 ${input.overviews.map(overviewBlock).join('\n') || 'None.'}
 </OVERVIEWS>
 
@@ -115,8 +119,8 @@ A development's stories may be months apart and report anything about it: a new 
 - A story that mentions the development only as background to another subject is no.
 - An overview belongs only when its charter's IN covers the story; its newest stories show what it has taken so far, never widen it.
 - unsure is for a story the texts genuinely leave open; it is never a polite no.
-- Each quote is the shortest run of words, copied exactly, that states the shared cause, place or end on that side: from the story's title, label or summary; from an overview's TITLE, its charter's IN or its END_EVENT; from a candidate story's title, label or summary. Never from the facts, never from an OUT entry (OUT names what does not belong), never paraphrased. When a side states none, the quote is empty and the answer cannot be yes.
-- reportsEndEvent is true only when the story reports that the overview's END_EVENT has happened, not that it may, is expected or was called for.
+- Each quote is the shortest run of words, copied exactly, that states the shared cause, place or end on that side: from the story's title, label or summary; from an overview's TITLE, its charter's IN or its END_EVENT when it names one; from a candidate story's title, label or summary. Never from the facts, never from an OUT entry (OUT names what does not belong), never from an END_EVENT of none, never paraphrased. When a side states none, the quote is empty and the answer cannot be yes.
+- reportsEndEvent is true only when the story reports that the overview's END_EVENT has happened, not that it may, is expected or was called for. It is false for an overview whose END_EVENT is none.
 - The story's role is its role in the development it belongs to; when it belongs to none, its role as a story on its own.
 </RULES>
 
@@ -151,7 +155,7 @@ Two of our stories report on the same development. Write the development's chart
 - The charter states what the stories state, never what they leave open.
 </CHARTER>
 <END_EVENT>
-The one concrete, observable event that would end the development, which a news report could say has happened: 'The health ministry declares the outbreak over', 'A ceasefire is signed and holds', 'The final rule is published'. Never a trend, a hope or something that cannot be observed ('the situation improves'). Leave it empty only when no such event can be named; the development is then not started.
+Name the end event only when the development has one a report could date: a declaration, a signature, a ruling ('The health ministry declares the outbreak over', 'A ceasefire is signed and holds', 'The final rule is published'). Most developments have none; then leave it empty, and the development ends by fading when reporting stops. Never a trend, a hope or something that cannot be observed ('the situation improves').
 </END_EVENT>
 <TITLE>
 The development in a few words, as a reader would name it: 'Ebola outbreak in eastern DR Congo', 'Shipping through the Strait of Hormuz'. American spelling, no date unless it names the development, no period at the end.
@@ -188,13 +192,14 @@ You are a second editor who checks a new development's charter before its timeli
 </ROLE>
 
 <GOAL>
-Judge whether each story in <STORIES> belongs to the development <CHARTER> describes, and whether the charter's END_EVENT is a concrete, observable event.
+Judge whether each story in <STORIES> belongs to the development <CHARTER> describes, and, when the charter names an END_EVENT, whether it is a concrete, observable event.
 </GOAL>
 
 <RULES>
 - A story fits when the charter's IN covers what it reports, and nothing in the charter's OUT list does.
 - A story that shares only a place, an agency or a theme with the charter does not fit.
 - END_EVENT is concrete when a news report could say it has happened on a given day: a declaration, a signature, a ruling, a publication. A trend, a hope or a state no report could date is not.
+- An END_EVENT of none is no fault: most developments end when reporting stops. Answer none for it.
 - Judge the texts as written; what you know from elsewhere does not count.
 </RULES>
 
@@ -409,7 +414,7 @@ Judge each entry in <ENTRIES> against the development's charter: whether it belo
 - Give each entry the role it has in the development, as <ROLES> defines them.
 </ENTRY_RULES>
 <CHARTER_RULES>
-- Copy IN and END_EVENT exactly as given, and keep every OUT entry.
+- Copy IN and END_EVENT exactly as given (an END_EVENT of none as an empty string), and keep every OUT entry.
 - You may add to OUT a short phrase for each neighboring development or theme that entries you judged as not belonging show the charter attracting ('cholera in DR Congo'). Add nothing when none did.
 </CHARTER_RULES>
 <TITLE_RULES>
@@ -460,12 +465,15 @@ const CANONICAL_STORY: LinkStory = {
 const CANONICAL_CHARTER: Charter = { in: 'In.', out: ['Out.'], endEvent: 'End.' }
 const CANONICAL_ROLE: Role = { role: 'turning_point', roleKind: 'spread' }
 
-/** The linking prompts' versions, computed once at load. */
+/** The linking prompts' versions, computed once at load. The link prompt's input shows a charter with no end event too, so its rendering is versioned. */
 export const OVERVIEW_PROMPT_VERSIONS = {
   link: promptVersionOf(
     buildLinkPrompt({
       story: CANONICAL_STORY,
-      overviews: [{ ref: 'O1', id: 'o', title: 'Overview', charter: CANONICAL_CHARTER, entries: [{ title: 'Entry', date: '2026-01-01' }] }],
+      overviews: [
+        { ref: 'O1', id: 'o', title: 'Overview', charter: CANONICAL_CHARTER, entries: [{ title: 'Entry', date: '2026-01-01' }] },
+        { ref: 'O2', id: 'p', title: 'Overview', charter: { ...CANONICAL_CHARTER, endEvent: null }, entries: [{ title: 'Entry', date: '2026-01-01' }] },
+      ],
       partners: [{ ...CANONICAL_STORY, ref: 'F1' }],
     }),
     linkSchema,

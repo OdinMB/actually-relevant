@@ -10,7 +10,7 @@
 import { config } from '../config.js'
 import { normalizeQuote } from '../lib/quoteMatch.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
-import { OVERVIEW_PROMPT_VERSIONS, type ReviewPromptInput } from '../prompts/overviews.js'
+import { NO_END_EVENT, OVERVIEW_PROMPT_VERSIONS, type ReviewPromptInput } from '../prompts/overviews.js'
 import type { ReviewAnswer } from '../schemas/overviews.js'
 import { roleOf, type ModelCall } from './overviewLink.js'
 import { scopeAfterReview } from './overviewStatus.js'
@@ -67,6 +67,9 @@ export type ReviewOptions = Pick<typeof config.overviews, 'maxTitleChars' | 'max
 
 const ref = (i: number) => `E${i + 1}`
 const same = (a: string, b: string) => normalizeQuote(a).toLowerCase() === normalizeQuote(b).toLowerCase()
+/** The answer's END_EVENT is the charter's: for one that names none, copied as empty or as the prompt shows none. */
+const sameEndEvent = (answered: string, charter: string | null) =>
+  charter === null ? !answered.trim() || same(answered, NO_END_EVENT) || same(answered, 'none') : same(answered, charter)
 const sameRole = (a: Role, b: Role) => a.role === b.role && a.roleKind === b.roleKind
 
 /**
@@ -118,7 +121,7 @@ export function allowedActions(
 
   const proposed = answer.charter
   if (!same(proposed.in, c.charter.in)) refusals.push({ what: 'charter', reason: 'rewrites IN: a review only adds to OUT' })
-  if (!same(proposed.endEvent, c.charter.endEvent)) refusals.push({ what: 'charter', reason: 'rewrites END_EVENT: a review only adds to OUT' })
+  if (!sameEndEvent(proposed.endEvent, c.charter.endEvent)) refusals.push({ what: 'charter', reason: 'rewrites END_EVENT: a review only adds to OUT' })
   const dropped = c.charter.out.filter(o => !proposed.out.some(p => same(p, o)))
   if (dropped.length > 0) refusals.push({ what: 'charter', reason: `drops OUT entries, which would widen it: ${dropped.join('; ')}` })
   const added: string[] = []

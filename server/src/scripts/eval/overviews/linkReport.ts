@@ -39,7 +39,9 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
       ? [
           '### End events',
           '',
-          ...r.endEvents.map(e => `- ${e.key}, run ${e.run}: ${e.right === null ? 'no verdict' : e.right ? 'right' : 'wrong'}: ${cell(e.why)}`),
+          `Founded with no end event (never wrong; for the owner): ${r.endEvents.filter(e => e.verdict === 'none').length} of ${r.endEvents.length}.`,
+          '',
+          ...r.endEvents.map(e => `- ${e.key}, run ${e.run}: ${e.verdict ?? 'no overview'}: ${cell(e.why)}`),
           '',
         ]
       : []),

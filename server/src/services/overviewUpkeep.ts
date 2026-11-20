@@ -253,7 +253,7 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
     c => c.overviewId,
     async c => {
       const offered = standsFacts(c.members, at.today, options)
-      const signature = standsSignature(offered, c.entries)
+      const signature = standsSignature(c.title, offered, c.entries)
       if (signature === c.lastSignature) return
       const result = await refreshStands({ title: c.title, entries: c.entries }, offered, at.today, deps.stands, options)
       tally.costUsd += result.costUsd

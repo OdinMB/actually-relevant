@@ -12,17 +12,17 @@ import { unescapeXmlDeep } from '../lib/xml.js'
 import { OVERVIEW_PROMPT_VERSIONS, type CloseCheckInput, type CloseInput } from '../prompts/overviews.js'
 import type { CloseAnswer, CloseCheckAnswer } from '../schemas/overviews.js'
 import type { ModelCall } from './overviewLink.js'
-import type { Charter, LinkStory } from './overviewTypes.js'
+import type { ClosingCharter, LinkStory } from './overviewTypes.js'
 
 export interface CloseDeps {
   close(input: CloseInput): Promise<ModelCall<CloseAnswer>>
   closeCheck(input: CloseCheckInput): Promise<ModelCall<CloseCheckAnswer>>
 }
 
-/** A story the link flagged as reporting its overview's end event, with what the calls are shown. */
+/** A story the link flagged as reporting its overview's end event, with what the calls are shown: never of an overview that names none. */
 export interface CloseCase {
   overviewId: string
-  charter: Charter
+  charter: ClosingCharter
   story: LinkStory
   /** The overview's other newest active entries, newest first: titles and days. */
   entries: { title: string; date: string }[]

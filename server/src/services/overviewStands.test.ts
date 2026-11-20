@@ -358,11 +358,13 @@ describe('the signature', () => {
 
   it('changes when a fact is gained, lost or expires, or a role changes, and not with order', () => {
     const offered = offer()
-    const base = standsSignature(offered, entries)
-    expect(standsSignature([...offered].reverse(), entries)).toBe(base)
-    expect(standsSignature(offered.slice(1), entries)).not.toBe(base)
-    expect(standsSignature([{ ...offered[0]!, current: false }, ...offered.slice(1)], entries)).not.toBe(base)
-    expect(standsSignature(offered, [{ storyId: 'a', role: { role: 'turning', roleKind: 'response' } }])).not.toBe(base)
+    const base = standsSignature('Title', offered, entries)
+    expect(standsSignature('Title', [...offered].reverse(), entries)).toBe(base)
+    expect(standsSignature('Title', offered.slice(1), entries)).not.toBe(base)
+    expect(standsSignature('Title', [{ ...offered[0]!, current: false }, ...offered.slice(1)], entries)).not.toBe(base)
+    expect(standsSignature('Title', offered, [{ storyId: 'a', role: { role: 'turning', roleKind: 'response' } }])).not.toBe(base)
+    // A retitle or re-center: the prompt reads the title, so the stands are written afresh
+    expect(standsSignature('Another title', offered, entries)).not.toBe(base)
   })
 })
 

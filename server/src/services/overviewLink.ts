@@ -12,7 +12,17 @@ import { unescapeXmlDeep } from '../lib/xml.js'
 import { OVERVIEW_PROMPT_VERSIONS, type FoundCheckInput, type FoundInput, type LinkInput } from '../prompts/overviews.js'
 import type { FoundAnswer, FoundCheckAnswer, LinkAnswer, LinkCandidateAnswer } from '../schemas/overviews.js'
 import { groupCandidates, type CandidateOptions, type Neighbour, type RankedOverview } from './overviewCandidates.js'
-import type { CandidateOverview, Charter, FoundingOutcome, LinkOutcome, LinkStory, Memberships, Role, Shared } from './overviewTypes.js'
+import {
+  endEventOf,
+  type CandidateOverview,
+  type Charter,
+  type FoundingOutcome,
+  type LinkOutcome,
+  type LinkStory,
+  type Memberships,
+  type Role,
+  type Shared,
+} from './overviewTypes.js'
 
 /** A model call's result, as `structuredCall` gives it. */
 export interface ModelCall<T> {
@@ -80,8 +90,8 @@ const sharedOf = (a: LinkCandidateAnswer): Shared => ({
 })
 
 const storyTexts = (s: LinkStory) => [s.title, s.label, s.summary]
-/** An overview's side of a quote: its title, its charter's IN and its END_EVENT. Never its OUT list, which names what does not belong. */
-const overviewTexts = (o: CandidateOverview) => [o.title, o.charter.in, o.charter.endEvent]
+/** An overview's side of a quote: its title, its charter's IN and its END_EVENT when it names one. Never its OUT list, which names what does not belong. */
+const overviewTexts = (o: CandidateOverview) => [o.title, o.charter.in, ...(o.charter.endEvent === null ? [] : [o.charter.endEvent])]
 
 /** Why a yes is refused: a shared field left empty, or a quote not found on its side; null when it passes. */
 function refusalOf(answer: LinkCandidateAnswer, story: readonly string[], other: readonly string[]): string | null {
@@ -130,20 +140,25 @@ export interface FoundingDraft {
   roles: { a: Role; b: Role }
 }
 
-/** A draft that names no end event, no title or no IN, or whose title is longer than `maxTitleChars`, founds nothing, and the check is not asked. */
+/**
+ * A draft with no title or no IN, or whose title is longer than `maxTitleChars`, founds nothing, and the
+ * check is not asked. An end event is not required: most developments have none and close by fading.
+ */
 export const draftRefused = (draft: FoundAnswer, options: Pick<typeof config.overviews, 'maxTitleChars'> = config.overviews): boolean =>
-  !draft.charter.endEvent.trim() || !draft.title.trim() || !draft.charter.in.trim() || draft.title.trim().length > options.maxTitleChars
+  !draft.title.trim() || !draft.charter.in.trim() || draft.title.trim().length > options.maxTitleChars
 
 /**
- * Whether the two founding calls agree (`.context/overviews.md`, "How a story is linked", step 3):
+ * Whether the two founding calls agree (`.context/overviews.md`, "How a story is linked", step 4):
  * `refused` for a draft `draftRefused` refuses; `founded` only when the check finds both stories fit
- * and the end event concrete, `disagreed` otherwise; `failed` for a call that gave no answer.
+ * and, when the draft names an end event, finds it concrete; `disagreed` otherwise; `failed` for a call
+ * that gave no answer.
  */
 export function acceptFounding(draft: FoundAnswer | null, check: FoundCheckAnswer | null): FoundingOutcome {
   if (!draft) return 'failed'
   if (draftRefused(draft)) return 'refused'
   if (!check) return 'failed'
-  return check.a.fits === 'yes' && check.b.fits === 'yes' && check.endEventConcrete === 'yes' ? 'founded' : 'disagreed'
+  const endEventHolds = endEventOf(draft.charter.endEvent) === null || check.endEventConcrete === 'yes'
+  return check.a.fits === 'yes' && check.b.fits === 'yes' && endEventHolds ? 'founded' : 'disagreed'
 }
 
 /** A founding attempt: the partner, both calls' answers, and on agreement the draft. */
@@ -206,21 +221,18 @@ async function found(story: LinkStory, partner: Accepted<ShownPartner>, deps: Li
   const [a, b] = partnerStory.datePublished.getTime() <= story.datePublished.getTime() ? [partnerStory, story] : [story, partnerStory]
   const draftCall = await deps.found({ a, b })
   const draft = draftCall.parsed ? unescapeXmlDeep(draftCall.parsed) : null
-  const checkCall = draft && !draftRefused(draft) ? await deps.foundCheck({ charter: draft.charter, a, b }) : null
+  // As stored, and as the check reads it: trimmed, an empty end event none
+  const charter: Charter | null = draft
+    ? { in: draft.charter.in.trim(), out: draft.charter.out.map(o => o.trim()).filter(Boolean), endEvent: endEventOf(draft.charter.endEvent) }
+    : null
+  const checkCall = draft && charter && !draftRefused(draft) ? await deps.foundCheck({ charter, a, b }) : null
   const check = checkCall?.parsed ? unescapeXmlDeep(checkCall.parsed) : null
   const outcome = acceptFounding(draft, check)
   const forStory = (roles: FoundAnswer['roles']) => ({ a: roleOf(roles.a), b: roleOf(roles.b) })
   return {
     partner: partnerStory,
     outcome,
-    draft:
-      outcome === 'founded' && draft
-        ? {
-            title: draft.title.trim(),
-            charter: { in: draft.charter.in.trim(), out: draft.charter.out.map(o => o.trim()).filter(Boolean), endEvent: draft.charter.endEvent.trim() },
-            roles: forStory(draft.roles),
-          }
-        : null,
+    draft: outcome === 'founded' && draft && charter ? { title: draft.title.trim(), charter, roles: forStory(draft.roles) } : null,
     answers: { draft, check },
     shared: partner.shared,
     confidence: partner.answer.confidence,

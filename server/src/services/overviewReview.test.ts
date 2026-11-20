@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { NO_END_EVENT } from '../prompts/overviews.js'
 import type { ReviewAnswer } from '../schemas/overviews.js'
 import type { ModelCall } from './overviewLink.js'
 import { allowedActions, auditOverview, reviewOverview, type ReviewCase, type ReviewDeps, type ReviewEntry } from './overviewReview.js'
@@ -90,6 +91,23 @@ describe('what a review may do', () => {
     expect(actions).toEqual([])
     expect(kept).toBe(3)
     expect(refusals.map(r => r.what)).toEqual(['E2', 'E4', 'E1', 'charter', 'charter', 'charter'])
+  })
+
+  it('reads an END_EVENT of none copied as empty, or as the prompt shows it, as kept; and naming one as a rewrite', () => {
+    const none = base({ charter: { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda'], endEvent: null } })
+    const copied = (endEvent: string) => allowedActions(none, answer({ charter: { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda'], endEvent } }))
+    expect(copied('').refusals).toEqual([])
+    expect(copied(` ${NO_END_EVENT}`).refusals).toEqual([])
+    expect(copied('The ministry declares it over').refusals).toEqual([{ what: 'charter', reason: 'rewrites END_EVENT: a review only adds to OUT' }])
+    // Narrowing keeps the charter's none
+    const narrowed = allowedActions(none, answer({ charter: { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda', 'Measles'], endEvent: '' } }))
+    expect(narrowed.actions).toEqual([
+      { kind: 'narrow', added: ['Measles'], charter: { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda', 'Measles'], endEvent: null } },
+    ])
+    // A named end event copied as empty is a rewrite
+    expect(allowedActions(base(), answer({ charter: { ...answer().charter, endEvent: '' } })).refusals.map(r => r.reason)).toEqual([
+      'rewrites END_EVENT: a review only adds to OUT',
+    ])
   })
 
   it('never adds again an OUT entry an editor’s undo took out, and keeps the others it adds', () => {

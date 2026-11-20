@@ -297,14 +297,15 @@ export async function refreshStands(
 }
 
 /**
- * What decides a refresh: the facts offered with their current flags, and the entries with their
- * roles. A refresh is due when it differs from the last attempt's (an entry gained or lost, a member's
- * pool gained usable facts, a cited fact demoted or expired, a role changed).
+ * What decides a refresh: the title the prompt reads, the facts offered with their current flags, and
+ * the entries with their roles. A refresh is due when it differs from the last attempt's (a retitle or
+ * re-center, an entry gained or lost, a member's pool gained usable facts, a cited fact demoted or
+ * expired, a role changed).
  */
-export function standsSignature(offered: readonly OfferedFact[], entries: readonly { storyId: string; role: Role }[]): string {
+export function standsSignature(title: string, offered: readonly OfferedFact[], entries: readonly { storyId: string; role: Role }[]): string {
   const facts = offered.map(o => `${o.id}:${o.current ? 'c' : 'e'}`).sort()
   const members = entries.map(e => `${e.storyId}:${e.role.role}:${e.role.roleKind ?? ''}`).sort()
-  return `${facts.join(',')}|${members.join(',')}`
+  return `${JSON.stringify(title)}|${facts.join(',')}|${members.join(',')}`
 }
 
 /**

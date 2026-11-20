@@ -14,6 +14,7 @@ import { linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import { STALE_REVIEW, planAudit, planBurst, planClosing, planReview, planStatus } from '../../../services/overviewPlans.js'
 import type { ReviewCase } from '../../../services/overviewReview.js'
 import { overviewStateOf } from '../../../services/overviewState.js'
+import { namesEndEvent } from '../../../services/overviewTypes.js'
 import type { MemberFact } from '../../../services/overviewStands.js'
 import type { StandsCase, UpkeepDeps } from '../../../services/overviewUpkeep.js'
 import { applied } from '../../../services/overviewChanges.js'
@@ -63,7 +64,7 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
     }
   }
 
-  /** `pendingClosings` over memory: live joins flagged as reporting the end event, of open or quiet unfrozen overviews, with no settling close decision. */
+  /** `pendingClosings` over memory: live joins flagged as reporting the end event, of open or quiet unfrozen overviews that name one, with no settling close decision. */
   const closings = async (): Promise<CloseCase[]> => {
     const judged = new Set(
       sandbox.decisions.filter(d => d.kind === 'close' && d.outcome !== 'failed' && d.outcome !== 'stale').map(d => `${d.overviewId}:${d.storyId}`),
@@ -74,10 +75,12 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
         const o = d.overviewId ? get(d.overviewId) : undefined
         const e = o && activeEntries(o).find(x => x.storyId === d.storyId)
         if (!o || !e || !e.published || judged.has(`${o.id}:${d.storyId}`) || !(o.status === 'open' || o.status === 'quiet') || o.frozen) return []
+        const charter = o.charter
+        if (!namesEndEvent(charter)) return []
         return [
           {
             overviewId: o.id,
-            charter: o.charter,
+            charter,
             story: story(e.storyId!),
             entries: activeEntries(o)
               .filter(x => x.storyId !== e.storyId && x.datePublished!.getTime() <= e.datePublished!.getTime())
@@ -93,7 +96,7 @@ export function sandboxUpkeep(sandbox: Sandbox, facts: (storyIds: string[]) => M
   const standsCase = (o: SandboxOverview, today: string): StandsCase => {
     const entries = activeEntries(o).sort(byDate)
     const members = facts(entries.map(e => e.storyId!))
-    const marker = JSON.stringify([entries.map(e => [e.storyId, e.role, e.roleKind]), members.map(m => [m.storyId, m.fact.id])])
+    const marker = JSON.stringify([o.title, entries.map(e => [e.storyId, e.role, e.roleKind]), members.map(m => [m.storyId, m.fact.id])])
     return {
       overviewId: o.id,
       title: o.title,

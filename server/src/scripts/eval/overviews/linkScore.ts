@@ -4,8 +4,8 @@
  * development most of its members are `must` entries of. `link`: precision over `must` entries and
  * near misses that ended in an overview (`optional` entries ignored; a near miss in its development's
  * overview, or an entry in another's, is wrong), and recall of `must` entries. `found`: foundings whose
- * pair is not two entries of one development, and whether each development's founded charter names the
- * key's end event (the strong judge's verdicts, passed in). `role`: turning point or routine against
+ * pair is not two entries of one development, and founded charters naming an end event other than the
+ * key's (the strong judge's verdicts, passed in; one naming none is never wrong). `role`: turning point or routine against
  * the key. Means over runs. Pure.
  */
 import type { Role } from '../../../services/overviewTypes.js'
@@ -14,7 +14,7 @@ import type { AnswerKey } from './keySchema.js'
 /** One replay's end state: each overview's members and founding pair, and each story's stored role. */
 export interface ReplayRun {
   run: number
-  overviews: { id: string; members: string[]; foundedFrom: [string, string]; endEvent: string }[]
+  overviews: { id: string; members: string[]; foundedFrom: [string, string]; endEvent: string | null }[]
   /** Each replayed story's role (from its join, its founding, or the link answer for a story left alone), by slug. */
   roles: Map<string, Role>
 }
@@ -157,28 +157,31 @@ export interface LinkScore {
 }
 
 /**
- * The bars over every run: joins right ≥97% and must entries found ≥85% (`link`); no wrong founding,
- * and the right end event for every development (`found`, from `endEventRight`: development id → the
- * judge's verdict per run, null where it had no overview); roles agreeing ≥85% (`role`).
+ * A development's founded end event in one run, as the strong judge read it: right or wrong against
+ * the key's; `none` when its charter names none (most developments end by fading: counted for the
+ * owner, never wrong); `unjudged` when it names one and the judge gave nothing; null when no overview
+ * of it was founded (the joins' bars count that).
  */
-export function scoreLinking(
-  keys: readonly AnswerKey[],
-  runs: readonly ReplayRun[],
-  endEventRight: ReadonlyMap<string, (boolean | null)[]> = new Map(),
-): LinkScore {
+export type EndEventVerdict = 'right' | 'wrong' | 'none' | 'unjudged' | null
+
+/**
+ * The bars over every run: joins right ≥97% and must entries found ≥85% (`link`); no wrong founding,
+ * and no wrong end event, judged only where a founding names one (`found`, from `endEvents`:
+ * development id → its verdict per run; no verdict while a named one is unjudged); roles agreeing ≥85%
+ * (`role`).
+ */
+export function scoreLinking(keys: readonly AnswerKey[], runs: readonly ReplayRun[], endEvents: ReadonlyMap<string, EndEventVerdict[]> = new Map()): LinkScore {
   const scored = runs.map(r => scoreLinkRun(keys, r))
-  const verdicts = keys.map(k => endEventRight.get(k.id) ?? [])
-  const everyRun = verdicts.length === 0 ? null : mean(runs.map((_, i) => (verdicts.every(v => v[i] === true) ? 1 : 0)))
+  const verdicts = keys.map(k => endEvents.get(k.id) ?? [])
+  const unjudged = verdicts.some(v => v.includes('unjudged'))
+  const wrongEnds = runs.length === 0 || unjudged ? null : mean(runs.map((_, i) => verdicts.filter(v => v[i] === 'wrong').length))
   return {
     runs: scored,
     link: [
       bar('joins right', mean(scored.map(s => ratio(s.right, s.right + s.wrong))), 0.97),
       bar('true joins found', mean(scored.map(s => ratio(s.found, s.must))), 0.85),
     ],
-    found: [
-      bar('wrong foundings', mean(scored.map(s => s.wrongFoundings)), 0, 'atMost'),
-      bar('right end event for every development', runs.length === 0 ? null : everyRun, 1),
-    ],
+    found: [bar('wrong foundings', mean(scored.map(s => s.wrongFoundings)), 0, 'atMost'), bar('wrong end events (where one is named)', wrongEnds, 0, 'atMost')],
     role: [bar('roles agreeing', mean(scored.map(s => ratio(s.rolesAgreeing, s.rolesJudged))), 0.85)],
   }
 }

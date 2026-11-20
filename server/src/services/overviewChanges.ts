@@ -34,6 +34,20 @@ export interface OverviewFields {
   frozenAt: Date | null
   hidden: boolean
   charter: Charter
+  /**
+   * The model and prompt version that wrote the charter and title, which the public AI marker names: a
+   * founding's or an automated re-center's; an editor's retitle or new charter keeps them (an
+   * editor-written title stays marked AI-written, the cautious side).
+   */
+  charterModel: string
+  charterPromptVersion: string
+  /** The last re-center and who made it (`recenter`, `editor`, or `undo` for an Undo of an automated one). */
+  recenteredAt: Date | null
+  recenteredBy: string | null
+  /** The last automated re-center attempt: signals after it count. Never put back by an Undo. */
+  recenterTriedAt: Date | null
+  /** Applied automated re-centers, not undone (an Undo puts the count back). */
+  automatedRecenters: number
   /** The active entries the last review kept (the count trigger, `reviewDue`), and when it ran. */
   entriesAtLastReview: number
   reviewedAt: Date | null
@@ -98,6 +112,8 @@ export const DECISION_KINDS = [
   'editor_hide',
   'editor_close',
   'undo',
+  'recenter',
+  'editor_recenter',
 ] as const
 export type DecisionKind = (typeof DECISION_KINDS)[number]
 
@@ -284,6 +300,12 @@ export const newOverviewRow = (n: NewOverview): OverviewRow => ({
   frozenAt: null,
   hidden: false,
   charter: n.charter,
+  charterModel: n.charterModel,
+  charterPromptVersion: n.charterPromptVersion,
+  recenteredAt: null,
+  recenteredBy: null,
+  recenterTriedAt: null,
+  automatedRecenters: 0,
   entriesAtLastReview: 0,
   reviewedAt: null,
   reopenedAt: null,
@@ -349,10 +371,20 @@ export const publicBefore = (o: Pick<OverviewRow, 'scope' | 'hidden' | 'slug'> |
 /**
  * Fields an Undo never puts back, nor checks: a slug once given stays reserved; the burst count never
  * counts again the joins a write answered; the scope and the last entry follow the entries, settled
- * again after the undo; and a review that ran stays run (its time, the entries it kept, a closure's
- * review), so its triggers count from it.
+ * again after the undo; a review that ran stays run (its time, the entries it kept, a closure's
+ * review), so its triggers count from it; and an automated re-center attempt stays tried, so a later
+ * attempt never blocks an Undo.
  */
-const ONE_WAY = new Set<string>(['slug', 'joinsCountedFrom', 'scope', 'lastEntryAt', 'reviewedAt', 'entriesAtLastReview', 'closureReviewedAt'])
+const ONE_WAY = new Set<string>([
+  'slug',
+  'joinsCountedFrom',
+  'scope',
+  'lastEntryAt',
+  'reviewedAt',
+  'entriesAtLastReview',
+  'closureReviewedAt',
+  'recenterTriedAt',
+])
 
 const DATE_FIELDS = new Set([
   'closedAt',
@@ -363,6 +395,8 @@ const DATE_FIELDS = new Set([
   'reopenedAt',
   'joinsCountedFrom',
   'lastEntryAt',
+  'recenteredAt',
+  'recenterTriedAt',
   'detachedAt',
 ])
 

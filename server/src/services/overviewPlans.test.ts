@@ -57,6 +57,12 @@ describe('planJoin', () => {
     expect(held.outcome).toBe('held')
     expect(held.plan.newEntries).toEqual([])
   })
+
+  it('keeps the end-event flag only for an overview that names an end event, so one with none never starts a closing', () => {
+    const flagged = joinResult(story, 'o1', true)
+    expect(planJoin(overview(), flagged, ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: true })
+    expect(planJoin(overview({ charter: { ...charter, endEvent: null } }), flagged, ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: false })
+  })
 })
 
 describe('planStatus', () => {

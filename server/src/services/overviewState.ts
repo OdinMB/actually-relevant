@@ -28,6 +28,8 @@ export type StateRow = Pick<
   | 'reviewedAt'
   | 'reopenedAt'
   | 'joinsCountedFrom'
+  | 'recenteredAt'
+  | 'recenteredBy'
 >
 
 export type StateEntry = Pick<EntryRow, 'id' | 'storyId' | 'status' | 'joinedBy' | 'joinedAt' | 'published' | 'datePublished'>
@@ -40,8 +42,8 @@ const HOUR_MS = 3_600_000
  * published in the last `nightHours` of `now` that the pipeline joined after `joinsCountedFrom` (the
  * last freeze, unfreeze, review or undo), so a backfill's old stories and the joins one freeze answered
  * never count; while frozen by a burst and not reviewed since, when; while closing, its end-event story
- * and whether its closure review ran; when a person last reopened it; and the newest reader's report
- * that queued a review (`reportAt`, from the feedback the caller reads).
+ * and whether its closure review ran; when a person last reopened it; the newest reader's report
+ * that queued a review (`reportAt`, from the feedback the caller reads); and its last re-center.
  */
 export function overviewStateOf(
   o: StateRow,
@@ -78,5 +80,7 @@ export function overviewStateOf(
     closureReviewed: closing && o.closureReviewedAt !== null,
     reopenedAt: o.reopenedAt,
     reportAt,
+    recenteredAt: o.recenteredAt,
+    recenteredBy: o.recenteredBy,
   }
 }

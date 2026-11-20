@@ -15,7 +15,7 @@ import { linkStories, parseCharter } from './overviewInput.js'
 import { publicOverviewSql } from './overviewPublicRule.js'
 import type { ReviewCase, ReviewEntry } from './overviewReview.js'
 import { overviewStateOf, type StateEntry, type StateRow } from './overviewState.js'
-import { ENTRY_ROLES, OVERVIEW_SCOPES, OVERVIEW_STATUSES, ROLE_KINDS, type OverviewState, type Role } from './overviewTypes.js'
+import { ENTRY_ROLES, OVERVIEW_SCOPES, OVERVIEW_STATUSES, ROLE_KINDS, namesEndEvent, type OverviewState, type Role } from './overviewTypes.js'
 import type { StandsCase } from './overviewUpkeep.js'
 import { loadMemberFacts } from './passRecords.js'
 import { oneOf } from './storyContextRecords.js'
@@ -27,10 +27,11 @@ const roleFrom = (role: string, kind: string | null): Role => {
 
 /**
  * The stories a join flagged as reporting their overview's end event (`reportsEndEvent` on a live
- * `joined` link decision), still active members and published, of an overview that is open or quiet
- * and not frozen, with no `close` decision for that pair but a failed or stale one (an undone one
- * included: an editor's undo of a closing is not judged again); oldest first. Each with the overview's
- * charter and its newest `candidateEntries` other entries published on or before the story's day.
+ * `joined` link decision), still active members and published, of an overview that is open or quiet,
+ * not frozen and names an end event (one with none closes only by fading, whatever was flagged before
+ * an editor took it out), with no `close` decision for that pair but a failed or stale one (an undone
+ * one included: an editor's undo of a closing is not judged again); oldest first. Each with the
+ * overview's charter and its newest `candidateEntries` other entries published on or before the story's day.
  */
 export async function pendingClosings(db: OverviewDb, options: Pick<typeof config.overviews, 'candidateEntries'> = config.overviews): Promise<CloseCase[]> {
   const rows = await db.$queryRaw<{ story_id: string; overview_id: string; charter: unknown }[]>`
@@ -40,7 +41,7 @@ export async function pendingClosings(db: OverviewDb, options: Pick<typeof confi
     JOIN overviews o ON o.id = d.overview_id
     JOIN stories s ON s.id = d.story_id
     WHERE d.kind = 'link' AND d.outcome = 'joined' AND d.undone_at IS NULL AND d.inputs->>${REPORTS_END_EVENT} = 'true'
-      AND s.status = 'published' AND o.status IN ('open', 'quiet') AND NOT o.frozen
+      AND s.status = 'published' AND o.status IN ('open', 'quiet') AND NOT o.frozen AND o.charter->>'endEvent' IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM overview_decisions c
         WHERE c.kind = 'close' AND c.story_id = d.story_id AND c.overview_id = d.overview_id AND c.outcome NOT IN ('failed', 'stale')
@@ -60,7 +61,7 @@ export async function pendingClosings(db: OverviewDb, options: Pick<typeof confi
   for (const r of rows) {
     const story = stories.get(r.story_id)
     const charter = parseCharter(r.charter)
-    if (!story || !charter) continue
+    if (!story || !charter || !namesEndEvent(charter)) continue
     const entries = await db.$queryRaw<{ title: string; date_published: Date }[]>`
       SELECT COALESCE(s.title, s.source_title) AS title, s.date_published
       FROM overview_entries e JOIN stories s ON s.id = e.story_id
@@ -92,6 +93,8 @@ interface StateQueryRow {
   reviewed_at: Date | null
   reopened_at: Date | null
   joins_counted_from: Date | null
+  recentered_at: Date | null
+  recentered_by: string | null
 }
 
 const stateRow = (r: StateQueryRow): StateRow => ({
@@ -112,6 +115,8 @@ const stateRow = (r: StateQueryRow): StateRow => ({
   reviewedAt: r.reviewed_at,
   reopenedAt: r.reopened_at,
   joinsCountedFrom: r.joins_counted_from,
+  recenteredAt: r.recentered_at,
+  recenteredBy: r.recentered_by,
 })
 
 /**
@@ -127,7 +132,7 @@ export async function overviewStates(
   const rows = await db.$queryRaw<StateQueryRow[]>`
     SELECT o.id, o.title, o.scope::text AS scope, o.status::text AS status, o.closed_reason, o.frozen, o.frozen_by, o.frozen_at, o.hidden,
            o.last_entry_at, o.closing_since, o.closing_story_id, o.closure_reviewed_at, o.entries_at_last_review, o.reviewed_at,
-           o.reopened_at, o.joins_counted_from
+           o.reopened_at, o.joins_counted_from, o.recentered_at, o.recentered_by
     FROM overviews o
     WHERE EXISTS (SELECT 1 FROM overview_entries e WHERE e.overview_id = o.id AND e.status = 'active')
     ORDER BY o.founded_at, o.id
@@ -246,8 +251,8 @@ export async function auditPicks(
 /**
  * Every public overview that is not frozen, as its stands are refreshed: its active entries of
  * published stories oldest first, the last refresh that did not fail (its signature, marker and the day
- * its offer next changes), and a marker of what the offer is made of (the entries' roles and the
- * members' pool facts: each fact's verdict, status and source in use). When the marker is the last
+ * its offer next changes), and a marker of what the offer is made of (the title, the entries' roles and
+ * the members' pool facts: each fact's verdict, status and source in use). When the marker is the last
  * refresh's and its day has not come, nothing the offer is made of changed, so the facts are not read
  * (`unchanged`); otherwise its members' usable, structured page facts (`loadMemberFacts`).
  */
@@ -272,7 +277,7 @@ export async function standsCases(db: OverviewDb, today: string): Promise<Stands
       ORDER BY s.date_published, s.id
     `
     const storyIds = entries.map(e => e.story_id)
-    const marker = await standsMarker(db, entries)
+    const marker = await standsMarker(db, o.title, entries)
     const unchanged = o.marker !== null && o.marker === marker && (o.until === null || today < o.until)
     const facts = unchanged ? [] : await loadMemberFacts(db, storyIds)
     cases.push({
@@ -288,10 +293,14 @@ export async function standsCases(db: OverviewDb, today: string): Promise<Stands
   return cases
 }
 
-/** The marker of what a stands offer is made of: the entries and their roles, and every pool fact of theirs `loadMemberFacts` could read, with what decides whether it does. */
-async function standsMarker(db: OverviewDb, entries: readonly { story_id: string; role: string; role_kind: string | null }[]): Promise<string> {
+/**
+ * The marker of what a stands offer is made of: the title the prompt reads (so a retitle or re-center
+ * forces a fresh write), the entries and their roles, and every pool fact of theirs `loadMemberFacts`
+ * could read, with what decides whether it does.
+ */
+async function standsMarker(db: OverviewDb, title: string, entries: readonly { story_id: string; role: string; role_kind: string | null }[]): Promise<string> {
   const members = entries.map(e => `${e.story_id}:${e.role}:${e.role_kind ?? ''}`).sort()
-  if (entries.length === 0) return 'none'
+  if (entries.length === 0) return `${title}|none`
   const [row] = await db.$queryRaw<{ n: bigint; facts: string | null }[]>`
     SELECT COUNT(*) AS n,
            md5(string_agg(f.id || ':' || f.verdict::text || ':' || f.status::text || ':' || COALESCE(f.structure_model, '') || ':' ||
@@ -299,5 +308,5 @@ async function standsMarker(db: OverviewDb, entries: readonly { story_id: string
     FROM pool_facts f JOIN evidence_sources s ON s.id = f.source_id
     WHERE f.story_id = ANY(${entries.map(e => e.story_id)}::text[])
   `
-  return `${members.join(',')}|${String(row?.n ?? 0)}:${row?.facts ?? ''}`
+  return `${title}|${members.join(',')}|${String(row?.n ?? 0)}:${row?.facts ?? ''}`
 }

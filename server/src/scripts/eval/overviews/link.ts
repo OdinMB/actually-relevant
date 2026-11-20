@@ -21,7 +21,7 @@ import { JUDGE_ARM } from './contextJudge.js'
 import { inDevelopmentHalf } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
-import { scoreLinking, type LinkScore, type ReplayRun } from './linkScore.js'
+import { scoreLinking, type EndEventVerdict, type LinkScore, type ReplayRun } from './linkScore.js'
 import { createSandbox } from './overviewSandbox.js'
 import { buildEndEventJudgePrompt, endEventJudgeSchema } from './prompts.js'
 
@@ -60,7 +60,7 @@ export interface LinkStepReport {
   stories: number
   left: { what: string; reason: string }[]
   score: LinkScore
-  endEvents: { key: string; run: number; right: boolean | null; why: string }[]
+  endEvents: { key: string; run: number; verdict: EndEventVerdict; why: string }[]
   /** The replay's model spend per run, and per story. */
   costUsd: number
   perStoryUsd: number | null
@@ -135,7 +135,7 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
     if (stopped) break
   }
 
-  // The strong judge on each development's founded end event, per run
+  // The strong judge on each development's founded end event, per run: only where the founding names one
   const provisional = scoreLinking(keys, runs)
   const endEvents: LinkStepReport['endEvents'] = []
   for (const r of provisional.runs) {
@@ -144,7 +144,11 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
       const overviewId = r.developments.get(k.id)
       const founded = run.overviews.find(ov => ov.id === overviewId)
       if (!founded) {
-        endEvents.push({ key: k.id, run: r.run, right: null, why: 'no overview of it was founded' })
+        endEvents.push({ key: k.id, run: r.run, verdict: null, why: 'no overview of it was founded' })
+        continue
+      }
+      if (founded.endEvent === null) {
+        endEvents.push({ key: k.id, run: r.run, verdict: 'none', why: 'founded with no end event: it closes by fading' })
         continue
       }
       const prompt = buildEndEventJudgePrompt({ development: k.title, key: k.charter.endEvent, founded: founded.endEvent })
@@ -152,12 +156,12 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
       endEvents.push({
         key: k.id,
         run: r.run,
-        right: answer.parsed ? answer.parsed.same === 'yes' : null,
+        verdict: answer.parsed ? (answer.parsed.same === 'yes' ? 'right' : 'wrong') : 'unjudged',
         why: answer.parsed?.why ?? 'the judge gave no answer',
       })
     }
   }
-  const verdicts = new Map(keys.map(k => [k.id, runs.map(r => endEvents.find(e => e.key === k.id && e.run === r.run)?.right ?? null)]))
+  const verdicts = new Map(keys.map(k => [k.id, runs.map(r => endEvents.find(e => e.key === k.id && e.run === r.run)?.verdict ?? null)]))
   const costUsd = o.ctx.spentUsd() - spentBefore
   return {
     half: o.half,

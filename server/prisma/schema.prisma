@@ -972,6 +972,9 @@ enum OverviewDecisionKind {
   /// An editor's close or reopen (added with the admin views, 20261118231431_overview_editor_close)
   editor_close
   undo
+  /// An automated re-center (two agreeing calls) and an editor's new charter (20261120000620_overview_recenter; .context/overviews.md, "Re-centering")
+  recenter
+  editor_recenter
 }
 
 /// One development followed across our stories. Its dates (`founded_at`, `last_entry_at`) are the development's time, its stories' publication dates, so a backfill forms it as it would have formed live
@@ -985,7 +988,7 @@ model Overview {
   issue                Issue?             @relation(fields: [issueId], references: [id], onDelete: SetNull)
   scope                OverviewScope      @default(forming)
   status               OverviewStatus     @default(open)
-  /// { in, out: string[], endEvent }, the answer keys' shape
+  /// { in, out: string[], endEvent: string | null }, the answer keys' shape; a null end event closes only by fading
   charter              Json
   charterModel         String             @map("charter_model")
   charterPromptVersion String             @map("charter_prompt_version")
@@ -1017,6 +1020,13 @@ model Overview {
   joinsCountedFrom     DateTime?          @map("joins_counted_from")
   /// OUT entries an editor's undo of a review took out, which no review adds again
   lockedOut            Json               @default("[]") @map("locked_out")
+  /// The last re-center of its charter and who made it (recenter, editor, or undo for an Undo of an automated one): an editor's or an Undo's keeps automation from re-centering it for editorRecenterLockDays
+  recenteredAt         DateTime?          @map("recentered_at")
+  recenteredBy         String?            @map("recentered_by")
+  /// The last automated re-center attempt: only signals after it count (never put back by an Undo)
+  recenterTriedAt      DateTime?          @map("recenter_tried_at")
+  /// Applied automated re-centers not undone: at maxAutomatedRecenters only an editor re-centers it
+  automatedRecenters   Int                @default(0) @map("automated_recenters")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
   entries              OverviewEntry[]
@@ -1042,9 +1052,9 @@ model OverviewEntry {
   roleKind      String?           @map("role_kind")
   status        EntryStatus       @default(active)
   judgment      JudgmentStatus    @default(unreviewed)
-  /// link, founding or editor
+  /// pipeline, editor, or recenter (a re-center's join of a story it took in)
   joinedBy      String            @map("joined_by")
-  /// pipeline, review or an editor's id; null while active
+  /// pipeline, review, recenter or an editor's id; null while active
   detachedBy    String?           @map("detached_by")
   detachReason  String?           @map("detach_reason")
   /// An editor's attach or detach, which automation never reverses
@@ -1101,7 +1111,7 @@ model OverviewDecision {
   story         Story?               @relation(fields: [storyId], references: [id], onDelete: SetNull)
   /// joined, founded, none, rejected, held, conflict, failed (a link); founded, disagreed, refused, failed (a founding)
   outcome       String
-  /// Ids only: the candidates and their distances, the founding partner
+  /// Ids only: the candidates and their distances, the founding partner. A link decision's `signals` have the GIN index `overview_decisions_link_signals` (raw SQL in 20261120000620_overview_recenter)
   inputs        Json                 @default("{}")
   answer        Json?
   model         String?

@@ -18,7 +18,7 @@ const quotePair = (what: string) =>
       other: z
         .string()
         .describe(
-          `The words of the candidate that state ${what}, copied exactly: from an overview's TITLE, IN or END_EVENT (never its OUT entries), or from a story's title, label or summary. Empty when it states none.`,
+          `The words of the candidate that state ${what}, copied exactly: from an overview's TITLE, IN or END_EVENT (never its OUT entries or an END_EVENT of none), or from a story's title, label or summary. Empty when it states none.`,
         ),
     })
     .describe(`Where both sides state ${what}.`)
@@ -42,7 +42,9 @@ export const linkSchema = z.object({
         end: quotePair('what would end both: the outcome whose arrival closes the development'),
         reportsEndEvent: z
           .boolean()
-          .describe("For an overview: whether the story reports that its charter's END_EVENT has happened. Always false for a story candidate."),
+          .describe(
+            "For an overview: whether the story reports that its charter's END_EVENT has happened. Always false for a story candidate and for an overview whose END_EVENT is none.",
+          ),
         confidence: z.number().describe('Your probability, from 0 to 1, that the story belongs to the candidate.'),
       }),
     )
@@ -63,9 +65,7 @@ export const foundSchema = z.object({
   charter: z.object({
     in: z.string().describe('One or two sentences: what the development is, where, since when, and what kinds of stories belong to it.'),
     out: z.array(z.string()).describe('Each neighboring development or theme that must stay separate, as a short phrase.'),
-    endEvent: z
-      .string()
-      .describe('The one concrete, observable event that would end the development, as <END_EVENT> asks. Empty only when no such event can be named.'),
+    endEvent: z.string().describe('The one concrete, observable event that would end the development, as <END_EVENT> asks. Empty when it has none.'),
   }),
   roles: z
     .object({ a: z.object({ role, roleKind }), b: z.object({ role, roleKind }) })
@@ -85,9 +85,9 @@ export const foundCheckSchema = z.object({
   a: fits.describe('<STORY_A> against the charter.'),
   b: fits.describe('<STORY_B> against the charter.'),
   endEventConcrete: z
-    .enum(['yes', 'no'])
+    .enum(['yes', 'no', 'none'])
     .describe(
-      "yes: the charter's END_EVENT is a concrete, observable event a news report could say has happened. no: it is vague, a trend, or never observable.",
+      "yes: the charter's END_EVENT is a concrete, observable event a news report could say has happened. no: it is vague, a trend, or never observable. none: the charter's END_EVENT is none.",
     ),
 })
 
@@ -150,7 +150,7 @@ export const reviewSchema = z.object({
     .object({
       in: z.string().describe("The charter's IN, copied exactly as given."),
       out: z.array(z.string()).describe("The charter's OUT entries as given, each kept, with any you add after them as <CHARTER_RULES> allows."),
-      endEvent: z.string().describe("The charter's END_EVENT, copied exactly as given."),
+      endEvent: z.string().describe("The charter's END_EVENT, copied exactly as given; empty when it is none."),
     })
     .describe('The charter, narrowed only by additions to OUT.'),
   title: z.string().describe('A corrected title only when the current one misnames the development, as <TITLE_RULES> asks; empty to keep it.'),

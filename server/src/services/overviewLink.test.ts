@@ -109,17 +109,31 @@ describe('acceptLink', () => {
     expect(got.join).toBeNull()
     expect(got.refusals).toEqual([{ id: 'O1', reason: "place: the candidate's quote is not in its text" }])
   })
+
+  it('takes the overview side of a quote from its title and IN alone when its charter names no end event', () => {
+    const none = { ...shownOverview('A', 'O1', 0.1), charter: { in: 'The Ebola outbreak in Ituri province, until it fades.', out: [], endEvent: null } }
+    expect(acceptLink(s, [none], [], answer([yes('O1', { end: { story: 'declares it over', other: 'until it fades' } })])).join).not.toBeNull()
+    expect(acceptLink(s, [none], [], answer([yes('O1', { end: { story: 'declares it over', other: 'reporting stops' } })])).refusals).toEqual([
+      { id: 'O1', reason: "end: the candidate's quote is not in its text" },
+    ])
+  })
 })
 
 describe('acceptFounding', () => {
-  it('founds only when the check agrees on both stories and the end event', () => {
+  it('founds only when the check agrees on both stories and on a named end event', () => {
     expect(acceptFounding(draft, agree)).toBe('founded')
     expect(acceptFounding(draft, { ...agree, b: { fits: 'no', reason: 'r' } })).toBe('disagreed')
     expect(acceptFounding(draft, { ...agree, endEventConcrete: 'no' })).toBe('disagreed')
+    expect(acceptFounding(draft, { ...agree, endEventConcrete: 'none' })).toBe('disagreed')
   })
 
-  it('refuses a charter without an end event, and fails on a call that gave nothing', () => {
-    expect(acceptFounding({ ...draft, charter: { ...draft.charter, endEvent: ' ' } }, agree)).toBe('refused')
+  it('founds a charter that names no end event on the stories alone, and fails on a call that gave nothing', () => {
+    const none = { ...draft, charter: { ...draft.charter, endEvent: ' ' } }
+    expect(acceptFounding(none, { ...agree, endEventConcrete: 'none' })).toBe('founded')
+    // The check's word on an end event the draft did not name does not count
+    expect(acceptFounding(none, { ...agree, endEventConcrete: 'no' })).toBe('founded')
+    expect(acceptFounding(none, { ...agree, a: { fits: 'no', reason: 'r' } })).toBe('disagreed')
+    expect(acceptFounding({ ...draft, title: ' ' }, agree)).toBe('refused')
     expect(acceptFounding(null, agree)).toBe('failed')
     expect(acceptFounding(draft, null)).toBe('failed')
   })
@@ -278,13 +292,28 @@ describe('linkStory', () => {
     expect(got).toMatchObject({ outcome: 'none', founding: { outcome: 'disagreed', draft: null } })
   })
 
-  it('refuses a draft without an end event without asking the check', async () => {
+  it('founds a draft that names no end event, its charter storing none, once the check finds both stories fit', async () => {
     const s = story('s', 10)
     const w = world({
       stories: [s, story('p', 5)],
       neighbours: { s: [{ id: 'p', distance: 0.2 }] },
       link: () => answer([yesPartner('F1')]),
-      found: { ...draft, charter: { ...draft.charter, endEvent: '' } },
+      found: { ...draft, charter: { ...draft.charter, endEvent: '  ' } },
+      check: { ...agree, endEventConcrete: 'none' },
+    })
+    const got = await linkStory(s, w.deps)
+    expect(got).toMatchObject({ outcome: 'founded', founding: { outcome: 'founded' } })
+    expect(got.founding?.draft?.charter.endEvent).toBeNull()
+    expect(w.calls.foundCheck).toHaveBeenCalledWith(expect.objectContaining({ charter: expect.objectContaining({ endEvent: null }) }))
+  })
+
+  it('refuses a draft without a title without asking the check', async () => {
+    const s = story('s', 10)
+    const w = world({
+      stories: [s, story('p', 5)],
+      neighbours: { s: [{ id: 'p', distance: 0.2 }] },
+      link: () => answer([yesPartner('F1')]),
+      found: { ...draft, title: '' },
     })
     expect(await linkStory(s, w.deps)).toMatchObject({ outcome: 'none', founding: { outcome: 'refused' } })
     expect(w.calls.foundCheck).not.toHaveBeenCalled()

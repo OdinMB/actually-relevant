@@ -72,21 +72,29 @@ export const activated = (e: Pick<NewEntry, 'id' | 'fields'>): Change[] => entry
 // One story's linking
 // ---------------------------------------------------------------------------
 
-const linkRecord = (result: LinkResult): LinkInputs => ({
+/** A link decision's record; `endEventNamed` false (the overview joined names none) drops the end-event flag, so it never starts a closing. */
+const linkRecord = (result: LinkResult, endEventNamed: boolean): LinkInputs => ({
   shown: result.shown,
   proposed: result.proposed,
   refusals: result.refusals,
-  reportsEndEvent: result.join?.reportsEndEvent ?? false,
+  reportsEndEvent: endEventNamed && (result.join?.reportsEndEvent ?? false),
 })
 
-const linkDecision = (result: LinkResult, outcome: LinkOutcome, overviewId: string | null, ctx: PlanContext, confidence: number | null = null): DecisionDraft =>
+const linkDecision = (
+  result: LinkResult,
+  outcome: LinkOutcome,
+  overviewId: string | null,
+  ctx: PlanContext,
+  confidence: number | null = null,
+  endEventNamed = true,
+): DecisionDraft =>
   draft({
     id: ctx.newId(),
     kind: 'link',
     outcome,
     overviewId,
     storyId: result.story.id,
-    inputs: linkRecord(result),
+    inputs: linkRecord(result, endEventNamed),
     answer: result.answer,
     model: result.model,
     promptVersion: result.promptVersion,
@@ -132,14 +140,15 @@ export const planConflict = (result: LinkResult, ctx: PlanContext): LinkPlan => 
  * state and made active, and its `joined` link decision; a `conflict` when the overview is gone or
  * closed (but faded) since, `held` when frozen since. The last entry and the scope follow the entries;
  * a quiet or faded overview opens again at the same run's status machine. A join never changes a
- * charter or a title.
+ * charter or a title; its end-event flag counts only on an overview that names an end event, as its
+ * row holds it at the write.
  */
 export function planJoin(o: OverviewRow | null, result: LinkResult, ctx: PlanContext): LinkPlan {
   const j = result.join!
   if (!o || (o.status === 'closed' && o.closedReason !== 'faded'))
     return { plan: plan(linkDecision(result, 'conflict', j.candidate.id, ctx)), outcome: 'conflict' }
   if (o.frozen) return { plan: plan(linkDecision(result, 'held', o.id, ctx)), outcome: 'held' }
-  const decision = linkDecision(result, 'joined', o.id, ctx, j.answer.confidence)
+  const decision = linkDecision(result, 'joined', o.id, ctx, j.answer.confidence, o.charter.endEvent !== null)
   const entry: NewEntry = {
     id: ctx.newId(),
     overviewId: o.id,

@@ -13,7 +13,8 @@ import { ENTRY_ROLES, OVERVIEW_SCOPES, REVIEW_TRIGGERS, ROLE_KINDS } from './ove
 const storedDate = z.preprocess(v => (typeof v === 'string' || v instanceof Date ? new Date(v) : v), z.date())
 
 const roleSchema = z.object({ role: z.enum(ENTRY_ROLES), roleKind: z.enum(ROLE_KINDS).nullable() })
-const charterSchema = z.object({ in: z.string(), out: z.array(z.string()), endEvent: z.string() })
+/** A charter as stored: a null end event is none (the development closes only by fading); older rows keep their strings. */
+export const charterSchema = z.object({ in: z.string(), out: z.array(z.string()), endEvent: z.string().nullable() })
 
 /** One row change as a write stored it: the fields it changed, before and after (dates as strings). */
 export const storedChangeSchema = z.object({
@@ -55,7 +56,7 @@ export const statusInputs = z.object({
   reason: z.string().nullable().default(null),
   /** The development time a closure is recorded at. */
   clock: storedDate.nullable().default(null),
-  /** Who cancelled a closing: the unpublished-member rule or a review. */
+  /** Who cancelled a closing: the unpublished-member rule, a review, or an editor's re-center (reason `recentered`). */
   by: z.string().nullable().default(null),
   /** A burst's freeze: the joins it counted. */
   joins: z.number().nullable().default(null),
@@ -63,7 +64,7 @@ export const statusInputs = z.object({
   ...changeSet,
 })
 
-/** `close`: the end event judged. */
+/** `close`: the end event judged (a closing is only ever judged against a named one). */
 export const closeInputs = z.object({ endEvent: z.string(), ...changeSet })
 
 const reviewActionSchema = z.discriminatedUnion('kind', [
@@ -115,8 +116,23 @@ export const standsInputs = z.object({
   failed: z.number().default(0),
 })
 
+/**
+ * `recenter`, an automated re-center (`.context/overviews.md`, "Re-centering"): the rule a refused
+ * attempt failed, the OUT entries an applied one added (an Undo locks them out, as it does a review's
+ * narrowing), and the anchor entries with whether both calls judged each to belong.
+ */
+export const recenterInputs = z.object({
+  rule: z.string().nullable().default(null),
+  outAdded: z.array(z.string()).default([]),
+  anchor: z.array(z.object({ entryId: z.string(), founding: z.boolean(), passed: z.boolean() })).default([]),
+  ...changeSet,
+})
+
 /** An editor's action or an undo: its change set and, for an undo, the decision it undid. */
 export const editInputs = z.object({ target: z.string().nullable().default(null), ...changeSet })
+
+/** `editor_recenter`: an editor's new charter, with their confirmation that it still covers the anchor (the server records it and judges nothing). */
+export const editorRecenterInputs = editInputs.extend({ anchorConfirmed: z.boolean().default(false) })
 
 export type LinkInputs = z.input<typeof linkInputs>
 export type FoundInputs = z.input<typeof foundInputs>
@@ -126,6 +142,8 @@ export type ReviewInputs = z.input<typeof reviewInputs>
 export type AuditInputs = z.input<typeof auditInputs>
 export type StandsInputs = z.input<typeof standsInputs>
 export type EditInputs = z.input<typeof editInputs>
+export type RecenterInputs = z.input<typeof recenterInputs>
+export type EditorRecenterInputs = z.input<typeof editorRecenterInputs>
 export type StoredChange = z.infer<typeof storedChangeSchema>
 
 /** The schema of a kind's (and outcome's) inputs. */
@@ -136,6 +154,8 @@ export function inputsSchema(kind: string, outcome: string) {
   if (kind === 'close') return closeInputs
   if (kind === 'review') return outcome === 'audited' || outcome === 'audit_failed' ? auditInputs : reviewInputs
   if (kind === 'stands') return standsInputs
+  if (kind === 'recenter') return recenterInputs
+  if (kind === 'editor_recenter') return editorRecenterInputs
   return editInputs
 }
 

@@ -4,9 +4,9 @@
  * it, with up to `MAX_LINK_FACTS` of its usable pool facts of pages as context, and a candidate
  * overview with its charter and its newest published entries.
  */
-import { z } from 'zod'
 import { utcDay } from '../lib/days.js'
 import type { OverviewDb } from './overviewCandidates.js'
+import { charterSchema } from './overviewDecisions.js'
 import type { CandidateOverview, Charter, LinkStory } from './overviewTypes.js'
 
 /** Pool facts a story shows the link prompts at most, as context. */
@@ -66,9 +66,7 @@ export async function linkStories(db: OverviewDb, ids: readonly string[]): Promi
   })
 }
 
-const charterSchema = z.object({ in: z.string(), out: z.array(z.string()), endEvent: z.string() })
-
-/** A stored charter, or null when the column does not hold one. */
+/** A stored charter (its end event a string, or null for none), or null when the column does not hold one. */
 export const parseCharter = (value: unknown): Charter | null => charterSchema.safeParse(value).data ?? null
 
 /**

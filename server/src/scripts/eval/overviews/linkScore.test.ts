@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseOverviewOptions } from '../options.js'
 import type { AnswerKey } from './keySchema.js'
 import { linkLines } from './linkReport.js'
-import { scoreLinking, scoreLinkRun, type ReplayRun } from './linkScore.js'
+import { scoreLinking, scoreLinkRun, type EndEventVerdict, type ReplayRun } from './linkScore.js'
 import { createSandbox } from './overviewSandbox.js'
 import type { LinkResult } from '../../../services/overviewLink.js'
 
@@ -99,21 +99,33 @@ describe('scoreLinking', () => {
         ['c2', 'routine'],
       ],
     )
-    const verdicts = new Map([
-      ['ebola', [true]],
-      ['cholera', [true]],
+    const verdicts = new Map<string, EndEventVerdict[]>([
+      ['ebola', ['right']],
+      ['cholera', ['right']],
     ])
     const s = scoreLinking(KEYS, [clean], verdicts)
     expect([...s.link, ...s.found, ...s.role].map(b => b.met)).toEqual([true, true, true, true, true])
     const wrongEnd = scoreLinking(
       KEYS,
       [clean],
-      new Map([
-        ['ebola', [true]],
-        ['cholera', [false]],
+      new Map<string, EndEventVerdict[]>([
+        ['ebola', ['right']],
+        ['cholera', ['wrong']],
       ]),
     )
     expect(wrongEnd.found[1]!.met).toBe(false)
+  })
+
+  it('counts a development founded with no end event, or not founded, as no wrong end event, and decides nothing while a named one is unjudged', () => {
+    const verdicts = (cholera: EndEventVerdict) =>
+      new Map<string, EndEventVerdict[]>([
+        ['ebola', ['none']],
+        ['cholera', [cholera]],
+      ])
+    const ends = (cholera: EndEventVerdict) => scoreLinking(KEYS, [run([])], verdicts(cholera)).found[1]!
+    expect(ends(null)).toMatchObject({ value: 0, met: true })
+    expect(ends('right')).toMatchObject({ value: 0, met: true })
+    expect(ends('unjudged')).toMatchObject({ value: null, met: null })
   })
 
   it('has no data without runs', () => {

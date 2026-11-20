@@ -24,12 +24,23 @@ export interface Role {
   roleKind: RoleKind | null
 }
 
-/** The answer keys' charter: what the development is, what stays separate, and the event that ends it. */
+/**
+ * The answer keys' charter: what the development is, what stays separate, and the event that ends it.
+ * Most developments have no end event a report could date (`null`): they close only by fading.
+ */
 export interface Charter {
   in: string
   out: string[]
-  endEvent: string
+  endEvent: string | null
 }
+
+/** A charter that names its end event: the only kind an end-event closing is judged against. */
+export type ClosingCharter = Charter & { endEvent: string }
+
+export const namesEndEvent = (c: Charter): c is ClosingCharter => c.endEvent !== null
+
+/** An end event as a model answers it (an empty string for none) or an editor types it, as stored: trimmed, or null for none. */
+export const endEventOf = (text: string | null): string | null => (text?.trim() ? text.trim() : null)
 
 /** A story as linking reads it. `date` is its publication day, `YYYY-MM-DD` (UTC); `facts` are up to 10 usable pool facts' statements, as context. */
 export interface LinkStory {
@@ -89,7 +100,7 @@ export type LinkOutcome = (typeof LINK_OUTCOMES)[number]
 
 export const SETTLING_OUTCOMES: readonly LinkOutcome[] = ['joined', 'founded', 'none', 'rejected']
 
-/** A founding attempt's outcome: founded on agreement; disagreed (the check did not agree), refused (no end event named), failed (a call failed). */
+/** A founding attempt's outcome: founded on agreement; disagreed (the check did not agree, or found a named end event vague), refused (no title or IN, or a title too long), failed (a call failed). */
 export type FoundingOutcome = 'founded' | 'disagreed' | 'refused' | 'failed'
 
 /** A "Where this stands" sentence or a "What's being done" line as stored: its text and the pool facts it cites, by row id. */
@@ -100,9 +111,10 @@ export interface StandsLine {
 
 /**
  * Why a review runs: an entry count reached, its 30 days, a closure waiting on it, a burst of joins, a
- * reader's "Report an error" from the overview page; the monthly audit reviews and never acts.
+ * reader's "Report an error" from the overview page, an editor's new charter (`recenter`, so every
+ * entry is read under it); the monthly audit reviews and never acts.
  */
-export const REVIEW_TRIGGERS = ['entries', 'periodic', 'closure', 'burst', 'report', 'audit'] as const
+export const REVIEW_TRIGGERS = ['entries', 'periodic', 'closure', 'burst', 'report', 'recenter', 'audit'] as const
 export type ReviewTrigger = (typeof REVIEW_TRIGGERS)[number]
 
 /**
@@ -157,4 +169,10 @@ export interface OverviewState {
    * feedback route decides), or null: a review is due while no review has run since.
    */
   reportAt: Date | null
+  /**
+   * The last re-center of its charter and who made it (`recenter`, `editor`, or `undo` for an Undo of
+   * an automated one): an editor's queues a review while no review has run since.
+   */
+  recenteredAt: Date | null
+  recenteredBy: string | null
 }
