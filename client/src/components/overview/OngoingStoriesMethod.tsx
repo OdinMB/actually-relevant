@@ -20,16 +20,17 @@ export default function OngoingStoriesMethod() {
       <p>
         Many stories are part of a development that runs for weeks or months, such as an outbreak, a war or a negotiation. After a story is published, AI checks
         whether it belongs to one we already follow, among those its most similar earlier stories belong to. It adds the story only when it can quote both the
-        story and the development for a shared cause, place and end, and code finds each quote in their text. When two stories report a development we
-        don&apos;t follow yet, AI drafts what belongs to it, what stays separate and the event that would end it, and a second AI check must agree before it
-        starts. A development gets its own page once an AI review keeps at least three stories in it.
+        story and the development for a shared cause and place, and a shared end where the development names one, and code finds each quote in their text. When
+        two stories report a development we don&apos;t follow yet, AI drafts what belongs to it, what stays separate and, if one can be named, the event that
+        would end it, and a second AI check must agree before it starts. A development gets its own page once an AI review keeps at least three stories in it.
       </p>
       <p>
         The page shows a timeline of our stories with the turning points AI marked and, once our research has checked enough facts, a short summary of where
         things stand and what is being done, written by AI from those facts and citing them. Each sentence is checked against the facts it cites, by code and by
-        a second AI check, and dropped if it fails. As a development grows, AI reviews it again and may take stories out or narrow what belongs, but never add a
-        story. A development ends when two AI checks agree that one of our stories reports its end, or after 120 days without a new story, and opens again when
-        a new story belongs. These pages carry the label &quot;{OVERVIEW_LABEL_TEXT}&quot; and are listed under{' '}
+        a second AI check, and dropped if it fails. As a development grows, AI reviews it again and may take stories out or narrow what belongs. When enough new
+        stories show it has grown or shifted, AI may widen it, but only when two AI checks agree and keep the stories it started from. This happens at most
+        twice per development, and an editor can undo it. A development ends when two AI checks agree that one of our stories reports its end, or after 120 days
+        without a new story, and opens again when a new story belongs. These pages carry the label &quot;{OVERVIEW_LABEL_TEXT}&quot; and are listed under{' '}
         <Link to="/ongoing" className={TEXT_LINK}>
           Ongoing Stories
         </Link>
