@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "lebanon-war-2026",
   "title": "War in Lebanon between Israel and Hezbollah, 2026",
   "charter": {
@@ -268,17 +268,7 @@
       "join": "must",
       "role": "routine",
       "kind": null,
-      "values": [
-        {
-          "figure": "deaths",
-          "value": 1000,
-          "approx": "at_least",
-          "asOf": "2026-03-22",
-          "matches": true,
-          "countedAs": null,
-          "quote": "already killed 1,000+ in Lebanon"
-        }
-      ],
+      "values": [],
       "statuses": [],
       "why": "Background on how Iran's Revolutionary Guards rebuilt Hezbollah, enabling its re-entry into this war and the fighting in Lebanon."
     },
@@ -598,7 +588,7 @@
           "asOf": "2026-04-14",
           "matches": true,
           "countedAs": null,
-          "quote": "has killed about 2,055 people"
+          "quote": "about 2,055 killed"
         },
         {
           "figure": "displaced",
@@ -842,6 +832,29 @@
       "date": "2026-11-02",
       "title": "Washington used pause to secure oil shipping lanes",
       "why": "Analysis of the US-Iran memorandum and Hormuz shipping with one bullet on Lebanon (Hezbollah disarmament arrangement, Israel's continued occupation)."
+    }
+  ],
+  "responses": [
+    {
+      "date": "2026-03-04",
+      "what": "Lebanon's government bans Hezbollah's military activities.",
+      "slug": "government-bans-hezbollah-military-activity-after-israeli-strikes",
+      "quote": "Lebanon's government declared a historic 'total ban' on Hezbollah's military activities, isolating the group politically, but Hezbollah rejected the decision.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-03-09",
+      "what": "Lebanon's government shelters house about a third of those ordered to evacuate.",
+      "slug": "israel-warns-lebanon-will-pay-very-heavy-price-after-deadly-raid",
+      "quote": "About 300,000 people were ordered to evacuate and only a third are in government shelters, creating urgent needs for food, shelter and medical care.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-04-01",
+      "what": "The UN Security Council meets following peacekeeper deaths in Lebanon.",
+      "slug": "israel-vows-to-occupy-south-lebanon",
+      "quote": "the UN Security Council met after peacekeeper deaths",
+      "reviewed": true
     }
   ],
   "notes": "Start: our stories date the war from 2 March 2026 ('Since March 2'); the first story is 4 March. Not closed on 16 November 2026, and two events must not be read as the end. (1) The April truce: the 25 April story is the first to report it ('a fragile three‑week ceasefire', 'A temporary truce extended for three weeks'), without naming its parties; on 6 June the truces had 'cut major battles but not stopped strikes and deaths' and the Lebanon toll had risen from more than 2,400 to more than 3,500. (2) The 18 June US-Iran deal declared 'immediate and permanent termination of military operations on all fronts, including in Lebanon', but the same day's UN story notes Israeli strikes on Beirut despite a ceasefire, Iran re-closed Hormuz on 22 June 'after Israeli attacks on Lebanon', strikes hit Nabatieh on 6 July, Israeli attacks 'continued in Gaza and Lebanon' on 4 October, the 2 November analysis describes 'Israel’s continued occupation and destruction of villages', and the 10 November story ('Trump says Iran fighting is over but keeps forces ready', not listed) names 'renewed conflict involving ... Israel in Lebanon'. After 25 April no story is mainly about Lebanon, so the later state comes only from optional entries and near misses. Counts: deaths are Lebanese health ministry or UN totals and do not separate civilians from fighters (6 June antifactor). Several stories restate a count loosely ('more than 1,000' after '1,029'; 'over one million' displaced after '1.2 million'); these are not falls. The 9 March 300,000 is given as displaced but the same story also says 'About 300,000 people were ordered to evacuate', so it may count only those under evacuation orders. The 7 March 400,000 is the population of the area under an evacuation order, not a displacement count. Near misses carry Lebanon numbers too (nearly 700,000 displaced on 10 March, 850 dead on 17 March, more than 900 dead and 800,000 displaced on 20 March, 1.2 million displaced on 6 June); a system that rightly leaves those stories out records none of them. Boundary rule used: optional when a wider-war story names Lebanon in its title or gives the Lebanon front a strand of its own with Lebanon-specific facts; near miss when Lebanon is a clause or one bullet in a list of fronts."
