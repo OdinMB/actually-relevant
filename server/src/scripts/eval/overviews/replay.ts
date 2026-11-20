@@ -1,10 +1,11 @@
 /**
  * The `closure` and `replay` steps (`.context/model-eval.md`, "Overview evals"; plan "Evals and bars"):
- * one replay of the whole module per development serves both. The half's stories (entries and near
- * misses) are linked day by day in date order as the `link` step links them, and after each day
- * production's upkeep runs (`runUpkeep`) over the sandbox (`upkeepSandbox.ts`) with the day as its
- * clock: the closing checks, the status machine, reviews and the stands, on the eval's cached calls
- * at the step tiers. The days run on past the last story until every closing has had time to finish.
+ * one replay of the whole module per development serves both. Each day runs the job's night
+ * (`runNight`) over the sandbox (`overviewSandbox.ts`, `upkeepSandbox.ts`) with the day as its clock:
+ * the half's stories (entries and near misses) published by then and owed by production's rule
+ * (`owedOf`, `owedSlices`: a held, failed or conflicting one linked again when it is due) are linked
+ * in date order, then production's upkeep runs (`runUpkeep`): the closing checks, the status machine,
+ * re-centers, reviews and the stands, on the eval's cached calls at the step tiers. The days run on past the last story until every closing has had time to finish.
  * Each development is looked at on its checkpoint days; `replayScore.ts` scores the bars. The keys'
  * centers' stories are replayed too, and the signal fires the automated re-center as in production:
  * each applied re-center is recorded with its day. The members'
@@ -14,10 +15,11 @@
  */
 import { config } from '../../../config.js'
 import type { Neighbour } from '../../../services/overviewCandidates.js'
-import { linkInOrder, type LinkDeps } from '../../../services/overviewLink.js'
+import type { LinkDeps } from '../../../services/overviewLink.js'
+import { runNight } from '../../../services/overviewNight.js'
+import { owedSlices } from '../../../services/overviewOwed.js'
 import { standsFacts, type MemberFact } from '../../../services/overviewStands.js'
 import type { LinkStory } from '../../../services/overviewTypes.js'
-import { runUpkeep } from '../../../services/overviewUpkeep.js'
 import { runNumbers } from '../repeats.js'
 import type { SuiteContext } from '../types.js'
 import { inDevelopmentHalf } from './developmentHalves.js'
@@ -25,7 +27,7 @@ import type { KeyFile } from './keyFiles.js'
 import { awaitingReview, type AnswerKey } from './keySchema.js'
 import { evalCalls, replaySlugs } from './link.js'
 import { developmentOf, keyIndex } from './linkScore.js'
-import { activeEntries, createSandbox, roleOf, type Sandbox } from './overviewSandbox.js'
+import { activeEntries, createSandbox, owedOf, roleOf, type Sandbox } from './overviewSandbox.js'
 import { readInputs, recenterInputs } from '../../../services/overviewDecisions.js'
 import {
   checkpointsOf,
@@ -47,7 +49,8 @@ export interface ReplayStepOptions {
   files: KeyFile[]
   half: 'tune' | 'judge' | 'all'
   stories(slugs: string[]): Promise<Map<string, LinkStory | null>>
-  neighbours(story: LinkStory): Promise<Neighbour[]>
+  /** Production's neighbours of a story as of a day (`nearestPublished`, read-only). */
+  neighbours(storyId: string, asOf: Date): Promise<Neighbour[]>
   /** The usable, structured facts of these stories' pools (the `pass-pool` step's, or the database's). */
   facts(storyIds: string[]): Promise<MemberFact[]>
   repeat: number
@@ -151,8 +154,6 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
   for (const f of await o.facts([...ids])) factsOf.set(f.storyId, [...(factsOf.get(f.storyId) ?? []), f])
   const facts = (storyIds: string[]) => storyIds.flatMap(id => factsOf.get(id) ?? [])
   const index = keyIndex(keys)
-  const byDay = new Map<string, LinkStory[]>()
-  for (const s of replayed) byDay.set(s.date, [...(byDay.get(s.date) ?? []), s])
   const lastDay = [...replayed.map(s => s.date), ...keys.flatMap(k => (k.closed ? [k.closed.date] : []))].sort().at(-1)
   const checkpoints = new Map<string, { key: AnswerKey; at: CheckpointState['at']; day: string }[]>()
   for (const k of keys) for (const c of checkpointsOf(k)) checkpoints.set(c.day, [...(checkpoints.get(c.day) ?? []), { key: k, ...c }])
@@ -165,19 +166,20 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
     const runStart = o.ctx.spentUsd()
     const sandbox = createSandbox()
     let clock = new Date(0)
-    // A re-center's neighbours: each story's, as of its own day (the runner's reads), among the replayed stories
-    const near = async (id: string) => (byId.has(id) ? (await o.neighbours(byId.get(id)!)).filter(n => ids.has(n.id)) : [])
+    // A story's neighbours as of a day (the runner's reads), among the replayed stories: linking reads them as of the story's own date, a re-center as of the development clock, as production does
+    const near = async (id: string, asOf: Date) => (byId.has(id) ? (await o.neighbours(id, asOf)).filter(n => ids.has(n.id)) : [])
     const upkeep = sandboxUpkeep(sandbox, facts, () => clock, near)
     const { link: linkCalls, ...calls } = evalCalls(o.ctx, run)
     const safeguards: Record<string, number> = {}
     const add = (name: string, n: number) => {
       if (n > 0) safeguards[name] = (safeguards[name] ?? 0) + n
     }
+    const storiesOf = async (wanted: string[]) => wanted.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []))
     const deps: LinkDeps = {
-      neighbours: s => near(s.id),
+      neighbours: s => near(s.id, s.datePublished),
       memberships: sandbox.memberships,
       overviews: sandbox.candidateOverviews,
-      stories: async wanted => wanted.flatMap(id => (byId.has(id) ? [byId.get(id)!] : [])),
+      stories: storiesOf,
       ...linkCalls,
     }
     const keepGoing = async () => {
@@ -192,19 +194,34 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
     for (let day = replayed[0]!.date; day < end && !stopped; day = nextDay(day)) {
       clock = new Date(`${day}T23:59:59Z`)
       sandbox.setClock(clock)
-      const todays = byDay.get(day) ?? []
-      if (todays.length > 0) {
-        const linked = await linkInOrder(todays, deps, sandbox.apply, { concurrency: o.concurrency, keepGoing })
-        add(
-          'link yeses refused by code',
-          linked.results.reduce((s, r) => s + r.refusals.length, 0),
-        )
-        add('foundings not agreed', linked.results.filter(r => r.founding && r.founding.outcome !== 'founded').length)
-      }
       const before = new Map([...sandbox.overviews.values()].map(ov => [ov.id, ov.status]))
       const written = sandbox.decisions.length
-      const tally = await runUpkeep({ ...upkeep, ...calls }, { clock, now: clock, today: day }, keepGoing)
-      add('upkeep items failed', tally.failed)
+      // The job's night over the sandbox: the stories published by today and owed by production's rule (a held, failed or conflicting one again when it is due), then the upkeep
+      const night = await runNight(
+        {
+          owed: async () =>
+            owedSlices(
+              owedOf(
+                sandbox,
+                replayed.filter(s => s.date <= day),
+              ),
+              clock,
+            ),
+          stories: storiesOf,
+          link: deps,
+          apply: sandbox.apply,
+          upkeep: { ...upkeep, ...calls },
+        },
+        { now: clock, today: day },
+        { concurrency: o.concurrency, keepGoing },
+      )
+      add(
+        'link yeses refused by code',
+        night.run.results.reduce((s, r) => s + r.refusals.length, 0),
+      )
+      add('foundings not agreed', night.run.results.filter(r => r.founding && r.founding.outcome !== 'founded').length)
+      add('stories given up after their last try', night.givenUp.length)
+      add('upkeep items failed', night.upkeep?.failed ?? 0)
       for (const d of sandbox.decisions.slice(written)) {
         const ov = d.kind === 'recenter' && d.outcome === 'recentered' && d.overviewId ? sandbox.overviews.get(d.overviewId) : undefined
         if (!ov) continue

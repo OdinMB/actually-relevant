@@ -20,7 +20,9 @@ import {
   type Plan,
   type Rows,
 } from '../../../services/overviewChanges.js'
+import { linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import { isStale, type ApplyLink } from '../../../services/overviewLink.js'
+import type { LinkAttempt, OwedStory } from '../../../services/overviewOwed.js'
 import { planAlone, planConflict, planFounding, planJoin, type LinkPlan, type PlanContext } from '../../../services/overviewPlans.js'
 import {
   SETTLING_OUTCOMES,
@@ -210,6 +212,28 @@ export function createSandbox(): Sandbox {
       clock = at
     },
   }
+}
+
+/**
+ * The stories of `candidates` (published by now) still owed a link decision by production's rule
+ * (active in no overview, no live settling `link` decision), each with its link decisions as the owed
+ * rule reads them, for `owedSlices` to slice as production's `owedStories` does.
+ */
+export function owedOf(sandbox: Sandbox, candidates: readonly { id: string; datePublished: Date }[]): OwedStory[] {
+  const active = new Set([...sandbox.overviews.values()].flatMap(o => activeEntries(o).map(e => e.storyId)))
+  const links = new Map<string, SandboxDecision[]>()
+  for (const d of sandbox.decisions) if (d.kind === 'link' && d.storyId) links.set(d.storyId, [...(links.get(d.storyId) ?? []), d])
+  return candidates.flatMap(s => {
+    const own = links.get(s.id) ?? []
+    if (active.has(s.id) || own.some(d => !d.undone && SETTLES.has(d.outcome as LinkOutcome))) return []
+    const attempts: LinkAttempt[] = own.map(d => ({
+      outcome: d.outcome as LinkOutcome,
+      undone: d.undone,
+      at: readInputs(linkInputs, d.inputs)?.linkedAt ?? new Date(0),
+      heldFrozen: d.outcome === 'held' && d.overviewId !== null && sandbox.overviews.get(d.overviewId)?.frozen === true,
+    }))
+    return [{ id: s.id, datePublished: s.datePublished, attempts }]
+  })
 }
 
 /**

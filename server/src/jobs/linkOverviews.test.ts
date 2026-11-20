@@ -68,7 +68,7 @@ vi.mock('../lib/runUsage.js', async importOriginal => ({
   reportRunResult: mocks.reportRunResult,
 }))
 
-const { linkSummary, notifyRecenter, productionUpkeepDeps, runLinkOverviewsJob, upkeepClock, upkeepSummary } = await import('./linkOverviews.js')
+const { linkSummary, notifyRecenter, productionUpkeepDeps, runLinkOverviewsJob, upkeepSummary } = await import('./linkOverviews.js')
 const { forgetOverviewStep } = await import('../services/overviewQueue.js')
 
 /** Nothing owed. */
@@ -255,15 +255,8 @@ describe('runLinkOverviewsJob', () => {
   })
 })
 
-describe('the upkeep clock and summary', () => {
+describe('the upkeep summary, notices and deps', () => {
   const now = new Date('2026-11-18T03:00:00Z')
-
-  it('counts in the newest linked story’s time while a backfill drains, and in now once it is done', () => {
-    const linked = [story('a', 1), story('b', 20)]
-    expect(upkeepClock({ backlog: ['a', 'b'], backlogTotal: 900 }, linked, now)).toEqual(story('b', 20).datePublished)
-    expect(upkeepClock({ backlog: ['a', 'b'], backlogTotal: 2 }, linked, now)).toEqual(now)
-    expect(upkeepClock({ backlog: ['a', 'b'], backlogTotal: 900 }, [], now)).toEqual(now)
-  })
 
   it('names refreshes and reviews always, and the rest when they happened', () => {
     const tally = {

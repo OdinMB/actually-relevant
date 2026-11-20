@@ -25,12 +25,13 @@ import { utcDay } from '../lib/days.js'
 import { membershipsOf, nearestPublished } from '../services/overviewCandidates.js'
 import { candidateOverviews, linkStories } from '../services/overviewInput.js'
 import { applyAudit, applyBurst, applyClosing, applyLink, applyRecenter, applyReview, applyStands, applyStatus } from '../services/overviewLifecycle.js'
-import { linkInOrder, type ApplyLink, type LinkDeps } from '../services/overviewLink.js'
+import type { ApplyLink, LinkDeps } from '../services/overviewLink.js'
+import { runNight } from '../services/overviewNight.js'
 import { LINK_OVERVIEWS_JOB, overviewStepOn, overviewSwitchRefusal, owedStories } from '../services/overviewQueue.js'
 import { overviewCalls, type OverviewCalls } from '../services/overviewSteps.js'
-import type { LinkOutcome, LinkStory } from '../services/overviewTypes.js'
+import type { LinkOutcome } from '../services/overviewTypes.js'
 import { recenterCases } from '../services/overviewRecenterInput.js'
-import { runUpkeep, type UpkeepDeps, type UpkeepFreeze, type UpkeepRecenter, type UpkeepTally } from '../services/overviewUpkeep.js'
+import type { UpkeepDeps, UpkeepFreeze, UpkeepRecenter, UpkeepTally } from '../services/overviewUpkeep.js'
 import { auditPicks, overviewStates, pendingClosings, reviewCase, standsCases } from '../services/overviewUpkeepInput.js'
 import { structuredCall } from '../services/structuredCall.js'
 import { jobDisplayName } from './jobDisplayName.js'
@@ -75,17 +76,6 @@ export const productionUpkeepDeps = (now: Date, calls: OverviewCalls = productio
   applyAudit: (c, result) => applyAudit(c, result, now),
   applyStands: (c, result, record, today) => applyStands(c, result, record, today),
 })
-
-/**
- * The development time the status machine counts in (`.context/overviews.md`, "The job"): while a
- * backfill drains (older owed stories left after this run's slice), the newest story this run linked,
- * so an overview formed from May's stories does not fade in November before its later stories join;
- * otherwise now.
- */
-export function upkeepClock(slices: { backlog: string[]; backlogTotal: number }, linked: readonly LinkStory[], now: Date): Date {
-  if (slices.backlogTotal <= slices.backlog.length || linked.length === 0) return now
-  return new Date(Math.max(...linked.map(s => s.datePublished.getTime())))
-}
 
 /** "; 3 overviews refreshed, 1 reviewed", and what else the upkeep did when it did it. */
 export function upkeepSummary(t: UpkeepTally): string {
@@ -198,10 +188,6 @@ export function linkSummary(
   return backlog ? `${line}; backfill ${backlog.taken.toLocaleString('en-US')} of ${backlog.total.toLocaleString('en-US')}` : line
 }
 
-/** The retries on their last try that failed or conflicted again: given up. */
-export const givenUpOf = (lastTries: readonly string[], outcomes: ReadonlyMap<string, LinkOutcome>): string[] =>
-  lastTries.filter(id => outcomes.get(id) === 'failed' || outcomes.get(id) === 'conflict')
-
 /** One run of the step at `now`; `calls` are production's model calls (a test gives scripted ones). */
 export async function runLinkOverviewsJob(now: Date = new Date(), calls: OverviewCalls = productionCalls()): Promise<void> {
   const refusal = overviewSwitchRefusal()
@@ -212,12 +198,6 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
     return
   }
 
-  const slices = await owedStories(now)
-  const stories = await linkStories(prisma, [...slices.backlog, ...slices.retries, ...slices.night])
-  log.info(
-    { backlog: slices.backlog.length, retries: slices.retries.length, night: slices.night.length, backlogTotal: slices.backlogTotal },
-    'starting overview linking',
-  )
   let switchedOff = false
   // A write that throws is rolled back: the story stays owed and the run goes on
   const apply: ApplyLink = (result, lastTry) =>
@@ -232,31 +212,42 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
     }
     return !switchedOff
   }
-  const run = await linkInOrder(stories, productionLinkDeps(calls), apply, { concurrency: config.overviews.concurrency, keepGoing })
+  const owed = async () => {
+    const slices = await owedStories(now)
+    log.info(
+      { backlog: slices.backlog.length, retries: slices.retries.length, night: slices.night.length, backlogTotal: slices.backlogTotal },
+      'starting overview linking',
+    )
+    return slices
+  }
+  // Part 1, linking; then parts 2 to 5: closings, the status machine, re-centers, reviews and the audit, the stands (none once switched off)
+  const night = await runNight(
+    {
+      owed,
+      stories: ids => linkStories(prisma, ids),
+      link: productionLinkDeps(calls),
+      apply,
+      upkeep: productionUpkeepDeps(now, calls),
+    },
+    { now, today: utcDay(now) },
+    { concurrency: config.overviews.concurrency, keepGoing },
+  )
+  const { slices, stories, run, upkeep } = night
 
   const proposed = run.results.reduce((sum, r) => sum + r.proposed, 0)
   const refused = run.results.reduce((sum, r) => sum + r.refusals.length, 0)
   const failed = [...run.outcomes.values()].filter(o => o === 'failed').length
   for (const r of run.results)
     if (r.error) log.error({ storyId: r.story.id, error: sanitizedError(r.error) }, 'linking a story failed; it is tried again next run')
-  log.info({ stories: run.outcomes.size, proposed, refused, failed }, 'overview linking finished')
-
-  // Parts 2 to 5: closings, the status machine, reviews and the audit, the stands (nothing once switched off)
-  let upkeep: UpkeepTally | null = null
-  if (!switchedOff) {
-    const clock = upkeepClock(
-      slices,
-      stories.filter(s => run.outcomes.has(s.id)),
-      now,
-    )
-    upkeep = await runUpkeep(productionUpkeepDeps(now, calls), { clock, now, today: utcDay(now) }, keepGoing)
+  log.info({ stories: run.outcomes.size, proposed, refused, failed, givenUp: night.givenUp.length }, 'overview linking finished')
+  if (upkeep) {
     for (const e of upkeep.errors)
       log.error({ part: e.part, overviewId: e.id, error: sanitizedError(e.error) }, 'overview upkeep failed for an overview; it is tried again next run')
-    log.info({ ...upkeep, errors: upkeep.errors.length, clock }, 'overview upkeep finished')
+    log.info({ ...upkeep, errors: upkeep.errors.length, clock: night.clock }, 'overview upkeep finished')
   }
   // Checked: joins proposed and stands lines written; failed: yeses code refused and stands lines dropped (each part never more than its checked)
   recordItems(proposed + (upkeep?.standsChecked ?? 0), refused + (upkeep?.standsDropped ?? 0))
-  const givenUp = givenUpOf(slices.lastTries, run.outcomes).length
+  const givenUp = night.givenUp.length
   if (failing(run.outcomes.size, failed) || givenUp > 0) await notifyFailedStories(run.outcomes.size, failed, givenUp).catch(() => {})
   if (upkeep && failing(upkeep.items, upkeep.failed)) await notifyFailedUpkeep(upkeep.items, upkeep.failed).catch(() => {})
   for (const f of upkeep?.freezes ?? []) await notifyFreeze(f).catch(() => {})

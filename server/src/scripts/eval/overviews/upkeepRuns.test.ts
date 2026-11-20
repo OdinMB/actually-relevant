@@ -291,8 +291,8 @@ describe('runReplayStep', () => {
       files: FILES,
       half: 'judge',
       stories,
-      // e2 sees e1 as a founding partner; the link call gives nothing, so the story fails and nothing forms
-      neighbours: async s => (s.id === 'id-e2' ? [{ id: 'id-e1', datePublished: STORIES.get('e1')!.datePublished, distance: 0.1, via: 'near' }] : []),
+      // e2 sees e1 as a founding partner; the link call gives nothing, so the story fails, is linked again 1, 3 and 7 days later as in production, and is given up
+      neighbours: async id => (id === 'id-e2' ? [{ id: 'id-e1', datePublished: STORIES.get('e1')!.datePublished, distance: 0.1, via: 'near' }] : []),
       facts,
       repeat: 1,
       concurrency: 2,
@@ -300,8 +300,9 @@ describe('runReplayStep', () => {
     })
     expect(report.stories).toBe(4)
     expect(report.left).toEqual([{ what: 'broken.json', reason: '1 format errors: fix the key' }])
-    expect(ctx.calls.map(c => base(c.schemaName))).toEqual(['overview-link'])
+    expect(ctx.calls.map(c => base(c.schemaName))).toEqual(['overview-link', 'overview-link', 'overview-link', 'overview-link'])
     const [run] = report.runs
+    expect(run!.safeguards['stories given up after their last try']).toBe(1)
     expect(run!.checkpoints.map(c => [c.at, c.day, c.overview, c.mustByThen, c.mustFound])).toEqual([
       ['third', DAYS[0], null, 1, 0],
       ['two-thirds', DAYS[1], null, 2, 0],

@@ -2,7 +2,8 @@
  * The overview step end to end, and the eval sandbox's parity with it (`.context/model-eval.md`,
  * "Overview evals"): scripted nights of stories run through the job (`runLinkOverviewsJob`: the real
  * queue, reads and lifecycle writes) with scripted model calls, and through the sandbox
- * (`overviewSandbox.ts`, `upkeepSandbox.ts`, as the `replay` step drives it) with the same calls and
+ * (`overviewSandbox.ts`, `upkeepSandbox.ts`, as the `replay` step drives it: the same night,
+ * `runNight`, over the stories the sandbox owes by its own decisions) with the same calls and
  * production's neighbours; after every run both hold the same overviews, entries and decisions, each
  * decision with the same change set. The nights cover a founding, joins, the first review making it
  * public, an end-event closing, the closing story unpublished (its entry detached, the closing
@@ -40,10 +41,10 @@ const { config } = await import('../config.js')
 const { runLinkOverviewsJob } = await import('./linkOverviews.js')
 const { nearestPublished } = await import('../services/overviewCandidates.js')
 const { linkStories } = await import('../services/overviewInput.js')
-const { linkInOrder } = await import('../services/overviewLink.js')
-const { forgetOverviewStep, owedStories } = await import('../services/overviewQueue.js')
-const { runUpkeep } = await import('../services/overviewUpkeep.js')
-const { createSandbox } = await import('../scripts/eval/overviews/overviewSandbox.js')
+const { runNight } = await import('../services/overviewNight.js')
+const { owedSlices } = await import('../services/overviewOwed.js')
+const { forgetOverviewStep } = await import('../services/overviewQueue.js')
+const { createSandbox, owedOf } = await import('../scripts/eval/overviews/overviewSandbox.js')
 const { sandboxUpkeep } = await import('../scripts/eval/overviews/upkeepSandbox.js')
 
 const call = <T>(parsed: T, model = 'scripted') => Promise.resolve({ parsed, costUsd: 0.001, model })
@@ -213,25 +214,35 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
     )
     const { link: linkCalls, ...upkeepCalls } = calls
 
-    /** One run at `now`: the stories the job owes, through the sandbox as the replay links and keeps them, then through the job. */
+    /** One run at `now`: the night through the sandbox as the replay runs it (the stories it owes by its own decisions), then through the job. */
     async function run(now: Date) {
-      const owed = await owedStories(now)
       clock = now
       sandbox.setClock(now)
-      const stories = await linkStories(prisma, [...owed.backlog, ...owed.retries, ...owed.night])
-      await linkInOrder(
-        stories,
+      const published = await prisma.story.findMany({ where: { status: 'published', datePublished: { not: null } }, select: { id: true, datePublished: true } })
+      await runNight(
         {
-          neighbours: s => nearestPublished(prisma, s.id, s.datePublished),
-          memberships: sandbox.memberships,
-          overviews: sandbox.candidateOverviews,
+          owed: async () =>
+            owedSlices(
+              owedOf(
+                sandbox,
+                published.map(s => ({ id: s.id, datePublished: s.datePublished! })),
+              ),
+              now,
+            ),
           stories: ids => linkStories(prisma, ids),
-          ...linkCalls,
+          link: {
+            neighbours: s => nearestPublished(prisma, s.id, s.datePublished),
+            memberships: sandbox.memberships,
+            overviews: sandbox.candidateOverviews,
+            stories: ids => linkStories(prisma, ids),
+            ...linkCalls,
+          },
+          apply: sandbox.apply,
+          upkeep: { ...upkeep, ...upkeepCalls },
         },
-        sandbox.apply,
-        { concurrency: config.overviews.concurrency },
+        { now, today: utcDay(now) },
+        { concurrency: config.overviews.concurrency, keepGoing: async () => true },
       )
-      await runUpkeep({ ...upkeep, ...upkeepCalls }, { clock: now, now, today: utcDay(now) })
       await runLinkOverviewsJob(now, calls)
       const [db, sb] = [await tablesView(), sandboxView(sandbox)]
       expect(db).toEqual(sb)

@@ -574,7 +574,7 @@ async function main(): Promise<void> {
             half: opts.half,
             ...limit,
             stories: storiesBySlug,
-            neighbours: async s => (await session.get()).read(q => nearestPublished(q, s.id, s.datePublished)),
+            neighbours: async (id, asOf) => (await session.get()).read(q => nearestPublished(q, id, asOf)),
             facts: memberFacts,
             repeat: opts.repeat,
             concurrency: opts.concurrency,
