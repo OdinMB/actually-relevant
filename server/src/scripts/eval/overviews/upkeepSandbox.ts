@@ -221,11 +221,11 @@ export function sandboxUpkeep(
       sandbox.write(rows, p)
       return p.decision.outcome === STALE_REVIEW ? 'stale' : 'written'
     },
-    // Stale, applying nothing, when the rows or a story to join changed, as in production
+    // Stale, applying nothing, when the rows or a story to join changed, as in production (every story of a replay stays published)
     applyRecenter: async (c, result) => {
       const rows = sandbox.rowsOf(c.overviewId)
       const active = (await sandbox.memberships(result.joins.map(j => j.storyId))).active
-      const p = planRecenter(rows, c, result, new Set(active.keys()), ctx())
+      const p = planRecenter(rows, c, result, { active: new Set(active.keys()), published: new Set(c.stories.map(s => s.storyId)) }, ctx())
       sandbox.write(rows, p)
       return p.decision.outcome === STALE_RECENTER ? 'stale' : 'written'
     },

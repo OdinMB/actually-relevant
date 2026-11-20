@@ -113,6 +113,17 @@ describeDb('the overview admin reads', () => {
         },
       },
     })
+    // An undone founding anchors nothing, as production reads it
+    await prisma.overviewDecision.create({
+      data: {
+        kind: 'found',
+        overviewId: o.id,
+        outcome: 'founded',
+        actor: 'pipeline',
+        undoneAt: new Date(),
+        inputs: { partnerId: a.id, changes: [], created: [{ table: 'entry', id: eb!.id }] },
+      },
+    })
     const before = await adminOverview(o.id)
     expect(before.recentering).toMatchObject({
       automated: 0,
@@ -144,7 +155,7 @@ describeDb('the overview admin reads', () => {
     const after = await adminOverview(o.id)
     expect(after.charter).toEqual(wider)
     const lockDays = (after.recentering.lockedUntil!.getTime() - after.recentering.recenteredAt!.getTime()) / 86_400_000
-    expect([after.recentering.recenteredBy, lockDays]).toEqual(['editor', config.overviews.editorRecenterLockDays])
+    expect([after.recentering.recenteredBy, after.recentering.lockedBy, lockDays]).toEqual(['editor', 'editor', config.overviews.editorRecenterLockDays])
     expect(after.recentering.history).toEqual([
       expect.objectContaining({
         kind: 'editor_recenter',

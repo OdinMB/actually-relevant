@@ -8,7 +8,7 @@ import {
   automatedRecenterBlocked,
   neighbourOverviews,
   recenterCaseOf,
-  recenterLockedUntil,
+  recenterLock,
   recenterOverview,
   signalFires,
   signalsSince,
@@ -91,6 +91,7 @@ describe('the fixed limits on an automated re-center', () => {
     automatedRecenters: 0,
     recenteredAt: null,
     recenteredBy: null,
+    recenterUndoneAt: null,
     ...over,
   })
 
@@ -111,14 +112,18 @@ describe('the fixed limits on an automated re-center', () => {
     expect(automatedRecenterBlocked(state({ automatedRecenters: 2 }), NOW, OPTIONS)).toBe('limit')
   })
 
-  it("holds automation off for 180 days after an editor's or an Undo's re-center, never after its own", () => {
-    const at = (by: string, daysAgo: number) => state({ recenteredBy: by, recenteredAt: new Date(NOW.getTime() - daysAgo * 86_400_000) })
+  it("holds automation off for 180 days after an editor's re-center or an Undo of automation's, never after its own", () => {
+    const ago = (days: number) => new Date(NOW.getTime() - days * 86_400_000)
+    const at = (by: string, daysAgo: number) => state({ recenteredBy: by, recenteredAt: ago(daysAgo) })
     expect(automatedRecenterBlocked(at('editor', 10), NOW, OPTIONS)).toBe('locked')
-    expect(automatedRecenterBlocked(at('undo', 179), NOW, OPTIONS)).toBe('locked')
+    expect(automatedRecenterBlocked(state({ recenterUndoneAt: ago(179) }), NOW, OPTIONS)).toBe('locked')
     expect(automatedRecenterBlocked(at('editor', 180), NOW, OPTIONS)).toBeNull()
     expect(automatedRecenterBlocked(at('recenter', 1), NOW, OPTIONS)).toBeNull()
-    expect(recenterLockedUntil(at('editor', 10), OPTIONS)).toEqual(new Date(NOW.getTime() + 170 * 86_400_000))
-    expect(recenterLockedUntil(at('recenter', 10), OPTIONS)).toBeNull()
+    expect(recenterLock(at('editor', 10), OPTIONS)).toEqual({ until: new Date(NOW.getTime() + 170 * 86_400_000), by: 'editor' })
+    expect(recenterLock(at('recenter', 10), OPTIONS)).toBeNull()
+    // The later lock holds, whichever set it: an Undo's after an editor's, or an editor's after an Undo's
+    expect(recenterLock({ ...at('editor', 10), recenterUndoneAt: ago(5) }, OPTIONS)).toEqual({ until: new Date(NOW.getTime() + 175 * 86_400_000), by: 'undo' })
+    expect(recenterLock({ ...at('editor', 5), recenterUndoneAt: ago(10) }, OPTIONS)?.by).toBe('editor')
   })
 })
 
@@ -218,7 +223,17 @@ describe('recenterCaseOf', () => {
       closingStoryId: null,
       lockedOut: [],
     },
-    state: { scope: 'ongoing', status: 'open', frozen: false, automatedRecenters: 0, recenteredAt: null, recenteredBy: null, recenterTriedAt: null, ...state },
+    state: {
+      scope: 'ongoing',
+      status: 'open',
+      frozen: false,
+      automatedRecenters: 0,
+      recenteredAt: null,
+      recenteredBy: null,
+      recenterUndoneAt: null,
+      recenterTriedAt: null,
+      ...state,
+    },
     entryDates: new Map([1, 2, 3].map(i => [`e${i}`, day(i)])),
     founding: ['e2', 'e1'],
     records: [
@@ -359,6 +374,9 @@ describe('recenterOverview', () => {
       [draft({ charter: { ...draft().charter, out: ['Western drought', 'Lake Mead tourism'] } }), 'out'],
       [draft({ charter: { ...draft().charter, out: ['Western drought', 'x'.repeat(ATTEMPT.maxOutChars + 1)] } }), 'out'],
       [draft({ title: '' }), 'draft'],
+      // A story judged among the entries (with no role), or an entry among the stories, is a malformed draft
+      [draft({ entries: [...judged(['E1', 'E2', 'E3', 'E4']), { id: 'S1', belongs: 'yes' }], stories: draft().stories.slice(1) }), 'draft'],
+      [draft({ stories: [...draft().stories, { id: 'E2', belongs: 'no', ...routine }] }), 'draft'],
       [
         draft({
           title: 'Colorado River rules',

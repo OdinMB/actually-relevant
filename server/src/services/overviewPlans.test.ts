@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { joinResult, linkResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
 import { applied, newOverviewRow, settle, type EntryRow, type OverviewRow, type Rows } from './overviewChanges.js'
 import { planAlone, planBurst, planClosing, planConflict, planJoin, planRecenter, planReview, planStatus } from './overviewPlans.js'
-import type { RecenterCase, RecenterResult } from './overviewRecenter.js'
+import type { OfferedStory, RecenterCase, RecenterResult } from './overviewRecenter.js'
 import type { ReviewResult } from './overviewReview.js'
 
 const NOW = new Date('2026-11-18T03:00:00Z')
@@ -86,6 +86,18 @@ describe('planRecenter', () => {
     neighbours: [],
     fired: { wider: 2, centerMoved: 0 },
   })
+  /** The stories as they are when the re-center is written: those active in an overview, those published (every story by default). */
+  const storiesNow = (active: string[] = [], published: string[] = ['s7', 's8', 's9']) => ({ active: new Set(active), published: new Set(published) })
+  const offered = (storyId: string): OfferedStory => ({
+    storyId,
+    title: storyId,
+    label: 'Label',
+    summary: 'Summary.',
+    date: '2026-11-09',
+    datePublished: day(9),
+    entryId: null,
+    quotes: [storyId],
+  })
   const result = (over: Partial<RecenterResult> = {}): RecenterResult => ({
     outcome: 'recentered',
     rule: null,
@@ -110,7 +122,7 @@ describe('planRecenter', () => {
 
   it('writes the new title and charter as the re-center’s, detaches what both rejected, joins what both accepted, and counts it', () => {
     const r = at()
-    const p = planRecenter(r, caseOf(r), result(), new Set(), ctx)
+    const p = planRecenter(r, caseOf(r), result(), storiesNow(), ctx)
     expect(p.decision).toMatchObject({ kind: 'recenter', outcome: 'recentered', actor: 'recenter', model: 'large-model', promptVersion: 'rv', costUsd: 0.12 })
     expect(p.decision.inputs).toMatchObject({ outAdded: ['Cholera in Ituri'], joined: ['s7', 's9'], detached: ['e4'], kept: 3 })
     const done = applied(r, settle(r, p))
@@ -144,28 +156,31 @@ describe('planRecenter', () => {
   it('only marks the attempt when kept or refused, and writes nothing for a failed call', () => {
     const r = at()
     for (const outcome of ['kept', 'refused'] as const) {
-      const p = planRecenter(r, caseOf(r), result({ outcome, joins: [], detaches: [], rule: outcome === 'refused' ? 'anchor' : null }), new Set(), ctx)
+      const p = planRecenter(r, caseOf(r), result({ outcome, joins: [], detaches: [], rule: outcome === 'refused' ? 'anchor' : null }), storiesNow(), ctx)
       expect(p.decision.outcome).toBe(outcome)
       expect(p.changes).toEqual([expect.objectContaining({ table: 'overview', after: { recenterTriedAt: NOW } })])
       expect(p.decision.inputs).toMatchObject({ outAdded: [] })
     }
-    const failed = planRecenter(r, caseOf(r), result({ outcome: 'failed', joins: [], detaches: [] }), new Set(), ctx)
+    const failed = planRecenter(r, caseOf(r), result({ outcome: 'failed', joins: [], detaches: [] }), storiesNow(), ctx)
     expect(failed.changes).toEqual([])
     expect(failed.decision.inputs).toMatchObject({ kept: null })
   })
 
-  it('is stale, applying nothing, when the overview changed during the calls or a story to join is taken', () => {
+  it('is stale, applying nothing, when the overview changed during the calls, a story to join is taken, or a story it was offered is unpublished', () => {
     const r = at()
-    const c = caseOf(r)
-    const stale = (rowsNow: Rows | null, taken = new Set<string>()) => planRecenter(rowsNow, c, result(), taken, ctx)
+    const c = { ...caseOf(r), stories: ['s7', 's8', 's9'].map(offered) }
+    const stale = (rowsNow: Rows | null, taken: string[] = [], published?: string[]) => planRecenter(rowsNow, c, result(), storiesNow(taken, published), ctx)
+    expect(stale(r).decision.outcome).toBe('recentered')
+    // s8 was offered and judged, though not joined: the calls read a story no longer published
+    expect(stale(r, [], ['s7', 's9']).decision.outcome).toBe('stale')
     expect(stale(null).decision.outcome).toBe('stale')
     expect(stale({ ...r, overview: { ...r.overview, title: 'Retitled' } }).decision.outcome).toBe('stale')
     expect(stale({ ...r, overview: { ...r.overview, lockedOut: ['x'] } }).decision.outcome).toBe('stale')
     expect(stale({ ...r, overview: { ...r.overview, automatedRecenters: 1 } }).decision.outcome).toBe('stale')
     expect(stale({ ...r, overview: { ...r.overview, status: 'quiet' } }).decision.outcome).toBe('stale')
-    expect(stale(r, new Set(['s9'])).decision.outcome).toBe('stale')
+    expect(stale(r, ['s9']).decision.outcome).toBe('stale')
     expect(stale({ ...r, entries: r.entries.map(e => (e.id === 'e7' ? { ...e, status: 'active' as const } : e)) }).decision.outcome).toBe('stale')
-    expect(stale(r, new Set(['s9'])).changes).toEqual([])
+    expect(stale(r, ['s9']).changes).toEqual([])
   })
 })
 

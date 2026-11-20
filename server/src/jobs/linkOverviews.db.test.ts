@@ -174,6 +174,7 @@ const OVERVIEW_KEYS = [
   'charterPromptVersion',
   'recenteredAt',
   'recenteredBy',
+  'recenterUndoneAt',
   'recenterTriedAt',
   'automatedRecenters',
 ] as const

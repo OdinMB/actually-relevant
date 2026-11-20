@@ -1020,9 +1020,11 @@ model Overview {
   joinsCountedFrom     DateTime?          @map("joins_counted_from")
   /// OUT entries an editor's undo of a review took out, which no review adds again
   lockedOut            Json               @default("[]") @map("locked_out")
-  /// The last re-center of its charter and who made it (recenter, editor, or undo for an Undo of an automated one): an editor's or an Undo's keeps automation from re-centering it for editorRecenterLockDays
+  /// The last re-center of its charter in force and who made it (recenter or editor; an Undo puts back the one before): an editor's keeps automation from re-centering it for editorRecenterLockDays
   recenteredAt         DateTime?          @map("recentered_at")
   recenteredBy         String?            @map("recentered_by")
+  /// When an Undo of an automated re-center last ran: it keeps automation from re-centering it for editorRecenterLockDays (an Undo of that Undo puts it back)
+  recenterUndoneAt     DateTime?          @map("recenter_undone_at")
   /// The last automated re-center attempt: only signals after it count (never put back by an Undo)
   recenterTriedAt      DateTime?          @map("recenter_tried_at")
   /// Applied automated re-centers not undone: at maxAutomatedRecenters only an editor re-centers it

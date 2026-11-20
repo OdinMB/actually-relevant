@@ -16,7 +16,7 @@ import { undoable } from './overviewEdits.js'
 import { parseCharter } from './overviewInput.js'
 import { isPublicOverview } from './overviewPublicRule.js'
 import { overviewStepOn } from './overviewQueue.js'
-import { anchorOf, type AnchorEntry, recenterLockedUntil, signalsSince, type SignalRecord } from './overviewRecenter.js'
+import { anchorOf, type AnchorEntry, recenterLock, signalsSince, type SignalRecord } from './overviewRecenter.js'
 import { signalRecords } from './overviewRecenterInput.js'
 import { usable } from './researchPool.js'
 
@@ -51,18 +51,26 @@ type CharterDecision = { id: string; kind: string; outcome: string; actor: strin
 
 /**
  * An overview's re-centering for its admin page (`.context/overviews.md`, "Re-centering"): the
- * anchor a new charter should still cover, the automated re-centers against the limit, the lock an
- * editor's or an Undo's re-center set, the OUT entries an Undo locked out, the link signals since the
- * last re-center, and the charter history from the re-center decisions.
+ * anchor a new charter should still cover (from its live founding, as production reads it), the
+ * automated re-centers against the limit, the lock an editor's re-center or an Undo of an automated
+ * one set, the OUT entries an Undo locked out, the link signals since the last re-center, and the
+ * charter history from the re-center decisions.
  */
 function recenteringView(
-  o: { id: string; automatedRecenters: number; recenteredAt: Date | null; recenteredBy: string | null; lockedOut: unknown },
+  o: {
+    id: string
+    automatedRecenters: number
+    recenteredAt: Date | null
+    recenteredBy: string | null
+    recenterUndoneAt: Date | null
+    lockedOut: unknown
+  },
   entries: ViewedEntry[],
   charterDecisions: CharterDecision[],
   signals: readonly SignalRecord[],
   names: ReadonlyMap<string, string>,
 ) {
-  const founding = charterDecisions.filter(d => d.kind === 'found').flatMap(d => foundingEntries(d.inputs))
+  const founding = charterDecisions.filter(d => d.kind === 'found' && d.undoneAt === null).flatMap(d => foundingEntries(d.inputs))
   const anchor = anchorOf(
     entries.map(e => ({
       entryId: e.id,
@@ -74,7 +82,8 @@ function recenteringView(
     founding,
   )
   const byId = new Map(entries.map(e => [e.id, e]))
-  const lockedUntil = recenterLockedUntil(o)
+  const lock = recenterLock(o)
+  const holding = lock && lock.until.getTime() > Date.now() ? lock : null
   const anchorEntry = (founding: boolean) => (entryId: string) => {
     const story = byId.get(entryId)?.story
     return { entryId, storyId: story?.id ?? null, title: story ? (story.title ?? story.sourceTitle) : null, founding }
@@ -85,8 +94,9 @@ function recenteringView(
     lockDays: config.overviews.editorRecenterLockDays,
     recenteredAt: o.recenteredAt,
     recenteredBy: o.recenteredBy,
-    /** No automated re-center before this, after an editor's or an Undo's re-center; null when no such lock holds now. */
-    lockedUntil: lockedUntil && lockedUntil.getTime() > Date.now() ? lockedUntil : null,
+    /** No automated re-center before this, after an editor's re-center or an Undo of an automated one (`lockedBy`); null when no such lock holds now. */
+    lockedUntil: holding?.until ?? null,
+    lockedBy: holding?.by ?? null,
     /** OUT entries an Undo took out, which no review adds again; an editor's charter that names one again lifts its lock. */
     lockedOut: Array.isArray(o.lockedOut) ? o.lockedOut.filter((x): x is string => typeof x === 'string') : [],
     /** Stories linked since the last re-center (since founding before one) that pointed past the charter: still counted at the limit, so the editor sees them. */
@@ -215,7 +225,8 @@ async function editorNames(ids: string[]): Promise<Map<string, string>> {
  * One overview for its admin page: its fields and charter, its entries, its stands versions, its
  * decision log, and its re-centering (`.context/overviews.md`, "Re-centering"): the anchor a new
  * charter should still cover, the count of automated re-centers against the limit, the lock an
- * editor's or an Undo's re-center set, and the charter history from the re-center decisions.
+ * editor's re-center or an Undo of an automated one set, and the charter history from the re-center
+ * decisions.
  */
 export async function adminOverview(id: string) {
   const o = await prisma.overview.findUnique({
@@ -230,6 +241,7 @@ export async function adminOverview(id: string) {
       reviewedAt: true,
       recenteredAt: true,
       recenteredBy: true,
+      recenterUndoneAt: true,
       automatedRecenters: true,
       lockedOut: true,
     },
@@ -256,7 +268,8 @@ export async function adminOverview(id: string) {
     entryCounts([id]),
     overviewStepOn(),
   ])
-  const signals = await signalRecords(prisma, id)
+  // What the view counts: the signals since the last re-center
+  const signals = await signalRecords(prisma, id, o.recenteredAt)
   const versions = stands.map(v => ({ ...v, sentences: linesSchema.parse(v.sentences), doing: linesSchema.parse(v.doing) }))
   const resolve = resolveLine(await citedFacts([...new Set(versions.flatMap(v => [...v.sentences, ...v.doing].flatMap(l => l.facts)))]))
   const names = await editorNames([...new Set([...decisions, ...history, ...charterDecisions].flatMap(d => [d.actor, d.undoneBy ?? '']).filter(Boolean))])
@@ -279,11 +292,17 @@ export async function adminOverview(id: string) {
     answer: d.answer,
     undoable: undoable(d),
   })
-  const { lockedOut, automatedRecenters, recenteredAt, recenteredBy, ...fields } = o
+  const { lockedOut, automatedRecenters, recenteredAt, recenteredBy, recenterUndoneAt, ...fields } = o
   return {
     ...fields,
     charter: parseCharter(o.charter) ?? { in: '', out: [], endEvent: null },
-    recentering: recenteringView({ id, lockedOut, automatedRecenters, recenteredAt, recenteredBy }, entries, charterDecisions, signals, names),
+    recentering: recenteringView(
+      { id, lockedOut, automatedRecenters, recenteredAt, recenteredBy, recenterUndoneAt },
+      entries,
+      charterDecisions,
+      signals,
+      names,
+    ),
     entries: counts.get(id) ?? 0,
     public: isPublicOverview(o),
     on,

@@ -51,6 +51,7 @@ const ROW = {
   charterPromptVersion: true,
   recenteredAt: true,
   recenteredBy: true,
+  recenterUndoneAt: true,
   recenterTriedAt: true,
   automatedRecenters: true,
   entriesAtLastReview: true,

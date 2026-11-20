@@ -12,18 +12,31 @@
  *   re-centered expected, 3 runs (not run with fewer than 3 such entries);
  * - the anchor breach (Colorado offered only near misses of the wider Western water loss): no
  *   re-center expected, 3 runs;
+ * - the neighbor a wider charter would absorb (Lebanon under an earlier charter, offered the regional
+ *   war's near misses, with the Strait of Hormuz overview as its neighbor): no re-center expected, 3 runs;
  * - each development at its end checkpoint under its own charter (before any center), offered its near
  *   misses of the 90 days before: no re-center expected, 1 run (not run with fewer than
  *   `recenterMinJoins` of them).
  *
  * Offered stories are production's at most (`maxRecenterStories`, newest first), near misses at most
- * half of them while entries fill the rest, so a case offers both. The strong judge compares an applied expected re-center's
+ * half of them while entries fill the rest, so a case offers both; each carries one signal quote
+ * (`signalQuote`), as a story the link call flagged does. Only the neighbor case has a neighbor. The strong judge compares an applied expected re-center's
  * END_EVENT with the expected one. `recenterScore.ts` scores the bars. On the eval's cached calls at
  * the step's tier; each run k ≥ 2 has its own cache keys; attempts start only while the budget lasts.
  * It refuses, before any read or call, while a key of its half holds a center no one has reviewed.
  */
 import { config } from '../../../config.js'
-import { anchorHolds, anchorOf, recenterOverview, type AttemptOptions, type OfferedStory, type RecenterCase } from '../../../services/overviewRecenter.js'
+import { quoteFound } from '../../../lib/quoteMatch.js'
+import { storyTexts } from '../../../services/overviewLink.js'
+import {
+  anchorHolds,
+  anchorOf,
+  recenterOverview,
+  type AttemptOptions,
+  type OfferedStory,
+  type RecenterCase,
+  type RecenterNeighbour,
+} from '../../../services/overviewRecenter.js'
 import type { ReviewEntry } from '../../../services/overviewReview.js'
 import type { Charter, LinkStory, Role } from '../../../services/overviewTypes.js'
 import type { SuiteContext } from '../types.js'
@@ -34,7 +47,7 @@ import { awaitingReview, centerSlugs, mustEntriesOn, type AnswerKey } from './ke
 import { END_EVENT_SCHEMA, evalCall } from './link.js'
 import type { EndEventVerdict } from './linkScore.js'
 import { buildEndEventJudgePrompt, endEventJudgeSchema } from './prompts.js'
-import { ANCHOR_BREACH, NARROWED_PLANTS } from './recenterPlants.js'
+import { ANCHOR_BREACH, NARROWED_PLANTS, NEIGHBOUR_ABSORB } from './recenterPlants.js'
 import { RECENTER_RUNS, expectsRecenter, scoreRecenters, type RecenterCaseKind, type RecenterCaseRun, type RecenterScore } from './recenterScore.js'
 import { checkpointsOf } from './replayScore.js'
 import { keyRole } from './stands.js'
@@ -93,14 +106,29 @@ interface Member {
   role: Role
 }
 
+/** A story a case offers, and the quote a plant gives its signal (`signalQuote`). */
+interface Offered {
+  slug: string
+  story: LinkStory
+  quote?: string
+}
+
+/**
+ * The words an offered story's signal quotes, as production's link call gives them and its quote check
+ * holds them (`storyTexts`): the plant's quote where the story's title, label or summary holds it,
+ * otherwise the story's title, a run of its own words that points past the charter as the whole story does.
+ */
+export const signalQuote = (o: Offered): string => (o.quote && quoteFound(o.quote, storyTexts(o.story)) ? o.quote : o.story.title)
+
 /**
  * The case production's `recenterOverview` reads, built as production's `recenterCases` would: an
  * ongoing open overview with these members (oldest first; the founding ones named), its anchor by
- * production's rule, no neighbor, and the offered stories newest first with no signal quote.
+ * production's rule, the neighbors given (none but the neighbor case's), and the offered stories newest
+ * first, each with one signal quote (`signalQuote`), as a story the link call flagged carries.
  */
 export function buildCase(
   id: string,
-  o: { title: string; charter: Charter; members: Member[]; founding: string[]; offered: { slug: string; story: LinkStory }[] },
+  o: { title: string; charter: Charter; members: Member[]; founding: string[]; offered: Offered[]; neighbours?: RecenterNeighbour[] },
   options: AttemptOptions = config.overviews,
 ): { case: RecenterCase; slugOf: Map<string, string> } {
   const members = [...o.members].sort((a, b) => a.story.datePublished.getTime() - b.story.datePublished.getTime())
@@ -122,15 +150,15 @@ export function buildCase(
   )
   const stories: OfferedStory[] = [...o.offered]
     .sort((a, b) => b.story.datePublished.getTime() - a.story.datePublished.getTime() || a.slug.localeCompare(b.slug))
-    .map(({ story: s }) => ({
-      storyId: s.id,
-      title: s.title,
-      label: s.label,
-      summary: s.summary,
-      date: s.date,
-      datePublished: s.datePublished,
+    .map(x => ({
+      storyId: x.story.id,
+      title: x.story.title,
+      label: x.story.label,
+      summary: x.story.summary,
+      date: x.story.date,
+      datePublished: x.story.datePublished,
       entryId: null,
-      quotes: [],
+      quotes: [signalQuote(x)],
     }))
   return {
     case: {
@@ -146,7 +174,7 @@ export function buildCase(
       automatedRecenters: 0,
       anchor,
       stories,
-      neighbours: [],
+      neighbours: o.neighbours ?? [],
       fired: { wider: 0, centerMoved: 0 },
     },
     slugOf: new Map([...members.map(m => [m.story.id, m.slug] as const), ...o.offered.map(s => [s.story.id, s.slug] as const)]),
@@ -171,12 +199,13 @@ export function offeredOn(
   return [...misses.slice(0, options.maxRecenterStories - taken.length), ...taken].map(x => x.slug)
 }
 
-const published = (slugs: readonly string[], loaded: Loaded) => slugs.flatMap(slug => (loaded.get(slug) ? [{ slug, story: loaded.get(slug)! }] : []))
+const published = (slugs: readonly string[], loaded: Loaded, quotes: Readonly<Record<string, string>> = {}): Offered[] =>
+  slugs.flatMap(slug => (loaded.get(slug) ? [{ slug, story: loaded.get(slug)!, ...(quotes[slug] ? { quote: quotes[slug] } : {}) }] : []))
 const membersOf = (entries: readonly Entry[], loaded: Loaded): Member[] =>
   entries.flatMap(e => (loaded.get(e.slug) ? [{ slug: e.slug, story: loaded.get(e.slug)!, role: keyRole(e) }] : []))
 
-/** Every case of the half's keys, and those that cannot be built with why. */
-export function plannedCases(keys: readonly AnswerKey[], loaded: Loaded, options: AttemptOptions = config.overviews) {
+/** Every case of the half's keys, and those that cannot be built with why; `all`, the committed keys, give the neighbor case its neighbor. */
+export function plannedCases(keys: readonly AnswerKey[], loaded: Loaded, all: readonly AnswerKey[] = keys, options: AttemptOptions = config.overviews) {
   const planned: PlannedRecenter[] = []
   const notRun: RecenterStepReport['notRun'] = []
   const add = (p: Omit<PlannedRecenter, 'case' | 'slugOf' | 'members' | 'offered'>, o: Parameters<typeof buildCase>[1]): void => {
@@ -260,7 +289,7 @@ export function plannedCases(keys: readonly AnswerKey[], loaded: Loaded, options
 
   const breach = byId.get(ANCHOR_BREACH.key)
   if (breach) {
-    const offered = published(ANCHOR_BREACH.offered, loaded)
+    const offered = published(ANCHOR_BREACH.offered, loaded, ANCHOR_BREACH.quotes)
     const day = offered
       .map(s => s.story.date)
       .sort()
@@ -279,6 +308,42 @@ export function plannedCases(keys: readonly AnswerKey[], loaded: Loaded, options
           nearMisses: [...ANCHOR_BREACH.offered],
         },
         { title: breach.title, charter: breach.charter, members, founding: members.slice(0, 2).map(m => m.slug), offered },
+      )
+    }
+  }
+
+  const absorbing = byId.get(NEIGHBOUR_ABSORB.key)
+  if (absorbing) {
+    const id = `neighbour ${absorbing.id}`
+    const neighbour = all.find(k => k.id === NEIGHBOUR_ABSORB.neighbour)
+    const offered = published(NEIGHBOUR_ABSORB.offered, loaded, NEIGHBOUR_ABSORB.quotes)
+    const day = offered
+      .map(s => s.story.date)
+      .sort()
+      .at(-1)
+    if (!neighbour) notRun.push({ what: id, reason: `its neighbor's key ${NEIGHBOUR_ABSORB.neighbour} is not committed` })
+    else if (!day) notRun.push({ what: id, reason: 'none of its offered stories is published here' })
+    else {
+      const notYet = new Set<string>(NEIGHBOUR_ABSORB.notYetOut)
+      const members = membersOf(musts(absorbing, day), loaded)
+      add(
+        {
+          id,
+          kind: 'neighbour',
+          key: absorbing.id,
+          day,
+          development: absorbing.title,
+          expectedEndEvent: absorbing.charter.endEvent,
+          nearMisses: [...NEIGHBOUR_ABSORB.offered],
+        },
+        {
+          title: absorbing.title,
+          charter: { ...absorbing.charter, out: absorbing.charter.out.filter(x => !notYet.has(x)) },
+          members,
+          founding: members.slice(0, 2).map(m => m.slug),
+          offered,
+          neighbours: [{ overviewId: `overview:${neighbour.id}`, title: neighbour.title, in: neighbour.charter.in }],
+        },
       )
     }
   }
@@ -318,13 +383,14 @@ const caseSlugs = (keys: readonly AnswerKey[]) => [
 ]
 
 export async function runRecenterStep(o: RecenterStepOptions): Promise<RecenterStepReport> {
-  const keys = o.files.flatMap(f => (f.key && f.errors.length === 0 && inDevelopmentHalf(f.key.id, o.half) ? [f.key] : []))
+  const all = o.files.flatMap(f => (f.key && f.errors.length === 0 ? [f.key] : []))
+  const keys = all.filter(k => inDevelopmentHalf(k.id, o.half))
   const base = { half: o.half, ...(o.limit !== undefined ? { limit: o.limit } : {}), keys: keys.map(k => k.id) }
   // A center's case is scored against it: none may be a draft no one checked
   const refused = awaitingReview(keys, 'centers')
   if (refused) return { ...base, planned: [], notRun: [], runs: [], score: scoreRecenters([]), costUsd: 0, stopped: refused }
   const loaded = await o.stories(caseSlugs(keys))
-  const built = plannedCases(keys, loaded)
+  const built = plannedCases(keys, loaded, all)
   const cases = o.limit !== undefined ? built.planned.slice(0, o.limit) : built.planned
   const spentBefore = o.ctx.spentUsd()
   const runs: RecenterCaseRun[] = []

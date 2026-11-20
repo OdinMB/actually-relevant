@@ -436,16 +436,26 @@ export function planReview(rows: Rows, c: ReviewCase, result: ReviewResult, ctx:
 /** The outcome of an automated re-center whose overview or stories changed during its calls: recorded, nothing applied, asked again next run. */
 export const STALE_RECENTER = 'stale'
 
+/** The stories an automated re-center read, as they are when it is written. */
+export interface RecenterStoriesNow {
+  /** Those of its joins active in an overview by now. */
+  active: ReadonlySet<string>
+  /** Those of the stories it was offered still published. */
+  published: ReadonlySet<string>
+}
+
 /**
  * Whether an automated re-center's calls read rows that no longer hold (`.context/overviews.md`,
- * "Re-centering"): what a review compares (`changedSinceCase`), and the status, the locked-out OUT
- * entries and the count of automated re-centers; for a proposal also a story it would join that is
- * active in an overview by now (`activeNow`), or whose row here is no longer detached.
+ * "Re-centering"): what a review compares (`changedSinceCase`), the status, the locked-out OUT entries
+ * and the count of automated re-centers, and a story it was offered no longer published (the calls
+ * judged it); for a proposal also a story it would join that is active in an overview by now, or whose
+ * row here is no longer detached.
  */
-export function recenterStale(c: RecenterCase, rows: Rows, result: RecenterResult, activeNow: ReadonlySet<string>): boolean {
+export function recenterStale(c: RecenterCase, rows: Rows, result: RecenterResult, now: RecenterStoriesNow): boolean {
   const o = rows.overview
   if (changedSinceCase(c, rows) || o.status !== c.status || !sameValue(o.lockedOut, c.lockedOut) || o.automatedRecenters !== c.automatedRecenters) return true
-  return result.joins.some(j => activeNow.has(j.storyId) || (j.entryId !== null && rows.entries.find(e => e.id === j.entryId)?.status !== 'detached'))
+  if (c.stories.some(s => !now.published.has(s.storyId))) return true
+  return result.joins.some(j => now.active.has(j.storyId) || (j.entryId !== null && rows.entries.find(e => e.id === j.entryId)?.status !== 'detached'))
 }
 
 /**
@@ -459,8 +469,8 @@ export function recenterStale(c: RecenterCase, rows: Rows, result: RecenterResul
  * draft's role and unlocked. A re-center join never starts a closing, and `joins_counted_from` stays,
  * as the burst count counts only the pipeline's joins. `rows` is null for an overview gone.
  */
-export function planRecenter(rows: Rows | null, c: RecenterCase, result: RecenterResult, activeNow: ReadonlySet<string>, ctx: PlanContext): Plan {
-  const stale = rows === null || (result.outcome !== 'failed' && recenterStale(c, rows, result, activeNow))
+export function planRecenter(rows: Rows | null, c: RecenterCase, result: RecenterResult, storiesNow: RecenterStoriesNow, ctx: PlanContext): Plan {
+  const stale = rows === null || (result.outcome !== 'failed' && recenterStale(c, rows, result, storiesNow))
   const inputs: RecenterInputs = {
     rule: result.rule,
     outAdded: result.outcome === 'recentered' ? result.outAdded : [],

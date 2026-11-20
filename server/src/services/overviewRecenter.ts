@@ -2,7 +2,7 @@
  * Re-centering (`.context/overviews.md`, "Re-centering"): the rules that hold it to where a development
  * began (D-RC14, the owner's: the anchor every re-center must still cover, and the fixed limits on an
  * automated one: its scope and status, the limit of applied automated re-centers, the lock an editor's
- * or an Undo's re-center sets), which the admin reads to show the anchor in the editor's form; and the
+ * re-center or an Undo of an automated one sets), which the admin reads to show the anchor in the editor's form; and the
  * automated re-center itself, over injected calls, the same in production and in the eval's sandbox:
  * the signals that fire an attempt (D-RC3), the stories it may take in (D-RC6), the neighbors its new
  * IN must not take in, the draft and its blind check, and the code rules that accept a proposal
@@ -84,20 +84,39 @@ export interface RecenterState {
   automatedRecenters: number
   recenteredAt: Date | null
   recenteredBy: string | null
+  recenterUndoneAt: Date | null
 }
 
-/** Until when an editor's or an Undo's re-center keeps automation off (`editorRecenterLockDays`); null when neither made the last one. */
-export function recenterLockedUntil(o: Pick<RecenterState, 'recenteredAt' | 'recenteredBy'>, options: RecenterOptions = config.overviews): Date | null {
-  if (!o.recenteredAt || (o.recenteredBy !== 'editor' && o.recenteredBy !== 'undo')) return null
-  return new Date(o.recenteredAt.getTime() + options.editorRecenterLockDays * DAY_MS)
+/** The lock on automated re-centers, until when it holds and whose it is. */
+export interface RecenterLock {
+  until: Date
+  /** An editor's re-center, or an Undo of an automated one. */
+  by: 'editor' | 'undo'
+}
+
+/**
+ * The lock that keeps automation off an overview for `editorRecenterLockDays` (D-RC14): after an
+ * editor's re-center in force (`recenteredBy` `editor`) and after an Undo of an automated re-center
+ * (`recenterUndoneAt`), the later of the two; null when neither set one.
+ */
+export function recenterLock(
+  o: Pick<RecenterState, 'recenteredAt' | 'recenteredBy' | 'recenterUndoneAt'>,
+  options: RecenterOptions = config.overviews,
+): RecenterLock | null {
+  const after = (at: Date) => new Date(at.getTime() + options.editorRecenterLockDays * DAY_MS)
+  const locks: RecenterLock[] = [
+    ...(o.recenteredBy === 'editor' && o.recenteredAt ? [{ until: after(o.recenteredAt), by: 'editor' as const }] : []),
+    ...(o.recenterUndoneAt ? [{ until: after(o.recenterUndoneAt), by: 'undo' as const }] : []),
+  ]
+  return locks.sort((a, b) => b.until.getTime() - a.until.getTime())[0] ?? null
 }
 
 /**
  * Why automation may not re-center the overview at `now` (the wall clock an editor acts on), or null
  * when it may: only an ongoing overview, open or quiet and not frozen (a forming one is not
  * re-centered by automation); fewer than `maxAutomatedRecenters` applied automated re-centers (after
- * that only an editor re-centers it); and no editor's or Undo's re-center within
- * `editorRecenterLockDays`.
+ * that only an editor re-centers it); and no lock (`recenterLock`): no editor's re-center or Undo of an
+ * automated one within `editorRecenterLockDays`.
  */
 export function automatedRecenterBlocked(
   o: RecenterState,
@@ -108,8 +127,8 @@ export function automatedRecenterBlocked(
   if (o.status !== 'open' && o.status !== 'quiet') return 'status'
   if (o.frozen) return 'frozen'
   if (o.automatedRecenters >= options.maxAutomatedRecenters) return 'limit'
-  const until = recenterLockedUntil(o, options)
-  return until && now.getTime() < until.getTime() ? 'locked' : null
+  const lock = recenterLock(o, options)
+  return lock && now.getTime() < lock.until.getTime() ? 'locked' : null
 }
 
 // ---------------------------------------------------------------------------
@@ -382,9 +401,16 @@ export const recenterCheckInput = (c: RecenterCase, charter: Charter): RecenterC
   neighbours: c.neighbours.map((n, i) => ({ ref: `N${i + 1}`, title: n.title, in: n.in })),
 })
 
+/** A ref of the other list: a story's `S#` among the entries' judgments, or an entry's `E#` among the stories'. */
+const misfiled = (draft: RecenterAnswer): string[] => [
+  ...draft.entries.map(e => e.id.trim()).filter(id => /^S\d+$/.test(id)),
+  ...draft.stories.map(s => s.id.trim()).filter(id => /^E\d+$/.test(id)),
+]
+
 /**
- * The rules a draft is held to before its check is asked (D-RC2): a title within `maxTitleChars` and
- * an IN, something changed, and the old OUT list kept whole, with additions within `maxOutChars` and
+ * The rules a draft is held to before its check is asked (D-RC2): every judgment in its own list (a
+ * story judged among the entries would join with no role); a title within `maxTitleChars` and an IN,
+ * something changed, and the old OUT list kept whole, with additions within `maxOutChars` and
  * `maxOutEntries` and none an editor's Undo locked out. Returns the charter code builds (the old OUT
  * with the additions after it), or the refusals.
  */
@@ -396,6 +422,8 @@ function draftRules(
   const refusals: RecenterResult['refusals'] = []
   const title = draft.title.trim()
   const charter: Charter = { in: draft.charter.in.trim(), out: [...c.charter.out], endEvent: endEventFrom(draft.charter.endEvent) }
+  const wrong = misfiled(draft)
+  if (wrong.length > 0) refusals.push({ rule: 'draft', reason: `judges ${wrong.join(', ')} in the wrong list: a malformed draft` })
   if (!title || !charter.in) refusals.push({ rule: 'draft', reason: 'proposes no title or no IN' })
   else if (title.length > options.maxTitleChars) refusals.push({ rule: 'draft', reason: `a title longer than ${options.maxTitleChars} characters` })
   const dropped = c.charter.out.filter(o => !draft.charter.out.some(p => same(p, o)))

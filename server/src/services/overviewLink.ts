@@ -104,7 +104,8 @@ const sharedOf = (a: LinkCandidateAnswer): Shared => ({
   end: { story: a.end.story, other: a.end.other },
 })
 
-const storyTexts = (s: LinkStory) => [s.title, s.label, s.summary]
+/** The texts a story's quotes are found in: its title, label and summary. */
+export const storyTexts = (s: LinkStory) => [s.title, s.label, s.summary]
 /** An overview's side of a quote: its title, its charter's IN and its END_EVENT when it names one. Never its OUT list, which names what does not belong. */
 const overviewTexts = (o: CandidateOverview) => [o.title, o.charter.in, ...(o.charter.endEvent === null ? [] : [o.charter.endEvent])]
 

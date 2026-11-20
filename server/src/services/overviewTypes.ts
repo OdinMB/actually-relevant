@@ -170,8 +170,8 @@ export interface OverviewState {
    */
   reportAt: Date | null
   /**
-   * The last re-center of its charter and who made it (`recenter`, `editor`, or `undo` for an Undo of
-   * an automated one): an editor's queues a review while no review has run since.
+   * The last re-center of its charter in force and who made it (`recenter` or `editor`; an Undo puts
+   * back the one before): an editor's queues a review while no review has run since.
    */
   recenteredAt: Date | null
   recenteredBy: string | null

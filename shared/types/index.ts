@@ -1795,11 +1795,12 @@ export interface OverviewRecentering {
   limit: number
   /** The days an editor's re-center keeps automation from re-centering it. */
   lockDays: number
+  /** The last re-center in force (an Undo puts back the one before), and who made it: recenter or editor. */
   recenteredAt: string | null
-  /** recenter, editor or undo. */
   recenteredBy: string | null
-  /** No automated re-center before this, after an editor's or an Undo's re-center; null when no such lock holds now. */
+  /** No automated re-center before this, after an editor's re-center or an Undo of an automated one (`lockedBy`); null when no such lock holds now. */
   lockedUntil: string | null
+  lockedBy: 'editor' | 'undo' | null
   /** OUT entries an Undo took out, which no review adds again; naming one in OUT lifts its lock. */
   lockedOut: string[]
   /** Stories linked since the last re-center (since founding before one) that the link call found wider than the charter, or reporting that its center moved. */

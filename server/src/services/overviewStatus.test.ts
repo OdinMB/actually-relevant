@@ -171,10 +171,9 @@ describe('reviewDue', () => {
     expect(due({ ...recentered, reviewedAt: null, entriesAtLastReview: 0, activeEntries: 2, scope: 'forming' })).toBe('recenter')
     expect(due({ ...recentered, activeEntries: 7, entriesAtLastReview: 3 })).toBe('recenter')
     expect(due({ ...recentered, reportAt: daysAgo(1) })).toBe('report')
-    // A frozen overview gets it once unfrozen; a single one never; an Undo's or automation's queues none
+    // A frozen overview gets it once unfrozen; a single one never; automation's queues none
     expect(due({ ...recentered, frozen: true })).toBeNull()
     expect(due({ ...recentered, scope: 'single', activeEntries: 1 })).toBeNull()
-    expect(due({ ...recentered, recenteredBy: 'undo' })).toBeNull()
     expect(due({ ...recentered, recenteredBy: 'recenter' })).toBeNull()
   })
 

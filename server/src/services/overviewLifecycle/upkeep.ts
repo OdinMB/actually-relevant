@@ -89,10 +89,10 @@ export async function applyReview(c: ReviewCase, result: ReviewResult, now: Date
 
 /**
  * An automated re-center's result (`planRecenter`), as its `recenter` decision, planned on the rows
- * locked here and the memberships of the stories it would join read in the same transaction: `stale`,
- * applying nothing, when either changed during its calls or the overview is gone. A join the
- * one-active-entry index still refuses (an editor's attach at the same moment) rolls the write back,
- * and the attempt is recorded `stale` on its own.
+ * locked here, the memberships of the stories it would join and which stories it was offered are still
+ * published, read in the same transaction: `stale`, applying nothing, when any of them changed during
+ * its calls or the overview is gone. A join the one-active-entry index still refuses (an editor's
+ * attach at the same moment) rolls the write back, and the attempt is recorded `stale` on its own.
  */
 export async function applyRecenter(c: RecenterCase, result: RecenterResult, now: Date = new Date(), db: typeof prisma = prisma): Promise<ReviewWrite> {
   const ctx = context(now)
@@ -103,7 +103,8 @@ export async function applyRecenter(c: RecenterCase, result: RecenterResult, now
         tx,
         result.joins.map(j => j.storyId),
       )
-      const p = planRecenter(rows, c, result, new Set(memberships.active.keys()), ctx)
+      const published = await tx.story.findMany({ where: { id: { in: c.stories.map(s => s.storyId) }, status: 'published' }, select: { id: true } })
+      const p = planRecenter(rows, c, result, { active: new Set(memberships.active.keys()), published: new Set(published.map(s => s.id)) }, ctx)
       const done = await applyPlan(tx, rows, p, now)
       return { write: p.decision.outcome === STALE_RECENTER ? 'stale' : 'written', removed: done.removed }
     })
@@ -111,7 +112,7 @@ export async function applyRecenter(c: RecenterCase, result: RecenterResult, now
     return write
   } catch (error) {
     if (!refusedByIndex(error)) throw error
-    await db.$transaction(tx => applyPlan(tx, null, planRecenter(null, c, result, new Set(), ctx), now))
+    await db.$transaction(tx => applyPlan(tx, null, planRecenter(null, c, result, { active: new Set(), published: new Set() }, ctx), now))
     return 'stale'
   }
 }

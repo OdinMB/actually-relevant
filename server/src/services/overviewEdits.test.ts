@@ -493,7 +493,7 @@ describe('planUndo', () => {
     expect(refusal(() => planUndo(done.decision, retitled.rows, [], ctx(LATER)))).toMatch(/its title changed after it/)
   })
 
-  it('undoes an automated re-center whole: moves back and locked, OUT additions locked out, model fields back, the count down, the lock the Undo’s', () => {
+  it('undoes an automated re-center whole: moves back and locked, OUT additions locked out, model fields back, the count down, the Undo’s lock set', () => {
     const at = rows({ automatedRecenters: 1 }, [
       entry(1),
       entry(2),
@@ -540,8 +540,10 @@ describe('planUndo', () => {
       charterPromptVersion: 'v',
       automatedRecenters: 1,
       lockedOut: ['Mpox'],
-      recenteredAt: LATER,
-      recenteredBy: 'undo',
+      // The re-center before it (none) is the last again, and the Undo's lock is its own
+      recenteredAt: null,
+      recenteredBy: null,
+      recenterUndoneAt: LATER,
       // The attempt stays tried: a later one never blocks an Undo
       recenterTriedAt: NOW,
     })
@@ -552,7 +554,76 @@ describe('planUndo', () => {
 
     // An undo of that undo raises the count again and the re-center is automation's once more
     const again = run(undo.rows, planUndo(undo.decision, undo.rows, [undo.decision], ctx(LATER)))
-    expect(again.rows.overview).toMatchObject({ automatedRecenters: 2, recenteredBy: 'recenter', recenteredAt: NOW, charter: moved, lockedOut: [] })
+    expect(again.rows.overview).toMatchObject({
+      automatedRecenters: 2,
+      recenteredBy: 'recenter',
+      recenteredAt: NOW,
+      recenterUndoneAt: null,
+      charter: moved,
+      lockedOut: [],
+    })
+  })
+
+  /** An automated re-center of `at` to `to` at `when`, as `planRecenter` writes the overview. */
+  const automated = (at: Rows, id: string, to: { title: string; charter: Charter }, when: Date) =>
+    run(
+      at,
+      plan(
+        draft({
+          id,
+          kind: 'recenter',
+          outcome: 'recentered',
+          overviewId: 'o1',
+          storyId: null,
+          inputs: { rule: null, outAdded: [], anchor: [] },
+          actor: 'recenter',
+        }),
+        {
+          changes: overviewChange(at.overview, {
+            ...to,
+            recenteredAt: when,
+            recenteredBy: 'recenter',
+            recenterTriedAt: when,
+            automatedRecenters: at.overview.automatedRecenters + 1,
+          }),
+        },
+      ),
+    )
+  const LATEST = new Date('2026-11-20T12:00:00Z')
+
+  it('undoes two automated re-centers newest first, each Undo keeping its lock beside the re-center it puts back', () => {
+    const first = automated(rows(), 'r1', { title: 'Ebola in eastern Congo', charter: wider }, NOW)
+    const moved = { ...wider, in: 'Ebola in Congo and Uganda.' }
+    const second = automated(first.rows, 'r2', { title: 'Ebola in the Great Lakes', charter: moved }, LATER)
+    const undoSecond = run(second.rows, planUndo(second.decision, second.rows, [], ctx(LATER)))
+    expect(undoSecond.rows.overview).toMatchObject({
+      charter: wider,
+      automatedRecenters: 1,
+      // The first re-center is the last one again; the Undo's lock is its own field
+      recenteredAt: NOW,
+      recenteredBy: 'recenter',
+      recenterUndoneAt: LATER,
+    })
+    const undoFirst = run(undoSecond.rows, planUndo(first.decision, undoSecond.rows, [undoSecond.decision], ctx(LATEST)))
+    expect(undoFirst.rows.overview).toMatchObject({
+      title: 'Ebola in Ituri',
+      charter,
+      automatedRecenters: 0,
+      recenteredAt: null,
+      recenteredBy: null,
+      recenterUndoneAt: LATEST,
+    })
+  })
+
+  it("undoes an editor's re-center after undoing the automated one that followed it, and the Undo's lock stays", () => {
+    const at = rows()
+    const edited = run(at, recenter(wider, at))
+    const moved = { ...wider, in: 'Ebola in Congo and Uganda.' }
+    const auto = automated(edited.rows, 'r1', { title: 'Ebola in the Great Lakes', charter: moved }, LATER)
+    const undoAuto = run(auto.rows, planUndo(auto.decision, auto.rows, [], ctx(LATER)))
+    expect(undoAuto.rows.overview).toMatchObject({ charter: wider, recenteredBy: 'editor', recenteredAt: NOW, recenterUndoneAt: LATER })
+    const undoEdit = run(undoAuto.rows, planUndo(edited.decision, undoAuto.rows, [undoAuto.decision], ctx(LATEST)))
+    expect(undoEdit.rows.overview).toMatchObject({ title: 'Ebola in Ituri', charter, recenteredAt: null, recenteredBy: null, recenterUndoneAt: LATER })
   })
 
   it('refuses a decision undone already, one it cannot reverse, a founding’s link and one that recorded no change set', () => {

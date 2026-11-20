@@ -4,8 +4,8 @@
  * run directly on cases built from the answer keys (`recenter.ts`): re-centered where a re-center is
  * expected (the planted narrowed charters and a reviewed center of a key, ≥80%, left to the owner under
  * 20 judgments); no named END_EVENT other than the expected one (the strong judge; one naming none is
- * counted, never wrong); no false re-center (the anchor breach and the end-checkpoint negatives); no
- * near miss joined; and no applied re-center whose anchor did not hold, which code makes impossible
+ * counted, never wrong); no false re-center (the anchor breach, the neighbor a wider charter would
+ * absorb and the end-checkpoint negatives); no near miss joined; and no applied re-center whose anchor did not hold, which code makes impossible
  * (a regression check). Counts over all runs. Pure.
  */
 import type { RecenterOutcome, RecenterRule } from '../../../services/overviewRecenter.js'
@@ -13,10 +13,10 @@ import { bar, rateBar, ratio, type Bar, type EndEventVerdict } from './linkScore
 
 export const RECENTERED_BAR = 0.8
 
-/** The cases' kinds, and the runs each is asked (the plan's table). */
-export type RecenterCaseKind = 'planted' | 'center' | 'breach' | 'negative'
-export const RECENTER_RUNS: Readonly<Record<RecenterCaseKind, number>> = { planted: 3, center: 3, breach: 3, negative: 1 }
-/** A re-center is expected of a planted narrowed charter and of a key's center; of a breach or a negative it is a false one. */
+/** The cases' kinds, and the runs each is asked (the plan's table; the neighbor case as the breach). */
+export type RecenterCaseKind = 'planted' | 'center' | 'breach' | 'neighbour' | 'negative'
+export const RECENTER_RUNS: Readonly<Record<RecenterCaseKind, number>> = { planted: 3, center: 3, breach: 3, neighbour: 3, negative: 1 }
+/** A re-center is expected of a planted narrowed charter and of a key's center; of a breach, a neighbor case or a negative it is a false one. */
 export const expectsRecenter = (kind: RecenterCaseKind): boolean => kind === 'planted' || kind === 'center'
 
 /** One attempt on one case, as the bars and the report read it; stories by slug. */
@@ -48,7 +48,7 @@ export interface RecenterScore {
   /** Expected re-centers answered (not failed), and those re-centered. */
   positives: number
   recentered: number
-  /** Breach and negative attempts answered, and those re-centered. */
+  /** Breach, neighbor and negative attempts answered, and those re-centered. */
   negatives: number
   falseRecenters: number
   nearMissesJoined: number

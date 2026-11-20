@@ -32,13 +32,19 @@ const signalList = z.array(signalSchema)
 /** The signals key as a literal in the SQL, not a bound value, so the partial GIN index on `(inputs -> 'signals')` serves the query; held to the schema's name. */
 const SIGNALS_SQL = Prisma.raw(`'${SIGNALS}'`)
 
-/** The live link decisions naming an overview in a signal, through the GIN index `overview_decisions_link_signals`. */
-export async function signalRecords(db: OverviewDb, overviewId: string): Promise<SignalRecord[]> {
+/**
+ * The live link decisions naming an overview in a signal, through the GIN index
+ * `overview_decisions_link_signals`; with `since`, only those linked after it (what `signalsSince`
+ * counts from it), so a night's check reads the signals since the last attempt, not the whole history.
+ */
+export async function signalRecords(db: OverviewDb, overviewId: string, since: Date | null = null): Promise<SignalRecord[]> {
+  const after = since ? Prisma.sql`AND (inputs ->> ${LINKED_AT})::timestamptz > ${since}` : Prisma.empty
   const decisions = await db.$queryRaw<{ story_id: string; signals: unknown; linked_at: string | null }[]>`
     SELECT story_id, inputs -> ${SIGNALS_SQL} AS signals, inputs ->> ${LINKED_AT} AS linked_at
     FROM overview_decisions
     WHERE kind = 'link' AND undone_at IS NULL AND story_id IS NOT NULL
       AND inputs -> ${SIGNALS_SQL} @> ${JSON.stringify([{ overviewId }])}::jsonb
+      ${after}
   `
   return decisions.map(d => ({
     storyId: d.story_id,
@@ -50,8 +56,9 @@ export async function signalRecords(db: OverviewDb, overviewId: string): Promise
 /**
  * The overviews an automated re-center is due on at the development clock `clock` and the wall clock
  * `now`, oldest founding first, each with its neighbors: of the ongoing overviews, open or quiet, not
- * frozen and below the limit of automated re-centers, those the editor's lock leaves to automation; the
- * live link decisions naming each in a signal (the GIN index `overview_decisions_link_signals`); the
+ * frozen and below the limit of automated re-centers, those no lock keeps from automation; the live
+ * link decisions naming each in a signal since its last attempt (the GIN index
+ * `overview_decisions_link_signals`), and for one whose signals fire them all; the
  * stories those name and those a review detached from it, with their membership and its newest row
  * there; then `recenterCaseOf` decides, and the neighbors are read for the cases it keeps.
  */
@@ -65,10 +72,11 @@ export async function recenterCases(db: OverviewDb, at: { clock: Date; now: Date
       automated_recenters: number
       recentered_at: Date | null
       recentered_by: string | null
+      recenter_undone_at: Date | null
       recenter_tried_at: Date | null
     }[]
   >`
-    SELECT id, scope::text AS scope, status::text AS status, frozen, automated_recenters, recentered_at, recentered_by, recenter_tried_at
+    SELECT id, scope::text AS scope, status::text AS status, frozen, automated_recenters, recentered_at, recentered_by, recenter_undone_at, recenter_tried_at
     FROM overviews
     WHERE scope = 'ongoing' AND status IN ('open', 'quiet') AND NOT frozen AND automated_recenters < ${options.maxAutomatedRecenters}
     ORDER BY founded_at, id
@@ -82,11 +90,14 @@ export async function recenterCases(db: OverviewDb, at: { clock: Date; now: Date
       automatedRecenters: o.automated_recenters,
       recenteredAt: o.recentered_at,
       recenteredBy: o.recentered_by,
+      recenterUndoneAt: o.recenter_undone_at,
       recenterTriedAt: o.recenter_tried_at,
     }
     if (automatedRecenterBlocked(state, at.now, options)) continue
-    const records = await signalRecords(db, o.id)
-    if (!signalFires(signalsSince(o.id, records, o.recenter_tried_at), options)) continue
+    // Only the signals since the last attempt fire one; the stories an attempt may take in are flagged by any signal (D-RC6), so the whole history is read only for an overview whose signals fire
+    const fresh = await signalRecords(db, o.id, o.recenter_tried_at)
+    if (!signalFires(signalsSince(o.id, fresh, o.recenter_tried_at), options)) continue
+    const records = o.recenter_tried_at === null ? fresh : await signalRecords(db, o.id)
     const review = await reviewCase(db, o.id)
     if (!review) continue
     const [entryDates, founding, rowsHere] = await Promise.all([

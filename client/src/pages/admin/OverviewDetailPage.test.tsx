@@ -104,6 +104,7 @@ function detail(over: Partial<AdminOverviewDetail> = {}): AdminOverviewDetail {
       recenteredAt: null,
       recenteredBy: null,
       lockedUntil: null,
+      lockedBy: null,
       lockedOut: [],
       signals: { wider: 0, centerMoved: 0 },
       anchor: {
@@ -286,6 +287,7 @@ describe('OverviewDetailPage', () => {
           recenteredAt: '2026-11-05T00:00:00.000Z',
           recenteredBy: 'editor',
           lockedUntil: '2099-05-04T00:00:00.000Z',
+          lockedBy: 'editor',
           signals: { wider: 3, centerMoved: 1 },
           history: [
             {

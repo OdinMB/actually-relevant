@@ -3,8 +3,8 @@ import type { LinkStory } from '../../../services/overviewTypes.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
 import { readKeyFiles, type KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
-import { offeredOn, plannedCases, runRecenterStep } from './recenter.js'
-import { ANCHOR_BREACH, NARROWED_PLANTS } from './recenterPlants.js'
+import { offeredOn, plannedCases, runRecenterStep, signalQuote } from './recenter.js'
+import { ANCHOR_BREACH, NARROWED_PLANTS, NEIGHBOUR_ABSORB } from './recenterPlants.js'
 import { scoreRecenters, type RecenterCaseRun } from './recenterScore.js'
 import { checkpointsOf } from './replayScore.js'
 import { recenterLines } from './upkeepReport.js'
@@ -66,6 +66,32 @@ describe('the planted cases', () => {
     const colorado = byId.get(ANCHOR_BREACH.key)!
     for (const slug of ANCHOR_BREACH.offered) expect(colorado.nearMisses.some(n => n.slug === slug)).toBe(true)
   })
+
+  it("name the neighbor case's OUT entries and near misses in its key, none an entry of the neighbor's key, and quote only offered stories", () => {
+    const lebanon = byId.get(NEIGHBOUR_ABSORB.key)!
+    const hormuz = byId.get(NEIGHBOUR_ABSORB.neighbour)!
+    for (const out of NEIGHBOUR_ABSORB.notYetOut) expect(lebanon.charter.out, out).toContain(out)
+    for (const slug of NEIGHBOUR_ABSORB.offered) {
+      expect(lebanon.nearMisses.some(n => n.slug === slug)).toBe(true)
+      // An entry of the Hormuz overview would be active there, and production never offers an active story
+      expect(
+        hormuz.entries.some(e => e.slug === slug),
+        slug,
+      ).toBe(false)
+    }
+    for (const plant of [ANCHOR_BREACH, NEIGHBOUR_ABSORB]) expect(plant.offered).toEqual(expect.arrayContaining(Object.keys(plant.quotes)))
+  })
+})
+
+describe('signalQuote', () => {
+  const story = STORIES.get(KEYS[0]!.entries[0]!.slug)!
+  it("gives a plant's quote the story's text holds, and otherwise the story's title", () => {
+    expect(signalQuote({ slug: 'x', story: { ...story, summary: 'The region teeters toward war.' }, quote: 'region teeters toward war' })).toBe(
+      'region teeters toward war',
+    )
+    expect(signalQuote({ slug: 'x', story, quote: 'words it does not hold' })).toBe(story.title)
+    expect(signalQuote({ slug: 'x', story })).toBe(story.title)
+  })
 })
 
 describe('offeredOn', () => {
@@ -84,8 +110,8 @@ describe('offeredOn', () => {
 describe('plannedCases', () => {
   const judged = KEYS.filter(k => ['ebola-drc-2026', 'el-nino-2026', 'lebanon-war-2026', 'pandemic-agreement-pabs', 'colorado-river-rules'].includes(k.id))
 
-  it('builds the plants at the two-thirds checkpoint, the breach on its newest story, and the negatives at the end', async () => {
-    const { planned, notRun } = plannedCases(judged, await stories([...STORIES.keys()]))
+  it('builds the plants at the two-thirds checkpoint, the breach and the neighbor case on their newest story, and the negatives at the end', async () => {
+    const { planned, notRun } = plannedCases(judged, await stories([...STORIES.keys()]), KEYS)
     expect(planned.map(p => `${p.id} ${p.day} ${p.members}/${p.offered}`)).toEqual([
       'planted ebola-drc-2026 2026-10-11 5/10',
       'planted el-nino-2026 2026-08-27 3/10',
@@ -93,6 +119,7 @@ describe('plannedCases', () => {
       'planted pandemic-agreement-pabs 2026-06-18 2/6',
       'planted colorado-river-rules 2026-06-06 2/6',
       'breach colorado-river-rules 2026-08-26 6/4',
+      'neighbour lebanon-war-2026 2026-04-17 14/6',
       'negative colorado-river-rules 2026-08-18 6/4',
       'negative ebola-drc-2026 2026-11-16 52/3',
       'negative el-nino-2026 2026-11-07 43/8',
@@ -106,6 +133,24 @@ describe('plannedCases', () => {
       'entry:who-raises-national-risk-to-very-high-in-eastern-drc',
     ])
     expect(ebola.case.stories.map(s => s.date)).toEqual([...ebola.case.stories.map(s => s.date)].sort().reverse())
+    // Every offered story carries one signal quote, as a flagged one does; only the neighbor case has a neighbor
+    expect(planned.every(p => p.case.stories.every(s => s.quotes.length === 1))).toBe(true)
+    expect(planned.filter(p => p.case.neighbours.length > 0).map(p => p.id)).toEqual(['neighbour lebanon-war-2026'])
+  })
+
+  it('gives the neighbor case an earlier charter, the Hormuz overview beside it, and needs that key committed', async () => {
+    const loaded = await stories([...STORIES.keys()])
+    const lebanon = byId.get('lebanon-war-2026')!
+    const hormuz = byId.get('hormuz-shipping-2026')!
+    const p = plannedCases(judged, loaded, KEYS).planned.find(x => x.kind === 'neighbour')!
+    expect(p.case.charter.out).toEqual(lebanon.charter.out.filter(x => !(NEIGHBOUR_ABSORB.notYetOut as readonly string[]).includes(x)))
+    expect(p.case.charter.in).toBe(lebanon.charter.in)
+    expect(p.case.neighbours).toEqual([{ overviewId: 'overview:hormuz-shipping-2026', title: hormuz.title, in: hormuz.charter.in }])
+    expect(p.nearMisses).toEqual([...NEIGHBOUR_ABSORB.offered])
+    expect(plannedCases(judged, loaded).notRun).toContainEqual({
+      what: 'neighbour lebanon-war-2026',
+      reason: "its neighbor's key hormuz-shipping-2026 is not committed",
+    })
   })
 
   it("builds a key's center on the day of its third entry on or after from, and leaves a thinner one out", async () => {
@@ -160,18 +205,25 @@ describe('runRecenterStep', () => {
   it('asks every case its runs, judges the applied end events, and scores the bars', async () => {
     const ctx = fakeEvalContext(answer)
     const report = await runRecenterStep({ ctx, files: FILES, half: 'judge', stories, budgetUsd: 5 })
-    expect(report.runs).toHaveLength(5 * 3 + 3 + 4)
-    expect(ctx.calls).toHaveLength(15 * 3 + 7 * 2)
+    // 5 plants, the breach and the neighbor case 3 runs each, 4 negatives 1
+    expect(report.runs).toHaveLength(5 * 3 + 3 + 3 + 4)
+    expect(ctx.calls).toHaveLength(15 * 3 + 10 * 2)
     expect(report.runs.filter(r => r.kind === 'planted').every(r => r.outcome === 'recentered' && r.anchorHeld && r.endEventVerdict === 'right')).toBe(true)
-    expect(report.runs.filter(r => r.kind !== 'planted').map(r => `${r.outcome} ${r.rule}`)).toEqual(Array(7).fill('refused joins'))
+    expect(report.runs.filter(r => r.kind !== 'planted').map(r => `${r.outcome} ${r.rule}`)).toEqual(Array(10).fill('refused joins'))
     expect(report.score).toMatchObject({
       positives: 15,
       recentered: 15,
-      negatives: 7,
+      negatives: 10,
       falseRecenters: 0,
       nearMissesJoined: 0,
-      heldBy: { 'refused (joins)': 7 },
+      heldBy: { 'refused (joins)': 10 },
     })
+    // Each draft is shown every story's signal; only the neighbor case's check is shown a neighbor, the Hormuz overview
+    const drafts = ctx.calls.filter(c => c.schemaName.startsWith('overview-recenter') && !c.schemaName.startsWith('overview-recenter-check'))
+    expect(drafts.every(c => c.prompt.split('<STORY id=').length - 1 === c.prompt.split('<SIGNAL>').length - 1)).toBe(true)
+    const shown = ctx.calls.filter(c => c.schemaName.startsWith('overview-recenter-check') && c.prompt.includes('<NEIGHBOR id='))
+    expect(shown).toHaveLength(3)
+    expect(shown[0]!.prompt).toContain('<TITLE>Disruption of shipping through the Strait of Hormuz</TITLE>')
     expect(report.score.bars.map(b => [b.name, b.value, b.met])).toEqual([
       ['re-centered where expected', 1, null],
       ['wrong end events (where one is named)', 0, true],

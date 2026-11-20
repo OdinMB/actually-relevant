@@ -8,13 +8,13 @@ import { NO_END_EVENT, actorLabel } from './overviewLabels'
 /*
  * An overview's charter on its admin page (`.context/overviews.md`, "Admin" and "Re-centering"): IN,
  * OUT and END_EVENT (or none), who drafted it, the count of automated re-centers against the limit,
- * the lock an editor's or an Undo's re-center set, the stories linked since the last re-center that
+ * the lock an editor's re-center or an Undo of automation's set, the stories linked since the last re-center that
  * pointed past the charter, "Edit charter", and the charter history from the re-center decisions.
  */
 
 const CLOSED_REASONS: Record<string, string> = { end_event: 'its end event was reported', faded: 'it faded', editor: 'an editor closed it' }
 
-const LOCKED_BY: Record<string, string> = { editor: "an editor's re-center", undo: "an Undo of automation's re-center" }
+const LOCKED_BY: Record<'editor' | 'undo', string> = { editor: "an editor's re-center", undo: "an Undo of automation's re-center" }
 
 const stories = (n: number) => (n === 1 ? '1 story' : `${n} stories`)
 
@@ -73,18 +73,12 @@ export function OverviewCharter({ overview: o }: { overview: AdminOverviewDetail
           {r.recenteredAt && (
             <span className="block text-neutral-500">
               Last re-centered {formatShortDate(r.recenteredAt)}
-              {r.recenteredBy === 'recenter'
-                ? ' by automation'
-                : r.recenteredBy === 'editor'
-                  ? ' by an editor'
-                  : r.recenteredBy === 'undo'
-                    ? ' by an Undo'
-                    : ''}
+              {r.recenteredBy === 'recenter' ? ' by automation' : r.recenteredBy === 'editor' ? ' by an editor' : ''}
             </span>
           )}
-          {r.lockedUntil && r.recenteredBy && (
+          {r.lockedUntil && r.lockedBy && (
             <span className="block text-neutral-500">
-              No automatic re-center until {formatShortDate(r.lockedUntil)}, after {LOCKED_BY[r.recenteredBy] ?? 'a re-center'}
+              No automatic re-center until {formatShortDate(r.lockedUntil)}, after {LOCKED_BY[r.lockedBy]}
             </span>
           )}
           {(r.signals.wider > 0 || r.signals.centerMoved > 0) && (

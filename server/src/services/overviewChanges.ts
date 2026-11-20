@@ -41,9 +41,11 @@ export interface OverviewFields {
    */
   charterModel: string
   charterPromptVersion: string
-  /** The last re-center and who made it (`recenter`, `editor`, or `undo` for an Undo of an automated one). */
+  /** The last re-center in force and who made it (`recenter` or `editor`): an Undo puts back the one before. */
   recenteredAt: Date | null
   recenteredBy: string | null
+  /** When an Undo of an automated re-center last ran: its lock (`recenterLock`). An Undo of that Undo puts it back. */
+  recenterUndoneAt: Date | null
   /** The last automated re-center attempt: signals after it count. Never put back by an Undo. */
   recenterTriedAt: Date | null
   /** Applied automated re-centers, not undone (an Undo puts the count back). */
@@ -304,6 +306,7 @@ export const newOverviewRow = (n: NewOverview): OverviewRow => ({
   charterPromptVersion: n.charterPromptVersion,
   recenteredAt: null,
   recenteredBy: null,
+  recenterUndoneAt: null,
   recenterTriedAt: null,
   automatedRecenters: 0,
   entriesAtLastReview: 0,
@@ -396,6 +399,7 @@ const DATE_FIELDS = new Set([
   'joinsCountedFrom',
   'lastEntryAt',
   'recenteredAt',
+  'recenterUndoneAt',
   'recenterTriedAt',
   'detachedAt',
 ])

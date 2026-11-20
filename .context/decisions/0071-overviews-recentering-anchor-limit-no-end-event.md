@@ -93,3 +93,19 @@ come later (plan phases 2 to 5).
   block the person D3 lets step in; the confirmation and the queued review take its place.
 - **Require an end event** and let founding refuse a development without one: most developments
   have none, so the draft would invent end events.
+
+## Amendment 2026-11-20: the Undo's lock in a column of its own
+
+A review of the branch found that the lock written into `recentered_at` and `recentered_by` (`undo`,
+now) blocked the next Undo down a chain: after an Undo of a later automated re-center, an Undo of
+the one before it, or of an editor's re-center before it, was refused, since that decision's change
+set names those two fields as it left them. The Undo's lock now has its own column,
+`recenter_undone_at` (migration `20261120130000_overview_recenter_undo_lock`, additive), and an Undo
+puts `recentered_at` and `recentered_by` back to the re-center before.
+
+Rule: an Undo of an automated re-center keeps automation off the overview for 180 days, as before,
+and the re-centers under it can be undone newest first; the lock holds after an editor's re-center
+in force or after an Undo, whichever is later, and an undo of that Undo lifts its own.
+
+Consequences: `recentered_by` is only `recenter` or `editor`; the admin names whose lock holds
+(`lockedBy`). Nothing in production holds overview rows yet, so no data moves.

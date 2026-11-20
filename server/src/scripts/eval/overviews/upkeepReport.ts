@@ -75,7 +75,7 @@ export function recenterLines(r: RecenterStepReport): string[] {
   const s = r.score
   const held = Object.entries(s.heldBy).map(([by, n]) => `${by} ${n}`)
   return [
-    `${r.planned.length} cases of ${r.keys.length} answer keys (half ${r.half}${r.limit !== undefined ? `; the first ${r.limit} cases only, a smoke run, not evidence` : ''}): production's automated re-center (the draft, its blind check, the code rules) asked directly, bypassing the signal. Planted narrowed charters and reviewed centers expect a re-center; the anchor breach and the end-checkpoint negatives expect none. ${s.positives} expected re-centers answered, ${s.negatives} others, ${s.failed} attempts a call gave nothing for. Spend ${usd(r.costUsd)}.`,
+    `${r.planned.length} cases of ${r.keys.length} answer keys (half ${r.half}${r.limit !== undefined ? `; the first ${r.limit} cases only, a smoke run, not evidence` : ''}): production's automated re-center (the draft, its blind check, the code rules) asked directly, bypassing the signal (each offered story carries one signal quote). Planted narrowed charters and reviewed centers expect a re-center; the anchor breach, the neighbor a wider charter would absorb and the end-checkpoint negatives expect none. ${s.positives} expected re-centers answered, ${s.negatives} others, ${s.failed} attempts a call gave nothing for. Spend ${usd(r.costUsd)}.`,
     ...(r.stopped ? [`- Stopped: ${cell(r.stopped)}`] : []),
     ...r.notRun.map(x => `- Not run: ${x.what}: ${cell(x.reason)}`),
     '',

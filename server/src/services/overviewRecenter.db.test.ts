@@ -2,14 +2,16 @@
  * The automated re-center against PostgreSQL (`.context/overviews.md`, "Re-centering"): the link
  * decisions' signals found through the GIN index's containment query and counted from the last attempt,
  * the stories a re-center may take in (flagged or review-detached, never an editor's), its write with a
- * reused row and a new one, its stale path, and Undo putting the charter back and locking automation out.
+ * reused row and a new one, its stale paths, and Undo putting the charter back and locking automation
+ * out, down a chain of re-centers too.
  */
 import { expect, it } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-import { applyRecenter, undoDecision } from './overviewLifecycle.js'
-import type { RecenterResult } from './overviewRecenter.js'
-import { recenterCases } from './overviewRecenterInput.js'
+import { applyRecenter, editorAction, undoDecision } from './overviewLifecycle.js'
+import { automatedRecenterBlocked, type RecenterCase, type RecenterResult } from './overviewRecenter.js'
+import { recenterCases, signalRecords } from './overviewRecenterInput.js'
+import type { Charter } from './overviewTypes.js'
 
 const DAY = 86_400_000
 const NOW = new Date('2026-11-18T03:00:00Z')
@@ -153,6 +155,10 @@ describeDb('the automated re-center records', () => {
     expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ title: 'Colorado River rules', recenterTriedAt: daysFrom(-20) })
     expect(await prisma.overviewDecision.count({ where: { kind: 'recenter', outcome: 'stale' } })).toBe(1)
     await prisma.overviewEntry.delete({ where: { id: taken.id } })
+    // A story it was offered, joined or not, unpublished during the calls: stale too
+    await prisma.story.update({ where: { id: a!.id }, data: { status: 'selected' } })
+    expect(await applyRecenter(c!, result, NOW)).toBe('stale')
+    await prisma.story.update({ where: { id: a!.id }, data: { status: 'published' } })
 
     expect(await applyRecenter(c!, result, NOW)).toBe('written')
     expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({
@@ -173,17 +179,158 @@ describeDb('the automated re-center records', () => {
     // Undo: the charter, the title, the count and the entries back; automation locked out by the Undo; the attempt stays marked
     const d = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'recenter', outcome: 'recentered' } })
     await undoDecision(d.id, 'ed-1')
-    expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({
+    const back = await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })
+    expect(back).toMatchObject({
       title: 'Colorado River rules',
       charter,
       charterModel: 'founding-model',
       automatedRecenters: 0,
-      recenteredBy: 'undo',
+      recenteredAt: null,
+      recenteredBy: null,
       recenterTriedAt: NOW,
       lockedOut: ['Sacramento aquifer'],
     })
+    expect(back.recenterUndoneAt).not.toBeNull()
     const undone = await prisma.overviewEntry.findMany({ where: { overviewId: o.id, status: 'active' } })
     expect(undone.map(e => e.id).sort()).toEqual(entries.map(e => e.id).sort())
     expect(await recenterCases(prisma, AT)).toEqual([])
+  })
+
+  it('reads only the signals linked after a time when given one, and still offers a story flagged before the last attempt', async () => {
+    const { o, story, signal } = await setup()
+    const [early, a, b] = await Promise.all([-25, -10, -5].map(d => story(d, `Shortage story ${d}`)))
+    await signal(early!.id, daysFrom(-25), 'wider')
+    await signal(a!.id, daysFrom(-10), 'wider')
+    await signal(b!.id, daysFrom(-5), 'wider')
+    expect((await signalRecords(prisma, o.id, daysFrom(-20))).map(r => r.storyId).sort()).toEqual([a!.id, b!.id].sort())
+    // Linked exactly at the time: weighed by the attempt made then, so not after it
+    expect(await signalRecords(prisma, o.id, daysFrom(-5))).toEqual([])
+    expect(await signalRecords(prisma, o.id)).toHaveLength(3)
+    const [c] = await recenterCases(prisma, AT)
+    expect(c!.fired).toEqual({ wider: 2, centerMoved: 0 })
+    expect(c!.stories.map(s => s.storyId)).toEqual([b!.id, a!.id, early!.id])
+  })
+})
+
+/** What both calls agreed for a case: the title and charter, the stories joined as routine, nothing detached. */
+function recentered(c: RecenterCase, title: string, to: Charter, joins: { id: string; datePublished: Date | null }[]): RecenterResult {
+  return {
+    outcome: 'recentered',
+    rule: null,
+    refusals: [],
+    title,
+    charter: to,
+    outAdded: to.out.filter(x => !c.charter.out.includes(x)),
+    detaches: [],
+    joins: joins.map(s => ({ storyId: s.id, entryId: null, datePublished: s.datePublished!, role: { role: 'routine', roleKind: null } })),
+    anchor: [],
+    kept: c.entries.length,
+    fired: c.fired,
+    answer: { draft: null, check: null },
+    costUsd: 0.1,
+    model: 'large-model',
+    promptVersion: 'rv',
+  }
+}
+
+describeDb('undoing re-centers in a chain', () => {
+  useTestDatabase()
+
+  const widest = {
+    in: 'Water loss across the US West and the fights over sharing what is left.',
+    out: ['Western drought', 'Sacramento aquifer'],
+    endEvent: null,
+  }
+  const rowOf = (id: string) => prisma.overview.findUniqueOrThrow({ where: { id } })
+  const locked = (o: Awaited<ReturnType<typeof rowOf>>) => automatedRecenterBlocked(o, new Date(Date.now() + 179 * DAY))
+
+  async function overviewWithStories() {
+    const feed = await createFeed((await createIssue()).id)
+    const story = (d: number, title: string) => createStory({ feedId: feed.id, status: 'published', datePublished: daysFrom(d), title })
+    const members = await Promise.all([-60, -50, -40].map((d, i) => story(d, `Rules story ${i + 1}`)))
+    const o = await prisma.overview.create({
+      data: {
+        title: 'Colorado River rules',
+        charter,
+        charterModel: 'founding-model',
+        charterPromptVersion: 'fv',
+        foundedAt: daysFrom(-60),
+        lastEntryAt: daysFrom(-40),
+        scope: 'ongoing',
+        slug: 'colorado-river-rules',
+        recenterTriedAt: daysFrom(-20),
+      },
+    })
+    for (const s of members) await prisma.overviewEntry.create({ data: { overviewId: o.id, storyId: s.id, role: 'routine', joinedBy: 'pipeline' } })
+    /** Two stories linked on these days, each pointing past the charter. */
+    const flagged = async (days: [number, number], label: string) => {
+      const two = await Promise.all(days.map(d => story(d, `${label} ${d}`)))
+      for (const [i, s] of two.entries())
+        await prisma.overviewDecision.create({
+          data: {
+            kind: 'link',
+            outcome: 'none',
+            storyId: s.id,
+            actor: 'pipeline',
+            inputs: { signals: [{ overviewId: o.id, kind: 'wider', quote: label }], linkedAt: daysFrom(days[i]!).toISOString() },
+          },
+        })
+      return two
+    }
+    return { o, flagged }
+  }
+
+  it('undoes a later automated re-center, then the one before it, and automation stays locked out', async () => {
+    const { o, flagged } = await overviewWithStories()
+    const shortage = await flagged([-10, -5], 'Shortage story')
+    const [first] = await recenterCases(prisma, AT)
+    expect(await applyRecenter(first!, recentered(first!, 'Colorado River water shortage', wider, shortage), NOW)).toBe('written')
+    const r1 = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'recenter', outcome: 'recentered' } })
+    const west = await flagged([1, 2], 'Western water story')
+    const [second] = await recenterCases(prisma, { clock: daysFrom(3), now: daysFrom(3) })
+    expect(await applyRecenter(second!, recentered(second!, 'Water in the US West', widest, west), daysFrom(3))).toBe('written')
+    const r2 = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'recenter', outcome: 'recentered', id: { not: r1.id } } })
+    expect(await rowOf(o.id)).toMatchObject({ automatedRecenters: 2, recenteredAt: daysFrom(3) })
+
+    await undoDecision(r2.id, 'ed-1')
+    expect(await rowOf(o.id)).toMatchObject({
+      title: 'Colorado River water shortage',
+      charter: wider,
+      automatedRecenters: 1,
+      recenteredAt: NOW,
+      recenteredBy: 'recenter',
+    })
+    await undoDecision(r1.id, 'ed-1')
+    const back = await rowOf(o.id)
+    expect(back).toMatchObject({ title: 'Colorado River rules', charter, automatedRecenters: 0, recenteredAt: null, recenteredBy: null })
+    expect(locked(back)).toBe('locked')
+  })
+
+  it("undoes an editor's re-center after undoing the automated one that followed it, and the Undo's lock stays", async () => {
+    const { o, flagged } = await overviewWithStories()
+    const { decisionId: edited } = await editorAction(
+      {
+        kind: 'recenter',
+        overviewId: o.id,
+        title: 'Colorado River water shortage',
+        charter: wider,
+        anchorConfirmed: true,
+        basedOn: { title: 'Colorado River rules', charter },
+      },
+      'ed-1',
+    )
+    const west = await flagged([1, 2], 'Western water story')
+    // Once the editor's lock is past
+    const [c] = await recenterCases(prisma, { clock: daysFrom(3), now: new Date(Date.now() + 181 * DAY) })
+    expect(await applyRecenter(c!, recentered(c!, 'Water in the US West', widest, west), daysFrom(3))).toBe('written')
+    const r = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'recenter', outcome: 'recentered' } })
+
+    await undoDecision(r.id, 'ed-1')
+    expect(await rowOf(o.id)).toMatchObject({ title: 'Colorado River water shortage', charter: wider, recenteredBy: 'editor', automatedRecenters: 0 })
+    await undoDecision(edited, 'ed-1')
+    const back = await rowOf(o.id)
+    expect(back).toMatchObject({ title: 'Colorado River rules', charter, recenteredAt: null, recenteredBy: null })
+    expect(back.recenterUndoneAt).not.toBeNull()
+    expect(locked(back)).toBe('locked')
   })
 })

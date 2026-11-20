@@ -293,6 +293,7 @@ function what(change: Change, field: string): string {
     lockedOut: "its charter's locked-out entries",
     recenteredAt: 'its last re-center',
     recenteredBy: 'its last re-center',
+    recenterUndoneAt: 'the lock its last Undo of a re-center set',
     automatedRecenters: 'its count of automatic re-centers',
     reopenedAt: 'its reopening',
   }
@@ -305,8 +306,9 @@ function what(change: Change, field: string): string {
  * it puts back the editor's, which only an editor lifts; an overview it takes out of `closed` open
  * again, quiet counted from now; for a review or an automated re-center, the OUT entries it added
  * locked out (`lockedOut`), so no review or re-center adds them again while the undo stands; and for an
- * automated re-center, the re-center the Undo's (`recenteredBy` `undo`), which keeps automation from
- * re-centering it for `editorRecenterLockDays` and queues no review.
+ * automated re-center, the Undo's lock (`recenterUndoneAt`), which keeps automation from re-centering
+ * it for `editorRecenterLockDays` and queues no review. The lock has a field of its own: the last
+ * re-center is put back as the one before left it, so that one can be undone in turn.
  */
 function stamped(changes: readonly Change[], rows: Rows, d: UndoTarget, ctx: EditContext): Change[] {
   const o = rows.overview
@@ -321,7 +323,7 @@ function stamped(changes: readonly Change[], rows: Rows, d: UndoTarget, ctx: Edi
     if (c.before.status === 'closed' && to.status !== undefined && to.status !== 'closed') Object.assign(to, OPEN, { reopenedAt: ctx.now })
     if (to.frozen === true) Object.assign(to, { frozenBy: 'editor', frozenAt: ctx.now })
     if (lockedOut.length > 0) to.lockedOut = [...new Set([...o.lockedOut, ...lockedOut])]
-    if (d.kind === 'recenter') Object.assign(to, { recenteredAt: ctx.now, recenteredBy: 'undo' })
+    if (d.kind === 'recenter') to.recenterUndoneAt = ctx.now
     return overviewChange(o, to)
   })
 }
@@ -365,7 +367,8 @@ export function undoChain(d: UndoLink, undos: readonly UndoLink[]): ChainMark[] 
  * (`undoChain`, read from the overview's `undos`). Undoing an automated decision (a join, a founding, a
  * closure or a closing begun, a burst's freeze, a review, a re-center) also makes what it restores the
  * editor's (`stamped`). An Undo of a re-center, an editor's or automation's, puts back its count of
- * automated re-centers and the last re-center before it, so an editor's lock is lifted with it. The
+ * automated re-centers and the last re-center before it, so an editor's lock is lifted with it (an
+ * earlier Undo's lock, in its own field, stays). The
  * fields that follow the entries, a given slug and a review's run are never put back (`inverted`). A join's undo makes its story owed again (the lifecycle marks the decision undone): it
  * may join another overview, never this one, where its entry is locked.
  */
