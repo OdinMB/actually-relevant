@@ -552,6 +552,17 @@ export const config = {
     /** The admin's overview page: its newest decisions shown at most (the status history keeps every move), and the overviews the attach picker lists. */
     logSize: 100,
     attachChoices: 200,
+    /**
+     * Re-centering (`.context/overviews.md`, "Re-centering"; D-RC14, the owner's): every re-center must
+     * still cover the anchor, every founding entry and this share of the turning points (rounded up),
+     * with the oldest `anchorStandIns` active entries standing in once no founding entry is left; after
+     * `maxAutomatedRecenters` applied automated re-centers only an editor re-centers; and an editor's or
+     * an Undo's re-center keeps automation off for `editorRecenterLockDays` (D-RC7).
+     */
+    anchorTurningShare: 2 / 3,
+    anchorStandIns: 2,
+    maxAutomatedRecenters: 2,
+    editorRecenterLockDays: 180,
     tiers: {
       link: 'small' as const,
       found: 'large' as const,
