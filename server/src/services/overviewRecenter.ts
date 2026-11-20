@@ -9,11 +9,11 @@
  * (`acceptRecenter`, D-RC2, D-RC4). Pure but for the neighbor reads it is given.
  */
 import { config } from '../config.js'
-import { normalizeQuote } from '../lib/quoteMatch.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
-import { NO_END_EVENT, OVERVIEW_PROMPT_VERSIONS, type RecenterCheckPromptInput, type RecenterPromptInput } from '../prompts/overviews.js'
+import { OVERVIEW_PROMPT_VERSIONS, type RecenterCheckPromptInput, type RecenterPromptInput } from '../prompts/overviews.js'
 import type { RecenterAnswer, RecenterCheckAnswer } from '../schemas/overviews.js'
 import { groupCandidates, type CandidateOptions, type Neighbour } from './overviewCandidates.js'
+import { amendCharter, answeredEndEvent, firstJudgments, RECENTER_RIGHTS, sameText } from './overviewCharterRules.js'
 import { roleOf, type ModelCall, type Signal } from './overviewLink.js'
 import { brakeTrips, type ReviewCase, type ReviewOptions } from './overviewReview.js'
 import type { CandidateOverview, Charter, EntryRole, Memberships, OverviewScope, OverviewStatus, Role } from './overviewTypes.js'
@@ -362,19 +362,8 @@ export interface RecenterResult {
 
 const entryRef = (i: number) => `E${i + 1}`
 const storyRef = (i: number) => `S${i + 1}`
-const same = (a: string, b: string) => normalizeQuote(a).toLowerCase() === normalizeQuote(b).toLowerCase()
-/** A draft's END_EVENT: empty, none or the prompt's none is no end event. */
-const endEventFrom = (text: string): string | null => {
-  const t = text.trim()
-  return !t || same(t, 'none') || same(t, NO_END_EVENT) ? null : t
-}
-
-/** Each ref's first judgment: the one that counts. */
-const judgments = (answers: readonly { id: string; belongs: 'yes' | 'no' }[]) => {
-  const out = new Map<string, 'yes' | 'no'>()
-  for (const a of answers) if (!out.has(a.id.trim())) out.set(a.id.trim(), a.belongs)
-  return out
-}
+/** Each ref's judgment: its first, the one that counts (`firstJudgments`). */
+const judgments = (answers: readonly { id: string; belongs: 'yes' | 'no' }[]) => new Map([...firstJudgments(answers).first].map(([id, a]) => [id, a.belongs]))
 
 export const recenterInput = (c: RecenterCase): RecenterPromptInput => {
   const anchored = new Set([...c.anchor.founding, ...c.anchor.turningPoints])
@@ -409,10 +398,11 @@ const misfiled = (draft: RecenterAnswer): string[] => [
 
 /**
  * The rules a draft is held to before its check is asked (D-RC2): every judgment in its own list (a
- * story judged among the entries would join with no role); a title within `maxTitleChars` and an IN,
- * something changed, and the old OUT list kept whole, with additions within `maxOutChars` and
- * `maxOutEntries` and none an editor's Undo locked out. Returns the charter code builds (the old OUT
- * with the additions after it), or the refusals.
+ * story judged among the entries would join with no role); a title and an IN, something changed, and
+ * the re-center's rights and the limits (`amendCharter`, `RECENTER_RIGHTS`: a title, IN and END_EVENT
+ * within their caps, the old OUT list kept whole, with additions within `maxOutChars` and
+ * `maxOutEntries` and none an editor's Undo locked out). Returns the proposal with the charter code
+ * builds (the old OUT with the additions after it), and the refusals.
  */
 function draftRules(
   c: RecenterCase,
@@ -421,26 +411,22 @@ function draftRules(
 ): { title: string; charter: Charter; outAdded: string[]; refusals: RecenterResult['refusals'] } {
   const refusals: RecenterResult['refusals'] = []
   const title = draft.title.trim()
-  const charter: Charter = { in: draft.charter.in.trim(), out: [...c.charter.out], endEvent: endEventFrom(draft.charter.endEvent) }
+  const proposed: Charter = { in: draft.charter.in.trim(), out: draft.charter.out, endEvent: answeredEndEvent(draft.charter.endEvent) }
   const wrong = misfiled(draft)
   if (wrong.length > 0) refusals.push({ rule: 'draft', reason: `judges ${wrong.join(', ')} in the wrong list: a malformed draft` })
-  if (!title || !charter.in) refusals.push({ rule: 'draft', reason: 'proposes no title or no IN' })
-  else if (title.length > options.maxTitleChars) refusals.push({ rule: 'draft', reason: `a title longer than ${options.maxTitleChars} characters` })
-  const dropped = c.charter.out.filter(o => !draft.charter.out.some(p => same(p, o)))
-  if (dropped.length > 0) refusals.push({ rule: 'out', reason: `drops OUT entries, which only an editor may: ${dropped.join('; ')}` })
-  const outAdded: string[] = []
-  for (const p of draft.charter.out.map(o => o.trim()).filter(Boolean)) {
-    if ([...c.charter.out, ...outAdded].some(o => same(o, p))) continue
-    if (c.lockedOut.some(o => same(o, p))) refusals.push({ rule: 'out', reason: `adds an OUT entry an editor took out: ${p}` })
-    else if (p.length > options.maxOutChars) refusals.push({ rule: 'out', reason: `adds an OUT entry longer than ${options.maxOutChars} characters` })
-    else if (c.charter.out.length + outAdded.length >= options.maxOutEntries)
-      refusals.push({ rule: 'out', reason: `adds an OUT entry past ${options.maxOutEntries} in all` })
-    else outAdded.push(p)
-  }
-  charter.out.push(...outAdded)
-  if (refusals.length === 0 && same(title, c.title) && same(charter.in, c.charter.in) && charter.endEvent === c.charter.endEvent && outAdded.length === 0)
+  if (!title || !proposed.in) refusals.push({ rule: 'draft', reason: 'proposes no title or no IN' })
+  const amended = amendCharter(c, { title, charter: proposed }, RECENTER_RIGHTS, options)
+  refusals.push(...amended.refusals.map(r => ({ rule: r.field === 'out' ? ('out' as const) : ('draft' as const), reason: r.reason })))
+  const charter: Charter = { in: proposed.in, out: amended.charter.out, endEvent: proposed.endEvent }
+  if (
+    refusals.length === 0 &&
+    sameText(title, c.title) &&
+    sameText(charter.in, c.charter.in) &&
+    charter.endEvent === c.charter.endEvent &&
+    amended.outAdded.length === 0
+  )
     refusals.push({ rule: 'draft', reason: 'proposes the title and charter it has' })
-  return { title, charter, outAdded, refusals }
+  return { title, charter, outAdded: amended.outAdded, refusals }
 }
 
 /**

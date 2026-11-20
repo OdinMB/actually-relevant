@@ -1,3 +1,8 @@
+import { loadCharterLimits } from './lib/charterLimits.js'
+
+/** An overview's title and charter limits, shared with the admin's forms (shared/overviewCharterLimits.json). */
+const charterLimits = loadCharterLimits()
+
 /** Every `reasoning_effort` value an OpenAI model accepts; each model accepts a subset (see createChatModel). */
 export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
@@ -540,10 +545,17 @@ export const config = {
     auditSize: 5,
     auditEveryDays: 30,
     failedAuditHours: 24,
-    /** What a model may write into a title (founding or review; an editor's too) and a review into the OUT list, which every link prompt copies: characters, entries. */
-    maxTitleChars: 200,
-    maxOutEntries: 12,
-    maxOutChars: 120,
+    /**
+     * What an overview's title and charter may hold, whoever writes it (a founding, a review, a
+     * re-center, an editor; `services/overviewCharterRules.ts`): a title's, an IN's, each OUT entry's and
+     * an END_EVENT's characters, and the OUT entries in all, which every link prompt copies. From
+     * shared/overviewCharterLimits.json, which the admin's forms read too.
+     */
+    maxTitleChars: charterLimits.titleChars,
+    maxInChars: charterLimits.inChars,
+    maxOutEntries: charterLimits.outEntries,
+    maxOutChars: charterLimits.outChars,
+    maxEndEventChars: charterLimits.endEventChars,
     /** "Where this stands": facts offered at most (response facts on top), the fewest it is written from, and its sentences and "What's being done" lines at most. */
     maxStandsFacts: 60,
     minStandsFacts: 3,

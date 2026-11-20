@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { AdminOverviewDetail, OverviewRecenterBody } from '@shared/types'
+import charterLimits from '@shared/overviewCharterLimits.json'
 import { useOverviewAction } from '../../hooks/useOverviews'
 import { adminApi } from '../../lib/admin-api'
 import { Input } from '../ui/Input'
@@ -15,10 +16,8 @@ import { NO_END_EVENT } from './overviewLabels'
  * judges nothing; the review it queues reads every entry under the new charter.
  */
 
-/** The server's limits (`config.overviews`): what a title and the OUT list may hold. */
-const TITLE_MAX = 200
-const OUT_MAX = 12
-const OUT_CHARS = 120
+/** The server's limits on a title and charter, whoever writes it (shared/overviewCharterLimits.json, `config.overviews`). */
+const { titleChars: TITLE_MAX, inChars: IN_CHARS, outEntries: OUT_MAX, outChars: OUT_CHARS, endEventChars: END_EVENT_CHARS } = charterLimits
 
 const lines = (text: string) =>
   text
@@ -54,9 +53,11 @@ function read(f: FormState): {
   if (!title) errors.title = 'A title is needed'
   else if (title.length > TITLE_MAX) errors.title = `At most ${TITLE_MAX} characters`
   if (!f.within.trim()) errors.in = 'Say what the overview is about'
+  else if (f.within.trim().length > IN_CHARS) errors.in = `At most ${IN_CHARS} characters`
   if (out.length > OUT_MAX) errors.out = `At most ${OUT_MAX} entries`
   else if (out.some(l => l.length > OUT_CHARS)) errors.out = `Each entry at most ${OUT_CHARS} characters`
   if (endEvent === '') errors.endEvent = 'Name the end event, or tick "No end event"'
+  else if (endEvent !== null && endEvent.length > END_EVENT_CHARS) errors.endEvent = `At most ${END_EVENT_CHARS} characters`
   return { body: { title, in: f.within.trim(), out, endEvent }, errors }
 }
 

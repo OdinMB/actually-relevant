@@ -54,6 +54,7 @@ const reviewCase = (id: string): ReviewCase => ({
     locked: false,
   })),
   closingStoryId: null,
+  lockedOut: [],
 })
 
 const source = (storyId: string): PoolSource => ({

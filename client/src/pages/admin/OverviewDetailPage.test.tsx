@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import type { AdminOverviewDecision, AdminOverviewDetail, AdminOverviewEntry } from '@shared/types'
+import charterLimits from '@shared/overviewCharterLimits.json'
 import { ApiError } from '../../lib/admin-api'
 import { renderAdminRoutes } from '../../test/admin'
 import OverviewDetailPage from './OverviewDetailPage'
@@ -330,6 +331,11 @@ describe('OverviewDetailPage', () => {
 
     fireEvent.change(panel.getByLabelText(/^In/), { target: { value: '  ' } })
     expect(panel.getByText('Say what the overview is about')).toBeInTheDocument()
+    // The server's limits, read from the file it reads them from
+    fireEvent.change(panel.getByLabelText(/^In/), { target: { value: 'x'.repeat(charterLimits.inChars + 1) } })
+    expect(panel.getByText(`At most ${charterLimits.inChars} characters`)).toBeInTheDocument()
+    fireEvent.change(panel.getByLabelText('Ends when'), { target: { value: 'x'.repeat(charterLimits.endEventChars + 1) } })
+    expect(panel.getByText(`At most ${charterLimits.endEventChars} characters`)).toBeInTheDocument()
     fireEvent.change(panel.getByLabelText(/^In/), { target: { value: ' The Ebola outbreak in eastern Congo. ' } })
     fireEvent.change(panel.getByLabelText(/^Out/), { target: { value: 'Ebola in Uganda\n\n Mpox ' } })
     fireEvent.change(panel.getByLabelText('Ends when'), { target: { value: ' ' } })

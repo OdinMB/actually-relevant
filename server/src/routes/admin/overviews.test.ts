@@ -17,6 +17,7 @@ vi.mock('../../services/overviewLifecycle.js', () => mockLifecycle)
 
 const { default: app } = await import('../../app.js')
 const { ConflictError, NotFoundError } = await import('../../utils/errors.js')
+const { config } = await import('../../config.js')
 
 const O = '00000000-0000-4000-8000-0000000000a1'
 const STORY = '00000000-0000-4000-8000-000000000001'
@@ -100,8 +101,11 @@ describe('admin overview routes', () => {
       { ...body, in: '  ' },
       { ...body, title: '' },
       { ...body, endEvent: '  ' },
-      { ...body, out: ['x'.repeat(121)] },
-      { ...body, out: Array.from({ length: 13 }, (_, i) => `o${i}`) },
+      { ...body, out: ['x'.repeat(config.overviews.maxOutChars + 1)] },
+      { ...body, out: Array.from({ length: config.overviews.maxOutEntries + 1 }, (_, i) => `o${i}`) },
+      { ...body, in: 'x'.repeat(config.overviews.maxInChars + 1) },
+      { ...body, endEvent: 'x'.repeat(config.overviews.maxEndEventChars + 1) },
+      { ...body, title: 'x'.repeat(config.overviews.maxTitleChars + 1) },
       { ...body, anchorConfirmed: undefined },
       { ...body, basedOn: undefined },
       { title: 'T', in: 'I', out: [] },

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import type { AdminOverviewDetail } from '@shared/types'
+import charterLimits from '@shared/overviewCharterLimits.json'
 import { useOverview, useOverviewAction } from '../../hooks/useOverviews'
 import { adminApi, ApiError } from '../../lib/admin-api'
 import { Button } from '../../components/ui/Button'
@@ -26,7 +27,8 @@ import { SCOPE_LABELS, STATUS_LABELS } from '../../components/admin/overviewLabe
  * Undo. Every action is logged and undoable.
  */
 
-const TITLE_MAX = 200
+/** The server's limit on a title, whoever writes it (shared/overviewCharterLimits.json). */
+const TITLE_MAX = charterLimits.titleChars
 
 export default function OverviewDetailPage() {
   const { id = '' } = useParams<{ id: string }>()

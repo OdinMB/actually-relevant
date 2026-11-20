@@ -6,8 +6,8 @@
  * automated decision also makes what it restores the editor's (`stamped`). A refusal is a
  * ConflictError with its reason in the editor's words. Pure.
  */
-import { normalizeQuote } from '../lib/quoteMatch.js'
-import { ConflictError } from '../utils/errors.js'
+import { BadRequestError, ConflictError } from '../utils/errors.js'
+import { amendCharter, EDITOR_RIGHTS } from './overviewCharterRules.js'
 import {
   ACTIVE,
   CLOSING_CANCELLED,
@@ -194,8 +194,6 @@ export function planEdit(action: EditorAction, rows: Rows, attach: AttachStory |
   }
 }
 
-const sameText = (a: string, b: string) => normalizeQuote(a).toLowerCase() === normalizeQuote(b).toLowerCase()
-
 /** An editor's re-center refused because the title or charter changed after the form was opened (a review's OUT addition, a retitle, another editor's save). */
 export const CHARTER_CHANGED =
   'The title or charter changed after you opened the form (a review or another editor changed it): reload the page and make your edit again, so nothing it added is lost'
@@ -203,7 +201,8 @@ export const CHARTER_CHANGED =
 /**
  * An editor's re-center (`.context/overviews.md`, "Re-centering"; D-RC7, D-RC10, D-RC11, D-RC14): the
  * title and the whole charter as given, so an editor may also drop OUT entries, name no end event and
- * re-admit an OUT entry a review's undo locked out (which leaves `lockedOut`); on any overview not
+ * re-admit an OUT entry a review's undo locked out (which leaves `lockedOut`), within the limits every
+ * writer is held to (`amendCharter`, `EDITOR_RIGHTS`; the route's schema refuses them first); on any overview not
  * closed, frozen or not, past the limit of automated re-centers (which it neither raises nor resets).
  * It applies only to the title and charter the editor's form was opened on (`basedOn`): the form sends
  * the whole charter, so a review's OUT addition or a retitle made meanwhile would otherwise be
@@ -218,10 +217,14 @@ function editorRecenter(o: OverviewRow, action: Extract<EditorAction, { kind: 'r
   if (action.basedOn.title !== o.title || !sameValue(action.basedOn.charter, o.charter)) throw new ConflictError(CHARTER_CHANGED)
   if (!action.anchorConfirmed) throw new ConflictError('Confirm the anchor first')
   if (action.title === o.title && sameValue(action.charter, o.charter)) throw new ConflictError('The overview already has that title and charter')
+  // The editor's rights: the whole charter as given, a locked-out OUT entry named again leaving `lockedOut`; the route's schema holds the limits already
+  const amended = amendCharter(o, action, EDITOR_RIGHTS)
+  if (!action.title.trim() || !action.charter.in.trim() || amended.refusals.length > 0)
+    throw new BadRequestError(amended.refusals[0]?.reason ?? 'A title and an IN are needed')
   const fields: Partial<OverviewFields> = {
-    title: action.title,
-    charter: action.charter,
-    lockedOut: o.lockedOut.filter(x => !action.charter.out.some(out => sameText(out, x))),
+    title: amended.title,
+    charter: amended.charter,
+    lockedOut: amended.lockedOut,
     recenteredAt: ctx.now,
     recenteredBy: 'editor',
   }

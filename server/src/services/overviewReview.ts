@@ -8,10 +8,10 @@
  * counts what a review would have changed. Pure.
  */
 import { config } from '../config.js'
-import { normalizeQuote } from '../lib/quoteMatch.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
-import { NO_END_EVENT, OVERVIEW_PROMPT_VERSIONS, type ReviewPromptInput } from '../prompts/overviews.js'
+import { OVERVIEW_PROMPT_VERSIONS, type ReviewPromptInput } from '../prompts/overviews.js'
 import type { ReviewAnswer } from '../schemas/overviews.js'
+import { amendCharter, answeredEndEvent, firstJudgments, REVIEW_RIGHTS, sameText, type CharterLimits } from './overviewCharterRules.js'
 import { roleOf, type ModelCall } from './overviewLink.js'
 import { scopeAfterReview } from './overviewStatus.js'
 import type { Charter, OverviewScope, ReviewTrigger, Role } from './overviewTypes.js'
@@ -62,14 +62,10 @@ export interface ReviewDeps {
   review(input: ReviewPromptInput, options: { audit: boolean }): Promise<ModelCall<ReviewAnswer>>
 }
 
-/** The caps on what a review may write: a title's length, and the OUT list's entries and each one's length. */
-export type ReviewOptions = Pick<typeof config.overviews, 'maxTitleChars' | 'maxOutEntries' | 'maxOutChars'>
+/** The limits on what a review may write: the charter's and the title's (`overviewCharterRules.ts`). */
+export type ReviewOptions = CharterLimits
 
 const ref = (i: number) => `E${i + 1}`
-const same = (a: string, b: string) => normalizeQuote(a).toLowerCase() === normalizeQuote(b).toLowerCase()
-/** The answer's END_EVENT is the charter's: for one that names none, copied as empty or as the prompt shows none. */
-const sameEndEvent = (answered: string, charter: string | null) =>
-  charter === null ? !answered.trim() || same(answered, NO_END_EVENT) || same(answered, 'none') : same(answered, charter)
 const sameRole = (a: Role, b: Role) => a.role === b.role && a.roleKind === b.roleKind
 
 /**
@@ -78,10 +74,11 @@ const sameRole = (a: Role, b: Role) => a.role === b.role && a.roleKind === b.rol
  *   restored it with an Undo); one judged to belong with another role is relabeled, unless an editor
  *   locked it; an id naming no shown entry (a story to
  *   add or a detached one to restore) or naming one twice is refused; an entry left unjudged stays;
- * - the charter is narrowed only by the OUT entries it adds, onto the current charter, so a rewritten
- *   IN or END_EVENT and a dropped OUT entry are refused and never applied, as is an OUT entry an
- *   editor's undo of an earlier review took out (`lockedOut`), one longer than `maxOutChars` and any
- *   past `maxOutEntries` in all (the charter is copied into every link prompt);
+ * - the charter is narrowed only by the OUT entries it adds, onto the current charter, by the review's
+ *   rights (`amendCharter`, `REVIEW_RIGHTS`): a rewritten IN or END_EVENT and a dropped OUT entry are
+ *   refused and never applied, as is an OUT entry an editor's undo of an earlier review took out
+ *   (`lockedOut`), one longer than `maxOutChars` and any past `maxOutEntries` in all (the charter is
+ *   copied into every link prompt);
  * - a new title differing from the current one retitles, unless longer than `maxTitleChars`;
  * - a freeze is cleared only on a frozen overview, and only when the answer judges every active entry,
  *   each by its own id and first judgment, to belong (an entry left unjudged keeps the freeze).
@@ -95,8 +92,7 @@ export function allowedActions(
   const actions: ReviewAction[] = []
   const refusals: ReviewRefusal[] = []
   const byRef = new Map(c.entries.map((e, i) => [ref(i), e]))
-  /** Each shown entry's first judgment: the one that counts. */
-  const judged = new Map<string, ReviewAnswer['entries'][number]['belongs']>()
+  const { first } = firstJudgments(answer.entries)
   for (const a of answer.entries) {
     const id = a.id.trim()
     const entry = byRef.get(id)
@@ -104,11 +100,10 @@ export function allowedActions(
       refusals.push({ what: id, reason: 'names no entry of the overview: a review never adds or restores one' })
       continue
     }
-    if (judged.has(id)) {
+    if (first.get(id) !== a) {
       refusals.push({ what: id, reason: 'judged twice' })
       continue
     }
-    judged.set(id, a.belongs)
     const role = roleOf(a)
     if (a.belongs === 'no') {
       if (entry.locked) refusals.push({ what: id, reason: 'an editor attached, set or restored it' })
@@ -119,29 +114,21 @@ export function allowedActions(
     }
   }
 
-  const proposed = answer.charter
-  if (!same(proposed.in, c.charter.in)) refusals.push({ what: 'charter', reason: 'rewrites IN: a review only adds to OUT' })
-  if (!sameEndEvent(proposed.endEvent, c.charter.endEvent)) refusals.push({ what: 'charter', reason: 'rewrites END_EVENT: a review only adds to OUT' })
-  const dropped = c.charter.out.filter(o => !proposed.out.some(p => same(p, o)))
-  if (dropped.length > 0) refusals.push({ what: 'charter', reason: `drops OUT entries, which would widen it: ${dropped.join('; ')}` })
-  const added: string[] = []
-  for (const p of proposed.out.map(o => o.trim()).filter(Boolean)) {
-    if ([...c.charter.out, ...added].some(o => same(o, p))) continue
-    if (c.lockedOut.some(o => same(o, p))) refusals.push({ what: 'charter', reason: `adds an OUT entry an editor took out: ${p}` })
-    else if (p.length > options.maxOutChars) refusals.push({ what: 'charter', reason: `adds an OUT entry longer than ${options.maxOutChars} characters` })
-    else if (c.charter.out.length + added.length >= options.maxOutEntries)
-      refusals.push({ what: 'charter', reason: `adds an OUT entry past ${options.maxOutEntries} in all: ${p}` })
-    else added.push(p)
-  }
-  if (added.length > 0) actions.push({ kind: 'narrow', added, charter: { ...c.charter, out: [...c.charter.out, ...added] } })
-
-  const title = answer.title.trim()
-  if (title && title.length > options.maxTitleChars) refusals.push({ what: 'title', reason: `longer than ${options.maxTitleChars} characters` })
-  else if (title && !same(title, c.title)) actions.push({ kind: 'retitle', from: c.title, to: title })
+  // The charter and title by the review's rights (`amendCharter`): the narrowed charter is the current one with the additions, whatever else the answer rewrote
+  const amended = amendCharter(
+    c,
+    { title: answer.title, charter: { in: answer.charter.in, out: answer.charter.out, endEvent: answeredEndEvent(answer.charter.endEvent) } },
+    REVIEW_RIGHTS,
+    options,
+  )
+  refusals.push(...amended.refusals.filter(r => r.field !== 'title').map(r => ({ what: 'charter', reason: r.reason })))
+  if (amended.outAdded.length > 0) actions.push({ kind: 'narrow', added: amended.outAdded, charter: { ...c.charter, out: amended.charter.out } })
+  refusals.push(...amended.refusals.filter(r => r.field === 'title').map(r => ({ what: 'title', reason: r.reason })))
+  if (!sameText(amended.title, c.title)) actions.push({ kind: 'retitle', from: c.title, to: amended.title })
 
   if (answer.clearFreeze && c.frozen) {
     // Every active entry judged, and judged to belong: one left unjudged keeps the freeze
-    if (c.entries.every((_, i) => judged.get(ref(i)) === 'yes')) actions.push({ kind: 'unfreeze' })
+    if (c.entries.every((_, i) => first.get(ref(i))?.belongs === 'yes')) actions.push({ kind: 'unfreeze' })
     else refusals.push({ what: 'freeze', reason: 'not every entry was judged to belong' })
   }
   return { actions, refusals, kept: c.entries.length - actions.filter(a => a.kind === 'detach').length }

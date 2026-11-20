@@ -1,0 +1,8 @@
+{
+  "$comment": "What an overview's title and charter may hold, for every writer: a founding, a review, a re-center and an editor (.context/overviews.md, \"Charter limits\"). The server reads it into config.overviews (server/src/lib/charterLimits.ts); the admin's charter and retitle forms import it. Characters, and OUT entries in all: the charter is copied into every link prompt. The prompts ask for a title, an IN of one or two sentences, short OUT phrases and one END_EVENT; the answer keys' longest IN is under 600 characters and their longest END_EVENT under 350.",
+  "titleChars": 200,
+  "inChars": 1000,
+  "outEntries": 12,
+  "outChars": 120,
+  "endEventChars": 500
+}

@@ -37,15 +37,15 @@ const attachSchema = z.object({ storyId: z.string().uuid(), role: roleSchema.def
 const title = z.string().trim().min(1).max(config.overviews.maxTitleChars)
 const titleSchema = z.object({ title })
 /**
- * An editor's re-center: the title and the whole charter, END_EVENT null for none (a named one not
- * blank), the anchor confirmed, and the title and charter the form was opened on (`basedOn`, as the
+ * An editor's re-center: the title and the whole charter within the charter limits every writer is
+ * held to (shared/overviewCharterLimits.json), END_EVENT null for none (a named one not blank), the anchor confirmed, and the title and charter the form was opened on (`basedOn`, as the
  * page read them), so a change made since is refused rather than overwritten.
  */
 const charterSchema = z.object({
   title,
-  in: z.string().trim().min(1),
+  in: z.string().trim().min(1).max(config.overviews.maxInChars),
   out: z.array(z.string().trim().min(1).max(config.overviews.maxOutChars)).max(config.overviews.maxOutEntries),
-  endEvent: z.string().trim().min(1).nullable(),
+  endEvent: z.string().trim().min(1).max(config.overviews.maxEndEventChars).nullable(),
   anchorConfirmed: z.boolean(),
   basedOn: z.object({ title: z.string(), charter: z.object({ in: z.string(), out: z.array(z.string()), endEvent: z.string().nullable() }) }),
 })

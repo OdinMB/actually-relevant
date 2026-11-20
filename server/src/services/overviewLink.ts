@@ -12,6 +12,7 @@ import { unescapeXmlDeep } from '../lib/xml.js'
 import { OVERVIEW_PROMPT_VERSIONS, type FoundCheckInput, type FoundInput, type LinkInput } from '../prompts/overviews.js'
 import type { FoundAnswer, FoundCheckAnswer, LinkAnswer, LinkCandidateAnswer } from '../schemas/overviews.js'
 import { groupCandidates, type CandidateOptions, type Neighbour, type RankedOverview } from './overviewCandidates.js'
+import { amendCharter, FOUNDING_RIGHTS, NO_CHARTER, type CharterLimits } from './overviewCharterRules.js'
 import {
   endEventOf,
   type CandidateOverview,
@@ -174,12 +175,21 @@ export interface FoundingDraft {
   roles: { a: Role; b: Role }
 }
 
+/** A founding draft's title and charter as stored, and as the check reads them: trimmed, an empty END_EVENT none. */
+export const foundingCharter = (draft: FoundAnswer): { title: string; charter: Charter } => ({
+  title: draft.title.trim(),
+  charter: { in: draft.charter.in.trim(), out: draft.charter.out.map(o => o.trim()).filter(Boolean), endEvent: endEventOf(draft.charter.endEvent) },
+})
+
 /**
- * A draft with no title or no IN, or whose title is longer than `maxTitleChars`, founds nothing, and the
- * check is not asked. An end event is not required: most developments have none and close by fading.
+ * A draft with no title or no IN, or past the limits on a charter (`amendCharter`, `FOUNDING_RIGHTS`: a
+ * title, IN, END_EVENT or OUT entry too long, or too many OUT entries), founds nothing, and the check
+ * is not asked. An end event is not required: most developments have none and close by fading.
  */
-export const draftRefused = (draft: FoundAnswer, options: Pick<typeof config.overviews, 'maxTitleChars'> = config.overviews): boolean =>
-  !draft.title.trim() || !draft.charter.in.trim() || draft.title.trim().length > options.maxTitleChars
+export const draftRefused = (draft: FoundAnswer, options: CharterLimits = config.overviews): boolean => {
+  const { title, charter } = foundingCharter(draft)
+  return !title || !charter.in || amendCharter(NO_CHARTER, { title, charter }, FOUNDING_RIGHTS, options).refusals.length > 0
+}
 
 /**
  * Whether the two founding calls agree (`.context/overviews.md`, "How a story is linked", step 4):
@@ -258,10 +268,7 @@ async function found(story: LinkStory, partner: Accepted<ShownPartner>, deps: Li
   const [a, b] = partnerStory.datePublished.getTime() <= story.datePublished.getTime() ? [partnerStory, story] : [story, partnerStory]
   const draftCall = await deps.found({ a, b })
   const draft = draftCall.parsed ? unescapeXmlDeep(draftCall.parsed) : null
-  // As stored, and as the check reads it: trimmed, an empty end event none
-  const charter: Charter | null = draft
-    ? { in: draft.charter.in.trim(), out: draft.charter.out.map(o => o.trim()).filter(Boolean), endEvent: endEventOf(draft.charter.endEvent) }
-    : null
+  const charter: Charter | null = draft ? foundingCharter(draft).charter : null
   const checkCall = draft && charter && !draftRefused(draft) ? await deps.foundCheck({ charter, a, b }) : null
   const check = checkCall?.parsed ? unescapeXmlDeep(checkCall.parsed) : null
   const outcome = acceptFounding(draft, check)
@@ -269,7 +276,7 @@ async function found(story: LinkStory, partner: Accepted<ShownPartner>, deps: Li
   return {
     partner: partnerStory,
     outcome,
-    draft: outcome === 'founded' && draft && charter ? { title: draft.title.trim(), charter, roles: forStory(draft.roles) } : null,
+    draft: outcome === 'founded' && draft && charter ? { title: foundingCharter(draft).title, charter, roles: forStory(draft.roles) } : null,
     answers: { draft, check },
     shared: partner.shared,
     confidence: partner.answer.confidence,

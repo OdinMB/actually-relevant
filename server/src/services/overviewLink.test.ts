@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { config } from '../config.js'
 import type { FoundAnswer, FoundCheckAnswer, LinkAnswer, LinkCandidateAnswer } from '../schemas/overviews.js'
 import type { Neighbour } from './overviewCandidates.js'
 import {
@@ -187,6 +188,17 @@ describe('acceptFounding', () => {
     expect(acceptFounding({ ...draft, title: ' ' }, agree)).toBe('refused')
     expect(acceptFounding(null, agree)).toBe('failed')
     expect(acceptFounding(draft, null)).toBe('failed')
+  })
+
+  it('refuses a draft past the charter limits every writer is held to, without its check', () => {
+    const past = (over: Partial<typeof draft.charter>, title = draft.title) =>
+      acceptFounding({ ...draft, title, charter: { ...draft.charter, ...over } }, agree)
+    expect(past({}, 'x'.repeat(config.overviews.maxTitleChars + 1))).toBe('refused')
+    expect(past({ in: 'x'.repeat(config.overviews.maxInChars + 1) })).toBe('refused')
+    expect(past({ endEvent: 'x'.repeat(config.overviews.maxEndEventChars + 1) })).toBe('refused')
+    expect(past({ out: ['x'.repeat(config.overviews.maxOutChars + 1)] })).toBe('refused')
+    expect(past({ out: Array.from({ length: config.overviews.maxOutEntries + 1 }, (_, i) => `out ${i}`) })).toBe('refused')
+    expect(past({ out: Array.from({ length: config.overviews.maxOutEntries }, (_, i) => `out ${i}`) })).toBe('founded')
   })
 })
 
