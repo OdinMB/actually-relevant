@@ -46,8 +46,10 @@ export default defineConfig({
       // views: measured 85.45, 80.85, 84.37, 86.13 (statements raised to 85, functions to 84;
       // branches kept at 80 and lines at 85, since 81 and 86 would leave no margin). Measured
       // 2026-11-19 with the overviews' public reads: 85.53, 80.9, 84.48, 86.21 (none raised: lines
-      // at 86 would leave 0.21)
-      thresholds: { statements: 85, branches: 80, functions: 84, lines: 85 },
+      // at 86 would leave 0.21). Raised 2026-11-20 with the overviews' scan fixes: measured 86.14,
+      // 81.32, 85.51, 86.79 (branches raised to 81, functions to 85, lines to 86; statements kept at
+      // 85, since 86 would leave 0.14)
+      thresholds: { statements: 85, branches: 81, functions: 85, lines: 86 },
     },
     projects: [
       {
