@@ -117,6 +117,11 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/overviewUpkeep.js': '*',
   // The automated re-center's rules and attempt, pure (held below), so the `recenter` and `replay` steps run what the job runs.
   'services/overviewRecenter.js': '*',
+  // The review, closing and re-center cases from raw rows, the owed-story rule and the night, pure (held below), so the
+  // sandbox and the `replay` step build the cases, retry the stories and run the night as the job does.
+  'services/overviewCases.js': '*',
+  'services/overviewOwed.js': '*',
+  'services/overviewNight.js': '*',
   // The write model, production's planners, the state they judge and the decision log's schemas, pure (held below), so
   // the sandbox writes by the lifecycle's own plans.
   'services/overviewChanges.js': '*',
@@ -141,6 +146,9 @@ const OVERVIEW_SERVICE_MODULES = [
   'overviewStatus.ts',
   'overviewUpkeep.ts',
   'overviewRecenter.ts',
+  'overviewCases.ts',
+  'overviewOwed.ts',
+  'overviewNight.ts',
   'overviewChanges.ts',
   'overviewPlans.ts',
   'overviewState.ts',
