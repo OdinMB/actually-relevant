@@ -71,6 +71,9 @@ vi.mock('../lib/runUsage.js', async importOriginal => ({
 const { linkSummary, notifyRecenter, productionUpkeepDeps, runLinkOverviewsJob, upkeepClock, upkeepSummary } = await import('./linkOverviews.js')
 const { forgetOverviewStep } = await import('../services/overviewQueue.js')
 
+/** Nothing owed. */
+const owed = { backlog: [] as string[], retries: [] as string[], night: [] as string[], backlogTotal: 0, lastTries: [] as string[], frozenWaiting: 0 }
+
 const story = (id: string, day: number): LinkStory => ({
   id,
   title: `Title ${id}`,
@@ -114,7 +117,7 @@ describe('runLinkOverviewsJob', () => {
     gates.overview = null
     gates.pass = null
     const [b1, b2, n1, partner] = [story('b1', 1), story('b2', 2), story('n1', 9), story('p', 1)]
-    mocks.owedStories.mockResolvedValue({ backlog: ['b1', 'b2'], night: ['n1'], backlogTotal: 2 })
+    mocks.owedStories.mockResolvedValue({ ...owed, backlog: ['b1', 'b2'], night: ['n1'], backlogTotal: 2 })
     mocks.linkStories.mockImplementation(async (_db: unknown, ids: string[]) => [b1, b2, n1, partner].filter(s => ids.includes(s.id)))
     // b2 has a partner; the model's yes for it quotes nothing the partner says, so code refuses it
     mocks.nearestPublished.mockImplementation(async (_db: unknown, id: string) =>
@@ -151,10 +154,35 @@ describe('runLinkOverviewsJob', () => {
     expect(mocks.reportRunResult).toHaveBeenCalledWith('Linked 3 stories: 0 joined, 0 founded, 3 alone; backfill 2 of 2; 0 overviews refreshed, 0 reviewed')
   })
 
+  it('links the retries due after the backlog, and tells the owner of one given up on its last try', async () => {
+    gates.overview = null
+    gates.pass = null
+    const [b1, r1, r2, partner] = [story('b1', 1), story('r1', 2), story('r2', 3), story('p', 1)]
+    mocks.owedStories.mockResolvedValue({ ...owed, backlog: ['b1'], retries: ['r1', 'r2'], lastTries: ['r1', 'r2'], frozenWaiting: 2, backlogTotal: 1 })
+    mocks.linkStories.mockImplementation(async (_db: unknown, ids: string[]) => [b1, r1, r2, partner].filter(s => ids.includes(s.id)))
+    // r1 has a candidate and its call gives nothing: it fails again; r2 has none and settles alone
+    mocks.nearestPublished.mockImplementation(async (_db: unknown, id: string) =>
+      id === 'r1' ? [{ id: 'p', distance: 0.1, datePublished: partner.datePublished, via: 'near' }] : [],
+    )
+    mocks.structuredCall.mockResolvedValue({ parsed: null, costUsd: 0, model: 'small-model', outcome: 'failed' })
+    await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
+    expect(mocks.applyLink.mock.calls.map(([r]) => (r as { story: LinkStory }).story.id)).toEqual(['b1', 'r1', 'r2'])
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.stringMatching(/1 of 3 stories failed in the last run, 1 given up$/),
+        message: expect.stringContaining('1 story failed on its last try'),
+        dedupeKey: 'stories-failing:link_overviews',
+      }),
+    )
+    expect(mocks.reportRunResult).toHaveBeenCalledWith(
+      expect.stringMatching(/^Linked 3 stories: .*1 failed, 1 given up after their last try, 2 waiting on a frozen overview;/),
+    )
+  })
+
   it('runs the upkeep when nothing is owed, its status moves in development time and its stands checks in the tally', async () => {
     gates.overview = null
     gates.pass = null
-    mocks.owedStories.mockResolvedValue({ backlog: [], night: [], backlogTotal: 0 })
+    mocks.owedStories.mockResolvedValue(owed)
     mocks.linkStories.mockResolvedValue([])
     const quiet: OverviewState = {
       id: 'o1',
@@ -187,7 +215,7 @@ describe('runLinkOverviewsJob', () => {
   it('tells the owner of each overview a burst froze, and of upkeep items failing past the share', async () => {
     gates.overview = null
     gates.pass = null
-    mocks.owedStories.mockResolvedValue({ backlog: [], night: [], backlogTotal: 0 })
+    mocks.owedStories.mockResolvedValue(owed)
     mocks.linkStories.mockResolvedValue([])
     const base = {
       scope: 'ongoing' as const,

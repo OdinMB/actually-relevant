@@ -218,7 +218,7 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
       const owed = await owedStories(now)
       clock = now
       sandbox.setClock(now)
-      const stories = await linkStories(prisma, [...owed.backlog, ...owed.night])
+      const stories = await linkStories(prisma, [...owed.backlog, ...owed.retries, ...owed.night])
       await linkInOrder(
         stories,
         {

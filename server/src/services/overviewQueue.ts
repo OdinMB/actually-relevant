@@ -4,14 +4,16 @@
  * (`overviewGate.ts`) and research passes' gate is open too, and is enabled only while
  * `research_pass` is (the order of switches: overviews after research passes). A story is owed while
  * it is published, within the backfill window, has no active entry and no live settling `link`
- * decision (joined, founded, none, rejected; one not undone): held, conflicting and failed stories are
- * retried. The night's stories wait while older owed stories remain beyond a run's backlog slice.
- * SELECT only.
+ * decision (joined, founded, none, rejected; one not undone); which of them a run links, and when a
+ * held, conflicting or failed one is linked again, is `overviewOwed.ts`'s. SELECT only.
  */
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
+import { linkInputs, readInputs } from './overviewDecisions.js'
 import { OVERVIEW_EVAL_GATE } from './overviewGate.js'
-import { SETTLING_OUTCOMES } from './overviewTypes.js'
+import { owedSlices, type OwedSlices, type OwedStory } from './overviewOwed.js'
+import { LINK_OUTCOMES, SETTLING_OUTCOMES } from './overviewTypes.js'
+import { oneOf } from './storyContextRecords.js'
 import { PASS_EVAL_GATE } from './researchPassGate.js'
 import { RESEARCH_PASS_JOB } from './researchPassQueue.js'
 
@@ -54,44 +56,46 @@ export function forgetOverviewStep(): void {
   stepOn = null
 }
 
-const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
 
-/** The window's two parts: the night's stories (published within `nightHours`) and the older backlog the backfill takes. */
-export function owedWindow(now: Date, options = config.overviews): { since: Date; nightStart: Date } {
-  return { since: new Date(now.getTime() - options.backfillDays * DAY_MS), nightStart: new Date(now.getTime() - options.nightHours * HOUR_MS) }
-}
-
-const owedWhere = (from: Date, before: Date | null) => ({
-  status: 'published' as const,
-  datePublished: { gte: from, ...(before ? { lt: before } : {}) },
-  overviewEntries: { none: { status: 'active' as const } },
-  overviewDecisions: { none: { kind: 'link' as const, undoneAt: null, outcome: { in: [...SETTLING_OUTCOMES] } } },
-})
-
-export interface OwedSlices {
-  /** Older owed stories, oldest first, at most `backfillPerRun`. */
-  backlog: string[]
-  /** The night's owed stories, oldest first, at most `perRun`; none while older owed stories remain beyond the backlog's slice. */
-  night: string[]
-  /** Every older owed story, for the summary's "backfill N of M". */
-  backlogTotal: number
-}
-
 /**
- * The stories one run links, strictly oldest first: the backlog's slice, then the night's stories
- * only when that slice takes every older owed story. While the backlog drains (about 6 nights after
- * the switch), the night's stories wait in it, so no story is ever linked before an older one it may
- * belong with, whose founding it would otherwise pre-empt.
+ * The stories one run links (`owedSlices`: the new backlog oldest first, the retries due, then the
+ * night's), from every owed story of the backfill window with its link decisions: published, active
+ * in no overview, with no live settling `link` decision. A held decision reads whether its overview is
+ * still frozen.
  */
 export async function owedStories(now: Date = new Date(), options = config.overviews): Promise<OwedSlices> {
-  const { since, nightStart } = owedWindow(now, options)
-  const ids = (where: ReturnType<typeof owedWhere>, take: number) =>
-    prisma.story.findMany({ where, orderBy: [{ datePublished: 'asc' }, { id: 'asc' }], take, select: { id: true } }).then(rows => rows.map(r => r.id))
-  const [backlog, backlogTotal] = await Promise.all([
-    ids(owedWhere(since, nightStart), options.backfillPerRun),
-    prisma.story.count({ where: owedWhere(since, nightStart) }),
-  ])
-  const night = backlogTotal > backlog.length ? [] : await ids(owedWhere(nightStart, null), options.perRun)
-  return { backlog, night, backlogTotal }
+  const rows = await prisma.story.findMany({
+    where: {
+      status: 'published',
+      datePublished: { gte: new Date(now.getTime() - options.backfillDays * DAY_MS) },
+      overviewEntries: { none: { status: 'active' } },
+      overviewDecisions: { none: { kind: 'link', undoneAt: null, outcome: { in: [...SETTLING_OUTCOMES] } } },
+    },
+    select: {
+      id: true,
+      datePublished: true,
+      overviewDecisions: {
+        where: { kind: 'link' },
+        select: { outcome: true, undoneAt: true, createdAt: true, inputs: true, overview: { select: { frozen: true } } },
+      },
+    },
+  })
+  const owed: OwedStory[] = rows.flatMap(s =>
+    s.datePublished
+      ? [
+          {
+            id: s.id,
+            datePublished: s.datePublished,
+            attempts: s.overviewDecisions.map(d => ({
+              outcome: oneOf(d.outcome, LINK_OUTCOMES, 'failed'),
+              undone: d.undoneAt !== null,
+              at: readInputs(linkInputs, d.inputs)?.linkedAt ?? d.createdAt,
+              heldFrozen: d.outcome === 'held' && d.overview?.frozen === true,
+            })),
+          },
+        ]
+      : [],
+  )
+  return owedSlices(owed, now, options)
 }

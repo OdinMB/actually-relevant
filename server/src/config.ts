@@ -514,6 +514,12 @@ export const config = {
     nightHours: 24,
     /** Published stories this many days back or fewer are owed a link decision (the backfill window). */
     backfillDays: 183,
+    /**
+     * A story whose link failed or ended in a conflict is linked again this many days (UTC days) after
+     * each such attempt in a row, then given up; one held by a frozen overview waits, with no call,
+     * until the freeze lifts (`services/overviewOwed.ts`).
+     */
+    retryAfterDays: [1, 3, 7] as readonly number[],
     /** Link calls in flight at once; writes go one story at a time, oldest first. */
     concurrency: 3,
     /** The step records the failed-stories notice when more than `jobs.failureShare.share` of a run's stories failed technically, from this many stories on. */

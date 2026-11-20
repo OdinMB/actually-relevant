@@ -211,10 +211,9 @@ describeDb('the overview lifecycle', () => {
     await applyLink(joinResult(partner!, open.id), false)
     expect(await applyLink(foundResult(s!, partner!), false)).toEqual({ kind: 'stale' })
     expect(await prisma.overviewDecision.count({ where: { storyId: s!.id } })).toBe(0)
-    expect(await applyLink(foundResult(s!, partner!), true)).toEqual({ kind: 'written', outcome: 'conflict' })
-    // A conflict settles nothing: the story is owed at the next run
-    const owed = await owedStories(NOW)
-    expect([...owed.backlog, ...owed.night]).toContain(s!.id)
+    expect(await applyLink(foundResult(s!, partner!), true, NOW)).toEqual({ kind: 'written', outcome: 'conflict' })
+    // A conflict settles nothing: the story is owed again a day later
+    expect((await owedStories(daysFrom(1))).retries).toContain(s!.id)
   })
 
   it('logs a write the one-active-entry index refuses as a conflict, rolled back', async () => {
@@ -229,7 +228,17 @@ describeDb('the overview lifecycle', () => {
     ])
   })
 
-  it('owes published stories with no settling link decision, the backlog and the night apart, each oldest first', async () => {
+  it('a story held by a frozen overview waits with no call until the freeze lifts; a failed one backs off a day', async () => {
+    const [s, t] = await stories(2)
+    const frozen = await overviewRow({ frozen: true })
+    expect(await applyLink(joinResult(s!, frozen.id), false, daysFrom(-1))).toEqual({ kind: 'written', outcome: 'held' })
+    await applyLink(result(t!, { outcome: 'failed' }), false, NOW)
+    expect(await owedStories(NOW)).toMatchObject({ backlog: [], retries: [], frozenWaiting: 1 })
+    await prisma.overview.update({ where: { id: frozen.id }, data: { frozen: false } })
+    expect(await owedStories(daysFrom(1))).toMatchObject({ retries: [s!.id, t!.id], frozenWaiting: 0 })
+  })
+
+  it('owes published stories with no settling link decision, the new backlog and the night apart, each oldest first, then the retries due', async () => {
     const feed = await createFeed((await createIssue()).id)
     const at = (hours: number, status: 'published' | 'selected' = 'published') =>
       createStory({ feedId: feed.id, status, datePublished: new Date(NOW.getTime() + hours * 3_600_000) })
@@ -244,10 +253,18 @@ describeDb('the overview lifecycle', () => {
     await applyLink(result(linkStory(held), { outcome: 'held' }), false)
 
     const got = await owedStories(NOW)
-    expect(got).toEqual({ backlog: [held.id, backlogA.id, backlogB.id], night: [night.id], backlogTotal: 3 })
+    // The held story's overview is gone: it is due again, after the stories new to linking
+    expect(got).toEqual({ backlog: [backlogA.id, backlogB.id], retries: [held.id], night: [night.id], backlogTotal: 2, lastTries: [], frozenWaiting: 0 })
     expect(got.backlog).not.toContain(old.id)
-    // While older stories remain owed beyond the slice, the night's stories wait in the backlog
-    expect(await owedStories(NOW, { ...config.overviews, backfillPerRun: 1 })).toEqual({ backlog: [held.id], night: [], backlogTotal: 3 })
+    // While older new stories remain owed beyond the slice, the night's stories wait in the backlog, and the retries have no room
+    expect(await owedStories(NOW, { ...config.overviews, backfillPerRun: 1 })).toEqual({
+      backlog: [backlogA.id],
+      retries: [],
+      night: [],
+      backlogTotal: 2,
+      lastTries: [],
+      frozenWaiting: 0,
+    })
   })
 
   it('a development spread over the backfill and the night founds one overview, linked strictly oldest first', async () => {
@@ -295,7 +312,7 @@ describeDb('the overview lifecycle', () => {
     const options = { ...config.overviews, backfillPerRun: 1 }
     for (let run = 0; run < 4; run++) {
       const slices = await owedStories(NOW, options)
-      await linkInOrder(await linkStories(prisma, [...slices.backlog, ...slices.night]), deps, applyLink, { concurrency: 1 })
+      await linkInOrder(await linkStories(prisma, [...slices.backlog, ...slices.retries, ...slices.night]), deps, applyLink, { concurrency: 1 })
     }
     expect(await prisma.overview.count()).toBe(1)
     const entries = await prisma.overviewEntry.findMany({ where: { status: 'active' }, select: { storyId: true } })

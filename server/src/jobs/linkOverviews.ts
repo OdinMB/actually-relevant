@@ -1,8 +1,10 @@
 /**
  * The overview step, the `link_overviews` job (`.context/overviews.md`, "The job"), the daily
  * edition's step after publishing: it links each published story it still owes a link decision
- * (`overviewQueue.ts`), the backlog's slice (the backfill, at most `backfillPerRun`) first and then
- * the night's (at most `perRun`), each oldest first; link calls `concurrency` at a time, every write
+ * (`overviewQueue.ts`, `overviewOwed.ts`), the backlog's slice (the backfill, at most
+ * `backfillPerRun`) first, then the stories due again in the room it leaves (a held story once its
+ * overview's freeze lifts; a failed or conflicting one after 1, 3 and 7 days, then given up), then the
+ * night's (at most `perRun`), each oldest first; link calls `concurrency` at a time, every write
  * one story at a time in that order (`linkInOrder`, `applyLink`). It runs only while its gate and
  * research passes' gate are open and its job is enabled, re-reading that before each write, so a run
  * by hand of the disabled job does nothing. A story is settled by its `link` decision, so a run a
@@ -152,31 +154,53 @@ async function notifyFailedUpkeep(items: number, failed: number): Promise<void> 
   })
 }
 
-async function notifyFailedStories(taken: number, failed: number): Promise<void> {
+/**
+ * The owner's notice of stories whose linking failed: past the failure share, or whenever a story was
+ * given up (its last retry failed or conflicted too), which nothing links again by itself.
+ */
+export async function notifyFailedStories(taken: number, failed: number, givenUp: number): Promise<void> {
+  const days = config.overviews.retryAfterDays
+  const last = countOf(days.at(-1) ?? 0, 'day', 'days')
+  const retry = days.length > 1 ? `${days.slice(0, -1).join(', ')} and ${last}` : last
   await notify({
     source: 'jobs',
     severity: 'warning',
-    title: `${jobDisplayName(LINK_OVERVIEWS_JOB)}: ${failed.toLocaleString('en-US')} of ${countOf(taken, 'story', 'stories')} failed in the last run`,
+    title:
+      `${jobDisplayName(LINK_OVERVIEWS_JOB)}: ${failed.toLocaleString('en-US')} of ${countOf(taken, 'story', 'stories')} failed in the last run` +
+      (givenUp > 0 ? `, ${givenUp.toLocaleString('en-US')} given up` : ''),
     message:
-      'A technical problem stopped their linking: the AI service did not answer, or an error of ours. ' +
-      'Nothing paused, and published stories are untouched. They are tried again at the next run. ' +
+      'A technical problem stopped their linking: the AI service did not answer, a write conflicted, or an error of ours. ' +
+      `Nothing paused, and published stories are untouched. Each is tried again ${retry} after it failed, then given up. ` +
+      (givenUp > 0
+        ? `${countOf(givenUp, 'story', 'stories')} failed on ${givenUp === 1 ? 'its' : 'their'} last try and ${givenUp === 1 ? 'is' : 'are'} no longer linked automatically: attach any that belong from the story's Overview block. `
+        : '') +
       'Switch the step off on the Jobs page if it keeps happening.',
     link: '/admin/jobs',
     dedupeKey: `stories-failing:${LINK_OVERVIEWS_JOB}`,
   })
 }
 
-/** "Linked 9 stories: 4 joined, 1 founded, 4 alone", with the outcomes that leave a story owed after it. */
-export function linkSummary(outcomes: ReadonlyMap<string, LinkOutcome>, backlog: { taken: number; total: number } | null): string {
+/** "Linked 9 stories: 4 joined, 1 founded, 4 alone", with the outcomes that leave a story owed after it, the stories given up and those waiting on a freeze. */
+export function linkSummary(
+  outcomes: ReadonlyMap<string, LinkOutcome>,
+  backlog: { taken: number; total: number } | null,
+  waits: { givenUp: number; frozenWaiting: number } = { givenUp: 0, frozenWaiting: 0 },
+): string {
   const n = (...wanted: LinkOutcome[]) => [...outcomes.values()].filter(o => wanted.includes(o)).length
   const optional = (count: number, words: string) => (count > 0 ? `, ${count.toLocaleString('en-US')} ${words}` : '')
   const line =
     `Linked ${countOf(outcomes.size, 'story', 'stories')}: ${n('joined')} joined, ${n('founded')} founded, ${n('none', 'rejected')} alone` +
     optional(n('held'), 'held by a frozen overview') +
     optional(n('conflict'), 'left for the next run') +
-    optional(n('failed'), 'failed')
+    optional(n('failed'), 'failed') +
+    optional(waits.givenUp, 'given up after their last try') +
+    optional(waits.frozenWaiting, 'waiting on a frozen overview')
   return backlog ? `${line}; backfill ${backlog.taken.toLocaleString('en-US')} of ${backlog.total.toLocaleString('en-US')}` : line
 }
+
+/** The retries on their last try that failed or conflicted again: given up. */
+export const givenUpOf = (lastTries: readonly string[], outcomes: ReadonlyMap<string, LinkOutcome>): string[] =>
+  lastTries.filter(id => outcomes.get(id) === 'failed' || outcomes.get(id) === 'conflict')
 
 /** One run of the step at `now`; `calls` are production's model calls (a test gives scripted ones). */
 export async function runLinkOverviewsJob(now: Date = new Date(), calls: OverviewCalls = productionCalls()): Promise<void> {
@@ -189,8 +213,11 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
   }
 
   const slices = await owedStories(now)
-  const stories = await linkStories(prisma, [...slices.backlog, ...slices.night])
-  log.info({ backlog: slices.backlog.length, night: slices.night.length, backlogTotal: slices.backlogTotal }, 'starting overview linking')
+  const stories = await linkStories(prisma, [...slices.backlog, ...slices.retries, ...slices.night])
+  log.info(
+    { backlog: slices.backlog.length, retries: slices.retries.length, night: slices.night.length, backlogTotal: slices.backlogTotal },
+    'starting overview linking',
+  )
   let switchedOff = false
   // A write that throws is rolled back: the story stays owed and the run goes on
   const apply: ApplyLink = (result, lastTry) =>
@@ -229,15 +256,19 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
   }
   // Checked: joins proposed and stands lines written; failed: yeses code refused and stands lines dropped (each part never more than its checked)
   recordItems(proposed + (upkeep?.standsChecked ?? 0), refused + (upkeep?.standsDropped ?? 0))
-  if (failing(run.outcomes.size, failed)) await notifyFailedStories(run.outcomes.size, failed).catch(() => {})
+  const givenUp = givenUpOf(slices.lastTries, run.outcomes).length
+  if (failing(run.outcomes.size, failed) || givenUp > 0) await notifyFailedStories(run.outcomes.size, failed, givenUp).catch(() => {})
   if (upkeep && failing(upkeep.items, upkeep.failed)) await notifyFailedUpkeep(upkeep.items, upkeep.failed).catch(() => {})
   for (const f of upkeep?.freezes ?? []) await notifyFreeze(f).catch(() => {})
   for (const r of upkeep?.recenters ?? []) await notifyRecenter(r).catch(() => {})
   const left = stories.length - run.outcomes.size
   const linked =
     stories.length === 0
-      ? 'Nothing to link'
-      : linkSummary(run.outcomes, slices.backlogTotal > 0 ? { taken: slices.backlog.length, total: slices.backlogTotal } : null)
+      ? `Nothing to link${slices.frozenWaiting > 0 ? `, ${slices.frozenWaiting.toLocaleString('en-US')} waiting on a frozen overview` : ''}`
+      : linkSummary(run.outcomes, slices.backlogTotal > 0 ? { taken: slices.backlog.length, total: slices.backlogTotal } : null, {
+          givenUp,
+          frozenWaiting: slices.frozenWaiting,
+        })
   const summary = upkeep ? `${linked}; ${upkeepSummary(upkeep)}` : linked
   reportRunResult(left > 0 && switchedOff ? `${summary}; ${left} left for the next run` : summary)
 }

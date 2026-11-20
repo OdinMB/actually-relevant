@@ -129,7 +129,7 @@ describeDb("an editor's actions and undo", () => {
     const link = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'link', storyId: s!.id } })
     const owed = async () => {
       const slices = await owedStories(new Date())
-      return [...slices.backlog, ...slices.night]
+      return [...slices.backlog, ...slices.retries, ...slices.night]
     }
     expect(await owed()).not.toContain(s!.id)
 
@@ -156,7 +156,7 @@ describeDb("an editor's actions and undo", () => {
     const join = (await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'link', storyId: s!.id } })).id
     const owed = async () => {
       const slices = await owedStories(new Date())
-      return [...slices.backlog, ...slices.night]
+      return [...slices.backlog, ...slices.retries, ...slices.night]
     }
     const u1 = (await undoDecision(join, EDITOR)).decisionId
     const u2 = (await undoDecision(u1, EDITOR)).decisionId
@@ -194,7 +194,7 @@ describeDb("an editor's actions and undo", () => {
     ])
     expect((await row(o.id)).scope).toBe('single')
     const slices = await owedStories(new Date())
-    expect([...slices.backlog, ...slices.night]).not.toContain(a!.id)
+    expect([...slices.backlog, ...slices.retries, ...slices.night]).not.toContain(a!.id)
 
     // The story joined another overview meanwhile: putting it back would give it two
     const other = await overview([])
