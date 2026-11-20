@@ -29,8 +29,8 @@ import { config } from '../../../config.js'
 import { quoteFound } from '../../../lib/quoteMatch.js'
 import { storyTexts } from '../../../services/overviewLink.js'
 import {
-  anchorHolds,
   anchorOf,
+  draftHoldsAnchor,
   recenterOverview,
   type AttemptOptions,
   type OfferedStory,
@@ -408,16 +408,9 @@ export async function runRecenterStep(o: RecenterStepOptions): Promise<RecenterS
       const slug = (id: string) => p.slugOf.get(id) ?? id
       const joined = result.joins.map(j => slug(j.storyId))
       const applied = result.outcome === 'recentered'
-      const anchorHeld = applied
-        ? anchorHolds(
-            {
-              founding: result.anchor.filter(a => a.founding).map(a => a.entryId),
-              standIns: false,
-              turningPoints: result.anchor.filter(a => !a.founding).map(a => a.entryId),
-            },
-            id => result.anchor.some(a => a.entryId === id && a.passed),
-          ).holds
-        : null
+      // What the model made of the anchor, before code held both calls to it: an applied re-center always holds it
+      const draft = result.answer.draft
+      const draftAnchorHeld = draft?.decision === 'recenter' ? draftHoldsAnchor(p.case, draft) : null
       let endEventVerdict: EndEventVerdict = null
       let why: string | null = null
       if (applied && expectsRecenter(p.kind)) {
@@ -444,7 +437,7 @@ export async function runRecenterStep(o: RecenterStepOptions): Promise<RecenterS
         joined,
         nearMissesJoined: applied ? joined.filter(s => p.nearMisses.includes(s)) : [],
         detached: result.detaches.map(d => slug(d.storyId)),
-        anchorHeld,
+        draftAnchorHeld,
         endEventVerdict,
         why,
         costUsd: o.ctx.spentUsd() - start,

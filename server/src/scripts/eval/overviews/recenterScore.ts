@@ -5,8 +5,9 @@
  * expected (the planted narrowed charters and a reviewed center of a key, ≥80%, left to the owner under
  * 20 judgments); no named END_EVENT other than the expected one (the strong judge; one naming none is
  * counted, never wrong); no false re-center (the anchor breach, the neighbor a wider charter would
- * absorb and the end-checkpoint negatives); no near miss joined; and no applied re-center whose anchor did not hold, which code makes impossible
- * (a regression check). Counts over all runs. Pure.
+ * absorb and the end-checkpoint negatives); no near miss joined; and no proposal whose own judgments
+ * broke the anchor (`draftHoldsAnchor`: what the model made of it before code held both calls to it,
+ * since an applied re-center holds it by construction). Counts over all runs. Pure.
  */
 import type { RecenterOutcome, RecenterRule } from '../../../services/overviewRecenter.js'
 import { bar, rateBar, ratio, type Bar, type EndEventVerdict } from './linkScore.js'
@@ -36,8 +37,8 @@ export interface RecenterCaseRun {
   /** The joined stories that are near misses of the case. */
   nearMissesJoined: string[]
   detached: string[]
-  /** For an applied re-center: whether its anchor held, which code requires; null otherwise. */
-  anchorHeld: boolean | null
+  /** For a draft that proposed a re-center: whether its own judgments held the anchor, before the check and the code rules; null otherwise. */
+  draftAnchorHeld: boolean | null
   /** For an expected re-center applied: its END_EVENT against the expected one; null otherwise. */
   endEventVerdict: EndEventVerdict
   why: string | null
@@ -52,7 +53,9 @@ export interface RecenterScore {
   negatives: number
   falseRecenters: number
   nearMissesJoined: number
-  anchorRegressions: number
+  /** Proposals made (drafts answering `recenter`), and those whose own judgments broke the anchor. */
+  proposals: number
+  anchorBreaks: number
   failed: number
   endEvents: Record<'right' | 'wrong' | 'none' | 'unjudged', number>
   /** What held where no re-center was expected: `kept`, or the refusing rule. */
@@ -75,7 +78,8 @@ export function scoreRecenters(runs: readonly RecenterCaseRun[]): RecenterScore 
   const recentered = positives.filter(r => r.outcome === 'recentered').length
   const falseRecenters = negatives.filter(r => r.outcome === 'recentered').length
   const nearMissesJoined = applied.reduce((s, r) => s + r.nearMissesJoined.length, 0)
-  const anchorRegressions = applied.filter(r => r.anchorHeld === false).length
+  const proposals = runs.filter(r => r.draftAnchorHeld !== null)
+  const anchorBreaks = proposals.filter(r => r.draftAnchorHeld === false).length
   const judgedEnds = endEvents.right + endEvents.wrong + endEvents.none
   return {
     positives: positives.length,
@@ -83,7 +87,8 @@ export function scoreRecenters(runs: readonly RecenterCaseRun[]): RecenterScore 
     negatives: negatives.length,
     falseRecenters,
     nearMissesJoined,
-    anchorRegressions,
+    proposals: proposals.length,
+    anchorBreaks,
     failed: runs.length - answered.length,
     endEvents,
     heldBy,
@@ -92,7 +97,7 @@ export function scoreRecenters(runs: readonly RecenterCaseRun[]): RecenterScore 
       bar('wrong end events (where one is named)', endEvents.unjudged > 0 || judgedEnds === 0 ? null : endEvents.wrong, 0, 'atMost'),
       bar('false re-centers', negatives.length === 0 ? null : falseRecenters, 0, 'atMost'),
       bar('near misses joined', answered.length === 0 ? null : nearMissesJoined, 0, 'atMost'),
-      bar('applied re-centers whose anchor did not hold', applied.length === 0 ? null : anchorRegressions, 0, 'atMost'),
+      bar('proposals whose own judgments broke the anchor', proposals.length === 0 ? null : anchorBreaks, 0, 'atMost'),
     ],
   }
 }

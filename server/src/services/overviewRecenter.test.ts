@@ -6,6 +6,7 @@ import {
   anchorHolds,
   anchorOf,
   automatedRecenterBlocked,
+  draftHoldsAnchor,
   neighbourOverviews,
   recenterCaseOf,
   recenterLock,
@@ -325,6 +326,16 @@ describe('recenterOverview', () => {
     const deps = { draft: vi.fn(() => call(d)), check: vi.fn(() => call(k)) }
     return { deps, result: recenterOverview(c, deps, options) }
   }
+
+  it('reads whether a draft’s own judgments hold the anchor, its first judgment of each entry counting', () => {
+    expect(draftHoldsAnchor(recenterCase(), draft(), ATTEMPT)).toBe(true)
+    // A founding entry judged not to belong breaks it; the only turning point too (1 of 1 must pass)
+    expect(draftHoldsAnchor(recenterCase(), draft({}, ['E1']), ATTEMPT)).toBe(false)
+    expect(draftHoldsAnchor(recenterCase(), draft({}, ['E3']), ATTEMPT)).toBe(false)
+    // An entry outside the anchor may go
+    expect(draftHoldsAnchor(recenterCase(), draft({}, ['E4']), ATTEMPT)).toBe(true)
+    expect(draftHoldsAnchor(recenterCase(), draft({ entries: [...judged(['E1', 'E2', 'E3', 'E4']), { id: 'E1', belongs: 'no' }] }), ATTEMPT)).toBe(true)
+  })
 
   it('re-centers when every rule holds: the draft’s title, the old OUT with its additions, the stories both took in, the entries both rejected', async () => {
     const { deps, result } = run(draft({}, ['E4']), check({}, ['S2', 'E4']))

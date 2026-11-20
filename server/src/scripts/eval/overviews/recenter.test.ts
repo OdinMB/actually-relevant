@@ -208,7 +208,9 @@ describe('runRecenterStep', () => {
     // 5 plants, the breach and the neighbor case 3 runs each, 4 negatives 1
     expect(report.runs).toHaveLength(5 * 3 + 3 + 3 + 4)
     expect(ctx.calls).toHaveLength(15 * 3 + 10 * 2)
-    expect(report.runs.filter(r => r.kind === 'planted').every(r => r.outcome === 'recentered' && r.anchorHeld && r.endEventVerdict === 'right')).toBe(true)
+    expect(report.runs.filter(r => r.kind === 'planted').every(r => r.outcome === 'recentered' && r.draftAnchorHeld && r.endEventVerdict === 'right')).toBe(
+      true,
+    )
     expect(report.runs.filter(r => r.kind !== 'planted').map(r => `${r.outcome} ${r.rule}`)).toEqual(Array(10).fill('refused joins'))
     expect(report.score).toMatchObject({
       positives: 15,
@@ -229,7 +231,7 @@ describe('runRecenterStep', () => {
       ['wrong end events (where one is named)', 0, true],
       ['false re-centers', 0, true],
       ['near misses joined', 0, true],
-      ['applied re-centers whose anchor did not hold', 0, true],
+      ['proposals whose own judgments broke the anchor', 0, true],
     ])
     const text = recenterLines(report).join('\n')
     expect(text).toContain('| planted ebola-drc-2026 | 2026-10-11 | 1 | recentered |')
@@ -285,20 +287,21 @@ describe('scoreRecenters', () => {
     joined: [],
     nearMissesJoined: [],
     detached: [],
-    anchorHeld: true,
+    draftAnchorHeld: true,
     endEventVerdict: 'right',
     why: null,
     costUsd: 0,
     ...over,
   })
 
-  it('counts a false re-center, a near miss joined, a broken anchor and a wrong end event, and leaves failed calls out', () => {
+  it('counts a false re-center, a near miss joined, a draft that broke the anchor and a wrong end event, and leaves failed calls out', () => {
     const s = scoreRecenters([
       run({ nearMissesJoined: ['n1'], endEventVerdict: 'wrong' }),
-      run({ outcome: 'kept', title: null, endEventVerdict: null, anchorHeld: null }),
-      run({ outcome: 'failed', endEventVerdict: null, anchorHeld: null }),
-      run({ kind: 'breach', anchorHeld: false, endEventVerdict: null }),
-      run({ kind: 'negative', outcome: 'refused', rule: 'anchor', endEventVerdict: null, anchorHeld: null }),
+      run({ outcome: 'kept', title: null, endEventVerdict: null, draftAnchorHeld: null }),
+      run({ outcome: 'failed', endEventVerdict: null, draftAnchorHeld: null }),
+      run({ kind: 'breach', endEventVerdict: null }),
+      // Refused by code, but the model's draft broke the anchor all the same
+      run({ kind: 'negative', outcome: 'refused', rule: 'anchor', endEventVerdict: null, draftAnchorHeld: false }),
     ])
     expect(s).toMatchObject({
       positives: 2,
@@ -306,7 +309,8 @@ describe('scoreRecenters', () => {
       negatives: 2,
       falseRecenters: 1,
       nearMissesJoined: 1,
-      anchorRegressions: 1,
+      proposals: 3,
+      anchorBreaks: 1,
       failed: 1,
       heldBy: { 'refused (anchor)': 1 },
     })

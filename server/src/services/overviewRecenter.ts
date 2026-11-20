@@ -365,6 +365,17 @@ const storyRef = (i: number) => `S${i + 1}`
 /** Each ref's judgment: its first, the one that counts (`firstJudgments`). */
 const judgments = (answers: readonly { id: string; belongs: 'yes' | 'no' }[]) => new Map([...firstJudgments(answers).first].map(([id, a]) => [id, a.belongs]))
 
+/**
+ * Whether a draft's own judgments hold the anchor (`anchorHolds` on its first judgment of each entry),
+ * before the check or any code rule: what the model made of the anchor, which code then holds both
+ * calls to (`acceptRecenter`). The eval's `recenter` step counts the proposals that broke it.
+ */
+export function draftHoldsAnchor(c: Pick<RecenterCase, 'entries' | 'anchor'>, draft: RecenterAnswer, options: RecenterOptions = config.overviews): boolean {
+  const d = judgments([...draft.entries, ...draft.stories])
+  const refOf = new Map(c.entries.map((e, i) => [e.entryId, entryRef(i)]))
+  return anchorHolds(c.anchor, id => d.get(refOf.get(id) ?? '') === 'yes', options).holds
+}
+
 export const recenterInput = (c: RecenterCase): RecenterPromptInput => {
   const anchored = new Set([...c.anchor.founding, ...c.anchor.turningPoints])
   return {
