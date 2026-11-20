@@ -246,17 +246,21 @@ function sourceBook(members: ReadonlyMap<string, StoryOverviewLink>) {
   }
 }
 
-/** The current stands as served now, its lines cited as a researched story's are, and the sources they cite. */
+/**
+ * The current stands as served now, its lines cited as a researched story's are, and the sources they
+ * cite; and when the current version was written (`writtenAt`), served or not, which the page's
+ * `lastChange` counts as the index's does (`countsAndStands`).
+ */
 async function standsForReaders(overviewId: string, members: ReadonlyMap<string, StoryOverviewLink>, today: string) {
   const row = await prisma.overviewStands.findFirst({
     where: { overviewId, status: 'current' },
     select: { sentences: true, doing: true, asOf: true, writtenAt: true, model: true },
   })
-  if (!row) return { stands: null, sources: [], model: null }
+  if (!row) return { stands: null, sources: [], model: null, writtenAt: null }
   const stored = { sentences: linesOf(row.sentences), doing: linesOf(row.doing) }
   const facts = await servedFacts([...new Set([...stored.sentences, ...stored.doing].flatMap(l => l.facts))], members)
   const served = servedStands(stored, facts, today)
-  if (served.sentences.length === 0 && served.doing.length === 0) return { stands: null, sources: [], model: null }
+  if (served.sentences.length === 0 && served.doing.length === 0) return { stands: null, sources: [], model: null, writtenAt: row.writtenAt }
   const book = sourceBook(members)
   // One citation per source, in first-cited order, with its first fact's supporting sentence
   const cite = (line: StandsLine): CitedText => {
@@ -270,7 +274,7 @@ async function standsForReaders(overviewId: string, members: ReadonlyMap<string,
   }
   const sentences = served.sentences.map(cite)
   const doing = served.doing.map(cite)
-  return { stands: { asOf: utcDay(row.asOf), writtenAt: row.writtenAt, sentences, doing }, sources: book.sources, model: row.model }
+  return { stands: { asOf: utcDay(row.asOf), writtenAt: row.writtenAt, sentences, doing }, sources: book.sources, model: row.model, writtenAt: row.writtenAt }
 }
 
 /**
@@ -310,7 +314,7 @@ export async function publicOverview(slug: string, now = new Date()): Promise<Pu
   )
   if (shown.length === 0) return null
   const members = new Map(shown.map(e => [e.story.id, { slug: e.story.slug, title: e.story.title ?? e.story.sourceTitle }]))
-  const [{ stands, sources, model }, versions] = await Promise.all([
+  const [{ stands, sources, model, writtenAt }, versions] = await Promise.all([
     standsForReaders(o.id, members, utcDay(now)),
     publicVersionsOf(
       prisma,
@@ -319,7 +323,7 @@ export async function publicOverview(slug: string, now = new Date()): Promise<Pu
   ])
   return {
     id: o.id,
-    ...head(o, shown.length, stands?.writtenAt ?? null),
+    ...head(o, shown.length, writtenAt),
     stands,
     sources,
     entries: shown.map(e => ({

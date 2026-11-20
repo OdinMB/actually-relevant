@@ -148,6 +148,14 @@ describe('OverviewPage', () => {
     expect(screen.queryByText(/What's being done/)).toBeNull()
     unmount()
 
+    // Only "What's being done" served (its sentences' facts gone): it heads the section itself, with no "Where this stands" above it
+    mockApi.overviews.get.mockResolvedValue({ ...OVERVIEW, stands: { ...OVERVIEW.stands!, sentences: [] } })
+    const doing = renderPage()
+    const section = (await screen.findByRole('heading', { level: 2, name: "What's being done" })).closest('section')!
+    expect(screen.queryByRole('heading', { name: 'Where this stands' })).toBeNull()
+    expect(within(section).getByText('Vaccination goes on.').parentElement).not.toHaveTextContent(/^What's being done/)
+    doing.unmount()
+
     mockApi.overviews.get.mockResolvedValue({ ...OVERVIEW, stands: null, sources: [], aiGenerated: { ...OVERVIEW.aiGenerated, fields: ['title', 'entries'] } })
     renderPage()
     await screen.findByRole('heading', { level: 2, name: 'Timeline' })

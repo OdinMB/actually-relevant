@@ -276,6 +276,9 @@ describeDb('public overviews (PostgreSQL)', () => {
     expect(after!.entries.map(e => e.slug)).toEqual([b!.slug, a!.slug])
     expect(after!.stands).toBeNull()
     expect(after!.aiGenerated.fields).toEqual(['title', 'entries'])
+    // Its current stands still counts toward the last change, served or not, on the page as in the list
+    const listed = (await publicOverviewList()).overviews.find(x => x.slug === o.slug)
+    expect(after!.lastChange).toEqual(listed!.lastChange)
   })
 
   it('answers no page for an overview that is not public, and lists the public ones most recently changed first', async () => {
