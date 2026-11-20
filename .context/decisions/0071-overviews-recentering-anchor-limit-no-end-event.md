@@ -29,16 +29,16 @@ an end event is optional, since "I would expect most overviews never to be clear
 to fade" (For Odin 2, D-RC13); and two guards against cumulative drift, an anchor and a limit
 (D-RC14). The plan's other choices are the planner's, which the owner confirmed by approving it.
 The records, the charter with no end event (prompts included), the anchor and limit rules and the
-editor's re-center land with this record; the automated re-center, its link signal and its evals
-come later (plan phases 2 to 5).
+editor's re-center landed with this record; the link's re-center signals, the automated re-center
+they fire (the upkeep's part 4) and its evals followed on the same branch (plan phases 2 to 5).
 
 ## Decision
 
 - **D7's "never widen" is reversed for charters, by two paths only (D-RC1).** A **re-center**
   rewrites an overview's title, IN and END_EVENT in one decision and may add OUT entries. Its
-  writers are an editor (`editor_recenter`, `PUT /api/admin/overviews/:id/charter`) and, once built,
-  automation: two agreeing large-tier calls with code rules on top, fired by the link call's `wider`
-  and `centerMoved` flags (D-RC3). **Reviews stay demote-only**, and a join still never changes a
+  writers are an editor (`editor_recenter`, `PUT /api/admin/overviews/:id/charter`) and automation
+  (`recenter`, the upkeep's part 4): two agreeing large-tier calls with code rules on top, fired by
+  the link call's `wider` and `centerMoved` flags (D-RC3). **Reviews stay demote-only**, and a join still never changes a
   charter. Both paths are change sets in ADR-0070's one write model, so Undo applies whole or not at
   all.
 - **A charter may name no end event (D-RC13),** founding's included: `Charter.endEvent` is nullable
