@@ -7,9 +7,11 @@
  * stories with the facts found since and planted corrections (`update`), its notes judged; and the
  * overview linking replayed on the answer keys' stories in an in-memory sandbox (`link`, `found`,
  * `role`), the founded end events judged; and the overview upkeep (`pass-pool`, `stands`, `closure`,
- * `review`, `replay`): production's first pass run in memory on the developments' must entries for
- * the facts the stands are written from, the stands at each development's checkpoints judged, reviews
- * under planted errors, and the whole module replayed day by day for its closures and checkpoints.
+ * `review`, `recenter`, `replay`): production's first pass run in memory on the developments' must
+ * entries for the facts the stands are written from, the stands at each development's checkpoints
+ * judged, reviews under planted errors, the automated re-center on planted narrowed charters, the
+ * anchor breach and the keys' reviewed centers, and the whole module replayed day by day for its
+ * closures, checkpoints and re-centers.
  *
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline
@@ -22,6 +24,7 @@
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool --half judge --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,stands,fact-check --facts stands --half judge --budget 13
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,closure,replay --half judge --budget 18
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_review-eval --steps recenter --half judge --budget 6
  *
  * Reads the database through the read-only session and writes nothing to any database; its only
  * HTTP is OpenAI, and Tavily for the `context` and `pass-pool` steps. Writes overview-eval[-tags].md into --out, the
@@ -64,6 +67,7 @@ import { runLinkStep } from './overviews/link.js'
 import { verdict } from './overviews/linkReport.js'
 import { MEMBERS_PER_CHECKPOINT, passPoolStories, runPassPool } from './overviews/passPool.js'
 import { runReplayStep } from './overviews/replay.js'
+import { runRecenterStep } from './overviews/recenter.js'
 import { runReviewStep } from './overviews/review.js'
 import { runStandsStep, standsFactFixtures, type StandsStepReport } from './overviews/stands.js'
 import { nearestPublished } from '../../services/overviewCandidates.js'
@@ -90,6 +94,7 @@ const CALLING_STEPS: OverviewStep[] = [
   'stands',
   'closure',
   'review',
+  'recenter',
   'replay',
   'fact-check',
 ]
@@ -240,7 +245,7 @@ async function main(): Promise<void> {
   try {
     const linking = LINKING_STEPS.some(runs)
     const replaying = REPLAY_STEPS.some(runs)
-    const upkeep = replaying || runs('pass-pool') || runs('stands') || runs('review')
+    const upkeep = replaying || runs('pass-pool') || runs('stands') || runs('review') || runs('recenter')
     const keyFiles = runs('keys') || runs('key-draft') || runs('gap-draft') || runs('update') || linking || upkeep ? readKeyFiles() : []
     if (runs('keys')) for (const k of keyFiles) console.log(`${k.file}: ${k.errors.length === 0 ? 'format ok' : `${k.errors.length} format errors`}`)
     const gapKeyFiles = runs('gap-keys') || runs('context') ? readGapKeyFiles() : []
@@ -542,6 +547,19 @@ async function main(): Promise<void> {
           for (const b of report.review.score.bars) console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
         } catch (err) {
           failed('review', err)
+        }
+      }
+    }
+    if (runs('recenter')) {
+      if (!canCall) noKey('recenter')
+      else {
+        try {
+          report.recenter = await runRecenterStep({ ctx, files: keyFiles, half: opts.half, ...limit, stories: storiesBySlug, budgetUsd: opts.budget })
+          if (report.recenter.stopped) skipped.push({ step: 'recenter', reason: report.recenter.stopped })
+          for (const x of report.recenter.notRun) console.log(`recenter: not run: ${x.what}: ${x.reason}`)
+          for (const b of report.recenter.score.bars) console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
+        } catch (err) {
+          failed('recenter', err)
         }
       }
     }

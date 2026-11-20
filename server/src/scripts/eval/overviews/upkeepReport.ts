@@ -1,11 +1,12 @@
 /**
  * The overview upkeep steps' report sections: the `pass-pool` step's research, the `stands` bars, the
- * `review` bars under planted errors, and the whole module's replay (`closure`, `replay`) with its
- * checkpoints, safeguards and cost. Pure.
+ * `review` bars under planted errors, the `recenter` bars on planted and real cases, and the whole
+ * module's replay (`closure`, `replay`) with its checkpoints, re-centers, safeguards and cost. Pure.
  */
 import type { OverviewStep } from '../options.js'
 import { rows } from './linkReport.js'
 import { MEMBERS_PER_CHECKPOINT, type PassPoolReport } from './passPool.js'
+import type { RecenterStepReport } from './recenter.js'
 import type { ReplayStepReport } from './replay.js'
 import { cell, usd } from './reportText.js'
 import type { ReviewStepReport } from './review.js'
@@ -70,6 +71,30 @@ export function reviewLines(r: ReviewStepReport): string[] {
   ]
 }
 
+export function recenterLines(r: RecenterStepReport): string[] {
+  const s = r.score
+  const held = Object.entries(s.heldBy).map(([by, n]) => `${by} ${n}`)
+  return [
+    `${r.planned.length} cases of ${r.keys.length} answer keys (half ${r.half}${r.limit !== undefined ? `; the first ${r.limit} cases only, a smoke run, not evidence` : ''}): production's automated re-center (the draft, its blind check, the code rules) asked directly, bypassing the signal. Planted narrowed charters and reviewed centers expect a re-center; the anchor breach and the end-checkpoint negatives expect none. ${s.positives} expected re-centers answered, ${s.negatives} others, ${s.failed} attempts a call gave nothing for. Spend ${usd(r.costUsd)}.`,
+    ...(r.stopped ? [`- Stopped: ${cell(r.stopped)}`] : []),
+    ...r.notRun.map(x => `- Not run: ${x.what}: ${cell(x.reason)}`),
+    '',
+    ...table,
+    ...rows(s.bars),
+    '',
+    `End events of the expected re-centers: ${s.endEvents.right} right, ${s.endEvents.wrong} wrong, ${s.endEvents.none} naming none (counted, never wrong), ${s.endEvents.unjudged} unjudged. Where none was expected, what held: ${held.join(', ') || 'no such attempt answered'}.`,
+    '',
+    '### Attempts',
+    '',
+    '| Case | Day | Run | Outcome | Refused by | Title | END_EVENT | Joined | Near misses joined | Detached | End event judged |',
+    '|---|---|---|---|---|---|---|---|---|---|---|',
+    ...r.runs.map(
+      x =>
+        `| ${x.case} | ${x.day} | ${x.run} | ${x.outcome} | ${x.refusals.join(', ')} | ${cell(x.title ?? '')} | ${cell(x.endEvent ?? 'none')} | ${x.joined.length} | ${x.nearMissesJoined.join(', ')} | ${x.detached.length} | ${x.endEventVerdict ?? ''}${x.why ? `: ${cell(x.why)}` : ''} |`,
+    ),
+  ]
+}
+
 export function replayLines(r: ReplayStepReport, steps: readonly OverviewStep[]): string[] {
   const s = r.score
   return [
@@ -98,7 +123,28 @@ export function replayLines(r: ReplayStepReport, steps: readonly OverviewStep[])
           '### Safeguards fired (per run)',
           '',
           ...(Object.keys(s.safeguards).length === 0 ? ['None fired.'] : Object.entries(s.safeguards).map(([name, n]) => `- ${name}: ${n.toFixed(1)}`)),
+          '',
+          ...replayRecenterLines(r),
         ]
       : []),
+  ]
+}
+
+/** The replay's automated re-centers: the bars, then for the owner the counts, each re-center's day against its center's from, and each one. */
+function replayRecenterLines(r: ReplayStepReport): string[] {
+  const s = r.score.recentering
+  const each = r.runs.flatMap(run => run.recenters.map(x => ({ run: run.run, ...x })))
+  return [
+    '### Automated re-centers',
+    '',
+    ...table,
+    ...rows(s.bars),
+    '',
+    `Applied per run: ${s.applied === null ? 'n/a' : s.applied.toFixed(1)}; the most on one overview in a run: ${s.mostPerOverview} (the limit is 2). Splits (an overview founded by two center entries of one key; for the owner, never a right founding): ${s.splits === null ? 'n/a' : s.splits.toFixed(1)} per run. Attempts by what fired them, and refusals by rule, are among the safeguards above.`,
+    ...s.timing.map(t => `- Run ${t.run}: ${t.key} re-centered on ${t.day}, its center from ${t.from}`),
+    ...each.map(
+      x =>
+        `- Run ${x.run}, ${x.day}: ${cell(x.title)} (${x.development ?? 'no development'}), ${x.joined.length} joined${x.nearMissesJoined.length > 0 ? `, near misses ${x.nearMissesJoined.join(', ')}` : ''}`,
+    ),
   ]
 }

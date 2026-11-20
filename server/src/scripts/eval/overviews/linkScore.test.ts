@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseOverviewOptions } from '../options.js'
 import type { AnswerKey } from './keySchema.js'
 import { linkLines } from './linkReport.js'
-import { scoreLinking, scoreLinkRun, type EndEventVerdict, type ReplayRun } from './linkScore.js'
+import { keyIndex, scoreLinking, scoreLinkRun, scoreSignals, type EndEventVerdict, type ReplayRun } from './linkScore.js'
 import { createSandbox } from './overviewSandbox.js'
 import type { LinkResult } from '../../../services/overviewLink.js'
 
@@ -18,7 +18,26 @@ const key = (id: string, entries: [string, 'must' | 'optional', 'turning_point' 
   ),
   nearMisses: nearMisses.map(slug => ({ slug, date: '2026-05-01', title: slug, why: 'looks alike' })),
   responses: [],
+  centers: [],
   notes: '',
+})
+
+/** A key with one reviewed center holding these entries and near misses. */
+const centered = (k: AnswerKey, entries: string[], nearMisses: string[] = []): AnswerKey => ({
+  ...k,
+  centers: [
+    {
+      from: '2026-05-02',
+      title: `${k.title}, wider`,
+      charter: { in: 'Wider.', out: [], endEvent: null },
+      why: 'It spread',
+      entries: entries.map(slug => ({ ...k.entries[0]!, slug, join: 'must' })),
+      nearMisses: nearMisses.map(slug => ({ slug, date: '2026-05-03', title: slug, why: 'elsewhere' })),
+      responses: [],
+      closed: null,
+      reviewed: true,
+    },
+  ],
 })
 
 const role = (r: 'turning_point' | 'routine') => ({ role: r, roleKind: null })
@@ -66,6 +85,16 @@ describe('scoreLinkRun', () => {
     expect(s.wrong).toBe(3)
     expect(s.wrongFoundings).toBe(1)
     expect(s.mistakes).toEqual(expect.arrayContaining(['near miss uganda joined ebola', 'c1 (cholera) joined ebola']))
+  })
+
+  it("skips a center's entries as optional, a base entry of any key taking precedence, and counts its near misses as the key's", () => {
+    const keys = [centered(KEYS[0]!, ['w1', 'c2'], ['far']), KEYS[1]!]
+    const { entry, nearMiss } = keyIndex(keys)
+    expect(entry.get('w1')).toMatchObject({ key: 'ebola', join: 'optional' })
+    expect(entry.get('c2')).toMatchObject({ key: 'cholera', join: 'must' })
+    expect(nearMiss.get('far')).toEqual(['ebola'])
+    const s = scoreLinkRun(keys, run([{ id: 'o1', members: ['e1', 'e2', 'w1', 'far'], foundedFrom: ['e1', 'e2'], endEvent: 'End.' }]))
+    expect(s).toMatchObject({ right: 2, wrong: 1, must: 5 })
   })
 
   it('judges roles of must entries against the key', () => {
@@ -134,11 +163,47 @@ describe('scoreLinking', () => {
 
   it('reports the bars of the steps named', () => {
     const score = scoreLinking(KEYS, [run([])])
-    const report = { half: 'judge' as const, repeat: 1, keys: ['ebola'], stories: 3, left: [], score, endEvents: [], costUsd: 0.01, perStoryUsd: 0.003 }
+    const signals = [{ run: 1, centerEntries: 3, centerFlagged: 2, nearMisses: 10, nearMissesWider: 1, falseShifts: ['c1'] }]
+    const report = {
+      half: 'judge' as const,
+      repeat: 1,
+      keys: ['ebola'],
+      stories: 3,
+      left: [],
+      score,
+      endEvents: [],
+      signals,
+      costUsd: 0.01,
+      perStoryUsd: 0.003,
+    }
     const text = linkLines(report, ['link']).join('\n')
     expect(text).toContain('joins right')
     expect(text).not.toContain('roles agreeing |')
+    expect(text).toContain('| 1 | 2 of 3 | 1 of 10 | 1: c1 |')
     expect(linkLines(report, ['role']).join('\n')).toContain('roles agreeing')
+  })
+})
+
+describe('scoreSignals', () => {
+  it("counts center entries flagged for their development's overview, near misses flagged wider, and center flags where no center is keyed", () => {
+    const keys = [centered(KEYS[0]!, ['w1', 'w2', 'w3']), KEYS[1]!]
+    const replayed = new Set(['e1', 'e2', 'w1', 'w2', 'uganda', 'c1', 'c2'])
+    const s = scoreSignals(
+      keys,
+      replayed,
+      [
+        { slug: 'w1', overviewId: 'o1', kind: 'wider' },
+        { slug: 'w2', overviewId: 'o2', kind: 'center_moved' },
+        { slug: 'uganda', overviewId: 'o1', kind: 'wider' },
+        { slug: 'c1', overviewId: 'o2', kind: 'center_moved' },
+      ],
+      new Map([
+        ['ebola', 'o1'],
+        ['cholera', 'o2'],
+      ]),
+      2,
+    )
+    expect(s).toEqual({ run: 2, centerEntries: 2, centerFlagged: 1, nearMisses: 1, nearMissesWider: 1, falseShifts: ['c1'] })
   })
 })
 

@@ -14,6 +14,24 @@ export const verdict = (b: Bar) => (b.forOwner ? `for the owner: ${b.forOwner}` 
 /** One table row per bar: its name, target, mean and verdict. */
 export const rows = (bars: Bar[]) => bars.map(b => `| ${b.name} | ${target(b)} | ${value(b)} | ${verdict(b)} |`)
 
+/** How often the link calls flagged the re-center signals, per run: no bars, for the owner. */
+function signalLines(r: LinkStepReport): string[] {
+  if (r.signals.length === 0) return []
+  return [
+    '### Re-center signals (no bars; for the owner)',
+    '',
+    "A center entry flagged for its development's overview is the signal's recall; the share of near misses flagged wider sets how often attempts fire, and so their cost; a center-moved flag on a development whose key has no center is a false shift.",
+    '',
+    '| Run | Center entries flagged | Near misses flagged wider | False shifts |',
+    '|---|---|---|---|',
+    ...r.signals.map(
+      s =>
+        `| ${s.run} | ${s.centerFlagged} of ${s.centerEntries} | ${s.nearMissesWider} of ${s.nearMisses} | ${s.falseShifts.length}${s.falseShifts.length > 0 ? `: ${s.falseShifts.join(', ')}` : ''} |`,
+    ),
+    '',
+  ]
+}
+
 export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): string[] {
   const shown = (step: OverviewStep) => steps.includes(step)
   return [
@@ -45,6 +63,7 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
           '',
         ]
       : []),
+    ...signalLines(r),
     ...(r.score.runs.some(s => s.mistakes.length > 0)
       ? ['### Wrong joins and foundings', '', ...r.score.runs.flatMap(s => s.mistakes.map(m => `- Run ${s.run}: ${cell(m)}`)), '']
       : []),

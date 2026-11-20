@@ -7,7 +7,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { awaitingReview, parseKey, unreviewed, validateKey, type AnswerKey } from './keySchema.js'
+import { awaitingReview, centerOn, parseKey, unreviewed, validateKey, type AnswerKey } from './keySchema.js'
 import { KEYS_DIR, keyFileNames, readKeyFile } from './keyFiles.js'
 
 describe('the committed answer keys', () => {
@@ -224,6 +224,78 @@ describe('validateKey', () => {
       expect(awaitingReview([done, { ...done, closed: { slug: 'c', date: '2026-07-01', quote: null, reviewed: false } }], 'closed')).toMatch(
         /^refused: 1 drafted end is not reviewed yet \(el-nino-2026: 1\)/,
       )
+    })
+  })
+
+  describe('centers', () => {
+    const entry = (slug: string, date: string) => ({ slug, date, title: slug.toUpperCase(), join: 'must', role: 'routine', why: 'Under the new center' })
+    const center = (extra: Record<string, unknown> = {}) => ({
+      from: '2026-06-10',
+      title: 'Ebola in the Great Lakes region',
+      charter: { in: 'Ebola across the Great Lakes region since May 2026.', out: ['Cholera in Congo', 'mpox'], endEvent: null },
+      why: 'Cases spread past DR Congo',
+      entries: [entry('d', '2026-06-10'), entry('e', '2026-06-12')],
+      nearMisses: [{ slug: 'y', date: '2026-06-11', title: 'Y', why: 'Marburg, not Ebola' }],
+      ...extra,
+    })
+    const withCenters = (k: ReturnType<typeof key>, ...centers: object[]) => Object.assign(k, { centers })
+
+    it('accepts a key without centers and one with a center whose end event is none, at any version', () => {
+      expect(parseKey(key()).key?.centers).toEqual([])
+      expect(rule(k => withCenters(k, center()))).toEqual([])
+    })
+
+    it(`wants at most 2, in date order, each from after the first base entry`, () => {
+      expect(rule(k => withCenters(k, center(), center({ from: '2026-06-20', entries: [] }), center({ from: '2026-06-30', entries: [] })))).toEqual([
+        '3 centers, more than 2',
+      ])
+      expect(rule(k => withCenters(k, center({ from: '2026-06-20', entries: [] }), center()))).toEqual([
+        'centers not in date order at center "Ebola in the Great Lakes region"',
+      ])
+      expect(rule(k => withCenters(k, center({ from: '2026-06-01' })))).toEqual([
+        'center "Ebola in the Great Lakes region": from 2026-06-01 is not after the first entry (2026-06-01)',
+      ])
+    })
+
+    it('wants the base OUT kept, matched without case', () => {
+      expect(rule(k => withCenters(k, center({ charter: { in: 'Wider.', out: ['mpox'], endEvent: null } })))).toEqual([
+        'center "Ebola in the Great Lakes region": drops the base OUT entry "cholera in Congo"',
+      ])
+    })
+
+    it('wants its entries in date order, none a base entry or listed twice, and none its own near miss; a base near miss may become one', () => {
+      const at = 'center "Ebola in the Great Lakes region"'
+      expect(rule(k => withCenters(k, center({ entries: [entry('e', '2026-06-12'), entry('d', '2026-06-10')] })))).toEqual([
+        `${at}: entries not in date order at d`,
+      ])
+      expect(rule(k => withCenters(k, center({ entries: [entry('a', '2026-06-10')] })))).toEqual([`${at}: a is a base entry`])
+      expect(rule(k => withCenters(k, center(), center({ from: '2026-06-20', entries: [entry('d', '2026-06-20')] })))).toEqual([`${at}: d listed twice`])
+      expect(rule(k => withCenters(k, center({ nearMisses: [{ slug: 'd', date: '2026-06-10', title: 'D', why: 'Mixed up' }] })))).toEqual([
+        `${at}: d is both an entry and a near miss`,
+      ])
+      expect(rule(k => withCenters(k, center({ entries: [entry('x', '2026-06-10')] })))).toEqual([])
+    })
+
+    it('wants its responses sourced by a base or center entry, and its end slug an entry', () => {
+      const at = 'center "Ebola in the Great Lakes region"'
+      const response = (slug: string | null) => ({ date: '2026-06-12', what: 'Border screening', slug, quote: slug ? 'screening' : null })
+      expect(rule(k => withCenters(k, center({ responses: [response('e'), response('a'), response(null)] })))).toEqual([])
+      expect(rule(k => withCenters(k, center({ responses: [response('y')] })))).toEqual([`${at}: response "Border screening": slug y is not an entry`])
+      expect(rule(k => withCenters(k, center({ closed: { slug: 'y', date: '2026-07-01' } })))).toEqual([`${at}: closed.slug y is not an entry`])
+    })
+
+    it('counts a center as a draft until it is reviewed, and refuses the steps that read it', () => {
+      const k = parseKey(withCenters(key(), center(), center({ from: '2026-06-20', entries: [], reviewed: true }))).key!
+      expect(unreviewed(k, 'centers')).toBe(1)
+      expect(awaitingReview([k], 'centers')).toMatch(/^refused: 1 drafted center is not reviewed yet \(ebola-drc-2026: 1\)/)
+      expect(awaitingReview([{ ...k, centers: k.centers.map(c => ({ ...c, reviewed: true })) }], 'centers')).toBeNull()
+    })
+
+    it('gives the center in force on a day: the newest from on or before it', () => {
+      const k = parseKey(withCenters(key(), center(), center({ from: '2026-06-20', title: 'Later', entries: [] }))).key!
+      expect(centerOn(k, '2026-06-09')).toBeNull()
+      expect(centerOn(k, '2026-06-10')?.title).toBe('Ebola in the Great Lakes region')
+      expect(centerOn(k, '2026-07-01')?.title).toBe('Later')
     })
   })
 

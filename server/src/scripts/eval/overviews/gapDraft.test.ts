@@ -40,7 +40,7 @@ describe('the sample', () => {
   it('names every story a development key lists, entries and near misses', () => {
     const file = (key: Partial<AnswerKey> | null): KeyFile => ({ file: 'k.json', key: key as AnswerKey | null, errors: [] })
     const slugs = developmentSlugs([
-      file({ entries: [{ slug: 'a' }, { slug: 'b' }] as AnswerKey['entries'], nearMisses: [{ slug: 'x' }] as AnswerKey['nearMisses'] }),
+      file({ entries: [{ slug: 'a' }, { slug: 'b' }] as AnswerKey['entries'], nearMisses: [{ slug: 'x' }] as AnswerKey['nearMisses'], centers: [] }),
       file(null),
     ])
     expect([...slugs].sort()).toEqual(['a', 'b', 'x'])
@@ -112,7 +112,7 @@ describe('the step', () => {
       sampleFile: join(dir, 'cache', 'gap-sample.json'),
       refresh: false,
       loadCandidates: async () => ({ anchor: '2026-11-14', candidates: [candidate('a'), candidate('b', 'health', 4), candidate('gone'), candidate('dev')] }),
-      developmentKeys: [{ file: 'dev.json', key: { entries: [{ slug: 'dev' }], nearMisses: [] } as unknown as AnswerKey, errors: [] }],
+      developmentKeys: [{ file: 'dev.json', key: { entries: [{ slug: 'dev' }], nearMisses: [], centers: [] } as unknown as AnswerKey, errors: [] }],
       inputs: async slugs => new Map(slugs.map(s => [s, s === 'gone' ? null : contextInput({ storyId: `id-${s}` })])),
       draftDir: join(dir, 'out', 'gap-drafts'),
       dryRun: false,

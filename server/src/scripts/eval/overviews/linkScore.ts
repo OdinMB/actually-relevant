@@ -6,7 +6,8 @@
  * overview, or an entry in another's, is wrong), and recall of `must` entries. `found`: foundings whose
  * pair is not two entries of one development, and founded charters naming an end event other than the
  * key's (the strong judge's verdicts, passed in; one naming none is never wrong). `role`: turning point or routine against
- * the key. Means over runs. Pure.
+ * the key. Means over runs. And how often the link calls flagged the re-center signals
+ * (`scoreSignals`), with no bar. Pure.
  */
 import type { Role } from '../../../services/overviewTypes.js'
 import type { AnswerKey } from './keySchema.js'
@@ -75,15 +76,66 @@ export function rateBar(name: string, value: number | null, target: number, judg
   return { ...b, met: null, forOwner: `${judgments} judgment${judgments === 1 ? '' : 's'}, fewer than the ${MIN_RATE_SAMPLE} an automatic verdict needs` }
 }
 
-/** Which development each slug is a must or optional entry of, and which it is a near miss of. */
+/**
+ * Which development each slug is a must or optional entry of, and which it is a near miss of. A
+ * center's entries count as `optional` entries of its key, so the linking bars skip them, and a base
+ * entry of any key takes precedence over them; a center's near misses are its key's near misses.
+ */
 export function keyIndex(keys: readonly AnswerKey[]) {
   const entry = new Map<string, { key: string; join: 'must' | 'optional'; role: Role['role'] }>()
   const nearMiss = new Map<string, string[]>()
   for (const k of keys) {
     for (const e of k.entries) entry.set(e.slug, { key: k.id, join: e.join, role: e.role })
-    for (const n of k.nearMisses) nearMiss.set(n.slug, [...(nearMiss.get(n.slug) ?? []), k.id])
+    for (const n of [...k.nearMisses, ...k.centers.flatMap(c => c.nearMisses)]) nearMiss.set(n.slug, [...new Set([...(nearMiss.get(n.slug) ?? []), k.id])])
   }
+  for (const k of keys)
+    for (const e of k.centers.flatMap(c => c.entries)) if (!entry.has(e.slug)) entry.set(e.slug, { key: k.id, join: 'optional', role: e.role })
   return { entry, nearMiss }
+}
+
+/** A re-center signal a link decision kept (`linkInputs.signals`), by the story's slug. */
+export interface StorySignal {
+  slug: string
+  overviewId: string
+  kind: 'wider' | 'center_moved'
+}
+
+/** How often one run's link calls flagged the re-center signals (plan "Evals": no bars; the owner reads them). */
+export interface SignalRunScore {
+  run: number
+  /** Reviewed centers' entries replayed, and those flagged (wider or center moved) for their development's overview: the signal's recall. */
+  centerEntries: number
+  centerFlagged: number
+  /** Base near misses replayed, and those flagged wider for any overview: how often attempts would fire, and so their cost. */
+  nearMisses: number
+  nearMissesWider: number
+  /** Stories of developments whose key has no center, flagged center moved: false shift signals. */
+  falseShifts: string[]
+}
+
+/** One run's signals against the keys (`developments`: development id → its overview in the run). */
+export function scoreSignals(
+  keys: readonly AnswerKey[],
+  replayed: ReadonlySet<string>,
+  signals: readonly StorySignal[],
+  developments: ReadonlyMap<string, string>,
+  run: number,
+): SignalRunScore {
+  const bases = new Set(keys.flatMap(k => k.entries.map(e => e.slug)))
+  const of = (slug: string) => signals.filter(s => s.slug === slug)
+  const centers = keys.flatMap(k =>
+    k.centers.flatMap(c => c.entries.filter(e => replayed.has(e.slug) && !bases.has(e.slug)).map(e => ({ slug: e.slug, key: k.id }))),
+  )
+  const nearMisses = [...new Set(keys.flatMap(k => k.nearMisses.map(n => n.slug)))].filter(s => replayed.has(s) && !bases.has(s))
+  const unmoved = keys.filter(k => k.centers.length === 0).flatMap(k => [...k.entries.map(e => e.slug), ...k.nearMisses.map(n => n.slug)])
+  return {
+    run,
+    centerEntries: centers.length,
+    centerFlagged: centers.filter(c => of(c.slug).some(s => s.overviewId === developments.get(c.key))).length,
+    nearMisses: nearMisses.length,
+    nearMissesWider: nearMisses.filter(slug => of(slug).some(s => s.kind === 'wider')).length,
+    falseShifts: [...new Set(unmoved)].filter(slug => replayed.has(slug) && of(slug).some(s => s.kind === 'center_moved')),
+  }
 }
 
 /** The development an overview stands for: the key most of its members are must entries of (ties to the first founded member's key); null with none. */

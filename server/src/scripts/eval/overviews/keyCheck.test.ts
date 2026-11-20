@@ -143,6 +143,31 @@ describe('checkKey', () => {
     expect(checkKey(ending('declared over'), stories)).toEqual([])
     expect(checkKey(ending('declared finished'), stories)).toEqual(['closed b: quote not found: "declared finished"'])
   })
+
+  it("checks a center's entries, near misses and response against the database, each error naming the center", () => {
+    const centered = answerKey(k => {
+      k.entries[0].values[0].quote = '4,887 people'
+      k.centers = [
+        {
+          from: '2026-06-03',
+          title: 'Regional Ebola',
+          charter: { in: 'Wider.', out: [], endEvent: null },
+          why: 'It spread',
+          entries: [{ slug: 'c', date: '2026-06-03', title: 'C', join: 'must', role: 'routine', why: 'x' }],
+          nearMisses: [{ slug: 'y', date: '2026-06-03', title: 'Y', why: 'x' }],
+          responses: [{ date: '2026-06-03', what: 'Screening', slug: 'c', quote: 'border screening' }],
+        },
+      ]
+    })
+    expect(keySlugs(centered)).toEqual(['a', 'b', 'x', 'c', 'y'])
+    const base = [story('a'), story('b', { datePublished: new Date('2026-06-02T10:00:00Z') }), story('x')]
+    expect(checkKey(centered, byslug(...base, story('c', { datePublished: new Date('2026-06-04T01:00:00Z') })))).toEqual([
+      'center "Regional Ebola" entry c: dated 2026-06-03, published 2026-06-04 (UTC)',
+      'center "Regional Ebola" near miss y: no story with this slug',
+      'center "Regional Ebola" response c: quote not found: "border screening"',
+    ])
+    expect(summarizeKey(centered, byslug())).toMatchObject({ toReview: 2 })
+  })
 })
 
 describe('keySlugs and summarizeKey', () => {

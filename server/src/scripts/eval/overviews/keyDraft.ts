@@ -71,7 +71,14 @@ export function draftStories(key: AnswerKey, stories: ReadonlyMap<string, KeySto
 }
 
 export const keyDraftPrompt = (key: AnswerKey, shown: KeyDraftStory[]): string =>
-  buildKeyDraftPrompt({ title: key.title, charter: key.charter, notes: key.notes, stories: shown, perStory: MAX_RESPONSES_PER_STORY })
+  buildKeyDraftPrompt({
+    title: key.title,
+    // A key with no end event (it ends by fading) shows it as none, as the overview prompts do
+    charter: { ...key.charter, endEvent: key.charter.endEvent ?? 'none' },
+    notes: key.notes,
+    stories: shown,
+    perStory: MAX_RESPONSES_PER_STORY,
+  })
 
 const plannedCall = (key: AnswerKey, shown: ShownStory[]): PlannedCall => ({
   arm: KEY_DRAFT_ARM,

@@ -43,6 +43,7 @@ const KEY: AnswerKey = {
   ],
   nearMisses: [{ slug: 'n1', date: DAYS[1]!, title: 'n1', why: 'same province' }],
   responses: [{ date: DAYS[0]!, what: 'WHO ring vaccination', slug: 'e1', quote: 'vaccination', reviewed: true }],
+  centers: [],
   notes: '',
 }
 /** The key as `key-draft` leaves it: its response and its end drafted, neither reviewed yet. */
@@ -68,7 +69,12 @@ const story = (slug: string, date: string): LinkStory => ({
   issueId: null,
   facts: [],
 })
-const STORIES = new Map([...KEY.entries.map(e => [e.slug, story(e.slug, e.date)] as const), ['n1', story('n1', DAYS[1]!)] as const])
+const STORIES = new Map([
+  ...KEY.entries.map(e => [e.slug, story(e.slug, e.date)] as const),
+  ['n1', story('n1', DAYS[1]!)] as const,
+  // A center's entry, for the keys below that hold one
+  ['w1', story('w1', DAYS[1]!)] as const,
+])
 const stories = async (slugs: string[]) => new Map(slugs.map(s => [s, STORIES.get(s) ?? null]))
 
 const source = (storyId: string, date: string): PoolSource => ({
@@ -168,6 +174,37 @@ describe('runStandsStep', () => {
     expect(report.score.note).toMatch(/not enough evidence/)
     const text = standsLines(report).join('\n')
     expect(text).toContain(`| ${ID} | ${DAYS[0]} | 1 | 3 | written | 1 (0) | 1 of 1 | yes / no |`)
+  })
+
+  it("writes each checkpoint under the key's center in force that day: its title and its members", async () => {
+    const ctx = fakeEvalContext(standsAnswer)
+    const center = {
+      from: DAYS[1]!,
+      title: 'Ebola across the Great Lakes',
+      charter: { in: 'Wider.', out: [], endEvent: null },
+      why: 'It spread',
+      entries: [entry('w1', DAYS[1]!)],
+      nearMisses: [],
+      responses: [],
+      closed: null,
+      reviewed: true,
+    }
+    const report = await runStandsStep({
+      ctx,
+      files: [{ file: `${ID}.json`, key: { ...KEY, centers: [center] }, errors: [] }],
+      half: 'judge',
+      stories,
+      facts,
+      repeat: 1,
+      budgetUsd: 5,
+    })
+    expect(report.runs.map(r => [r.at, r.offered])).toEqual([
+      ['third', 3],
+      ['two-thirds', 9],
+      ['end', 12],
+    ])
+    const written = ctx.calls.filter(c => base(c.schemaName) === 'overview-stands').map(c => c.prompt.includes(center.title))
+    expect(written).toEqual([false, true, true])
   })
 
   it('counts a checkpoint with too few facts without writing it, and starts nothing once the budget is spent', async () => {

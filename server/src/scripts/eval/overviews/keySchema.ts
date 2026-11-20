@@ -101,32 +101,57 @@ const nearMissSchema = z.object({
   why: text('One line: what makes it look related, and why it must not join.'),
 })
 
+const closedSchema = z
+  .object({
+    slug: z.string().nullable().default(null).describe('The story that reports the end event; null when our stories never report it.'),
+    date: date('When it ended'),
+    quote: z
+      .string()
+      .nullable()
+      .default(null)
+      .describe('The exact words from that story that report the end, so a checker can find them; null without a slug.'),
+    reviewed,
+  })
+  .nullable()
+
+const charterSchema = (endEvent: string) =>
+  z.object({
+    in: z.string().describe('One or two sentences: what this development is, where, since when, and what kinds of stories belong.'),
+    out: z.array(z.string()).describe('Each neighboring development or theme that must stay separate, as a short phrase.'),
+    endEvent: z.string().nullable().describe(endEvent),
+  })
+
+/** The most centers a key holds: the limit of automated re-centers (`config.overviews.maxAutomatedRecenters`). */
+export const MAX_CENTERS = 2
+
+/**
+ * A center the development moved to (D-RC9; `.context/model-eval.md`, "Overview evals"): from its
+ * `from` day on, the development is better described by this charter, which still keeps the base OUT.
+ * Its entries belong only under it; base entries stay members. A person drafts it from the archive and
+ * marks it reviewed.
+ */
+const centerSchema = z.object({
+  from: date('The day the center moved: the first story that shows the new center'),
+  title: text('The development under its new center, e.g. "Colorado River water shortage".'),
+  charter: charterSchema('The event that would end it under this center; null when it has none (it ends by fading).'),
+  why: text('One line: what moved the center.'),
+  entries: z.array(entrySchema).default([]).describe('Stories that belong only under this center, in date order; never a base entry.'),
+  nearMisses: z.array(nearMissSchema).default([]).describe('Stories a careless re-center would take in but must not, e.g. drought outside the basin.'),
+  responses: z.array(responseSchema).default([]).describe('Responses under way under this center, as the base `responses`, at any schemaVersion.'),
+  closed: closedSchema.default(null).describe("The center's end, as the base `closed`; null while open."),
+  reviewed,
+})
+
 export const answerKeySchema = z.object({
   schemaVersion: z
     .union([z.literal(1), z.literal(2)])
     .describe('1, or 2 for a key that lists `responses` (decision D10: what is being done about the development).'),
   id: text('The development\'s id, also the file name (`keys/<id>.json`), e.g. "ebola-drc-2026".'),
   title: text('The development in a few words, e.g. "Ebola outbreak in eastern DR Congo".'),
-  charter: z.object({
-    in: z.string().describe('One or two sentences: what this development is, where, since when, and what kinds of stories belong.'),
-    out: z.array(z.string()).describe('Each neighboring development or theme that must stay separate, as a short phrase.'),
-    endEvent: z.string().describe('The event that would end it (for a closed development, the event that did).'),
-  }),
-  closed: z
-    .object({
-      slug: z.string().nullable().default(null).describe('The story that reports the end event; null when our stories never report it.'),
-      date: date('When it ended'),
-      quote: z
-        .string()
-        .nullable()
-        .default(null)
-        .describe('The exact words from that story that report the end, so a checker can find them; null without a slug.'),
-      reviewed,
-    })
-    .nullable()
-    .describe(
-      'Null while the development is still open on 16 November 2026. Only an end event that matches charter.endEvent closes it. When our stories never report the end but it clearly ended, the slug is null and the notes say so.',
-    ),
+  charter: charterSchema('The event that would end it (for a closed development, the event that did); null when it has none.'),
+  closed: closedSchema.describe(
+    'Null while the development is still open on 16 November 2026. Only an end event that matches charter.endEvent closes it. When our stories never report the end but it clearly ended, the slug is null and the notes say so.',
+  ),
   figures: z
     .array(figureSchema)
     .default([])
@@ -144,6 +169,10 @@ export const answerKeySchema = z.object({
     .describe(
       'Version 2 only: each response under way that a reader of the overview should learn of, in date order, one row for each story that reports it under way (a response three stories report is three rows), so the stands of any day can be held to the stories of that time; a row with no slug where none of our stories reports it.',
     ),
+  centers: z
+    .array(centerSchema)
+    .default([])
+    .describe(`At most ${MAX_CENTERS} centers the development moved to, in date order; empty for one that kept its charter. Additive, at any schemaVersion.`),
   notes: z
     .string()
     .default('')
@@ -186,37 +215,105 @@ export function validateKey(key: AnswerKey): string[] {
   if (key.closed && hasText(key.closed.slug) && !entrySlugs.has(key.closed.slug)) errors.push(`closed.slug ${key.closed.slug} is not an entry`)
   if (key.closed && hasText(key.closed.quote) && !hasText(key.closed.slug)) errors.push('closed.quote is set without closed.slug')
   errors.push(...responseErrors(key, entrySlugs))
+  errors.push(...centerErrors(key, entrySlugs))
   return errors
 }
 
-/** The drafted items of one field a person has not reviewed yet: the responses, or the end (0 or 1). */
-export function unreviewed(key: AnswerKey, field: 'responses' | 'closed'): number {
+const sameOut = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/**
+ * The rules on `centers` (D-RC9): at most `MAX_CENTERS`, in date order, each from after the first base
+ * entry; its entries in date order, never a base entry, another center's or its own near miss (a base
+ * near miss may become a center entry); the base OUT kept; its responses sourced by a base or center
+ * entry with their quotes; its end's slug an entry.
+ */
+function centerErrors(key: AnswerKey, baseSlugs: ReadonlySet<string>): string[] {
+  const errors: string[] = []
+  if (key.centers.length > MAX_CENTERS) errors.push(`${key.centers.length} centers, more than ${MAX_CENTERS}`)
+  const first = key.entries[0]?.date ?? ''
+  const seen = new Set<string>()
+  let previousFrom = ''
+  for (const c of key.centers) {
+    const at = `center "${c.title}"`
+    if (c.from < previousFrom) errors.push(`centers not in date order at ${at}`)
+    previousFrom = c.from > previousFrom ? c.from : previousFrom
+    if (first && c.from <= first) errors.push(`${at}: from ${c.from} is not after the first entry (${first})`)
+    for (const o of key.charter.out) if (!c.charter.out.some(x => sameOut(x, o))) errors.push(`${at}: drops the base OUT entry "${o}"`)
+    let previous = ''
+    for (const e of c.entries) {
+      if (e.date < previous) errors.push(`${at}: entries not in date order at ${e.slug}`)
+      previous = e.date > previous ? e.date : previous
+      if (baseSlugs.has(e.slug)) errors.push(`${at}: ${e.slug} is a base entry`)
+      if (seen.has(e.slug)) errors.push(`${at}: ${e.slug} listed twice`)
+      seen.add(e.slug)
+      if (e.role === 'turning_point' && !hasText(e.kind)) errors.push(`${at}: turning point ${e.slug} has no kind`)
+      if (e.role === 'routine' && hasText(e.kind)) errors.push(`${at}: routine entry ${e.slug} has a kind`)
+    }
+    const own = new Set(c.entries.map(e => e.slug))
+    for (const n of c.nearMisses) if (own.has(n.slug) || baseSlugs.has(n.slug)) errors.push(`${at}: ${n.slug} is both an entry and a near miss`)
+    const sources = new Set([...baseSlugs, ...own])
+    errors.push(...sourcedErrors(c.responses, sources).map(e => `${at}: ${e}`))
+    if (c.closed && hasText(c.closed.slug) && !sources.has(c.closed.slug)) errors.push(`${at}: closed.slug ${c.closed.slug} is not an entry`)
+  }
+  return errors
+}
+
+/** The drafted items of one field a person has not reviewed yet: the responses, the end (0 or 1), or the centers. */
+export function unreviewed(key: AnswerKey, field: 'responses' | 'closed' | 'centers'): number {
   if (field === 'responses') return key.responses.filter(r => !r.reviewed).length
+  if (field === 'centers') return key.centers.filter(c => !c.reviewed).length
   return key.closed && !key.closed.reviewed ? 1 : 0
 }
+
+/** Each development's center in force on `day`: the newest whose `from` is on or before it; null for the base charter. */
+export function centerOn(key: AnswerKey, day: string): AnswerKey['centers'][number] | null {
+  return key.centers.filter(c => c.from <= day).at(-1) ?? null
+}
+
+/**
+ * The must entries the development holds on `day` under the center in force: the base ones and those
+ * of every center from on or before it, published by then; by day, the key's order breaking a tie.
+ */
+export function mustEntriesOn(key: AnswerKey, day: string): AnswerKey['entries'] {
+  const centers = key.centers.filter(c => c.from <= day)
+  return [...key.entries, ...centers.flatMap(c => c.entries)].filter(e => e.join === 'must' && e.date <= day).sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/** Every slug a key's centers name: their entries, then their near misses. */
+export const centerSlugs = (key: AnswerKey): string[] => key.centers.flatMap(c => [...c.entries.map(e => e.slug), ...c.nearMisses.map(n => n.slug)])
 
 /**
  * Why a step that reads `field` refuses to run on these keys: drafts in it no person has reviewed
  * (`key-draft` writes them with `reviewed: false`), so a reading would rest on unchecked key data.
  * Null when nothing is left to review.
  */
-export function awaitingReview(keys: readonly AnswerKey[], field: 'responses' | 'closed'): string | null {
+export function awaitingReview(keys: readonly AnswerKey[], field: 'responses' | 'closed' | 'centers'): string | null {
   const open = keys.flatMap(k => {
     const n = unreviewed(k, field)
     return n > 0 ? [`${k.id}: ${n}`] : []
   })
   if (open.length === 0) return null
   const total = keys.reduce((sum, k) => sum + unreviewed(k, field), 0)
-  const what = field === 'responses' ? (total === 1 ? 'drafted response is' : 'drafted responses are') : total === 1 ? 'drafted end is' : 'drafted ends are'
+  const names = {
+    responses: ['drafted response is', 'drafted responses are'],
+    closed: ['drafted end is', 'drafted ends are'],
+    centers: ['drafted center is', 'drafted centers are'],
+  }
+  const what = names[field][total === 1 ? 0 : 1]
   return `refused: ${total} ${what} not reviewed yet (${open.join(', ')}): in each key, mark every one "reviewed": true or delete it, then run again`
 }
 
 /** `responses` only in a version 2 key, in date order, each sourced by an entry with its quote or by none. */
 function responseErrors(key: AnswerKey, entrySlugs: ReadonlySet<string>): string[] {
   if (key.schemaVersion === 1) return key.responses.length > 0 ? ['responses need schemaVersion 2'] : []
+  return sourcedErrors(key.responses, entrySlugs)
+}
+
+/** Responses in date order, each sourced by one of `entrySlugs` with its quote, or by none. */
+function sourcedErrors(responses: AnswerKey['responses'], entrySlugs: ReadonlySet<string>): string[] {
   const errors: string[] = []
   let previous = ''
-  for (const r of key.responses) {
+  for (const r of responses) {
     if (r.date < previous) errors.push(`responses not in date order at "${r.what}" (${r.date} after ${previous})`)
     previous = r.date > previous ? r.date : previous
     if (hasText(r.slug) && !entrySlugs.has(r.slug)) errors.push(`response "${r.what}": slug ${r.slug} is not an entry`)

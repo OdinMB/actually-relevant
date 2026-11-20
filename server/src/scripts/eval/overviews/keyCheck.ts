@@ -30,9 +30,15 @@ export interface KeyStory {
   hasResearchFacts: boolean
 }
 
-/** Every slug the key names (entries, near misses), once, in key order. */
+/** Every slug the key names (entries, near misses, then its centers'), once, in key order. */
 export function keySlugs(key: AnswerKey): string[] {
-  return [...new Set([...key.entries.map(e => e.slug), ...key.nearMisses.map(n => n.slug)])]
+  return [
+    ...new Set([
+      ...key.entries.map(e => e.slug),
+      ...key.nearMisses.map(n => n.slug),
+      ...key.centers.flatMap(c => [...c.entries.map(e => e.slug), ...c.nearMisses.map(n => n.slug)]),
+    ]),
+  ]
 }
 
 /** The stories the slugs name, for the answer keys' and the gap keys' checks alike: one SELECT through the read-only session. */
@@ -79,18 +85,24 @@ export function checkKey(key: AnswerKey, stories: ReadonlyMap<string, KeyStory>)
     else return s
     return null
   }
-  for (const e of key.entries) {
-    const s = published('entry', e.slug)
+  const centers = key.centers.map(c => ({ ...c, at: `center "${c.title}" ` }))
+  for (const { at, ...e } of [...key.entries.map(e => ({ ...e, at: '' })), ...centers.flatMap(c => c.entries.map(e => ({ ...e, at: c.at })))]) {
+    const s = published(`${at}entry`, e.slug)
     if (!s?.datePublished) continue
-    if (utcDay(s.datePublished) !== e.date) errors.push(`entry ${e.slug}: dated ${e.date}, published ${utcDay(s.datePublished)} (UTC)`)
+    if (utcDay(s.datePublished) !== e.date) errors.push(`${at}entry ${e.slug}: dated ${e.date}, published ${utcDay(s.datePublished)} (UTC)`)
     const texts = publishedTexts(s).map(normalizeQuote)
     for (const v of e.values) {
       const quote = normalizeQuote(v.quote)
-      if (!texts.some(t => t.includes(quote))) errors.push(`entry ${e.slug}: quote not found: "${v.quote}"`)
+      if (!texts.some(t => t.includes(quote))) errors.push(`${at}entry ${e.slug}: quote not found: "${v.quote}"`)
     }
   }
   for (const n of key.nearMisses) published('near miss', n.slug)
-  const quoted = [...key.responses.map(r => ({ field: 'response', ...r })), ...(key.closed ? [{ field: 'closed', ...key.closed }] : [])]
+  for (const c of centers) for (const n of c.nearMisses) published(`${c.at}near miss`, n.slug)
+  const quoted = [
+    ...key.responses.map(r => ({ field: 'response', ...r })),
+    ...(key.closed ? [{ field: 'closed', ...key.closed }] : []),
+    ...centers.flatMap(c => [...c.responses.map(r => ({ field: `${c.at}response`, ...r })), ...(c.closed ? [{ field: `${c.at}closed`, ...c.closed }] : [])]),
+  ]
   for (const q of quoted) {
     const s = q.slug && q.quote ? stories.get(q.slug) : undefined
     if (!s || !q.quote) continue
@@ -118,7 +130,7 @@ export interface KeySummary {
   closed: string | null
   /** Entry stories with a stored research run. */
   withResearchRun: number
-  /** Drafted responses and end a person has not reviewed yet (`unreviewed`). */
+  /** Drafted responses, end and centers a person has not reviewed yet (`unreviewed`). */
   toReview: number
 }
 
@@ -134,7 +146,7 @@ export function summarizeKey(key: AnswerKey, stories: ReadonlyMap<string, KeySto
     responses: key.responses.length,
     closed: key.closed?.date ?? null,
     withResearchRun: key.entries.filter(e => stories.get(e.slug)?.hasResearchRun).length,
-    toReview: unreviewed(key, 'responses') + unreviewed(key, 'closed'),
+    toReview: unreviewed(key, 'responses') + unreviewed(key, 'closed') + unreviewed(key, 'centers'),
   }
 }
 

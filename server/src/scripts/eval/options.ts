@@ -276,6 +276,7 @@ export const OVERVIEW_STEPS = [
   'stands',
   'closure',
   'review',
+  'recenter',
   'replay',
   'fact-check',
   'baseline',
@@ -292,8 +293,8 @@ export const REPLAY_STEPS: readonly OverviewStep[] = ['closure', 'replay']
  * strong judge, `update` replays a later pass's article step on the answer keys' stories and judges
  * its notes, `link`, `found` and `role` replay the overview linking on the answer keys' stories,
  * `pass-pool` researches the half's stories in memory (Tavily), `stands` writes and judges the stands
- * at the developments' checkpoints, `review` reviews them with planted errors, and `closure` and
- * `replay` replay the whole module.
+ * at the developments' checkpoints, `review` reviews them with planted errors, `recenter` asks the
+ * automated re-center on planted and real cases, and `closure` and `replay` replay the whole module.
  */
 export const OVERVIEW_DEFAULT_STEPS: readonly OverviewStep[] = ['keys', 'fact-check', 'baseline']
 /** Which facts the fact check plants errors in: research's extracted statements, module 1's rendered facts, or the stands' lines. */

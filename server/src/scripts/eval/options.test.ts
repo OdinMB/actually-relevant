@@ -217,15 +217,16 @@ describe('parseOverviewOptions', () => {
   })
 
   it('runs the upkeep steps only when named, the pass pool before the stands and the replay, the stands before the fact check that samples them', () => {
-    expect(parseOverviewOptions(['--out', 'x', '--steps', 'fact-check,replay,review,stands,closure,pass-pool']).steps).toEqual([
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'fact-check,replay,recenter,review,stands,closure,pass-pool']).steps).toEqual([
       'pass-pool',
       'stands',
       'closure',
       'review',
+      'recenter',
       'replay',
       'fact-check',
     ])
-    expect(OVERVIEW_DEFAULT_STEPS.some(s => ['pass-pool', 'stands', 'closure', 'review', 'replay'].includes(s))).toBe(false)
+    expect(OVERVIEW_DEFAULT_STEPS.some(s => ['pass-pool', 'stands', 'closure', 'review', 'recenter', 'replay'].includes(s))).toBe(false)
   })
 
   it('runs key-draft only when named, and only on its own: it writes the answer keys the other steps read', () => {

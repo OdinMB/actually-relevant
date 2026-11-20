@@ -5,10 +5,12 @@
  * production's upkeep runs (`runUpkeep`) over the sandbox (`upkeepSandbox.ts`) with the day as its
  * clock: the closing checks, the status machine, reviews and the stands, on the eval's cached calls
  * at the step tiers. The days run on past the last story until every closing has had time to finish.
- * Each development is looked at on its checkpoint days; `replayScore.ts` scores the bars. The members'
+ * Each development is looked at on its checkpoint days; `replayScore.ts` scores the bars. The keys'
+ * centers' stories are replayed too, and the signal fires the automated re-center as in production:
+ * each applied re-center is recorded with its day. The members'
  * facts are given by the runner: the `pass-pool` step's pools, or the database's. Each run k ≥ 2 has
  * its own cache keys. It refuses, before any read or call, while a key of its half holds a drafted
- * end no one has reviewed (`awaitingReview`).
+ * end or a center no one has reviewed (`awaitingReview`).
  */
 import { config } from '../../../config.js'
 import type { Neighbour } from '../../../services/overviewCandidates.js'
@@ -24,7 +26,17 @@ import { awaitingReview, type AnswerKey } from './keySchema.js'
 import { evalCalls, replaySlugs } from './link.js'
 import { developmentOf, keyIndex } from './linkScore.js'
 import { activeEntries, createSandbox, roleOf, type Sandbox } from './overviewSandbox.js'
-import { checkpointsOf, scoreReplay, type CheckpointState, type Closure, type ReplayRunResult, type ReplayScore } from './replayScore.js'
+import { readInputs, recenterInputs } from '../../../services/overviewDecisions.js'
+import {
+  checkpointsOf,
+  scoreReplay,
+  splitsOf,
+  type CheckpointState,
+  type Closure,
+  type ReplayRecenter,
+  type ReplayRunResult,
+  type ReplayScore,
+} from './replayScore.js'
 import { sandboxUpkeep } from './upkeepSandbox.js'
 
 /** Days the replay runs on past the last story and the last end: a closing's days, then time for its review and the 14-day bar. */
@@ -103,8 +115,8 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
   const left: ReplayStepReport['left'] = o.files
     .filter(f => !f.key || f.errors.length > 0)
     .map(f => ({ what: f.file, reason: `${f.errors.length} format errors: fix the key` }))
-  // The closures are scored against the keys' ends: none may be a draft no one checked
-  const refused = awaitingReview(keys, 'closed')
+  // The closures are scored against the keys' ends, and the re-centers against their centers: none may be a draft no one checked
+  const refused = awaitingReview(keys, 'closed') ?? awaitingReview(keys, 'centers')
   if (refused) {
     const score = scoreReplay(keys, [], config.overviews.minStandsFacts, 0)
     return {
@@ -175,6 +187,7 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
     }
     const states: CheckpointState[] = []
     const closures: Closure[] = []
+    const recenters: ReplayRecenter[] = []
     const end = nextDay(new Date(Date.parse(`${lastDay}T00:00:00Z`) + TAIL_DAYS * DAY_MS).toISOString().slice(0, 10))
     for (let day = replayed[0]!.date; day < end && !stopped; day = nextDay(day)) {
       clock = new Date(`${day}T23:59:59Z`)
@@ -189,8 +202,26 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
         add('foundings not agreed', linked.results.filter(r => r.founding && r.founding.outcome !== 'founded').length)
       }
       const before = new Map([...sandbox.overviews.values()].map(ov => [ov.id, ov.status]))
+      const written = sandbox.decisions.length
       const tally = await runUpkeep({ ...upkeep, ...calls }, { clock, now: clock, today: day }, keepGoing)
       add('upkeep items failed', tally.failed)
+      for (const d of sandbox.decisions.slice(written)) {
+        const ov = d.kind === 'recenter' && d.outcome === 'recentered' && d.overviewId ? sandbox.overviews.get(d.overviewId) : undefined
+        if (!ov) continue
+        const development = developmentOf(
+          activeEntries(ov).map(e => slugOf(e.storyId)),
+          index.entry,
+        )
+        const joined = (readInputs(recenterInputs, d.inputs)?.joined ?? []).map(slugOf)
+        recenters.push({
+          overviewId: ov.id,
+          day,
+          development,
+          title: ov.title,
+          joined,
+          nearMissesJoined: joined.filter(s => development !== null && (index.nearMiss.get(s) ?? []).includes(development)),
+        })
+      }
       for (const ov of sandbox.overviews.values())
         if (ov.status === 'closed' && before.get(ov.id) !== 'closed')
           closures.push({
@@ -208,17 +239,20 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
     const overviews = [...sandbox.overviews.values()]
     const roles = new Map([...sandbox.results].flatMap(([id, r]) => (r.role ? [[slugOf(id), r.role] as const] : [])))
     for (const ov of overviews) for (const e of activeEntries(ov)) roles.set(slugOf(e.storyId), roleOf(e))
+    const ended = overviews.map(ov => ({
+      id: ov.id,
+      members: activeEntries(ov).map(e => slugOf(e.storyId)),
+      foundedFrom: [slugOf(ov.foundedFrom[0]), slugOf(ov.foundedFrom[1])] as [string, string],
+      endEvent: ov.charter.endEvent,
+    }))
     runs.push({
       run,
-      overviews: overviews.map(ov => ({
-        id: ov.id,
-        members: activeEntries(ov).map(e => slugOf(e.storyId)),
-        foundedFrom: [slugOf(ov.foundedFrom[0]), slugOf(ov.foundedFrom[1])],
-        endEvent: ov.charter.endEvent,
-      })),
+      overviews: ended,
       roles,
       checkpoints: states,
       closures,
+      recenters,
+      splits: splitsOf(keys, ended),
       safeguards,
       costUsd: o.ctx.spentUsd() - runStart,
       founded: overviews.length,

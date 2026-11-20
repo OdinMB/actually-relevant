@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AnswerKey } from './keySchema.js'
-import { checkpointsOf, scoreClosures, scoreReplay, type CheckpointState, type ReplayRunResult } from './replayScore.js'
+import { checkpointsOf, scoreClosures, scoreReplay, splitsOf, type CheckpointState, type ReplayRunResult } from './replayScore.js'
 import { scoreReviewRun, scoreReviews, type ReviewCaseRun } from './reviewScore.js'
 import { latestValues, numbersIn, scoreStands, statesValue, type StandsCheckpointRun } from './standsScore.js'
 import { passPoolLines, replayLines, reviewLines, standsLines } from './upkeepReport.js'
@@ -41,6 +41,7 @@ const key = (id: string, entries: Entry[], over: Partial<AnswerKey> = {}): Answe
   entries,
   nearMisses: [],
   responses: [],
+  centers: [],
   notes: '',
   ...over,
 })
@@ -75,6 +76,8 @@ const replayRun = (closures: ReplayRunResult['closures'], over: Partial<ReplayRu
   roles: new Map(),
   checkpoints: [],
   closures,
+  recenters: [],
+  splits: [],
   safeguards: {},
   costUsd: 0,
   founded: 0,
@@ -109,6 +112,15 @@ describe('the closure bars', () => {
     expect(at('2026-05-24').closedInTime).toBe(1)
     expect(at('2026-05-25').closedInTime).toBe(0)
     expect(at('2026-05-12', 'faded').closedInTime).toBe(0)
+  })
+
+  it('owes a development with no end event no end-event closure, and counts one at an end event as premature', () => {
+    const fading = key('fading', [entry('d', '2026-05-01')], {
+      charter: { in: 'In.', out: [], endEvent: null },
+      closed: { slug: 'd', date: '2026-05-10', quote: null, reviewed: true },
+    })
+    const s = scoreClosures([fading], replayRun([{ overviewId: 'o1', development: 'fading', reason: 'end_event', day: '2026-05-12' }]))
+    expect(s).toMatchObject({ closable: 0, premature: ['fading closed at an end event on 2026-05-12, but it has none in the key: it ends by fading'] })
   })
 
   it('scores the replay: the closure bars, the evidence share, safeguards and cost as means over runs', () => {
@@ -148,6 +160,63 @@ describe('the closure bars', () => {
     expect(s.safeguards).toEqual({ 'burst froze an overview': 1 })
     expect(s.costPerStoryUsd).toBe(0.5)
     expect(s.costPerOverviewUsd).toBe(1)
+  })
+})
+
+describe("the replay's re-centers", () => {
+  const center = (entries: Entry[]): AnswerKey['centers'][number] => ({
+    from: '2026-05-05',
+    title: 'Wider',
+    charter: { in: 'Wider.', out: [], endEvent: null },
+    why: 'It spread',
+    entries,
+    nearMisses: [],
+    responses: [],
+    closed: null,
+    reviewed: true,
+  })
+  const KEYS = [
+    key('moved', [entry('a', '2026-05-01')], { centers: [center([entry('w1', '2026-05-06'), entry('w2', '2026-05-07')])] }),
+    key('kept', [entry('b', '2026-05-01')]),
+  ]
+  const recenter = (overviewId: string, development: string | null, day: string, nearMissesJoined: string[] = []) => ({
+    overviewId,
+    day,
+    development,
+    title: 'T',
+    joined: ['w1', ...nearMissesJoined],
+    nearMissesJoined,
+  })
+
+  it("counts a re-center of a development whose key has no center as false, near misses joined, the most on one overview, and each one's day against its center's from", () => {
+    const s = scoreReplay(
+      KEYS,
+      [
+        replayRun([], { recenters: [recenter('o1', 'moved', '2026-05-08'), recenter('o1', 'moved', '2026-05-20')], splits: ['o3'] }),
+        replayRun([], { run: 2, recenters: [recenter('o2', 'kept', '2026-05-09', ['n1'])] }),
+      ],
+      3,
+      4,
+    ).recentering
+    expect(s.bars.map(b => [b.name, b.value, b.met])).toEqual([
+      ['false re-centers', 0.5, false],
+      ['near misses joined by a re-center', 0.5, false],
+    ])
+    expect(s).toMatchObject({ applied: 1.5, splits: 0.5, mostPerOverview: 2 })
+    expect(s.timing).toEqual([
+      { run: 1, key: 'moved', day: '2026-05-08', from: '2026-05-05' },
+      { run: 1, key: 'moved', day: '2026-05-20', from: '2026-05-05' },
+    ])
+  })
+
+  it('takes a founding by two center entries of one key for a split, and one with a base entry for none', () => {
+    expect(
+      splitsOf(KEYS, [
+        { id: 'o1', foundedFrom: ['w1', 'w2'] },
+        { id: 'o2', foundedFrom: ['a', 'w1'] },
+        { id: 'o3', foundedFrom: ['b', 'w2'] },
+      ]),
+    ).toEqual(['o1'])
   })
 })
 

@@ -157,6 +157,7 @@ describe('checkpointStories', () => {
     entries,
     nearMisses: [],
     responses: [],
+    centers: [],
     notes: '',
   })
 
@@ -182,6 +183,26 @@ describe('checkpointStories', () => {
     // Checkpoints on 2026-05-02, 2026-05-04 (e4's day, which e5 shares) and 2026-05-08
     expect(checkpointStories(k, 1)).toEqual(['e2', 'e5', 'e6'])
     expect(checkpointStories(k, 2)).toEqual(['e1', 'e2', 'e4', 'e5', 'e6'])
+  })
+
+  it("reads a center's entries from its from on, at the base checkpoints, after the base ones", () => {
+    const base = key(
+      'ebola',
+      days(6).map((d, i) => entry(`e${i + 1}`, d)),
+    )
+    const center = {
+      from: '2026-05-03',
+      title: 'Wider',
+      charter: { in: 'Wider.', out: [], endEvent: null },
+      why: 'It spread',
+      entries: [entry('w1', '2026-05-05'), entry('w2', '2026-05-05')],
+      nearMisses: [],
+      responses: [],
+      closed: null,
+      reviewed: true,
+    }
+    // Checkpoints on 2026-05-02, 05-04 and 05-06, as without the center; at the last the newest three are w1, w2 and e6
+    expect(checkpointStories({ ...base, centers: [center] })).toEqual(['e1', 'e2', 'e3', 'e4', 'e6', 'w1', 'w2'])
   })
 
   it('takes every must entry of a development too small to leave any out', () => {

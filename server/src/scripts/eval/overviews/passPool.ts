@@ -18,7 +18,7 @@ import type { SuiteContext } from '../types.js'
 import { FIRST_PASS_RESERVE_USD } from './context.js'
 import { inDevelopmentHalf } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
-import type { AnswerKey } from './keySchema.js'
+import { mustEntriesOn, type AnswerKey } from './keySchema.js'
 import { checkpointsOf } from './replayScore.js'
 
 /**
@@ -29,15 +29,14 @@ import { checkpointsOf } from './replayScore.js'
 export const MEMBERS_PER_CHECKPOINT = 3
 
 /**
- * The must entries a development's stands checkpoints read most (`checkpointsOf`): at each, the
- * newest `perCheckpoint` published on or before its day, the key's order breaking a tie of days;
- * each once, in the key's order. Pure.
+ * The must entries a development's stands checkpoints read most (`checkpointsOf`, on the base must
+ * entries, so no checkpoint moves): at each, the newest `perCheckpoint` it holds on that day under the
+ * center in force (`mustEntriesOn`), the key's order breaking a tie of days; each once, in the key's
+ * order, a center's after the base ones. Pure.
  */
 export function checkpointStories(key: AnswerKey, perCheckpoint: number = MEMBERS_PER_CHECKPOINT): string[] {
-  const musts = key.entries.filter(e => e.join === 'must')
-  const byDay = [...musts].sort((a, b) => a.date.localeCompare(b.date))
-  const read = new Set(checkpointsOf(key).flatMap(p => byDay.filter(e => e.date <= p.day).slice(-perCheckpoint)))
-  return musts.filter(e => read.has(e)).map(e => e.slug)
+  const read = new Set(checkpointsOf(key).flatMap(p => mustEntriesOn(key, p.day).slice(-perCheckpoint)))
+  return [...key.entries, ...key.centers.flatMap(c => c.entries)].filter(e => read.has(e)).map(e => e.slug)
 }
 
 export interface PassPoolOptions {

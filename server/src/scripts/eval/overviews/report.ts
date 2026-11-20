@@ -29,9 +29,10 @@ import type { LinkStepReport } from './link.js'
 import { linkLines } from './linkReport.js'
 import type { PassPoolReport } from './passPool.js'
 import type { ReplayStepReport } from './replay.js'
+import type { RecenterStepReport } from './recenter.js'
 import type { ReviewStepReport } from './review.js'
 import type { StandsStepReport } from './stands.js'
-import { passPoolLines, replayLines, reviewLines, standsLines } from './upkeepReport.js'
+import { passPoolLines, recenterLines, replayLines, reviewLines, standsLines } from './upkeepReport.js'
 
 export type ReportNameInput = Pick<OverviewOptions, 'steps' | 'arms' | 'size' | 'repeat' | 'limit' | 'facts' | 'half'>
 
@@ -86,6 +87,7 @@ export interface OverviewReportInput {
   passPool?: PassPoolReport
   stands?: StandsStepReport
   review?: ReviewStepReport
+  recenter?: RecenterStepReport
   /** The `closure` and `replay` steps' one replay. */
   replay?: ReplayStepReport
   factCheck?: FactCheckReport
@@ -269,6 +271,7 @@ export function renderOverviewReport(input: OverviewReportInput): string {
     ...(input.passPool ? ["## The half's stories researched in memory (pass-pool)", '', ...passPoolLines(input.passPool), ''] : []),
     ...(input.stands ? ['## Where this stands against the bars', '', ...standsLines(input.stands), ''] : []),
     ...(input.review ? ['## Reviews under planted errors', '', ...reviewLines(input.review), ''] : []),
+    ...(input.recenter ? ['## Automated re-centers on planted and real cases', '', ...recenterLines(input.recenter), ''] : []),
     ...(input.replay ? ['## The whole module replayed (closure, replay)', '', ...replayLines(input.replay, input.steps), ''] : []),
     ...(input.factCheck ? ['## Fact check under planted errors', '', ...factCheckLines(input.factCheck), ''] : []),
     ...(input.baseline ? ["## Research's cost baseline", '', ...baselineLines(input.baseline), ''] : []),

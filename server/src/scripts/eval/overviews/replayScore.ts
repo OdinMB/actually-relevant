@@ -1,14 +1,16 @@
 /**
  * The `closure` and `replay` bars (`.context/model-eval.md`, "Overview evals"; plan "Evals and bars"),
  * scored on the sandbox's replay of the whole module per development (`replay.ts`): linking and the
- * upkeep day by day. `closure`: no premature closure at an end event (before the key's end, or of a
- * development the key says is open: Uganda's end for Congo's Ebola), and the developments whose end
- * our stories report closed within 14 days of it (a rate over a handful of developments, so it is
+ * upkeep day by day. `closure`: no premature closure at an end event (before the key's end, of a
+ * development the key says is open: Uganda's end for Congo's Ebola, or of one whose key names no end
+ * event, which ends by fading), and the developments whose end our stories report closed within 14 days of it (a rate over a handful of developments, so it is
  * reported for the owner below `MIN_RATE_SAMPLE` judgments). `replay`: the linking bars on the end state, the
  * three checkpoints of each development (at a third, two thirds and the last of its must entries)
  * with its overview's status, scope, members and stands, the share of checkpoints with enough
  * offerable facts for the stands, how often each safeguard fired, and the cost per story and per
- * overview. Means over runs. Pure.
+ * overview; and the automated re-centers: none of a development whose key has no center and no near
+ * miss joined by one (bars), re-centers per overview, splits (an overview founded by two center
+ * entries) and each re-center's day against its center's `from` (for the owner). Means over runs. Pure.
  */
 import type { OverviewScope, OverviewStatus } from '../../../services/overviewTypes.js'
 import type { AnswerKey } from './keySchema.js'
@@ -63,9 +65,23 @@ export interface Closure {
   day: string
 }
 
+/** An applied automated re-center in a replay: its overview, its day and the development it stood for then, and the stories it joined, by slug. */
+export interface ReplayRecenter {
+  overviewId: string
+  day: string
+  development: string | null
+  title: string
+  joined: string[]
+  /** The joined stories that are near misses of that development. */
+  nearMissesJoined: string[]
+}
+
 export interface ReplayRunResult extends ReplayRun {
   checkpoints: CheckpointState[]
   closures: Closure[]
+  recenters: ReplayRecenter[]
+  /** Overviews founded by two center entries of one key (not two base entries): a split, for the owner, never a right founding. */
+  splits: string[]
   /** Each safeguard's firings: refused links and foundings, closings refused or cancelled, review actions, bursts. */
   safeguards: Record<string, number>
   costUsd: number
@@ -91,6 +107,54 @@ export interface ReplayScore {
   safeguards: Record<string, number>
   costPerStoryUsd: number | null
   costPerOverviewUsd: number | null
+  recentering: ReplayRecenterScore
+}
+
+export interface ReplayRecenterScore {
+  /** No re-center of an overview whose development's key has no center, and no near miss joined by one (means over runs). */
+  bars: Bar[]
+  /** Applied re-centers and splits per run, averaged; the most any one overview had in a run (never more than the limit). */
+  applied: number | null
+  splits: number | null
+  mostPerOverview: number
+  /** Each re-center of a development whose key has a center: its day against the center's `from`. */
+  timing: { run: number; key: string; day: string; from: string }[]
+}
+
+/** The overviews founded by two center entries of one key, neither a base entry of any key. Pure. */
+export function splitsOf(keys: readonly AnswerKey[], overviews: readonly { id: string; foundedFrom: [string, string] }[]): string[] {
+  const bases = new Set(keys.flatMap(k => k.entries.map(e => e.slug)))
+  const centerKey = new Map(keys.flatMap(k => k.centers.flatMap(c => c.entries.filter(e => !bases.has(e.slug)).map(e => [e.slug, k.id] as const))))
+  return overviews.filter(o => centerKey.has(o.foundedFrom[0]) && centerKey.get(o.foundedFrom[0]) === centerKey.get(o.foundedFrom[1])).map(o => o.id)
+}
+
+export function scoreReplayRecenters(keys: readonly AnswerKey[], runs: readonly ReplayRunResult[]): ReplayRecenterScore {
+  const from = new Map(keys.flatMap(k => (k.centers[0] ? [[k.id, k.centers[0].from] as const] : [])))
+  const perRun = runs.map(r => {
+    const counts = new Map<string, number>()
+    for (const x of r.recenters) counts.set(x.overviewId, (counts.get(x.overviewId) ?? 0) + 1)
+    return {
+      applied: r.recenters.length,
+      wrong: r.recenters.filter(x => x.development === null || !from.has(x.development)).length,
+      nearMisses: r.recenters.reduce((s, x) => s + x.nearMissesJoined.length, 0),
+      most: Math.max(0, ...counts.values()),
+      splits: r.splits.length,
+    }
+  })
+  return {
+    bars: [
+      bar('false re-centers', mean(perRun.map(p => p.wrong)), 0, 'atMost'),
+      bar('near misses joined by a re-center', mean(perRun.map(p => p.nearMisses)), 0, 'atMost'),
+    ],
+    applied: mean(perRun.map(p => p.applied)),
+    splits: mean(perRun.map(p => p.splits)),
+    mostPerOverview: Math.max(0, ...perRun.map(p => p.most)),
+    timing: runs.flatMap(r =>
+      r.recenters.flatMap(x =>
+        x.development && from.has(x.development) ? [{ run: r.run, key: x.development, day: x.day, from: from.get(x.development)! }] : [],
+      ),
+    ),
+  }
 }
 
 const dayAfter = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
@@ -101,10 +165,12 @@ export function scoreClosures(keys: readonly AnswerKey[], r: ReplayRunResult): C
   for (const c of r.closures) {
     if (c.reason !== 'end_event' || !c.development) continue
     const k = byKey.get(c.development)
-    if (!k?.closed) premature.push(`${c.development} closed on ${c.day}, still open in the key`)
+    if (k?.charter.endEvent === null) premature.push(`${c.development} closed at an end event on ${c.day}, but it has none in the key: it ends by fading`)
+    else if (!k?.closed) premature.push(`${c.development} closed on ${c.day}, still open in the key`)
     else if (c.day < k.closed.date) premature.push(`${c.development} closed on ${c.day}, before its end on ${k.closed.date}`)
   }
-  const closable = keys.filter(k => k.closed?.slug)
+  // A development with no end event ends by fading: no end-event closure is owed it
+  const closable = keys.filter(k => k.closed?.slug && k.charter.endEvent !== null)
   const closedInTime = closable.filter(k =>
     r.closures.some(
       c => c.reason === 'end_event' && c.development === k.id && c.day >= k.closed!.date && c.day <= dayAfter(k.closed!.date, CLOSED_WITHIN_DAYS),
@@ -135,5 +201,6 @@ export function scoreReplay(keys: readonly AnswerKey[], runs: readonly ReplayRun
     safeguards: Object.fromEntries(names.map(n => [n, runs.reduce((s, r) => s + (r.safeguards[n] ?? 0), 0) / Math.max(1, runs.length)])),
     costPerStoryUsd: stories === 0 || runs.length === 0 ? null : totalUsd / (stories * runs.length),
     costPerOverviewUsd: founded === 0 ? null : totalUsd / founded,
+    recentering: scoreReplayRecenters(keys, runs),
   }
 }
