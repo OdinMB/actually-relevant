@@ -332,6 +332,40 @@ describe('the upkeep after linking', () => {
     expect(tally).toMatchObject({ reviews: 1, reviewsStale: 1, reviewActions: 0, reviewRefusals: 0, freezes: [], failed: 0, costUsd: 0.1 })
   })
 
+  it('counts an item whose call gave nothing and whose write then threw as one failure, in every part with a call', async () => {
+    const closing: CloseCase = {
+      overviewId: 'o1',
+      charter: { in: 'In.', out: [], endEvent: 'End.' },
+      story: { id: 's', title: 'T', label: 'L', summary: 'S.', datePublished: NOW, date: '2026-11-18', issueId: null, facts: [] },
+      entries: [],
+    }
+    const boom = async () => {
+      throw new Error('write failed')
+    }
+    const deps = fakes({
+      closings: async () => [closing],
+      states: async () => [state('o3', { activeEntries: 6 })],
+      recenterCases: async () => [recenterCase('o2')],
+      auditPicks: async () => ['o4'],
+      standsCases: async () => [standsCase()],
+      // Every call gives nothing, and every write throws
+      review: { review: async () => call(null) },
+      recenter: { draft: async () => call(null), check: async () => call(null) },
+      stands: { write: async () => call(null), check: async () => call(null) },
+      applyClosing: boom,
+      applyRecenter: boom,
+      applyReview: boom,
+      applyAudit: boom,
+      applyStands: boom,
+    })
+    const tally = await runUpkeep(deps, AT)
+    expect(tally.errors.map(e => e.part)).toEqual(['closing', 'recenter', 'review', 'audit', 'stands'])
+    expect([tally.items, tally.failed]).toEqual([6, 5])
+    // A failed call written without a throw is one failure too
+    const failedOnly = await runUpkeep(fakes({ closings: async () => [closing] }), AT)
+    expect([failedOnly.items, failedOnly.failed, failedOnly.errors]).toEqual([1, 1, []])
+  })
+
   it('goes on past an overview that throws, and starts nothing once switched off', async () => {
     const deps = fakes({
       states: async () => [state('o1', { lastEntryAt: new Date('2026-10-01T00:00:00Z') }), state('o2', { lastEntryAt: new Date('2026-10-01T00:00:00Z') })],

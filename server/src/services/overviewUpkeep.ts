@@ -22,7 +22,7 @@ import {
 } from './overviewStands.js'
 import { recenterOverview, type AttemptOptions, type RecenterCase, type RecenterDeps, type RecenterResult } from './overviewRecenter.js'
 import { anomalies, nextState, reviewDue, type StatusMove, type StatusOptions } from './overviewStatus.js'
-import type { OverviewState, Role } from './overviewTypes.js'
+import type { OverviewState, ReviewTrigger, Role } from './overviewTypes.js'
 
 /** A public overview as its stands are refreshed: its entries, its members' facts and the last attempt's signature. */
 export interface StandsCase {
@@ -130,7 +130,7 @@ export interface UpkeepTally {
   /** Stands lines written (within the limits), and those of them any check dropped: never more than the lines written. */
   standsChecked: number
   standsDropped: number
-  /** Items started (an end-event check, an overview's status, a review, an audit, a stands refresh due), and those whose call gave nothing or that threw: the next run tries them again. */
+  /** Items started (an end-event check, an overview's status, a re-center, a review, an audit, a stands refresh due), and those whose call gave nothing or that threw, each counted once: the next run tries them again. */
   items: number
   failed: number
   /** Overviews frozen this run, each with its title, for the owner's notice. */
@@ -170,150 +170,157 @@ const emptyTally = (): UpkeepTally => ({
   stopped: false,
 })
 
+/** What a run's parts share: the deps, the clocks, the settings, the tally, and the overviews re-centered so far. */
+interface UpkeepRun {
+  deps: UpkeepDeps
+  at: UpkeepTimes
+  options: NonNullable<UpkeepDeps['options']>
+  tally: UpkeepTally
+  recentered: Set<string>
+}
+
+/**
+ * Each part's work on one item, which says whether its call gave nothing (`true`: the next run tries
+ * it again). A write that throws fails the item too; `runUpkeep` counts each failed item once.
+ */
+type PartWork<T> = (run: UpkeepRun, item: T) => Promise<boolean>
+
+/** Part 2: one end-event story's closing check and its write. */
+const closeOne: PartWork<CloseCase> = async ({ deps, tally }, c) => {
+  const result = await checkClosing(c, deps.close)
+  tally.costUsd += result.costUsd
+  tally.closingsChecked++
+  if (result.outcome === 'closing') tally.closingsBegun++
+  await deps.applyClosing(c, result)
+  return result.outcome === 'failed'
+}
+
+/** Part 3: one overview's status moves, then the burst check that freezes it. */
+const statusOne: PartWork<OverviewState> = async ({ deps, at, options, tally }, state) => {
+  const moves = nextState(state, at.clock, options)
+  if (moves.length > 0) {
+    await deps.applyStatus(state, moves, at.clock)
+    tally.moves += moves.length
+    tally.detached += moves.filter(m => m.kind === 'detach').length
+  }
+  if (anomalies(state, options).includes('burst')) {
+    await deps.applyBurst(state)
+    tally.bursts++
+    tally.freezes.push({ overviewId: state.id, title: state.title, cause: 'burst', count: state.burstJoins })
+  }
+  return false
+}
+
+/** Part 4: one automated re-center attempt and its write; an applied one keeps its overview's review for the next run. */
+const recenterOne: PartWork<RecenterCase> = async ({ deps, options, tally, recentered }, c) => {
+  const result = await recenterOverview(c, deps.recenter, options)
+  tally.costUsd += result.costUsd
+  tally.recenterAttempts++
+  const failed = result.outcome === 'failed'
+  if ((await deps.applyRecenter(c, result)) === 'stale') {
+    tally.recentersStale++
+    return failed
+  }
+  if (result.outcome === 'refused') tally.recentersRefused++
+  if (result.outcome === 'recentered') {
+    recentered.add(c.overviewId)
+    tally.recenters.push({ overviewId: c.overviewId, from: c.title, to: result.title!, count: c.automatedRecenters + 1 })
+  }
+  return failed
+}
+
+/** Part 4: one review due and its write. */
+const reviewOne: PartWork<{ id: string; trigger: Exclude<ReviewTrigger, 'audit'> }> = async ({ deps, options, tally }, { id, trigger }) => {
+  const c = await deps.reviewCase(id)
+  if (!c || c.entries.length === 0) return false
+  const result = await reviewOverview(c, trigger, deps.review, options)
+  tally.costUsd += result.costUsd
+  tally.reviews++
+  if ((await deps.applyReview(c, result)) === 'stale') tally.reviewsStale++
+  else {
+    tally.reviewActions += result.actions.length
+    tally.reviewRefusals += result.refusals.length
+    if (result.brake) tally.freezes.push({ overviewId: c.overviewId, title: c.title, cause: 'brake', count: result.brake.asked })
+  }
+  return result.outcome === 'failed'
+}
+
+/** Part 4: one overview of the monthly audit, logged only. */
+const auditOne: PartWork<string> = async ({ deps, tally }, id) => {
+  const c = await deps.reviewCase(id)
+  if (!c || c.entries.length === 0) return false
+  const result = await auditOverview(c, deps.review)
+  tally.costUsd += result.costUsd
+  tally.audits++
+  await deps.applyAudit(c, result)
+  return result.outcome === 'failed'
+}
+
+/** Part 5: one overview's stands refresh, when its signature changed, and its write (a failed one records no signature, so the next run tries again). */
+const standsOne: PartWork<StandsCase> = async ({ deps, at, options, tally }, c) => {
+  const offered = standsFacts(c.members, at.today, options)
+  const signature = standsSignature(c.title, offered, c.entries)
+  if (signature === c.lastSignature) return false
+  const result = await refreshStands({ title: c.title, entries: c.entries }, offered, at.today, deps.stands, options)
+  tally.costUsd += result.costUsd
+  tally.standsRefreshes++
+  if (result.outcome === 'written') tally.standsWritten++
+  tally.standsChecked += result.checked
+  tally.standsDropped += result.failed
+  const failed = result.outcome === 'failed'
+  await deps.applyStands(c, result, { signature: failed ? null : signature, marker: failed ? null : c.marker, until: standsUntil(offered) }, at.today)
+  return failed
+}
+
 /**
  * Runs parts 2 to 5 in order (`.context/overviews.md`, "The job"): closing checks, then the status
  * machine (each overview's moves, then the burst check that freezes it), then the automated re-centers
  * due, then the reviews due on the states as they stand after them (none for an overview re-centered
  * this run) and the monthly audit, then the stands refreshes whose signature changed. `keepGoing` is
- * asked before each item; once it says no, nothing else starts.
+ * asked before each item; once it says no, nothing else starts. An item fails once, whether its call
+ * gave nothing, its write threw, or both.
  */
 export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: () => Promise<boolean> | boolean = () => true): Promise<UpkeepTally> {
-  const options = deps.options ?? config.overviews
-  const tally = emptyTally()
-  const each = async <T>(part: UpkeepPart, items: readonly T[], id: (item: T) => string, work: (item: T) => Promise<void>) => {
+  const run: UpkeepRun = { deps, at, options: deps.options ?? config.overviews, tally: emptyTally(), recentered: new Set() }
+  const { tally } = run
+  const each = async <T>(part: UpkeepPart, items: readonly T[], id: (item: T) => string, work: PartWork<T>) => {
     for (const item of items) {
       if (tally.stopped || !(await keepGoing())) {
         tally.stopped = true
         return
       }
+      tally.items++
+      let failed: boolean
       try {
-        tally.items++
-        await work(item)
+        failed = await work(run, item)
       } catch (error) {
-        tally.failed++
+        failed = true
         tally.errors.push({ part, id: id(item), error })
       }
+      if (failed) tally.failed++
     }
   }
 
-  await each(
-    'closing',
-    await deps.closings(),
-    c => c.overviewId,
-    async c => {
-      const result = await checkClosing(c, deps.close)
-      tally.costUsd += result.costUsd
-      tally.closingsChecked++
-      if (result.outcome === 'closing') tally.closingsBegun++
-      if (result.outcome === 'failed') tally.failed++
-      await deps.applyClosing(c, result)
-    },
-  )
+  await each('closing', await deps.closings(), c => c.overviewId, closeOne)
   if (tally.stopped) return tally
-
-  await each(
-    'status',
-    await deps.states(),
-    s => s.id,
-    async state => {
-      const moves = nextState(state, at.clock, options)
-      if (moves.length > 0) {
-        await deps.applyStatus(state, moves, at.clock)
-        tally.moves += moves.length
-        tally.detached += moves.filter(m => m.kind === 'detach').length
-      }
-      if (anomalies(state, options).includes('burst')) {
-        await deps.applyBurst(state)
-        tally.bursts++
-        tally.freezes.push({ overviewId: state.id, title: state.title, cause: 'burst', count: state.burstJoins })
-      }
-    },
-  )
+  await each('status', await deps.states(), s => s.id, statusOne)
   if (tally.stopped) return tally
-
   // Re-centers before reviews: one applied this run judged every entry under its new charter by two calls, so its overview's review waits for the next run
-  const recentered = new Set<string>()
-  await each(
-    'recenter',
-    await deps.recenterCases(at),
-    c => c.overviewId,
-    async c => {
-      const result = await recenterOverview(c, deps.recenter, options)
-      tally.costUsd += result.costUsd
-      tally.recenterAttempts++
-      if (result.outcome === 'failed') tally.failed++
-      if ((await deps.applyRecenter(c, result)) === 'stale') {
-        tally.recentersStale++
-        return
-      }
-      if (result.outcome === 'refused') tally.recentersRefused++
-      if (result.outcome !== 'recentered') return
-      recentered.add(c.overviewId)
-      tally.recenters.push({ overviewId: c.overviewId, from: c.title, to: result.title!, count: c.automatedRecenters + 1 })
-    },
-  )
+  await each('recenter', await deps.recenterCases(at), c => c.overviewId, recenterOne)
   if (tally.stopped) return tally
-
   const due = (await deps.states()).flatMap(s => {
-    const trigger = recentered.has(s.id) ? null : reviewDue(s, at, options)
+    const trigger = run.recentered.has(s.id) ? null : reviewDue(s, at, run.options)
     return trigger ? [{ id: s.id, trigger }] : []
   })
-  await each(
-    'review',
-    due,
-    d => d.id,
-    async ({ id, trigger }) => {
-      const c = await deps.reviewCase(id)
-      if (!c || c.entries.length === 0) return
-      const result = await reviewOverview(c, trigger, deps.review, options)
-      tally.costUsd += result.costUsd
-      tally.reviews++
-      if (result.outcome === 'failed') tally.failed++
-      if ((await deps.applyReview(c, result)) === 'stale') {
-        tally.reviewsStale++
-        return
-      }
-      tally.reviewActions += result.actions.length
-      tally.reviewRefusals += result.refusals.length
-      if (result.brake) tally.freezes.push({ overviewId: c.overviewId, title: c.title, cause: 'brake', count: result.brake.asked })
-    },
-  )
+  await each('review', due, d => d.id, reviewOne)
   if (tally.stopped) return tally
-
-  await each(
-    'audit',
-    await deps.auditPicks(at.now),
-    id => id,
-    async id => {
-      const c = await deps.reviewCase(id)
-      if (!c || c.entries.length === 0) return
-      const result = await auditOverview(c, deps.review)
-      tally.costUsd += result.costUsd
-      tally.audits++
-      if (result.outcome === 'failed') tally.failed++
-      await deps.applyAudit(c, result)
-    },
-  )
+  await each('audit', await deps.auditPicks(at.now), id => id, auditOne)
   if (tally.stopped) return tally
-
   await each(
     'stands',
     (await deps.standsCases(at.today)).filter(c => !c.unchanged),
     c => c.overviewId,
-    async c => {
-      const offered = standsFacts(c.members, at.today, options)
-      const signature = standsSignature(c.title, offered, c.entries)
-      if (signature === c.lastSignature) return
-      const result = await refreshStands({ title: c.title, entries: c.entries }, offered, at.today, deps.stands, options)
-      tally.costUsd += result.costUsd
-      tally.standsRefreshes++
-      if (result.outcome === 'written') tally.standsWritten++
-      if (result.outcome === 'failed') tally.failed++
-      tally.standsChecked += result.checked
-      tally.standsDropped += result.failed
-      const failed = result.outcome === 'failed'
-      await deps.applyStands(c, result, { signature: failed ? null : signature, marker: failed ? null : c.marker, until: standsUntil(offered) }, at.today)
-    },
+    standsOne,
   )
   return tally
 }
