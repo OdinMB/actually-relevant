@@ -128,6 +128,11 @@ export const standsInputs = z.object({
   failed: z.number().default(0),
 })
 
+/** The keys `standsCases` reads in SQL, held to the schema's names: a renamed one would read null and refresh every overview, unseen. */
+export const STANDS_SIGNATURE = 'signature' satisfies keyof z.infer<typeof standsInputs>
+export const STANDS_MARKER = 'marker' satisfies keyof z.infer<typeof standsInputs>
+export const STANDS_UNTIL = 'until' satisfies keyof z.infer<typeof standsInputs>
+
 /**
  * `recenter`, an automated re-center (`.context/overviews.md`, "Re-centering"): the rule a refused
  * attempt failed first and every refusal, the OUT entries an applied one added (an Undo locks them out,

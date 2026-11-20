@@ -11,7 +11,7 @@ import { utcDay } from '../lib/days.js'
 import type { CloseCase } from './overviewClose.js'
 import type { OverviewDb } from './overviewCandidates.js'
 import { closeCasesOf, entryRole, reviewCaseOf, UNSETTLED_CLOSE_OUTCOMES, type CaseDecision } from './overviewCases.js'
-import { REPORTS_END_EVENT } from './overviewDecisions.js'
+import { REPORTS_END_EVENT, STANDS_MARKER, STANDS_SIGNATURE, STANDS_UNTIL } from './overviewDecisions.js'
 import { linkStories } from './overviewInput.js'
 import { publicOverviewSql } from './overviewPublicRule.js'
 import type { ReviewCase } from './overviewReview.js'
@@ -131,7 +131,7 @@ export async function auditPicks(
  */
 export async function standsCases(db: OverviewDb, today: string): Promise<StandsCase[]> {
   const overviews = await db.$queryRaw<{ id: string; title: string; signature: string | null; marker: string | null; until: string | null }[]>`
-    SELECT o.id, o.title, last.inputs->>'signature' AS signature, last.inputs->>'marker' AS marker, last.inputs->>'until' AS until
+    SELECT o.id, o.title, last.inputs->>${STANDS_SIGNATURE} AS signature, last.inputs->>${STANDS_MARKER} AS marker, last.inputs->>${STANDS_UNTIL} AS until
     FROM overviews o
     LEFT JOIN LATERAL (
       SELECT d.inputs FROM overview_decisions d

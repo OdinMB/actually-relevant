@@ -1,19 +1,14 @@
 /**
  * What the link prompts read (`.context/overviews.md`, "How a story is linked", step 2), SELECT only
  * through the client given (production's, or the eval's read-only session): a story as linking reads
- * it, with up to `MAX_LINK_FACTS` of its usable pool facts of pages as context, and a candidate
- * overview with its charter and its newest published entries.
+ * it, with up to `linkFacts` of its usable pool facts of pages as context, and a candidate overview
+ * with its charter and its newest `candidateEntries` published entries.
  */
+import { config } from '../config.js'
 import { utcDay } from '../lib/days.js'
 import type { OverviewDb } from './overviewCandidates.js'
 import { charterSchema } from './overviewDecisions.js'
 import type { CandidateOverview, Charter, LinkStory } from './overviewTypes.js'
-
-/** Pool facts a story shows the link prompts at most, as context. */
-export const MAX_LINK_FACTS = 10
-
-/** An overview's newest entries the link prompt shows. */
-export const CANDIDATE_ENTRIES = 5
 
 interface StoryRow {
   id: string
@@ -25,7 +20,11 @@ interface StoryRow {
 }
 
 /** The stories as linking reads them, in the order asked; a story not published, or without a date, is left out. */
-export async function linkStories(db: OverviewDb, ids: readonly string[]): Promise<LinkStory[]> {
+export async function linkStories(
+  db: OverviewDb,
+  ids: readonly string[],
+  options: Pick<typeof config.overviews, 'linkFacts'> = config.overviews,
+): Promise<LinkStory[]> {
   const wanted = [...new Set(ids)]
   if (wanted.length === 0) return []
   const rows = await db.$queryRaw<StoryRow[]>`
@@ -45,7 +44,7 @@ export async function linkStories(db: OverviewDb, ids: readonly string[]): Promi
   const factsOf = new Map<string, string[]>()
   for (const f of facts) {
     const list = factsOf.get(f.story_id) ?? []
-    if (list.length < MAX_LINK_FACTS) factsOf.set(f.story_id, [...list, f.statement])
+    if (list.length < options.linkFacts) factsOf.set(f.story_id, [...list, f.statement])
   }
   const byId = new Map(rows.map(r => [r.id, r]))
   return wanted.flatMap(id => {
@@ -74,7 +73,12 @@ export const parseCharter = (value: unknown): Charter | null => charterSchema.sa
  * published entries, those published on or before `asOf` (the story being linked's date), so a story
  * sees the development as it stood on its own day. An overview whose charter does not parse is left out.
  */
-export async function candidateOverviews(db: OverviewDb, ids: readonly string[], asOf: Date): Promise<CandidateOverview[]> {
+export async function candidateOverviews(
+  db: OverviewDb,
+  ids: readonly string[],
+  asOf: Date,
+  options: Pick<typeof config.overviews, 'candidateEntries'> = config.overviews,
+): Promise<CandidateOverview[]> {
   const wanted = [...new Set(ids)]
   if (wanted.length === 0) return []
   const rows = await db.$queryRaw<{ id: string; title: string; charter: unknown }[]>`
@@ -89,7 +93,7 @@ export async function candidateOverviews(db: OverviewDb, ids: readonly string[],
       WHERE e.status = 'active' AND s.status = 'published' AND s.date_published IS NOT NULL AND s.date_published <= ${asOf}
         AND e.overview_id = ANY(${wanted}::text[])
     ) newest
-    WHERE n <= ${CANDIDATE_ENTRIES}
+    WHERE n <= ${options.candidateEntries}
     ORDER BY overview_id, n
   `
   const entriesOf = new Map<string, { title: string; date: string }[]>()

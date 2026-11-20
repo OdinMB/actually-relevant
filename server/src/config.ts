@@ -503,7 +503,11 @@ export const config = {
     maxDistance: 0.45,
     /** Neighbours read per story, nearest first, before grouping. */
     neighbourLimit: 40,
-    /** Candidate overviews the link call sees at most, ranked by their nearest member, each with its newest entries (as an end-event check shows its overview's). */
+    /**
+     * Candidate overviews the link call sees at most, ranked by their nearest member, each with its
+     * `candidateEntries` newest entries published by the story's date: the one count of an overview's
+     * newest entries a prompt shows, the link call's, an end-event check's and the sandbox's alike.
+     */
     candidateOverviews: 5,
     candidateEntries: 5,
     /** A story's usable pool facts the link call reads as context, at most. */

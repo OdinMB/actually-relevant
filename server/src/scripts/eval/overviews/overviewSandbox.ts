@@ -8,6 +8,7 @@
  * as a conflict. Every write is kept as its decisions, which the replay's safeguards are counted from
  * (`safeguardsOf`). Writes nothing to the database.
  */
+import { config } from '../../../config.js'
 import { slugify } from '../../../utils/slugify.js'
 import {
   applied,
@@ -122,7 +123,7 @@ export function createSandbox(): Sandbox {
     storyIds.flatMap(id => {
       const o = overviews.get(id)
       if (!o) return []
-      const newest = entriesAsOf(o, asOf).slice(0, 5)
+      const newest = entriesAsOf(o, asOf).slice(0, config.overviews.candidateEntries)
       return [{ id, title: o.title, charter: o.charter, entries: newest.map(e => ({ title: e.title, date: e.date })) }]
     })
 
