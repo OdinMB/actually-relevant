@@ -6,9 +6,11 @@
  * automated decision also makes what it restores the editor's (`stamped`). A refusal is a
  * ConflictError with its reason in the editor's words. Pure.
  */
+import { normalizeQuote } from '../lib/quoteMatch.js'
 import { ConflictError } from '../utils/errors.js'
 import {
   ACTIVE,
+  CLOSING_CANCELLED,
   OPEN,
   UNFROZEN,
   applied,
@@ -21,17 +23,20 @@ import {
   overviewChange,
   plan,
   publicBefore,
+  sameValue,
   type Change,
   type ChainMark,
+  type DecisionDraft,
   type EntryFields,
   type EntryRow,
   type NewEntry,
   type OverviewFields,
+  type OverviewRow,
   type Plan,
   type Rows,
 } from './overviewChanges.js'
-import { readInputs, reviewInputs, storedChanges } from './overviewDecisions.js'
-import type { Role } from './overviewTypes.js'
+import { readInputs, recenterInputs, reviewInputs, storedChanges, type EditorRecenterInputs, type StatusInputs } from './overviewDecisions.js'
+import { endEventOf, type Charter, type Role } from './overviewTypes.js'
 
 /** An editor's action on an overview (For Odin 8: the full set, each logged and undoable). */
 export type EditorAction =
@@ -42,8 +47,19 @@ export type EditorAction =
   | { kind: 'freeze'; overviewId: string; frozen: boolean }
   | { kind: 'hide'; overviewId: string; hidden: boolean }
   | { kind: 'close'; overviewId: string; closed: boolean }
+  /** A new title and whole charter (`.context/overviews.md`, "Re-centering"), with the editor's word that it still covers the anchor. */
+  | { kind: 'recenter'; overviewId: string; title: string; charter: Charter; anchorConfirmed: boolean }
 
-export const EDITOR_KINDS = ['editor_attach', 'editor_detach', 'editor_role', 'editor_retitle', 'editor_freeze', 'editor_hide', 'editor_close'] as const
+export const EDITOR_KINDS = [
+  'editor_attach',
+  'editor_detach',
+  'editor_role',
+  'editor_retitle',
+  'editor_freeze',
+  'editor_hide',
+  'editor_close',
+  'editor_recenter',
+] as const
 export type EditorKind = (typeof EDITOR_KINDS)[number]
 
 const KIND_OF: Record<EditorAction['kind'], EditorKind> = {
@@ -54,6 +70,7 @@ const KIND_OF: Record<EditorAction['kind'], EditorKind> = {
   freeze: 'editor_freeze',
   hide: 'editor_hide',
   close: 'editor_close',
+  recenter: 'editor_recenter',
 }
 
 /** What an attach reads of the story: whether it is published and when, the overview it is in now, and its newest row in this overview if it ever had one. */
@@ -83,15 +100,17 @@ const roleFields = (r: Role) => ({ role: r.role, roleKind: r.role === 'routine' 
  * - role: the entry takes the role, `locked`;
  * - retitle, hide or show;
  * - freeze (the editor's, which only an editor lifts) or unfreeze (the burst check counting from now);
- * - close (`editor`, which automation never moves) or reopen (open again, quiet counted from now).
+ * - close (`editor`, which automation never moves) or reopen (open again, quiet counted from now);
+ * - re-center (`recentered`): see `editorRecenter`.
  * A closing whose end-event story leaves is cancelled (`leaving`); the scope and the last entry follow
  * the entries. An action that would change nothing is refused.
  */
 export function planEdit(action: EditorAction, rows: Rows, attach: AttachStory | null, entryId: string | null, ctx: EditContext): Plan {
   const o = rows.overview
   const decisionId = ctx.newId()
+  const inputs: EditorRecenterInputs = action.kind === 'recenter' ? { target: null, anchorConfirmed: action.anchorConfirmed } : { target: null }
   const decide = (outcome: string, storyId: string | null, changes: Change[], over: Partial<Plan> = {}): Plan =>
-    plan(draft({ id: decisionId, kind: KIND_OF[action.kind], outcome, overviewId: o.id, storyId, inputs: { target: null }, actor: ctx.editorId }), {
+    plan(draft({ id: decisionId, kind: KIND_OF[action.kind], outcome, overviewId: o.id, storyId, inputs, actor: ctx.editorId }), {
       changes,
       wasPublic: publicBefore(o),
       ...over,
@@ -165,6 +184,43 @@ export function planEdit(action: EditorAction, rows: Rows, attach: AttachStory |
       }
       if (o.status !== 'closed') throw new ConflictError('The overview is not closed')
       return decide('reopened', null, overviewChange(o, { ...OPEN, reopenedAt: ctx.now }))
+    case 'recenter': {
+      const { changes, also } = editorRecenter(o, action, ctx)
+      return decide('recentered', null, changes, { also })
+    }
+  }
+}
+
+const sameText = (a: string, b: string) => normalizeQuote(a).toLowerCase() === normalizeQuote(b).toLowerCase()
+
+/**
+ * An editor's re-center (`.context/overviews.md`, "Re-centering"; D-RC7, D-RC10, D-RC11, D-RC14): the
+ * title and the whole charter as given, so an editor may also drop OUT entries, name no end event and
+ * re-admit an OUT entry a review's undo locked out (which leaves `lockedOut`); on any overview not
+ * closed, frozen or not, past the limit of automated re-centers (which it neither raises nor resets).
+ * It needs the editor's confirmation that the charter still covers the anchor (recorded, never judged)
+ * and is the editor's (`recenteredBy`), which keeps automation from re-centering it for
+ * `editorRecenterLockDays` and queues a review (`reviewDue`). A changed END_EVENT, to none too, cancels
+ * a closing, logged as an `open` status decision (`recentered`): the closing was begun on the old one.
+ * The AI marker's model fields stay, as a retitle leaves them.
+ */
+function editorRecenter(o: OverviewRow, action: Extract<EditorAction, { kind: 'recenter' }>, ctx: EditContext): { changes: Change[]; also: DecisionDraft[] } {
+  if (o.status === 'closed') throw new ConflictError('The overview is closed: reopen it first')
+  if (!action.anchorConfirmed) throw new ConflictError('Confirm the anchor first')
+  if (action.title === o.title && sameValue(action.charter, o.charter)) throw new ConflictError('The overview already has that title and charter')
+  const fields: Partial<OverviewFields> = {
+    title: action.title,
+    charter: action.charter,
+    lockedOut: o.lockedOut.filter(x => !action.charter.out.some(out => sameText(out, x))),
+    recenteredAt: ctx.now,
+    recenteredBy: 'editor',
+  }
+  const cancels = o.status === 'closing' && endEventOf(action.charter.endEvent) !== endEventOf(o.charter.endEvent)
+  if (!cancels) return { changes: overviewChange(o, fields), also: [] }
+  const move: StatusInputs = { from: 'closing', to: 'open', reason: 'recentered', by: 'editor' }
+  return {
+    changes: overviewChange(o, { ...fields, ...CLOSING_CANCELLED }),
+    also: [draft({ id: ctx.newId(), kind: 'status', outcome: 'open', overviewId: o.id, storyId: o.closingStoryId, inputs: move, actor: ctx.editorId })],
   }
 }
 
@@ -191,6 +247,7 @@ const AUTOMATED: Record<string, readonly string[]> = {
   status: ['closed', 'frozen'],
   close: ['closing'],
   review: ['reviewed'],
+  recenter: ['recentered'],
 }
 
 /** Whether the admin offers Undo on a decision: one not undone, of a kind and outcome `planUndo` can reverse. */
@@ -199,6 +256,9 @@ export function undoable(d: Pick<UndoTarget, 'kind' | 'outcome' | 'undoneAt'>): 
   if (isEditorKind(d.kind) || d.kind === 'undo') return true
   return AUTOMATED[d.kind]?.includes(d.outcome) ?? false
 }
+
+/** The decisions of many changes, named in a refusal so the editor knows no part of one is undone. */
+const WHOLE: Record<string, string> = { review: 'a review', recenter: 'a re-center', editor_recenter: 'a re-center' }
 
 /** What a field that no longer holds is, in the editor's words. */
 function what(change: Change, field: string): string {
@@ -218,7 +278,12 @@ function what(change: Change, field: string): string {
     hidden: 'whether it is hidden',
     title: 'its title',
     charter: 'its charter',
+    charterModel: 'its charter',
+    charterPromptVersion: 'its charter',
     lockedOut: "its charter's locked-out entries",
+    recenteredAt: 'its last re-center',
+    recenteredBy: 'its last re-center',
+    automatedRecenters: 'its count of automatic re-centers',
     reopenedAt: 'its reopening',
   }
   return words[field] ?? 'the overview'
@@ -228,11 +293,14 @@ function what(change: Change, field: string): string {
  * What undoing an automated decision makes the editor's, on top of its changes inverted: an entry it
  * moves `locked` (detached as `undone` by the editor, now), so automation never moves it back; a freeze
  * it puts back the editor's, which only an editor lifts; an overview it takes out of `closed` open
- * again, quiet counted from now; and for a review, the OUT entries its narrowing added locked out
- * (`lockedOut`), so no review adds them again while the undo stands.
+ * again, quiet counted from now; for a review or an automated re-center, the OUT entries it added
+ * locked out (`lockedOut`), so no review or re-center adds them again while the undo stands; and for an
+ * automated re-center, the re-center the Undo's (`recenteredBy` `undo`), which keeps automation from
+ * re-centering it for `editorRecenterLockDays` and queues no review.
  */
-function stamped(changes: readonly Change[], rows: Rows, lockedOut: readonly string[], ctx: EditContext): Change[] {
+function stamped(changes: readonly Change[], rows: Rows, d: UndoTarget, ctx: EditContext): Change[] {
   const o = rows.overview
+  const lockedOut = outAdded(d)
   return changes.flatMap(c => {
     if (c.table === 'entry') {
       const e = rows.entries.find(x => x.id === c.id)!
@@ -243,8 +311,16 @@ function stamped(changes: readonly Change[], rows: Rows, lockedOut: readonly str
     if (c.before.status === 'closed' && to.status !== undefined && to.status !== 'closed') Object.assign(to, OPEN, { reopenedAt: ctx.now })
     if (to.frozen === true) Object.assign(to, { frozenBy: 'editor', frozenAt: ctx.now })
     if (lockedOut.length > 0) to.lockedOut = [...new Set([...o.lockedOut, ...lockedOut])]
+    if (d.kind === 'recenter') Object.assign(to, { recenteredAt: ctx.now, recenteredBy: 'undo' })
     return overviewChange(o, to)
   })
+}
+
+/** The OUT entries an automated decision added: a review's narrowing, an automated re-center's (`outAdded`). */
+function outAdded(d: UndoTarget): string[] {
+  if (d.kind === 'review') return (readInputs(reviewInputs, d.inputs)?.actions ?? []).flatMap(a => (a.kind === 'narrow' ? a.added : []))
+  if (d.kind === 'recenter') return readInputs(recenterInputs, d.inputs)?.outAdded ?? []
+  return []
 }
 
 /** A decision as an undo chain is read: an `undo` names the decision it undid (`inputs.target`). */
@@ -277,9 +353,10 @@ export function undoChain(d: UndoLink, undos: readonly UndoLink[]): ChainMark[] 
  * left; otherwise refused whole, naming what changed after it, so a later change is undone first. An
  * undo of an undo makes the decision it had undone live again, and the chain below it consistent
  * (`undoChain`, read from the overview's `undos`). Undoing an automated decision (a join, a founding, a
- * closure or a closing begun, a burst's freeze, a review) also makes what it restores the editor's
- * (`stamped`). The fields that follow the entries, a given slug and a review's run are never put back
- * (`inverted`). A join's undo makes its story owed again (the lifecycle marks the decision undone): it
+ * closure or a closing begun, a burst's freeze, a review, a re-center) also makes what it restores the
+ * editor's (`stamped`). An Undo of a re-center, an editor's or automation's, puts back its count of
+ * automated re-centers and the last re-center before it, so an editor's lock is lifted with it. The
+ * fields that follow the entries, a given slug and a review's run are never put back (`inverted`). A join's undo makes its story owed again (the lifecycle marks the decision undone): it
  * may join another overview, never this one, where its entry is locked.
  */
 export function planUndo(d: UndoTarget, rows: Rows, undos: readonly UndoLink[], ctx: EditContext): Plan {
@@ -291,12 +368,11 @@ export function planUndo(d: UndoTarget, rows: Rows, undos: readonly UndoLink[], 
   if (back.length === 0) throw new ConflictError('Nothing this decision changed is left to undo')
   const stale = notHolding(back, rows)
   if (stale) {
-    const whole = d.kind === 'review' ? ', and a review is undone whole or not at all' : ''
+    const whole = WHOLE[d.kind] ? `, and ${WHOLE[d.kind]} is undone whole or not at all` : ''
     throw new ConflictError(`This cannot be undone: ${what(stale.change, stale.field)} changed after it${whole}. Undo the later change first.`)
   }
   const automated = !isEditorKind(d.kind) && d.kind !== 'undo'
-  const narrowed = d.kind === 'review' ? (readInputs(reviewInputs, d.inputs)?.actions ?? []).flatMap(a => (a.kind === 'narrow' ? a.added : [])) : []
-  const changes = automated ? stamped(back, rows, narrowed, ctx) : back
+  const changes = automated ? stamped(back, rows, d, ctx) : back
   const p = plan(
     draft({
       id: ctx.newId(),

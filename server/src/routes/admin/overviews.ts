@@ -1,8 +1,8 @@
 /**
  * Ongoing-story overviews, the admin's endpoints (`.context/overviews.md`, "Admin"): whether the step
  * is on and how many overviews exist, the list, one overview with its entries, stands and decision
- * log, a story's Overview block, an editor's actions (attach, detach, role, retitle, freeze, hide,
- * close or reopen) and Undo of one decision. Every write goes through the lifecycle module and is
+ * log, a story's Overview block, an editor's actions (attach, detach, role, retitle, re-center, freeze,
+ * hide, close or reopen) and Undo of one decision. Every write goes through the lifecycle module and is
  * logged as the editor's decision; each answers `{ decisionId }`. Refusals are the services'
  * ServiceErrors: 404 for an unknown overview, entry, story or decision, 409 for an action that would
  * change nothing or whose rows changed since, with the reason.
@@ -34,7 +34,16 @@ const roleSchema = z
   .transform((r): Role => ({ role: r.role, roleKind: r.role === 'routine' ? null : r.roleKind }))
 
 const attachSchema = z.object({ storyId: z.string().uuid(), role: roleSchema.default({ role: 'routine', roleKind: null }) })
-const titleSchema = z.object({ title: z.string().trim().min(1).max(config.overviews.maxTitleChars) })
+const title = z.string().trim().min(1).max(config.overviews.maxTitleChars)
+const titleSchema = z.object({ title })
+/** An editor's re-center: the title and the whole charter, END_EVENT null for none (a named one not blank), and the anchor confirmed. */
+const charterSchema = z.object({
+  title,
+  in: z.string().trim().min(1),
+  out: z.array(z.string().trim().min(1).max(config.overviews.maxOutChars)).max(config.overviews.maxOutEntries),
+  endEvent: z.string().trim().min(1).nullable(),
+  anchorConfirmed: z.boolean(),
+})
 const frozenSchema = z.object({ frozen: z.boolean() })
 const hiddenSchema = z.object({ hidden: z.boolean() })
 const closedSchema = z.object({ closed: z.boolean() })
@@ -76,6 +85,11 @@ router.put('/:id/entries/:entryId/role', failsWith('Failed to set the role'), va
 
 router.put('/:id/title', failsWith('Failed to retitle the overview'), validateBody(titleSchema), async (req, res) => {
   res.json(await act(req, { kind: 'retitle', overviewId: req.params.id!, title: req.body.title }))
+})
+
+router.put('/:id/charter', failsWith('Failed to re-center the overview'), validateBody(charterSchema), async (req, res) => {
+  const { title, in: within, out, endEvent, anchorConfirmed } = req.body
+  res.json(await act(req, { kind: 'recenter', overviewId: req.params.id!, title, charter: { in: within, out, endEvent }, anchorConfirmed }))
 })
 
 router.put('/:id/frozen', failsWith('Failed to change the freeze'), validateBody(frozenSchema), async (req, res) => {

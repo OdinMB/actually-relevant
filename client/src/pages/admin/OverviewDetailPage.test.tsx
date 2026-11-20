@@ -6,7 +6,17 @@ import { renderAdminRoutes } from '../../test/admin'
 import OverviewDetailPage from './OverviewDetailPage'
 
 const mockApi = vi.hoisted(() => ({
-  overviews: { get: vi.fn(), detach: vi.fn(), setRole: vi.fn(), retitle: vi.fn(), setFrozen: vi.fn(), setHidden: vi.fn(), setClosed: vi.fn(), undo: vi.fn() },
+  overviews: {
+    get: vi.fn(),
+    detach: vi.fn(),
+    setRole: vi.fn(),
+    retitle: vi.fn(),
+    recenter: vi.fn(),
+    setFrozen: vi.fn(),
+    setHidden: vi.fn(),
+    setClosed: vi.fn(),
+    undo: vi.fn(),
+  },
 }))
 
 vi.mock('../../lib/admin-api', async importOriginal => ({
@@ -87,6 +97,23 @@ function detail(over: Partial<AdminOverviewDetail> = {}): AdminOverviewDetail {
     closedAt: null,
     entriesAtLastReview: 0,
     reviewedAt: null,
+    recentering: {
+      automated: 0,
+      limit: 2,
+      lockDays: 180,
+      recenteredAt: null,
+      recenteredBy: null,
+      lockedUntil: null,
+      lockedOut: [],
+      anchor: {
+        standIns: false,
+        entries: [
+          { entryId: 'e1', storyId: 's1', title: 'Cases rise in Bunia', founding: true },
+          { entryId: 'e3', storyId: 's3', title: 'Vaccination begins', founding: false },
+        ],
+      },
+      history: [],
+    },
     on: true,
     members: [
       entry(),
@@ -244,6 +271,87 @@ describe('OverviewDetailPage', () => {
     fireEvent.change(field, { target: { value: '  Ebola in North Kivu  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save title' }))
     await waitFor(() => expect(mockApi.overviews.retitle).toHaveBeenCalledWith('o1', 'Ebola in North Kivu'))
+  })
+
+  it('shows a charter with no end event, the count of automatic re-centers, the lock, and the charter history', async () => {
+    const charter = detail().charter
+    const wider = { in: 'The Ebola outbreak in eastern Congo.', out: [], endEvent: null }
+    mockApi.overviews.get.mockResolvedValue(
+      detail({
+        charter: wider,
+        recentering: {
+          ...detail().recentering,
+          automated: 2,
+          recenteredAt: '2026-11-05T00:00:00.000Z',
+          recenteredBy: 'editor',
+          lockedUntil: '2099-05-04T00:00:00.000Z',
+          history: [
+            {
+              id: 'r1',
+              kind: 'editor_recenter',
+              actor: 'u1',
+              actorName: 'Odin',
+              createdAt: '2026-11-05T00:00:00.000Z',
+              undoneAt: null,
+              anchorConfirmed: true,
+              title: { from: 'Ebola in Ituri', to: 'Ebola in eastern Congo' },
+              charter: { from: charter, to: wider },
+            },
+          ],
+        },
+      }),
+    )
+    renderPage()
+    expect(await screen.findByText('No end event: it closes only by fading')).toBeInTheDocument()
+    expect(screen.getByText(/Automatic re-centers: 2 of 2: only an editor can re-center it now/)).toBeInTheDocument()
+    expect(screen.getByText(/No automatic re-center until May 4, 2099, after an editor's re-center/)).toBeInTheDocument()
+    const history = within(screen.getByRole('list', { name: 'Charter history' }))
+    expect(history.getByText(/Odin, anchor confirmed/)).toBeInTheDocument()
+    expect(history.getByText('The ministry declares it over')).toBeInTheDocument()
+    // OUT emptied and the end event dropped
+    expect(history.getAllByText('none')).toHaveLength(2)
+  })
+
+  it('edits the charter: lists the anchor, saves only once it is confirmed, allows no end event, and sends the whole charter', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit charter' }))
+    const panel = within(await screen.findByRole('dialog'))
+    expect(panel.getByRole('heading', { name: /This overview's anchor/ })).toBeInTheDocument()
+    const anchor = within(panel.getByRole('list', { name: 'Anchor stories' }))
+    expect(anchor.getByText('Founding')).toBeInTheDocument()
+    expect(anchor.getByText('Vaccination begins')).toBeInTheDocument()
+    const save = panel.getByRole('button', { name: 'Save' })
+
+    fireEvent.change(panel.getByLabelText(/^In/), { target: { value: '  ' } })
+    expect(panel.getByText('Say what the overview is about')).toBeInTheDocument()
+    fireEvent.change(panel.getByLabelText(/^In/), { target: { value: ' The Ebola outbreak in eastern Congo. ' } })
+    fireEvent.change(panel.getByLabelText(/^Out/), { target: { value: 'Ebola in Uganda\n\n Mpox ' } })
+    fireEvent.change(panel.getByLabelText('Ends when'), { target: { value: ' ' } })
+    expect(panel.getByText(/Name the end event, or tick/)).toBeInTheDocument()
+    fireEvent.click(panel.getByLabelText('No end event: it closes only by fading'))
+    expect(panel.getByLabelText('Ends when')).toBeDisabled()
+    // Unconfirmed, it does not save
+    expect(save).toBeDisabled()
+    fireEvent.click(panel.getByLabelText(/The new charter still covers them/))
+    expect(save).toBeEnabled()
+    fireEvent.click(save)
+    await waitFor(() =>
+      expect(mockApi.overviews.recenter).toHaveBeenCalledWith('o1', {
+        title: 'Ebola in Ituri',
+        in: 'The Ebola outbreak in eastern Congo.',
+        out: ['Ebola in Uganda', 'Mpox'],
+        endEvent: null,
+        anchorConfirmed: true,
+      }),
+    )
+    expect(await screen.findByText('Charter saved')).toBeInTheDocument()
+  })
+
+  it('offers no charter edit on a closed overview', async () => {
+    mockApi.overviews.get.mockResolvedValue(detail({ status: 'closed', closedReason: 'faded', closedAt: '2026-11-04T00:00:00.000Z' }))
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Edit charter' })).toBeDisabled()
+    expect(screen.getByText('Reopen the overview to edit its charter.')).toBeInTheDocument()
   })
 
   it('freezes, hides and closes (after a confirmation), and reopens a closed one', async () => {

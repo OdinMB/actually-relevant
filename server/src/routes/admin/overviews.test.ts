@@ -79,6 +79,35 @@ describe('admin overview routes', () => {
     expect(mockLifecycle.editorAction).toHaveBeenCalledWith({ kind: 'role', overviewId: O, entryId: 'e1', role: { role: 'routine', roleKind: null } }, EDITOR)
   })
 
+  it("hands an editor's re-center on with the charter trimmed, none for no end event, and refuses one past the limits", async () => {
+    const put = (body: object) => request(app).put(`${base}/${O}/charter`).set(authHeader()).send(body)
+    const body = { title: ' Ebola in eastern Congo ', in: ' The outbreak. ', out: [' Mpox '], endEvent: null, anchorConfirmed: true }
+    expect((await put(body)).status).toBe(200)
+    expect(mockLifecycle.editorAction).toHaveBeenCalledWith(
+      {
+        kind: 'recenter',
+        overviewId: O,
+        title: 'Ebola in eastern Congo',
+        charter: { in: 'The outbreak.', out: ['Mpox'], endEvent: null },
+        anchorConfirmed: true,
+      },
+      EDITOR,
+    )
+    const refused = [
+      { ...body, in: '  ' },
+      { ...body, title: '' },
+      { ...body, endEvent: '  ' },
+      { ...body, out: ['x'.repeat(121)] },
+      { ...body, out: Array.from({ length: 13 }, (_, i) => `o${i}`) },
+      { ...body, anchorConfirmed: undefined },
+      { title: 'T', in: 'I', out: [] },
+    ]
+    for (const b of refused) expect((await put(b)).status).toBe(400)
+    mockLifecycle.editorAction.mockRejectedValue(new ConflictError('Confirm the anchor first'))
+    const conflict = await put({ ...body, anchorConfirmed: false })
+    expect([conflict.status, conflict.body.error]).toEqual([409, 'Confirm the anchor first'])
+  })
+
   it('undoes a decision, and answers a refusal with its reason', async () => {
     const res = await request(app).post(`${base}/decisions/d1/undo`).set(authHeader())
     expect([res.status, res.body]).toEqual([200, { decisionId: 'd2' }])

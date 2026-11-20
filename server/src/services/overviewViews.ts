@@ -11,15 +11,34 @@ import { z } from 'zod'
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { NotFoundError } from '../utils/errors.js'
-import { decisionMove } from './overviewDecisions.js'
+import { decisionMove, editorRecenterInputs, foundInputs, readInputs, storedChanges } from './overviewDecisions.js'
 import { undoable } from './overviewEdits.js'
 import { parseCharter } from './overviewInput.js'
 import { isPublicOverview } from './overviewPublicRule.js'
 import { overviewStepOn } from './overviewQueue.js'
+import { anchorOf, recenterLockedUntil } from './overviewRecenter.js'
 import { usable } from './researchPool.js'
 
 /** The decisions the status history lists: the status machine's, end-event closings, an editor's close and freeze. */
 const STATUS_KINDS = ['status', 'close', 'editor_close', 'editor_freeze'] as const
+
+/** The decisions the re-centering reads: the founding (whose entries anchor the overview) and every applied re-center. */
+const CHARTER_KINDS = ['found', 'recenter', 'editor_recenter'] as const
+const RECENTER_KINDS: readonly string[] = ['recenter', 'editor_recenter']
+
+/** The entries a founding made (its change set's `created`): the anchor's founding entries. */
+const foundingEntries = (inputs: unknown): string[] => (readInputs(foundInputs, inputs)?.created ?? []).flatMap(c => (c.table === 'entry' ? [c.id] : []))
+
+/** What a re-center changed of the title and the charter, from its change set; null for what it left. */
+function charterMove(d: { kind: string; outcome: string; inputs: unknown }) {
+  const change = storedChanges(d.kind, d.outcome, d.inputs).find(c => c.table === 'overview')
+  const [fromTitle, toTitle] = [change?.before.title, change?.after.title]
+  const [from, to] = [parseCharter(change?.before.charter), parseCharter(change?.after.charter)]
+  return {
+    title: typeof fromTitle === 'string' && typeof toTitle === 'string' ? { from: fromTitle, to: toTitle } : null,
+    charter: from && to ? { from, to } : null,
+  }
+}
 
 export interface OverviewsAdminState {
   /** The step is switched on (both gates open, its job enabled). */
@@ -125,7 +144,12 @@ async function editorNames(ids: string[]): Promise<Map<string, string>> {
   return new Map(users.map(u => [u.id, u.name]))
 }
 
-/** One overview for its admin page: its fields and charter, its entries, its stands versions, its decision log. */
+/**
+ * One overview for its admin page: its fields and charter, its entries, its stands versions, its
+ * decision log, and its re-centering (`.context/overviews.md`, "Re-centering"): the anchor a new
+ * charter should still cover, the count of automated re-centers against the limit, the lock an
+ * editor's or an Undo's re-center set, and the charter history from the re-center decisions.
+ */
 export async function adminOverview(id: string) {
   const o = await prisma.overview.findUnique({
     where: { id },
@@ -137,12 +161,16 @@ export async function adminOverview(id: string) {
       closedAt: true,
       entriesAtLastReview: true,
       reviewedAt: true,
+      recenteredAt: true,
+      recenteredBy: true,
+      automatedRecenters: true,
+      lockedOut: true,
     },
   })
   if (!o) throw new NotFoundError('Overview not found')
   const newest = [{ createdAt: 'desc' as const }, { id: 'desc' as const }]
   const withStory = { story: { select: { title: true, sourceTitle: true } } }
-  const [entries, stands, decisions, decisionsTotal, history, counts, on] = await Promise.all([
+  const [entries, stands, decisions, decisionsTotal, history, charterDecisions, counts, on] = await Promise.all([
     prisma.overviewEntry.findMany({
       where: { overviewId: id },
       orderBy: [{ status: 'asc' }, { story: { datePublished: 'desc' } }, { id: 'asc' }],
@@ -153,12 +181,17 @@ export async function adminOverview(id: string) {
     prisma.overviewDecision.count({ where: { overviewId: id } }),
     // Every move, however long the log: the status history is short
     prisma.overviewDecision.findMany({ where: { overviewId: id, kind: { in: [...STATUS_KINDS] } }, orderBy: newest, include: withStory }),
+    prisma.overviewDecision.findMany({
+      where: { overviewId: id, kind: { in: [...CHARTER_KINDS] }, outcome: { in: ['founded', 'recentered'] } },
+      orderBy: newest,
+      select: { id: true, kind: true, outcome: true, actor: true, createdAt: true, undoneAt: true, undoneBy: true, inputs: true },
+    }),
     entryCounts([id]),
     overviewStepOn(),
   ])
   const versions = stands.map(v => ({ ...v, sentences: linesSchema.parse(v.sentences), doing: linesSchema.parse(v.doing) }))
   const resolve = resolveLine(await citedFacts([...new Set(versions.flatMap(v => [...v.sentences, ...v.doing].flatMap(l => l.facts)))]))
-  const names = await editorNames([...new Set([...decisions, ...history].flatMap(d => [d.actor, d.undoneBy ?? '']).filter(Boolean))])
+  const names = await editorNames([...new Set([...decisions, ...history, ...charterDecisions].flatMap(d => [d.actor, d.undoneBy ?? '']).filter(Boolean))])
   const logEntry = ({ story, ...d }: (typeof decisions)[number]) => ({
     id: d.id,
     kind: d.kind,
@@ -178,9 +211,51 @@ export async function adminOverview(id: string) {
     answer: d.answer,
     undoable: undoable(d),
   })
+  const { lockedOut, automatedRecenters, recenteredAt, recenteredBy, ...fields } = o
+  const founding = charterDecisions.filter(d => d.kind === 'found').flatMap(d => foundingEntries(d.inputs))
+  const anchor = anchorOf(
+    entries.map(e => ({
+      entryId: e.id,
+      status: e.status,
+      published: e.story?.status === 'published',
+      datePublished: e.story?.datePublished ?? null,
+      role: e.role,
+    })),
+    founding,
+  )
+  const byId = new Map(entries.map(e => [e.id, e]))
+  const lockedUntil = recenterLockedUntil(o)
+  const anchorEntry = (founding: boolean) => (entryId: string) => {
+    const story = byId.get(entryId)?.story
+    return { entryId, storyId: story?.id ?? null, title: story ? (story.title ?? story.sourceTitle) : null, founding }
+  }
   return {
-    ...o,
-    charter: parseCharter(o.charter) ?? { in: '', out: [], endEvent: '' },
+    ...fields,
+    charter: parseCharter(o.charter) ?? { in: '', out: [], endEvent: null },
+    recentering: {
+      automated: automatedRecenters,
+      limit: config.overviews.maxAutomatedRecenters,
+      lockDays: config.overviews.editorRecenterLockDays,
+      recenteredAt,
+      recenteredBy,
+      /** No automated re-center before this, after an editor's or an Undo's re-center; null when no such lock holds now. */
+      lockedUntil: lockedUntil && lockedUntil.getTime() > Date.now() ? lockedUntil : null,
+      /** OUT entries an Undo took out, which no review adds again; an editor's charter that names one again lifts its lock. */
+      lockedOut: Array.isArray(lockedOut) ? lockedOut.filter((x): x is string => typeof x === 'string') : [],
+      anchor: { standIns: anchor.standIns, entries: [...anchor.founding.map(anchorEntry(true)), ...anchor.turningPoints.map(anchorEntry(false))] },
+      history: charterDecisions
+        .filter(d => RECENTER_KINDS.includes(d.kind))
+        .map(d => ({
+          id: d.id,
+          kind: d.kind,
+          actor: d.actor,
+          actorName: names.get(d.actor) ?? null,
+          createdAt: d.createdAt,
+          undoneAt: d.undoneAt,
+          anchorConfirmed: d.kind === 'editor_recenter' ? (readInputs(editorRecenterInputs, d.inputs)?.anchorConfirmed ?? false) : null,
+          ...charterMove(d),
+        })),
+    },
     entries: counts.get(id) ?? 0,
     public: isPublicOverview(o),
     on,

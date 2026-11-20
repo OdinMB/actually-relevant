@@ -1750,7 +1750,56 @@ export interface AdminOverviewListItem {
 export interface OverviewCharter {
   in: string
   out: string[]
-  endEvent: string
+  /** Null: no end event, so the overview closes only by fading. */
+  endEvent: string | null
+}
+
+/** `PUT /api/admin/overviews/:id/charter`: an editor's re-center, the title and the whole charter, with the anchor confirmed. */
+export interface OverviewRecenterBody extends OverviewCharter {
+  title: string
+  anchorConfirmed: boolean
+}
+
+/** An anchor entry: a founding one (or an oldest one standing in) or a turning point, which a new charter should still cover. */
+export interface OverviewAnchorEntry {
+  entryId: string
+  storyId: string | null
+  title: string | null
+  founding: boolean
+}
+
+/** One applied re-center, newest first: what it changed of the title and the charter (null for what it left). */
+export interface OverviewRecenterRecord {
+  id: string
+  /** `editor_recenter` (an editor's) or `recenter` (automation's). */
+  kind: string
+  actor: string
+  actorName: string | null
+  createdAt: string
+  undoneAt: string | null
+  /** The editor confirmed the anchor; null for automation's. */
+  anchorConfirmed: boolean | null
+  title: { from: string; to: string } | null
+  charter: { from: OverviewCharter; to: OverviewCharter } | null
+}
+
+/** An overview's re-centering (`.context/overviews.md`, "Re-centering"). */
+export interface OverviewRecentering {
+  /** Applied automated re-centers, not undone, and the limit after which only an editor re-centers it. */
+  automated: number
+  limit: number
+  /** The days an editor's re-center keeps automation from re-centering it. */
+  lockDays: number
+  recenteredAt: string | null
+  /** recenter, editor or undo. */
+  recenteredBy: string | null
+  /** No automated re-center before this, after an editor's or an Undo's re-center; null when no such lock holds now. */
+  lockedUntil: string | null
+  /** OUT entries an Undo took out, which no review adds again; naming one in OUT lifts its lock. */
+  lockedOut: string[]
+  /** The founding entries first (`standIns` when none is left and the oldest stand in), then the turning points. */
+  anchor: { standIns: boolean; entries: OverviewAnchorEntry[] }
+  history: OverviewRecenterRecord[]
 }
 
 /** One entry of an overview, active or detached, with its judgment record. */
@@ -1765,7 +1814,7 @@ export interface AdminOverviewEntry {
   joinedBy: string
   joinedAt: string
   detachedBy: string | null
-  /** unpublished, review, editor or undone. */
+  /** unpublished, review, editor, undone or recenter. */
   detachReason: string | null
   detachedAt: string | null
   /** An editor attached, detached or set it: automation never reverses it. */
@@ -1821,7 +1870,7 @@ export interface AdminStandsVersion {
 /** One decision of an overview's log, newest first. */
 export interface AdminOverviewDecision {
   id: string
-  /** link, found, stands, status, close, review, editor_attach … editor_close, undo. */
+  /** link, found, stands, status, close, review, recenter, editor_attach … editor_close, editor_recenter, undo. */
   kind: string
   outcome: string
   storyId: string | null
@@ -1859,6 +1908,7 @@ export interface AdminOverviewDetail extends AdminOverviewListItem {
   closedAt: string | null
   entriesAtLastReview: number
   reviewedAt: string | null
+  recentering: OverviewRecentering
   /** The step is switched on. */
   on: boolean
   members: AdminOverviewEntry[]

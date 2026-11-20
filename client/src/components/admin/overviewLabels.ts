@@ -5,6 +5,9 @@ import type { OverviewEntryRole, OverviewRoleKind, OverviewScope, OverviewStatus
  * fields, an entry's role and a decision's kind (`.context/overviews.md`, "Admin").
  */
 
+/** A charter that names no end event: the overview closes only when reporting stops. */
+export const NO_END_EVENT = 'No end event: it closes only by fading'
+
 export const SCOPE_LABELS: Record<OverviewScope, string> = { single: 'Single', forming: 'Forming', ongoing: 'Ongoing' }
 export const STATUS_LABELS: Record<OverviewStatus, string> = { open: 'Open', quiet: 'Quiet', closing: 'Closing', closed: 'Closed' }
 
@@ -46,6 +49,7 @@ const DETACH_REASONS: Record<string, string> = {
   review: 'Detached by a review',
   editor: 'Detached by an editor',
   undone: 'Detached by an undo',
+  recenter: 'Detached by a re-center',
 }
 
 export const detachLabel = (reason: string | null): string => (reason && DETACH_REASONS[reason]) || 'Detached'
@@ -58,6 +62,7 @@ const DECISION_KINDS: Record<string, string> = {
   status: 'Status',
   close: 'End event',
   review: 'Review',
+  recenter: 'Re-center',
   editor_attach: 'Editor attached a story',
   editor_detach: 'Editor detached a story',
   editor_role: 'Editor set a role',
@@ -65,6 +70,7 @@ const DECISION_KINDS: Record<string, string> = {
   editor_freeze: 'Editor froze or unfroze',
   editor_hide: 'Editor hid or showed',
   editor_close: 'Editor closed or reopened',
+  editor_recenter: 'Editor re-centered',
   undo: 'Undo',
 }
 

@@ -50,6 +50,7 @@ import type {
   AdminOverviewDetail,
   StoryOverviewBlock,
   OverviewActionResult,
+  OverviewRecenterBody,
   OverviewEntryRole,
   OverviewRoleKind,
   OverviewScope,
@@ -432,6 +433,9 @@ export const adminApi = {
     setRole: (id: string, entryId: string, role: OverviewEntryRole, roleKind: OverviewRoleKind | null) =>
       request<OverviewActionResult>(`/overviews/${id}/entries/${entryId}/role`, { method: 'PUT', body: JSON.stringify({ role, roleKind }) }),
     retitle: (id: string, title: string) => request<OverviewActionResult>(`/overviews/${id}/title`, { method: 'PUT', body: JSON.stringify({ title }) }),
+    /** An editor's re-center: the title and the whole charter (`endEvent` null for none), with the anchor confirmed. */
+    recenter: (id: string, body: OverviewRecenterBody) =>
+      request<OverviewActionResult>(`/overviews/${id}/charter`, { method: 'PUT', body: JSON.stringify(body) }),
     setFrozen: (id: string, frozen: boolean) => request<OverviewActionResult>(`/overviews/${id}/frozen`, { method: 'PUT', body: JSON.stringify({ frozen }) }),
     setHidden: (id: string, hidden: boolean) => request<OverviewActionResult>(`/overviews/${id}/hidden`, { method: 'PUT', body: JSON.stringify({ hidden }) }),
     setClosed: (id: string, closed: boolean) => request<OverviewActionResult>(`/overviews/${id}/closed`, { method: 'PUT', body: JSON.stringify({ closed }) }),

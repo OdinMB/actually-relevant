@@ -93,6 +93,60 @@ describeDb('the overview admin reads', () => {
     expect(detail.statusHistory.map(d => [d.kind, d.move])).toEqual([['status', { from: 'open', to: 'quiet', reason: 'quiet' }]])
   })
 
+  it("gives the re-centering: the anchor from the founding's entries and the turning points, the count, the editor's lock and the charter history", async () => {
+    const { a, b, o } = await setUp()
+    const [ea, eb] = await Promise.all([a, b].map(s => prisma.overviewEntry.findFirstOrThrow({ where: { storyId: s.id } })))
+    await prisma.overviewEntry.update({ where: { id: eb!.id }, data: { role: 'turning_point', roleKind: 'response' } })
+    await prisma.overviewDecision.create({
+      data: {
+        kind: 'found',
+        overviewId: o.id,
+        outcome: 'founded',
+        actor: 'pipeline',
+        inputs: {
+          partnerId: b.id,
+          changes: [],
+          created: [
+            { table: 'overview', id: o.id },
+            { table: 'entry', id: ea!.id },
+          ],
+        },
+      },
+    })
+    const before = await adminOverview(o.id)
+    expect(before.recentering).toMatchObject({
+      automated: 0,
+      limit: config.overviews.maxAutomatedRecenters,
+      recenteredBy: null,
+      lockedUntil: null,
+      history: [],
+    })
+    expect(before.recentering.anchor).toEqual({
+      standIns: false,
+      entries: [
+        { entryId: ea!.id, storyId: a.id, title: 'Story 1', founding: true },
+        { entryId: eb!.id, storyId: b.id, title: 'Story 2', founding: false },
+      ],
+    })
+
+    const wider = { in: 'The Ebola outbreak in eastern Congo.', out: [], endEvent: null }
+    await editorAction({ kind: 'recenter', overviewId: o.id, title: 'Ebola in eastern Congo', charter: wider, anchorConfirmed: true }, 'editor-1')
+    const after = await adminOverview(o.id)
+    expect(after.charter).toEqual(wider)
+    const lockDays = (after.recentering.lockedUntil!.getTime() - after.recentering.recenteredAt!.getTime()) / 86_400_000
+    expect([after.recentering.recenteredBy, lockDays]).toEqual(['editor', config.overviews.editorRecenterLockDays])
+    expect(after.recentering.history).toEqual([
+      expect.objectContaining({
+        kind: 'editor_recenter',
+        actor: 'editor-1',
+        undoneAt: null,
+        anchorConfirmed: true,
+        title: { from: 'Ebola in Ituri', to: 'Ebola in eastern Congo' },
+        charter: { from: charter, to: wider },
+      }),
+    ])
+  })
+
   it("gives a story's block: its overview, its last link's candidates with the answers, and nothing to attach to while it is in one", async () => {
     const { a, c, o, other } = await setUp()
     await prisma.overviewDecision.create({

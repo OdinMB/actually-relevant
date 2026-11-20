@@ -306,6 +306,65 @@ describeDb("an editor's actions and undo", () => {
     expect(await row(o.id)).toMatchObject({ status: 'closing', closingStoryId: c!.id })
   })
 
+  it("re-centers on an editor's charter with no end event: the closing cancelled, a review queued until it runs, and Undo lifting both", async () => {
+    const members = await stories(4)
+    const o = await overview(
+      members.map(s => s.id),
+      { scope: 'ongoing' },
+    )
+    await prisma.overview.update({
+      where: { id: o.id },
+      data: {
+        status: 'closing',
+        closingSince: members[3]!.datePublished,
+        closingStoryId: members[3]!.id,
+        reviewedAt: new Date(Date.now() - DAY),
+        entriesAtLastReview: 4,
+      },
+    })
+    const wider = { in: 'The Ebola outbreak in eastern Congo.', out: [], endEvent: null }
+    const at = () => ({ clock: new Date(), now: new Date() })
+    const { decisionId } = await editorAction(
+      { kind: 'recenter', overviewId: o.id, title: 'Ebola in eastern Congo', charter: wider, anchorConfirmed: true },
+      EDITOR,
+    )
+    expect(await row(o.id)).toMatchObject({
+      title: 'Ebola in eastern Congo',
+      charter: wider,
+      status: 'open',
+      closingStoryId: null,
+      recenteredBy: 'editor',
+      charterModel: 'm',
+      automatedRecenters: 0,
+    })
+    expect(await prisma.overviewDecision.findUniqueOrThrow({ where: { id: decisionId } })).toMatchObject({
+      kind: 'editor_recenter',
+      outcome: 'recentered',
+      actor: EDITOR,
+      inputs: expect.objectContaining({ anchorConfirmed: true }),
+    })
+    expect(await prisma.overviewDecision.findFirstOrThrow({ where: { overviewId: o.id, kind: 'status' } })).toMatchObject({
+      outcome: 'open',
+      storyId: members[3]!.id,
+      inputs: expect.objectContaining({ from: 'closing', to: 'open', reason: 'recentered', by: 'editor' }),
+    })
+    const state = (await overviewStates(prisma, new Date()))[0]!
+    expect(reviewDue(state, at())).toBe('recenter')
+    // Its review reads the entries under the new charter
+    expect((await reviewCase(prisma, o.id))!.charter).toEqual(wider)
+
+    await undoDecision(decisionId, EDITOR)
+    expect(await row(o.id)).toMatchObject({
+      title: 'Ebola in Ituri',
+      charter,
+      status: 'closing',
+      closingStoryId: members[3]!.id,
+      recenteredBy: null,
+      recenteredAt: null,
+    })
+    expect(reviewDue((await overviewStates(prisma, new Date()))[0]!, at())).toBeNull()
+  })
+
   it("clears a burst's freeze by undo without the same joins freezing it again, and an editor's freeze asks for no burst review", async () => {
     const members = await stories(3)
     const o = await overview(members.map(s => s.id))

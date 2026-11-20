@@ -5,7 +5,6 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import type { AdminOverviewDetail } from '@shared/types'
 import { useOverview, useOverviewAction } from '../../hooks/useOverviews'
 import { adminApi, ApiError } from '../../lib/admin-api'
-import { formatShortDate } from '../../lib/constants'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Input } from '../../components/ui/Input'
@@ -13,6 +12,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Badge } from '../../components/ui/Badge'
+import { OverviewCharter } from '../../components/admin/OverviewCharter'
 import { OverviewFlags, StepOffNote } from '../../components/admin/OverviewFlags'
 import { OverviewEntries } from '../../components/admin/OverviewEntries'
 import { OverviewStands } from '../../components/admin/OverviewStands'
@@ -21,11 +21,11 @@ import { SCOPE_LABELS, STATUS_LABELS } from '../../components/admin/overviewLabe
 
 /*
  * `/admin/overviews/:id` (`.context/overviews.md`, "Admin"): an overview's title, flags and the
- * editor's actions on it (retitle, freeze, hide, close and reopen), its charter, entries, "Where this
- * stands" versions, status history and decision log with Undo. Every action is logged and undoable.
+ * editor's actions on it (retitle, freeze, hide, close and reopen), its charter with "Edit charter"
+ * (`OverviewCharter`), entries, "Where this stands" versions, status history and decision log with
+ * Undo. Every action is logged and undoable.
  */
 
-const CLOSED_REASONS: Record<string, string> = { end_event: 'its end event was reported', faded: 'it faded', editor: 'an editor closed it' }
 const TITLE_MAX = 200
 
 export default function OverviewDetailPage() {
@@ -73,62 +73,7 @@ function OverviewDetail({ overview: o }: { overview: AdminOverviewDetail }) {
       </div>
       {!o.on && <StepOffNote />}
       <OverviewActions overview={o} />
-
-      <section aria-labelledby="overview-about" className="space-y-3">
-        <h2 id="overview-about" className="text-lg font-semibold text-neutral-900">
-          Charter
-        </h2>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-lg border border-neutral-200 bg-white p-4 text-sm">
-          <dt className="text-neutral-500">In</dt>
-          <dd className="text-neutral-900">{o.charter.in || '—'}</dd>
-          <dt className="text-neutral-500">Out</dt>
-          <dd className="text-neutral-900">
-            {o.charter.out.length > 0 ? (
-              <ul className="list-disc space-y-0.5 pl-5">
-                {o.charter.out.map(x => (
-                  <li key={x}>{x}</li>
-                ))}
-              </ul>
-            ) : (
-              '—'
-            )}
-          </dd>
-          <dt className="text-neutral-500">Ends when</dt>
-          <dd className="text-neutral-900">{o.charter.endEvent || '—'}</dd>
-          <dt className="text-neutral-500">Drafted by</dt>
-          <dd className="text-neutral-900">{o.charterModel}</dd>
-          <dt className="text-neutral-500">Founded</dt>
-          <dd className="text-neutral-900">{formatShortDate(o.foundedAt)}</dd>
-          <dt className="text-neutral-500">Entries</dt>
-          <dd className="text-neutral-900">
-            {o.entries} published, last {formatShortDate(o.lastEntryAt)}
-          </dd>
-          <dt className="text-neutral-500">Last review</dt>
-          <dd className="text-neutral-900">{o.reviewedAt ? `${formatShortDate(o.reviewedAt)}, at ${o.entriesAtLastReview} entries` : 'Not reviewed yet'}</dd>
-          {o.closingSince && (
-            <>
-              <dt className="text-neutral-500">Closing since</dt>
-              <dd className="text-neutral-900">{formatShortDate(o.closingSince)}</dd>
-            </>
-          )}
-          {o.status === 'closed' && (
-            <>
-              <dt className="text-neutral-500">Closed</dt>
-              <dd className="text-neutral-900">
-                {formatShortDate(o.closedAt)}
-                {o.closedReason && `: ${CLOSED_REASONS[o.closedReason] ?? o.closedReason}`}
-              </dd>
-            </>
-          )}
-          {o.issue && (
-            <>
-              <dt className="text-neutral-500">Issue</dt>
-              <dd className="text-neutral-900">{o.issue.name}</dd>
-            </>
-          )}
-        </dl>
-      </section>
-
+      <OverviewCharter overview={o} />
       <OverviewEntries overview={o} />
       <OverviewStands versions={o.stands} />
       <OverviewStatusHistory decisions={o.statusHistory} />

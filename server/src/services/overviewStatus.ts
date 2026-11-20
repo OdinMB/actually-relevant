@@ -104,7 +104,8 @@ export function anomalies(state: OverviewState, options: Pick<StatusOptions, 'bu
 /**
  * The review an overview is due, if any, the most pressing first: a burst's (the only one a frozen
  * overview gets, and the one that may clear its freeze); the review before an end-event closure once
- * its closing period is over; a reader's report that queued one, while no review has run since; each
+ * its closing period is over; a reader's report that queued one, while no review has run since; an
+ * editor's re-center, likewise (it reads every entry under the new charter; an Undo's queues none); each
  * time the active entries reach a count of `reviewAt` since the last review kept fewer (so a forming
  * overview cut back by one is reviewed again when it climbs back to 3); and every `reviewEveryDays` of
  * wall-clock time while public and not closed. A single overview is never reviewed.
@@ -118,7 +119,9 @@ export function reviewDue(
   if (state.burstAt !== null) return 'burst'
   if (state.frozen) return null
   if (state.status === 'closing' && !state.closureReviewed && !newerThanClosing(state) && closingOver(state, at.clock, options)) return 'closure'
-  if (state.reportAt !== null && (state.reviewedAt === null || state.reportAt.getTime() > state.reviewedAt.getTime())) return 'report'
+  const sinceReview = (at: Date | null) => at !== null && (state.reviewedAt === null || at.getTime() > state.reviewedAt.getTime())
+  if (sinceReview(state.reportAt)) return 'report'
+  if (state.recenteredBy === 'editor' && sinceReview(state.recenteredAt)) return 'recenter'
   if (options.reviewAt.some(t => state.entriesAtLastReview < t && t <= state.activeEntries)) return 'entries'
   const spaced = state.reviewedAt !== null && daysBetween(state.reviewedAt, at.now) >= options.reviewEveryDays
   return state.scope === 'ongoing' && state.status !== 'closed' && spaced ? 'periodic' : null
