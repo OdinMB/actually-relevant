@@ -153,14 +153,16 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
     const runStart = o.ctx.spentUsd()
     const sandbox = createSandbox()
     let clock = new Date(0)
-    const upkeep = sandboxUpkeep(sandbox, facts, () => clock)
+    // A re-center's neighbours: each story's, as of its own day (the runner's reads), among the replayed stories
+    const near = async (id: string) => (byId.has(id) ? (await o.neighbours(byId.get(id)!)).filter(n => ids.has(n.id)) : [])
+    const upkeep = sandboxUpkeep(sandbox, facts, () => clock, near)
     const { link: linkCalls, ...calls } = evalCalls(o.ctx, run)
     const safeguards: Record<string, number> = {}
     const add = (name: string, n: number) => {
       if (n > 0) safeguards[name] = (safeguards[name] ?? 0) + n
     }
     const deps: LinkDeps = {
-      neighbours: async s => (await o.neighbours(s)).filter(n => ids.has(n.id)),
+      neighbours: s => near(s.id),
       memberships: sandbox.memberships,
       overviews: sandbox.candidateOverviews,
       stories: async wanted => wanted.flatMap(id => (byId.has(id) ? [byId.get(id)!] : [])),

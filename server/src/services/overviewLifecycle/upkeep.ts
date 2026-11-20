@@ -8,14 +8,27 @@ import prisma from '../../lib/prisma.js'
 import { applied, type Rows } from '../overviewChanges.js'
 import type { CloseCase, CloseResult } from '../overviewClose.js'
 import type { StandsInputs } from '../overviewDecisions.js'
-import { PIPELINE, STALE_REVIEW, planAudit, planBurst, planClosing, planReview, planStatus, type PlanContext } from '../overviewPlans.js'
+import { membershipsOf } from '../overviewCandidates.js'
+import {
+  PIPELINE,
+  STALE_RECENTER,
+  STALE_REVIEW,
+  planAudit,
+  planBurst,
+  planClosing,
+  planRecenter,
+  planReview,
+  planStatus,
+  type PlanContext,
+} from '../overviewPlans.js'
+import type { RecenterCase, RecenterResult } from '../overviewRecenter.js'
 import type { AuditResult, ReviewCase, ReviewResult } from '../overviewReview.js'
 import type { StandsResult } from '../overviewStands.js'
 import type { StatusMove } from '../overviewStatus.js'
 import type { OverviewState } from '../overviewTypes.js'
 import type { ReviewWrite, StandsCase } from '../overviewUpkeep.js'
 import { forgetOverviewLinks } from '../overviewCaches.js'
-import { applyPlan, json, readRows } from './apply.js'
+import { applyPlan, json, readRows, refusedByIndex } from './apply.js'
 
 const context = (now: Date): PlanContext => ({ now, newId: randomUUID })
 
@@ -72,6 +85,35 @@ export async function applyReview(c: ReviewCase, result: ReviewResult, now: Date
   })
   if (removed) forgetOverviewLinks()
   return write
+}
+
+/**
+ * An automated re-center's result (`planRecenter`), as its `recenter` decision, planned on the rows
+ * locked here and the memberships of the stories it would join read in the same transaction: `stale`,
+ * applying nothing, when either changed during its calls or the overview is gone. A join the
+ * one-active-entry index still refuses (an editor's attach at the same moment) rolls the write back,
+ * and the attempt is recorded `stale` on its own.
+ */
+export async function applyRecenter(c: RecenterCase, result: RecenterResult, now: Date = new Date(), db: typeof prisma = prisma): Promise<ReviewWrite> {
+  const ctx = context(now)
+  try {
+    const { write, removed } = await db.$transaction(async (tx): Promise<{ write: ReviewWrite; removed: boolean }> => {
+      const rows = await readRows(tx, c.overviewId)
+      const memberships = await membershipsOf(
+        tx,
+        result.joins.map(j => j.storyId),
+      )
+      const p = planRecenter(rows, c, result, new Set(memberships.active.keys()), ctx)
+      const done = await applyPlan(tx, rows, p, now)
+      return { write: p.decision.outcome === STALE_RECENTER ? 'stale' : 'written', removed: done.removed }
+    })
+    if (removed) forgetOverviewLinks()
+    return write
+  } catch (error) {
+    if (!refusedByIndex(error)) throw error
+    await db.$transaction(tx => applyPlan(tx, null, planRecenter(null, c, result, new Set(), ctx), now))
+    return 'stale'
+  }
 }
 
 /** The monthly audit's findings (`planAudit`), never applied. */

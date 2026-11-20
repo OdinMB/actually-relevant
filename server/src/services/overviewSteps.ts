@@ -14,14 +14,27 @@ import {
   buildFoundCheckPrompt,
   buildFoundPrompt,
   buildLinkPromptParts,
+  buildRecenterCheckPrompt,
+  buildRecenterPrompt,
   buildReviewPrompt,
   buildStandsPromptParts,
 } from '../prompts/overviews.js'
 import { buildFactCheckPromptParts } from '../prompts/research.js'
-import { closeCheckSchema, closeSchema, foundCheckSchema, foundSchema, linkSchema, reviewSchema, standsSchema } from '../schemas/overviews.js'
+import {
+  closeCheckSchema,
+  closeSchema,
+  foundCheckSchema,
+  foundSchema,
+  linkSchema,
+  recenterCheckSchema,
+  recenterSchema,
+  reviewSchema,
+  standsSchema,
+} from '../schemas/overviews.js'
 import { factCheckSchema } from '../schemas/research.js'
 import type { CloseDeps } from './overviewClose.js'
 import type { LinkDeps, ModelCall } from './overviewLink.js'
+import type { RecenterDeps } from './overviewRecenter.js'
 import type { ReviewDeps } from './overviewReview.js'
 import type { StandsDeps } from './overviewStands.js'
 import type { ModelTier } from './structuredCall.js'
@@ -56,6 +69,8 @@ export const OVERVIEW_STEPS = {
   audit: step('overview-review', tiers.review, reviewSchema, 'high'),
   stands: step('overview-stands', tiers.stands, standsSchema),
   standsCheck: step('overview-stands-check', tiers.standsCheck, factCheckSchema),
+  recenter: step('overview-recenter', tiers.recenter, recenterSchema),
+  recenterCheck: step('overview-recenter-check', tiers.recenterCheck, recenterCheckSchema),
 }
 
 /** How a caller makes one step's call with its prompt: production's `structuredCall`, an eval's cached call. */
@@ -66,6 +81,7 @@ export interface OverviewCalls {
   close: CloseDeps
   review: ReviewDeps
   stands: StandsDeps
+  recenter: RecenterDeps
 }
 
 /** Every model call of linking and the upkeep, each with its step's prompt, made by `call`. */
@@ -85,6 +101,10 @@ export function overviewCalls(call: StepCaller): OverviewCalls {
     stands: {
       write: input => call(s.stands, buildStandsPromptParts(input)),
       check: (items, lines) => call(s.standsCheck, buildFactCheckPromptParts(items, lines, [])),
+    },
+    recenter: {
+      draft: input => call(s.recenter, buildRecenterPrompt(input)),
+      check: input => call(s.recenterCheck, buildRecenterCheckPrompt(input)),
     },
   }
 }

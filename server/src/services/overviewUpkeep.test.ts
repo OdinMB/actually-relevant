@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { ReviewAnswer, StandsAnswer } from '../schemas/overviews.js'
+import type { RecenterAnswer, RecenterCheckAnswer, ReviewAnswer, StandsAnswer } from '../schemas/overviews.js'
 import type { FactCheck } from '../schemas/research.js'
 import type { CloseCase } from './overviewClose.js'
 import type { ModelCall } from './overviewLink.js'
+import type { RecenterCase } from './overviewRecenter.js'
 import type { ReviewCase } from './overviewReview.js'
 import type { MemberFact } from './overviewStands.js'
 import type { OverviewState } from './overviewTypes.js'
@@ -131,6 +132,43 @@ const keepAll: ReviewAnswer = {
   clearFreeze: false,
 }
 
+/** A re-center case of `reviewCase`'s three entries, the first two founding, and two stories turned away. */
+const recenterCase = (id: string): RecenterCase => ({
+  ...reviewCase(id),
+  lockedOut: [],
+  status: 'open',
+  automatedRecenters: 0,
+  anchor: { founding: ['e1', 'e2'], standIns: false, turningPoints: [] },
+  stories: [4, 5].map(n => ({
+    storyId: `s${n}`,
+    title: `T${n}`,
+    label: 'L',
+    summary: 'S.',
+    date: `2026-11-1${n}`,
+    datePublished: new Date(`2026-11-1${n}T00:00:00Z`),
+    entryId: null,
+    quotes: [`T${n}`],
+  })),
+  neighbours: [],
+  fired: { wider: 2, centerMoved: 0 },
+})
+
+const yes = (id: string) => ({ id, belongs: 'yes' as const })
+const widen: RecenterAnswer = {
+  decision: 'recenter',
+  title: 'Ebola and its response',
+  charter: { in: 'Wider in.', out: [], endEvent: '' },
+  entries: ['E1', 'E2', 'E3'].map(yes),
+  stories: ['S1', 'S2'].map(id => ({ ...yes(id), ...routine })),
+  reason: 'The stories show it.',
+}
+const agree: RecenterCheckAnswer = {
+  entries: ['E1', 'E2', 'E3'].map(id => ({ ...yes(id), reason: 'It does.' })),
+  stories: ['S1', 'S2'].map(id => ({ ...yes(id), reason: 'It does.' })),
+  endEventConcrete: 'none',
+  neighbours: [],
+}
+
 const supported = (n: number): FactCheck => ({
   items: Array.from({ length: n }, (_, i) => ({ number: i + 1, supported: true, problem: '', key: false, copiedSentence: '', followsSource: '' })),
 })
@@ -152,6 +190,12 @@ function fakes(over: Partial<UpkeepDeps> = {}): UpkeepDeps & { writes: string[] 
     applyClosing: async (c, r) => void writes.push(`closing:${c.overviewId}:${r.outcome}`),
     applyStatus: async (s, moves) => void writes.push(`status:${s.id}:${moves.map(m => (m.kind === 'status' ? m.to : m.kind)).join(',')}`),
     applyBurst: async s => void writes.push(`burst:${s.id}`),
+    recenterCases: async () => [],
+    recenter: { draft: async () => call(widen, 0.05), check: async () => call(agree, 0.05) },
+    applyRecenter: async (c, r) => {
+      writes.push(`recenter:${c.overviewId}:${r.outcome}`)
+      return 'written'
+    },
     applyReview: async (c, r) => {
       writes.push(`review:${c.overviewId}:${r.trigger}:${r.outcome}`)
       return 'written'
@@ -191,6 +235,48 @@ describe('the upkeep after linking', () => {
     const tally = await runUpkeep(deps, AT)
     expect(deps.writes).toEqual(['burst:o1', 'review:o1:burst:reviewed'])
     expect(tally.bursts).toBe(1)
+  })
+
+  it('re-centers before the reviews, skips the review of an overview it re-centered, and counts refusals and stale attempts', async () => {
+    const deps = fakes({
+      states: async () => [state('o1', { activeEntries: 6 }), state('o2', { activeEntries: 6 })],
+      recenterCases: async () => [recenterCase('o1'), recenterCase('o2')],
+      recenter: { draft: async input => call(input.title === 'Ebola' ? widen : null, 0.05), check: async () => call(agree, 0.05) },
+    })
+    const tally = await runUpkeep(deps, AT)
+    expect(deps.writes).toEqual(['recenter:o1:recentered', 'recenter:o2:recentered'])
+    expect(tally).toMatchObject({ recenterAttempts: 2, recentersRefused: 0, recentersStale: 0, reviews: 0 })
+    expect(tally.recenters).toEqual([
+      { overviewId: 'o1', from: 'Ebola', to: 'Ebola and its response', count: 1 },
+      { overviewId: 'o2', from: 'Ebola', to: 'Ebola and its response', count: 1 },
+    ])
+    expect(tally.costUsd).toBeCloseTo(0.2)
+
+    // A draft that keeps the charter asks no check; one that drops an OUT entry is refused unchecked; a stale write counts as stale
+    const checks: string[] = []
+    const kept = fakes({
+      states: async () => [state('o1', { activeEntries: 6 })],
+      recenterCases: async () => [
+        { ...recenterCase('o1'), charter: { in: 'Keep me.', out: [], endEvent: 'End.' } },
+        { ...recenterCase('o2'), charter: { in: 'In.', out: ['Kept.'], endEvent: 'End.' } },
+        recenterCase('o3'),
+      ],
+      recenter: {
+        draft: async input => call(input.charter.in === 'Keep me.' ? { ...widen, decision: 'keep' as const } : widen),
+        check: async () => {
+          checks.push('check')
+          return call(agree)
+        },
+      },
+      applyRecenter: async (c, r) => {
+        kept.writes.push(`recenter:${c.overviewId}:${r.outcome}:${r.rule ?? '-'}`)
+        return c.overviewId === 'o3' ? 'stale' : 'written'
+      },
+    })
+    const second = await runUpkeep(kept, AT)
+    expect(kept.writes).toEqual(['recenter:o1:kept:-', 'recenter:o2:refused:out', 'recenter:o3:recentered:-', 'review:o1:entries:reviewed'])
+    expect(checks).toEqual(['check'])
+    expect(second).toMatchObject({ recenterAttempts: 3, recentersRefused: 1, recentersStale: 1, recenters: [] })
   })
 
   it('refreshes no stands whose signature has not changed, and signs no failed refresh', async () => {

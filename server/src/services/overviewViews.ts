@@ -16,7 +16,8 @@ import { undoable } from './overviewEdits.js'
 import { parseCharter } from './overviewInput.js'
 import { isPublicOverview } from './overviewPublicRule.js'
 import { overviewStepOn } from './overviewQueue.js'
-import { anchorOf, type AnchorEntry, recenterLockedUntil } from './overviewRecenter.js'
+import { anchorOf, type AnchorEntry, recenterLockedUntil, signalsSince, type SignalRecord } from './overviewRecenter.js'
+import { signalRecords } from './overviewRecenterInput.js'
 import { usable } from './researchPool.js'
 
 /** The decisions the status history lists: the status machine's, end-event closings, an editor's close and freeze. */
@@ -51,13 +52,14 @@ type CharterDecision = { id: string; kind: string; outcome: string; actor: strin
 /**
  * An overview's re-centering for its admin page (`.context/overviews.md`, "Re-centering"): the
  * anchor a new charter should still cover, the automated re-centers against the limit, the lock an
- * editor's or an Undo's re-center set, the OUT entries an Undo locked out, the signals counted since
- * automation last tried, and the charter history from the re-center decisions.
+ * editor's or an Undo's re-center set, the OUT entries an Undo locked out, the link signals since the
+ * last re-center, and the charter history from the re-center decisions.
  */
 function recenteringView(
-  o: { automatedRecenters: number; recenteredAt: Date | null; recenteredBy: string | null; lockedOut: unknown },
+  o: { id: string; automatedRecenters: number; recenteredAt: Date | null; recenteredBy: string | null; lockedOut: unknown },
   entries: ViewedEntry[],
   charterDecisions: CharterDecision[],
+  signals: readonly SignalRecord[],
   names: ReadonlyMap<string, string>,
 ) {
   const founding = charterDecisions.filter(d => d.kind === 'found').flatMap(d => foundingEntries(d.inputs))
@@ -87,6 +89,8 @@ function recenteringView(
     lockedUntil: lockedUntil && lockedUntil.getTime() > Date.now() ? lockedUntil : null,
     /** OUT entries an Undo took out, which no review adds again; an editor's charter that names one again lifts its lock. */
     lockedOut: Array.isArray(o.lockedOut) ? o.lockedOut.filter((x): x is string => typeof x === 'string') : [],
+    /** Stories linked since the last re-center (since founding before one) that pointed past the charter: still counted at the limit, so the editor sees them. */
+    signals: signalsSince(o.id, signals, o.recenteredAt),
     anchor: { standIns: anchor.standIns, entries: [...anchor.founding.map(anchorEntry(true)), ...anchor.turningPoints.map(anchorEntry(false))] },
     history: charterDecisions
       .filter(d => RECENTER_KINDS.includes(d.kind))
@@ -252,6 +256,7 @@ export async function adminOverview(id: string) {
     entryCounts([id]),
     overviewStepOn(),
   ])
+  const signals = await signalRecords(prisma, id)
   const versions = stands.map(v => ({ ...v, sentences: linesSchema.parse(v.sentences), doing: linesSchema.parse(v.doing) }))
   const resolve = resolveLine(await citedFacts([...new Set(versions.flatMap(v => [...v.sentences, ...v.doing].flatMap(l => l.facts)))]))
   const names = await editorNames([...new Set([...decisions, ...history, ...charterDecisions].flatMap(d => [d.actor, d.undoneBy ?? '']).filter(Boolean))])
@@ -278,7 +283,7 @@ export async function adminOverview(id: string) {
   return {
     ...fields,
     charter: parseCharter(o.charter) ?? { in: '', out: [], endEvent: null },
-    recentering: recenteringView({ lockedOut, automatedRecenters, recenteredAt, recenteredBy }, entries, charterDecisions, names),
+    recentering: recenteringView({ id, lockedOut, automatedRecenters, recenteredAt, recenteredBy }, entries, charterDecisions, signals, names),
     entries: counts.get(id) ?? 0,
     public: isPublicOverview(o),
     on,

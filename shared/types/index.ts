@@ -1802,6 +1802,8 @@ export interface OverviewRecentering {
   lockedUntil: string | null
   /** OUT entries an Undo took out, which no review adds again; naming one in OUT lifts its lock. */
   lockedOut: string[]
+  /** Stories linked since the last re-center (since founding before one) that the link call found wider than the charter, or reporting that its center moved. */
+  signals: { wider: number; centerMoved: number }
   /** The founding entries first (`standIns` when none is left and the oldest stand in), then the turning points. */
   anchor: { standIns: boolean; entries: OverviewAnchorEntry[] }
   history: OverviewRecenterRecord[]

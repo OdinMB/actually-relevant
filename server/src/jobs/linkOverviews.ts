@@ -22,12 +22,13 @@ import { countOf, recordItems, reportRunResult } from '../lib/runUsage.js'
 import { utcDay } from '../lib/days.js'
 import { membershipsOf, nearestPublished } from '../services/overviewCandidates.js'
 import { candidateOverviews, linkStories } from '../services/overviewInput.js'
-import { applyAudit, applyBurst, applyClosing, applyLink, applyReview, applyStands, applyStatus } from '../services/overviewLifecycle.js'
+import { applyAudit, applyBurst, applyClosing, applyLink, applyRecenter, applyReview, applyStands, applyStatus } from '../services/overviewLifecycle.js'
 import { linkInOrder, type ApplyLink, type LinkDeps } from '../services/overviewLink.js'
 import { LINK_OVERVIEWS_JOB, overviewStepOn, overviewSwitchRefusal, owedStories } from '../services/overviewQueue.js'
 import { overviewCalls, type OverviewCalls } from '../services/overviewSteps.js'
 import type { LinkOutcome, LinkStory } from '../services/overviewTypes.js'
-import { runUpkeep, type UpkeepDeps, type UpkeepFreeze, type UpkeepTally } from '../services/overviewUpkeep.js'
+import { recenterCases } from '../services/overviewRecenterInput.js'
+import { runUpkeep, type UpkeepDeps, type UpkeepFreeze, type UpkeepRecenter, type UpkeepTally } from '../services/overviewUpkeep.js'
 import { auditPicks, overviewStates, pendingClosings, reviewCase, standsCases } from '../services/overviewUpkeepInput.js'
 import { structuredCall } from '../services/structuredCall.js'
 import { jobDisplayName } from './jobDisplayName.js'
@@ -59,12 +60,15 @@ export const productionUpkeepDeps = (now: Date, calls: OverviewCalls = productio
   reviewCase: id => reviewCase(prisma, id),
   auditPicks: at => auditPicks(prisma, at),
   standsCases: today => standsCases(prisma, today),
+  recenterCases: at => recenterCases(prisma, at),
   close: calls.close,
   review: calls.review,
   stands: calls.stands,
+  recenter: calls.recenter,
   applyClosing: (c, result) => applyClosing(c, result, now),
   applyStatus: (state, moves, clock) => applyStatus(state, moves, clock, now),
   applyBurst: state => applyBurst(state, now),
+  applyRecenter: (c, result) => applyRecenter(c, result, now),
   applyReview: (c, result) => applyReview(c, result, now),
   applyAudit: (c, result) => applyAudit(c, result, now),
   applyStands: (c, result, record, today) => applyStands(c, result, record, today),
@@ -84,6 +88,7 @@ export function upkeepClock(slices: { backlog: string[]; backlogTotal: number },
 /** "; 3 overviews refreshed, 1 reviewed", and what else the upkeep did when it did it. */
 export function upkeepSummary(t: UpkeepTally): string {
   const parts = [`${countOf(t.standsWritten, 'overview', 'overviews')} refreshed`, `${t.reviews.toLocaleString('en-US')} reviewed`]
+  if (t.recenters.length > 0) parts.push(`${t.recenters.length.toLocaleString('en-US')} re-centered`)
   if (t.closingsBegun > 0) parts.push(`${t.closingsBegun.toLocaleString('en-US')} closing`)
   if (t.bursts > 0) parts.push(`${t.bursts.toLocaleString('en-US')} frozen by a burst`)
   if (t.audits > 0) parts.push(`${t.audits.toLocaleString('en-US')} audited`)
@@ -111,6 +116,25 @@ export async function notifyFreeze(f: UpkeepFreeze): Promise<void> {
         'Check its stories on its admin page, detach any that do not belong, then unfreeze it.',
     link: `/admin/overviews/${f.overviewId}`,
     dedupeKey: `overview-frozen:${f.overviewId}`,
+  })
+}
+
+/**
+ * The owner's notice of an automated re-center applied this run: it changes what readers see with no
+ * person, so the owner reads it (old and new title, and where the limit stands).
+ */
+export async function notifyRecenter(r: UpkeepRecenter): Promise<void> {
+  const limit = config.overviews.maxAutomatedRecenters
+  await notify({
+    source: 'jobs',
+    severity: 'info',
+    title: `Ongoing story re-centered: "${r.from}" is now "${r.to}"`,
+    message:
+      `Two AI checks agreed that its stories now point past its charter, so its charter and title were widened and the stories they agreed on joined. ` +
+      `Automatic re-centers: ${r.count.toLocaleString('en-US')} of ${limit.toLocaleString('en-US')}${r.count >= limit ? ': only an editor can re-center it now' : ''}. ` +
+      'Check the new charter and its stories on its admin page; Undo puts the old charter back and keeps automation from re-centering it for a while.',
+    link: `/admin/overviews/${r.overviewId}`,
+    dedupeKey: `overview-recentered:${r.overviewId}`,
   })
 }
 
@@ -208,6 +232,7 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
   if (failing(run.outcomes.size, failed)) await notifyFailedStories(run.outcomes.size, failed).catch(() => {})
   if (upkeep && failing(upkeep.items, upkeep.failed)) await notifyFailedUpkeep(upkeep.items, upkeep.failed).catch(() => {})
   for (const f of upkeep?.freezes ?? []) await notifyFreeze(f).catch(() => {})
+  for (const r of upkeep?.recenters ?? []) await notifyRecenter(r).catch(() => {})
   const left = stories.length - run.outcomes.size
   const linked =
     stories.length === 0

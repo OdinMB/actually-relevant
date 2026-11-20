@@ -184,6 +184,9 @@ export interface Brake {
   unlocked: number
 }
 
+/** Whether `asked` detaches trip the detach brake: more than half of the `unlocked` entries. A re-center is held to it too. */
+export const brakeTrips = (asked: number, unlocked: number): boolean => asked > 0 && asked * 2 > unlocked
+
 /**
  * The detach brake (`.context/overviews.md`, "Reviews"): one review may detach at most half of the
  * overview's unlocked entries. A review asking for more detaches none (each refused), clears no freeze
@@ -194,7 +197,7 @@ export interface Brake {
 export function braked(c: ReviewCase, actions: readonly ReviewAction[]): { actions: ReviewAction[]; refusals: ReviewRefusal[]; brake: Brake | null } {
   const asked = actions.filter(a => a.kind === 'detach').length
   const unlocked = c.entries.filter(e => !e.locked).length
-  if (asked === 0 || asked * 2 <= unlocked) return { actions: [...actions], refusals: [], brake: null }
+  if (!brakeTrips(asked, unlocked)) return { actions: [...actions], refusals: [], brake: null }
   return {
     actions: actions.filter(a => a.kind !== 'detach' && a.kind !== 'unfreeze'),
     refusals: [

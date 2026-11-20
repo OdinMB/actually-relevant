@@ -2,7 +2,8 @@
  * The overview step's upkeep after linking (`.context/overviews.md`, "The job", parts 2 to 5), over
  * injected reads, calls and writes, the same in production and in the eval's sandbox: the end-event
  * closing checks; the status machine with the unpublished-member rule and the burst check; the
- * reviews due and the monthly audit; and the stands refreshes due. Each overview is its own item: one
+ * automated re-centers the link signals fired; the reviews due and the monthly audit; and the stands
+ * refreshes due. Each overview is its own item: one
  * that fails is logged and the rest go on, and the step stops starting items once it is switched off.
  * Pure: nothing here reads or writes the database.
  */
@@ -19,6 +20,7 @@ import {
   type StandsOptions,
   type StandsResult,
 } from './overviewStands.js'
+import { recenterOverview, type AttemptOptions, type RecenterCase, type RecenterDeps, type RecenterResult } from './overviewRecenter.js'
 import { anomalies, nextState, reviewDue, type StatusMove, type StatusOptions } from './overviewStatus.js'
 import type { OverviewState, Role } from './overviewTypes.js'
 
@@ -49,6 +51,15 @@ export interface UpkeepFreeze {
 /** What a review's write did: `written` as its result says, or `stale` when its overview changed while the call ran (or is gone), so nothing of it applied and the review stays due. */
 export type ReviewWrite = 'written' | 'stale'
 
+/** An automated re-center applied this run, for the owner's notice. */
+export interface UpkeepRecenter {
+  overviewId: string
+  from: string
+  to: string
+  /** Applied automated re-centers now, of `maxAutomatedRecenters`. */
+  count: number
+}
+
 export interface UpkeepDeps {
   /** Joined stories flagged as reporting their overview's end event, not yet judged. */
   closings(): Promise<CloseCase[]>
@@ -59,13 +70,18 @@ export interface UpkeepDeps {
   auditPicks(now: Date): Promise<string[]>
   /** Public overviews that are not frozen, with what their stands are written from on `today`. */
   standsCases(today: string): Promise<StandsCase[]>
+  /** The overviews an automated re-center is due on (`recenterCaseOf`), with their neighbors. */
+  recenterCases(at: Pick<UpkeepTimes, 'clock' | 'now'>): Promise<RecenterCase[]>
   close: CloseDeps
   review: ReviewDeps
   stands: StandsDeps
+  recenter: RecenterDeps
   applyClosing(c: CloseCase, result: CloseResult): Promise<void>
   applyStatus(state: OverviewState, moves: StatusMove[], clock: Date): Promise<void>
   applyBurst(state: OverviewState): Promise<void>
   applyReview(c: ReviewCase, result: ReviewResult): Promise<ReviewWrite>
+  /** `stale` when the overview or a story to join changed during the calls (or the overview is gone): nothing applied, asked again next run. */
+  applyRecenter(c: RecenterCase, result: RecenterResult): Promise<ReviewWrite>
   applyAudit(c: ReviewCase, result: AuditResult): Promise<void>
   /** The record's `signature` is null for a failed refresh, which the next run tries again. */
   applyStands(
@@ -74,7 +90,7 @@ export interface UpkeepDeps {
     record: { signature: string | null; marker: string | null; until: string | null },
     today: string,
   ): Promise<void>
-  options?: StatusOptions & StandsOptions & ReviewOptions
+  options?: StatusOptions & StandsOptions & ReviewOptions & AttemptOptions
 }
 
 /**
@@ -102,6 +118,11 @@ export interface UpkeepTally {
   /** Actions reviews applied, and answers or parts code refused, of the reviews written. */
   reviewActions: number
   reviewRefusals: number
+  /** Automated re-center attempts made, those code refused, and those gone stale (asked again next run); the applied ones are `recenters`. */
+  recenterAttempts: number
+  recentersRefused: number
+  recentersStale: number
+  recenters: UpkeepRecenter[]
   audits: number
   /** Stands refreshes attempted, and new versions written. */
   standsRefreshes: number
@@ -120,7 +141,7 @@ export interface UpkeepTally {
   stopped: boolean
 }
 
-export type UpkeepPart = 'closing' | 'status' | 'review' | 'audit' | 'stands'
+export type UpkeepPart = 'closing' | 'status' | 'recenter' | 'review' | 'audit' | 'stands'
 
 const emptyTally = (): UpkeepTally => ({
   closingsChecked: 0,
@@ -132,6 +153,10 @@ const emptyTally = (): UpkeepTally => ({
   reviewsStale: 0,
   reviewActions: 0,
   reviewRefusals: 0,
+  recenterAttempts: 0,
+  recentersRefused: 0,
+  recentersStale: 0,
+  recenters: [],
   audits: 0,
   standsRefreshes: 0,
   standsWritten: 0,
@@ -147,9 +172,10 @@ const emptyTally = (): UpkeepTally => ({
 
 /**
  * Runs parts 2 to 5 in order (`.context/overviews.md`, "The job"): closing checks, then the status
- * machine (each overview's moves, then the burst check that freezes it), then the reviews due on the
- * states as they stand after it and the monthly audit, then the stands refreshes whose signature
- * changed. `keepGoing` is asked before each item; once it says no, nothing else starts.
+ * machine (each overview's moves, then the burst check that freezes it), then the automated re-centers
+ * due, then the reviews due on the states as they stand after them (none for an overview re-centered
+ * this run) and the monthly audit, then the stands refreshes whose signature changed. `keepGoing` is
+ * asked before each item; once it says no, nothing else starts.
  */
 export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: () => Promise<boolean> | boolean = () => true): Promise<UpkeepTally> {
   const options = deps.options ?? config.overviews
@@ -205,8 +231,31 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
   )
   if (tally.stopped) return tally
 
+  // Re-centers before reviews: one applied this run judged every entry under its new charter by two calls, so its overview's review waits for the next run
+  const recentered = new Set<string>()
+  await each(
+    'recenter',
+    await deps.recenterCases(at),
+    c => c.overviewId,
+    async c => {
+      const result = await recenterOverview(c, deps.recenter, options)
+      tally.costUsd += result.costUsd
+      tally.recenterAttempts++
+      if (result.outcome === 'failed') tally.failed++
+      if ((await deps.applyRecenter(c, result)) === 'stale') {
+        tally.recentersStale++
+        return
+      }
+      if (result.outcome === 'refused') tally.recentersRefused++
+      if (result.outcome !== 'recentered') return
+      recentered.add(c.overviewId)
+      tally.recenters.push({ overviewId: c.overviewId, from: c.title, to: result.title!, count: c.automatedRecenters + 1 })
+    },
+  )
+  if (tally.stopped) return tally
+
   const due = (await deps.states()).flatMap(s => {
-    const trigger = reviewDue(s, at, options)
+    const trigger = recentered.has(s.id) ? null : reviewDue(s, at, options)
     return trigger ? [{ id: s.id, trigger }] : []
   })
   await each(

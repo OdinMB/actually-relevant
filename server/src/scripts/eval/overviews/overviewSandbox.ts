@@ -215,7 +215,8 @@ export function createSandbox(): Sandbox {
 /**
  * The safeguards that fired, by name, counted from the decisions written (what the replay reports):
  * end-event checks that did not begin a closing, closings cancelled (by a new entry, by a review, by an
- * unpublished member), bursts, the review brake, and what reviews did and what code refused of them.
+ * unpublished member), bursts, the review brake, what reviews did and what code refused of them, and
+ * the automated re-center's attempts by outcome, by the rule that refused one and by what fired it.
  */
 export function safeguardsOf(decisions: readonly SandboxDecision[]): Map<string, number> {
   const fired = new Map<string, number>()
@@ -247,6 +248,13 @@ export function safeguardsOf(decisions: readonly SandboxDecision[]): Map<string,
       add('review narrowed the charter', (inputs.actions ?? []).filter(a => a.kind === 'narrow').length)
       add('review answers refused', (inputs.refusals ?? []).length)
       if (inputs.brake) add('review brake froze an overview')
+    }
+    // Attempts by outcome, refusals by the rule that held, and by what fired them
+    if (d.kind === 'recenter') {
+      const r = d.inputs as { rule?: string | null; fired?: { wider: number; centerMoved: number } | null }
+      add(d.outcome === 'refused' ? `re-center refused (${r.rule ?? 'unknown'})` : `re-center ${d.outcome}`)
+      if (r.fired?.centerMoved) add('re-center attempt fired by a center flag')
+      else if (r.fired?.wider) add('re-center attempt fired by wider flags')
     }
   }
   return fired

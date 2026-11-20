@@ -115,6 +115,8 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/overviewReview.js': '*',
   'services/overviewStatus.js': '*',
   'services/overviewUpkeep.js': '*',
+  // The automated re-center's rules and attempt, pure (held below), so the `recenter` and `replay` steps run what the job runs.
+  'services/overviewRecenter.js': '*',
   // The write model, production's planners, the state they judge and the decision log's schemas, pure (held below), so
   // the sandbox writes by the lifecycle's own plans.
   'services/overviewChanges.js': '*',
@@ -138,6 +140,7 @@ const OVERVIEW_SERVICE_MODULES = [
   'overviewReview.ts',
   'overviewStatus.ts',
   'overviewUpkeep.ts',
+  'overviewRecenter.ts',
   'overviewChanges.ts',
   'overviewPlans.ts',
   'overviewState.ts',

@@ -8,13 +8,24 @@ import { NO_END_EVENT, actorLabel } from './overviewLabels'
 /*
  * An overview's charter on its admin page (`.context/overviews.md`, "Admin" and "Re-centering"): IN,
  * OUT and END_EVENT (or none), who drafted it, the count of automated re-centers against the limit,
- * the lock an editor's or an Undo's re-center set, "Edit charter", and the charter history from the
- * re-center decisions.
+ * the lock an editor's or an Undo's re-center set, the stories linked since the last re-center that
+ * pointed past the charter, "Edit charter", and the charter history from the re-center decisions.
  */
 
 const CLOSED_REASONS: Record<string, string> = { end_event: 'its end event was reported', faded: 'it faded', editor: 'an editor closed it' }
 
 const LOCKED_BY: Record<string, string> = { editor: "an editor's re-center", undo: "an Undo of automation's re-center" }
+
+const stories = (n: number) => (n === 1 ? '1 story' : `${n} stories`)
+
+/** "Since the last re-center: 3 stories pointed past the charter, 1 reported that its center moved." */
+function signalsLine(s: { wider: number; centerMoved: number }, recentered: boolean): string {
+  const parts = [
+    ...(s.wider > 0 ? [`${stories(s.wider)} pointed past the charter`] : []),
+    ...(s.centerMoved > 0 ? [`${stories(s.centerMoved)} reported that its center moved`] : []),
+  ]
+  return `${recentered ? 'Since the last re-center' : 'Since it was founded'}: ${parts.join(', ')}`
+}
 
 function OutList({ out }: { out: string[] }) {
   if (out.length === 0) return <>—</>
@@ -75,6 +86,9 @@ export function OverviewCharter({ overview: o }: { overview: AdminOverviewDetail
             <span className="block text-neutral-500">
               No automatic re-center until {formatShortDate(r.lockedUntil)}, after {LOCKED_BY[r.recenteredBy] ?? 'a re-center'}
             </span>
+          )}
+          {(r.signals.wider > 0 || r.signals.centerMoved > 0) && (
+            <span className="block text-neutral-500">{signalsLine(r.signals, r.recenteredAt !== null)}</span>
           )}
         </dd>
         <dt className="text-neutral-500">Founded</dt>

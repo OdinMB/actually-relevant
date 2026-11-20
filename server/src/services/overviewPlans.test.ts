@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { joinResult, linkResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
 import { applied, newOverviewRow, settle, type EntryRow, type OverviewRow, type Rows } from './overviewChanges.js'
-import { planAlone, planBurst, planClosing, planConflict, planJoin, planReview, planStatus } from './overviewPlans.js'
+import { planAlone, planBurst, planClosing, planConflict, planJoin, planRecenter, planReview, planStatus } from './overviewPlans.js'
+import type { RecenterCase, RecenterResult } from './overviewRecenter.js'
 import type { ReviewResult } from './overviewReview.js'
 
 const NOW = new Date('2026-11-18T03:00:00Z')
@@ -62,6 +63,109 @@ describe('planJoin', () => {
     const flagged = joinResult(story, 'o1', true)
     expect(planJoin(overview(), flagged, ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: true })
     expect(planJoin(overview({ charter: { ...charter, endEvent: null } }), flagged, ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: false })
+  })
+})
+
+describe('planRecenter', () => {
+  const wider = { in: 'The Ebola outbreak in Ituri and its regional response.', out: ['Ebola in Uganda', 'Cholera in Ituri'], endEvent: null }
+  const at = () =>
+    rows({ scope: 'ongoing', status: 'open', slug: 'ebola-in-ituri' }, [
+      entry(1),
+      entry(2),
+      entry(3),
+      entry(4),
+      entry(7, { status: 'detached', detachedBy: 'review', detachReason: 'review', detachedAt: day(8) }),
+    ])
+  const caseOf = (r: Rows): RecenterCase => ({
+    ...reviewCaseOf(r),
+    lockedOut: r.overview.lockedOut,
+    status: r.overview.status,
+    automatedRecenters: r.overview.automatedRecenters,
+    anchor: { founding: ['e1', 'e2'], standIns: false, turningPoints: [] },
+    stories: [],
+    neighbours: [],
+    fired: { wider: 2, centerMoved: 0 },
+  })
+  const result = (over: Partial<RecenterResult> = {}): RecenterResult => ({
+    outcome: 'recentered',
+    rule: null,
+    refusals: [],
+    title: 'Ebola in Ituri and the region',
+    charter: wider,
+    outAdded: ['Cholera in Ituri'],
+    detaches: [{ entryId: 'e4', storyId: 's4' }],
+    joins: [
+      { storyId: 's7', entryId: 'e7', datePublished: day(7), role: { role: 'turning_point', roleKind: 'response' } },
+      { storyId: 's9', entryId: null, datePublished: day(9), role: { role: 'routine', roleKind: null } },
+    ],
+    anchor: [],
+    kept: 3,
+    fired: { wider: 2, centerMoved: 0 },
+    answer: { draft: null, check: null },
+    costUsd: 0.12,
+    model: 'large-model',
+    promptVersion: 'rv',
+    ...over,
+  })
+
+  it('writes the new title and charter as the re-center’s, detaches what both rejected, joins what both accepted, and counts it', () => {
+    const r = at()
+    const p = planRecenter(r, caseOf(r), result(), new Set(), ctx)
+    expect(p.decision).toMatchObject({ kind: 'recenter', outcome: 'recentered', actor: 'recenter', model: 'large-model', promptVersion: 'rv', costUsd: 0.12 })
+    expect(p.decision.inputs).toMatchObject({ outAdded: ['Cholera in Ituri'], joined: ['s7', 's9'], detached: ['e4'], kept: 3 })
+    const done = applied(r, settle(r, p))
+    expect(done.overview).toMatchObject({
+      title: 'Ebola in Ituri and the region',
+      charter: wider,
+      charterModel: 'large-model',
+      charterPromptVersion: 'rv',
+      recenteredAt: NOW,
+      recenteredBy: 'recenter',
+      recenterTriedAt: NOW,
+      automatedRecenters: 1,
+      slug: 'ebola-in-ituri',
+      lastEntryAt: day(9),
+    })
+    expect(done.entries.find(e => e.id === 'e4')).toMatchObject({ status: 'detached', detachedBy: 'recenter', detachReason: 'recenter' })
+    // The review-detached row is reused, unlocked, with the draft's role; any other story gets a new row
+    expect(done.entries.find(e => e.id === 'e7')).toMatchObject({
+      status: 'active',
+      locked: false,
+      role: 'turning_point',
+      roleKind: 'response',
+      detachedBy: null,
+    })
+    expect(p.newEntries).toEqual([
+      expect.objectContaining({ storyId: 's9', joinedBy: 'recenter', decisionId: p.decision.id, shared: null, confidence: null, model: 'large-model' }),
+    ])
+    expect(done.entries.filter(e => e.status === 'active').map(e => e.storyId)).toEqual(['s1', 's2', 's3', 's7', 's9'])
+  })
+
+  it('only marks the attempt when kept or refused, and writes nothing for a failed call', () => {
+    const r = at()
+    for (const outcome of ['kept', 'refused'] as const) {
+      const p = planRecenter(r, caseOf(r), result({ outcome, joins: [], detaches: [], rule: outcome === 'refused' ? 'anchor' : null }), new Set(), ctx)
+      expect(p.decision.outcome).toBe(outcome)
+      expect(p.changes).toEqual([expect.objectContaining({ table: 'overview', after: { recenterTriedAt: NOW } })])
+      expect(p.decision.inputs).toMatchObject({ outAdded: [] })
+    }
+    const failed = planRecenter(r, caseOf(r), result({ outcome: 'failed', joins: [], detaches: [] }), new Set(), ctx)
+    expect(failed.changes).toEqual([])
+    expect(failed.decision.inputs).toMatchObject({ kept: null })
+  })
+
+  it('is stale, applying nothing, when the overview changed during the calls or a story to join is taken', () => {
+    const r = at()
+    const c = caseOf(r)
+    const stale = (rowsNow: Rows | null, taken = new Set<string>()) => planRecenter(rowsNow, c, result(), taken, ctx)
+    expect(stale(null).decision.outcome).toBe('stale')
+    expect(stale({ ...r, overview: { ...r.overview, title: 'Retitled' } }).decision.outcome).toBe('stale')
+    expect(stale({ ...r, overview: { ...r.overview, lockedOut: ['x'] } }).decision.outcome).toBe('stale')
+    expect(stale({ ...r, overview: { ...r.overview, automatedRecenters: 1 } }).decision.outcome).toBe('stale')
+    expect(stale({ ...r, overview: { ...r.overview, status: 'quiet' } }).decision.outcome).toBe('stale')
+    expect(stale(r, new Set(['s9'])).decision.outcome).toBe('stale')
+    expect(stale({ ...r, entries: r.entries.map(e => (e.id === 'e7' ? { ...e, status: 'active' as const } : e)) }).decision.outcome).toBe('stale')
+    expect(stale(r, new Set(['s9'])).changes).toEqual([])
   })
 })
 

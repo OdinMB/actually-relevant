@@ -2,7 +2,8 @@
  * The automated writes as change sets (`overviewChanges.ts`; `.context/overviews.md`, "How a story is
  * linked" and "Status, closing and reviews"), each planned from the rows as they stand when it is
  * written: one story's linking (a join, a founding, the story left alone), an end-event closing begun,
- * the status machine's moves, a burst's freeze, a review's actions and the monthly audit's findings.
+ * the status machine's moves, a burst's freeze, a review's actions, an automated re-center and the
+ * monthly audit's findings.
  * The lifecycle applies them in one transaction over the rows it locked; the eval sandbox applies the
  * same plans to its memory, so both write by one set of rules. Each applier settles a plan
  * (`settle`) before applying it; the status machine's moves are settled here, one after the other,
@@ -33,8 +34,9 @@ import {
   type Rows,
 } from './overviewChanges.js'
 import type { CloseCase, CloseResult } from './overviewClose.js'
-import type { AuditInputs, CloseInputs, FoundInputs, LinkInputs, ReviewInputs, StatusInputs } from './overviewDecisions.js'
+import type { AuditInputs, CloseInputs, FoundInputs, LinkInputs, RecenterInputs, ReviewInputs, StatusInputs } from './overviewDecisions.js'
 import type { LinkResult } from './overviewLink.js'
+import { RECENTERER, type RecenterCase, type RecenterResult } from './overviewRecenter.js'
 import type { AuditResult, ReviewCase, ReviewResult } from './overviewReview.js'
 import type { StatusMove } from './overviewStatus.js'
 import type { LinkOutcome, OverviewState, Role } from './overviewTypes.js'
@@ -429,6 +431,108 @@ export function planReview(rows: Rows, c: ReviewCase, result: ReviewResult, ctx:
     wasPublic: publicBefore(o),
     needsSlug: result.scope === 'ongoing' && o.slug === null,
   })
+}
+
+/** The outcome of an automated re-center whose overview or stories changed during its calls: recorded, nothing applied, asked again next run. */
+export const STALE_RECENTER = 'stale'
+
+/**
+ * Whether an automated re-center's calls read rows that no longer hold (`.context/overviews.md`,
+ * "Re-centering"): what a review compares (`changedSinceCase`), and the status, the locked-out OUT
+ * entries and the count of automated re-centers; for a proposal also a story it would join that is
+ * active in an overview by now (`activeNow`), or whose row here is no longer detached.
+ */
+export function recenterStale(c: RecenterCase, rows: Rows, result: RecenterResult, activeNow: ReadonlySet<string>): boolean {
+  const o = rows.overview
+  if (changedSinceCase(c, rows) || o.status !== c.status || !sameValue(o.lockedOut, c.lockedOut) || o.automatedRecenters !== c.automatedRecenters) return true
+  return result.joins.some(j => activeNow.has(j.storyId) || (j.entryId !== null && rows.entries.find(e => e.id === j.entryId)?.status !== 'detached'))
+}
+
+/**
+ * An automated re-center's result as its `recenter` decision (D-RC2, D-RC6, D-RC12, D-RC14): nothing
+ * for a failed call, nor for one gone stale (`recenterStale`), both asked again next run; `kept` and
+ * `refused` only mark the attempt (`recenter_tried_at`, which the next attempt's signals count from).
+ * `recentered` writes the title and the charter (the AI marker's model fields the draft's), the
+ * re-center's own (`recentered_by` `recenter`), one more automated re-center, the attempt; detaches the
+ * entries both calls rejected (`recenter`; their link decisions stay live); and joins the stories both
+ * accepted, a review-detached row reused, any other a new entry (`joined_by` `recenter`), each with the
+ * draft's role and unlocked. A re-center join never starts a closing, and `joins_counted_from` stays,
+ * as the burst count counts only the pipeline's joins. `rows` is null for an overview gone.
+ */
+export function planRecenter(rows: Rows | null, c: RecenterCase, result: RecenterResult, activeNow: ReadonlySet<string>, ctx: PlanContext): Plan {
+  const stale = rows === null || (result.outcome !== 'failed' && recenterStale(c, rows, result, activeNow))
+  const inputs: RecenterInputs = {
+    rule: result.rule,
+    outAdded: result.outcome === 'recentered' ? result.outAdded : [],
+    anchor: result.anchor,
+    refusals: result.refusals,
+    fired: result.fired,
+    offered: c.stories.map(s => s.storyId),
+    joined: result.joins.map(j => j.storyId),
+    detached: result.detaches.map(d => d.entryId),
+    kept: result.outcome === 'failed' ? null : result.kept,
+  }
+  const decision = draft({
+    id: ctx.newId(),
+    kind: 'recenter',
+    outcome: stale ? STALE_RECENTER : result.outcome,
+    overviewId: c.overviewId,
+    storyId: null,
+    inputs,
+    answer: result.answer,
+    model: result.model,
+    promptVersion: result.promptVersion,
+    costUsd: result.costUsd,
+    actor: RECENTERER,
+  })
+  if (stale || result.outcome === 'failed') return plan(decision)
+  const o = rows.overview
+  if (result.outcome !== 'recentered') return plan(decision, { changes: overviewChange(o, { recenterTriedAt: ctx.now }) })
+  const changes: Change[] = []
+  const left: (string | null)[] = []
+  for (const d of result.detaches) {
+    const e = rows.entries.find(x => x.id === d.entryId)
+    if (!e || e.status !== 'active' || e.locked) continue
+    changes.push(...entryChange(e, { status: 'detached', detachedBy: RECENTERER, detachReason: 'recenter', detachedAt: ctx.now }))
+    left.push(e.storyId)
+  }
+  const newEntries: NewEntry[] = []
+  for (const j of result.joins) {
+    const role = { role: j.role.role, roleKind: j.role.role === 'routine' ? null : j.role.roleKind }
+    const row = j.entryId === null ? undefined : rows.entries.find(e => e.id === j.entryId)
+    if (row) {
+      changes.push(...entryChange(row, { ...ACTIVE, ...role }))
+      continue
+    }
+    const entry: NewEntry = {
+      id: ctx.newId(),
+      overviewId: o.id,
+      storyId: j.storyId,
+      joinedBy: RECENTERER,
+      joinedAt: ctx.now,
+      decisionId: decision.id,
+      fields: undoneEntry(j.role, RECENTERER, ctx.now),
+      datePublished: j.datePublished,
+      shared: null,
+      confidence: null,
+      model: result.model,
+      promptVersion: result.promptVersion,
+    }
+    newEntries.push(entry)
+    changes.push(...activated(entry))
+  }
+  const fields: Partial<OverviewFields> = {
+    title: result.title!,
+    charter: result.charter!,
+    charterModel: result.model ?? o.charterModel,
+    charterPromptVersion: result.promptVersion,
+    recenteredAt: ctx.now,
+    recenteredBy: RECENTERER,
+    recenterTriedAt: ctx.now,
+    automatedRecenters: o.automatedRecenters + 1,
+    ...leaving(o, left),
+  }
+  return plan(decision, { newEntries, changes: [...changes, ...overviewChange(o, fields)], wasPublic: publicBefore(o) })
 }
 
 /** The monthly audit's findings as an `audited` review decision (`audit_failed` when the call gave nothing), never applied. */

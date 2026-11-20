@@ -79,10 +79,11 @@ export const decisionKindLabel = (kind: string): string => DECISION_KINDS[kind] 
 /** The decisions that make an overview's status history: its status moves, end-event checks, and an editor's close, reopen and freeze. */
 export const STATUS_KINDS = ['status', 'close', 'editor_close', 'editor_freeze']
 
-/** Who made a decision or an entry: the pipeline, a review, or an editor (by name where the log has it). */
+/** Who made a decision or an entry: the pipeline, a review, an automated re-center, or an editor (by name where the log has it). */
 export function actorLabel(actor: string, name: string | null = null): string {
   if (actor === 'pipeline') return 'Pipeline'
   if (actor === 'review') return 'Review'
+  if (actor === 'recenter') return 'Re-center'
   if (actor === 'editor') return 'An editor'
   return name ?? 'An editor'
 }

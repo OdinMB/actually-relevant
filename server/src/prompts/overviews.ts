@@ -6,13 +6,24 @@
  * title from two stories; and the founding check, which judges the charter against each story blind
  * to the draft's reasons. Upkeep: "Where this stands" and "What's being done" from the members' checked
  * facts (`overviewStands.ts`), the two calls that must agree an end event happened (`overviewClose.ts`),
- * and the demote-only review (`overviewReview.ts`). Written under `.context/prompting.md`: role, goal, XML
+ * the demote-only review (`overviewReview.ts`), and the automated re-center's draft and its blind check
+ * (`overviewRecenter.ts`). Written under `.context/prompting.md`: role, goal, XML
  * constraint blocks, declarative, format guidance in the schemas (`schemas/overviews.ts`), every stored
  * text escaped behind the untrusted-input line, the call's values last in `<REQUEST>`. Each prompt's
  * version is a hash of it on a fixed input and of its schema.
  */
 import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
-import { closeCheckSchema, closeSchema, foundCheckSchema, foundSchema, linkSchema, reviewSchema, standsSchema } from '../schemas/overviews.js'
+import {
+  closeCheckSchema,
+  closeSchema,
+  foundCheckSchema,
+  foundSchema,
+  linkSchema,
+  recenterCheckSchema,
+  recenterSchema,
+  reviewSchema,
+  standsSchema,
+} from '../schemas/overviews.js'
 import type { CandidateOverview, Charter, LinkStory, Role } from '../services/overviewTypes.js'
 import { promptVersionOf } from './promptVersion.js'
 import { escapeXml } from './shared.js'
@@ -458,6 +469,161 @@ ${input.entries
 }
 
 // ---------------------------------------------------------------------------
+// The automated re-center: the draft and its blind check
+// ---------------------------------------------------------------------------
+
+/** A story as the re-center prompts show it, under its ref. */
+interface RecenterItem {
+  ref: string
+  title: string
+  label: string
+  summary: string
+  date: string
+}
+
+const itemBlock = (name: string, item: RecenterItem, attributes = '', extra: string[] = []) =>
+  [
+    `<${name} id="${item.ref}" date="${escapeXml(item.date)}"${attributes}>`,
+    tag('TITLE', item.title),
+    tag('LABEL', item.label),
+    tag('SUMMARY', item.summary),
+    ...extra,
+    `</${name}>`,
+  ].join('\n')
+
+export interface RecenterPromptInput {
+  title: string
+  charter: Charter
+  /** The active entries of published stories, oldest first (`E1`…); `anchor`: a founding story or a turning point the new charter must still cover. */
+  entries: (RecenterItem & { role: Role; anchor: boolean })[]
+  /** The stories turned away that may join, newest first (`S1`…), each with the words of it that pointed past the charter. */
+  stories: (RecenterItem & { quotes: string[] })[]
+}
+
+/**
+ * Cache: off. An attempt is rare (a signal story since the last one) and its input is its own. House
+ * order: the rules first, the overview, its entries and the stories last.
+ */
+export function buildRecenterPrompt(input: RecenterPromptInput): string {
+  return `<ROLE>
+You are the senior editor who decides whether a news site's timeline of an ongoing development has outgrown its charter: whether the development is now better described by a wider or moved center that still holds where it began.
+</ROLE>
+
+<GOAL>
+Read the overview's entries and the stories in <STORIES>, which were kept out of it but point past its charter. Decide whether to re-center the charter, and judge every entry and story under the charter you leave.
+</GOAL>
+
+<RULES>
+<CENTER>
+- Re-center only when the stories show that the development itself has become part of, or a response to, something larger, so that a reader would now name it differently: the water shortage a rules fight responds to, the regional war a border clash became. Several stories saying so count; one passing mention does not.
+- Keep when the stories are neighbors that share only a place, a theme or vocabulary, or when the charter already covers what they report.
+- The new IN must still cover every entry marked anchor="yes": the founding stories and the turning points. A center may move outward from where the development began, never away from it.
+- The new IN says what the development now is, where, since when and what kinds of stories belong: as narrow as the entries and the joining stories need, never a whole theme or region.
+- Keep every OUT entry of the charter, copied as given. You may add a short phrase for each neighboring development or theme the wider IN would otherwise attract.
+- For keep: copy the charter as given and leave the title empty.
+</CENTER>
+<END_EVENT>
+Name the end event only when the development under its new center has one a report could date: a declaration, a signature, a ruling. Most developments have none; then leave it empty, and the development ends by fading when reporting stops. Never a trend, a hope or something that cannot be observed.
+</END_EVENT>
+<TITLE_RULES>
+The development under its new center in a few words, as a reader would name it. American spelling, no date unless it names the development, no period at the end.
+</TITLE_RULES>
+<JUDGING>
+- Under the charter you leave, an entry or story belongs when its IN covers what the story reports and nothing its OUT list names does.
+- Judge each one on its own text; the others never make one belong.
+- Give each story the role it would have in the development, as <ROLES> defines them.
+</JUDGING>
+- Judge the texts as written; what you know from elsewhere does not count.
+</RULES>
+
+${ROLES}
+
+<OVERVIEW>
+The development as the site follows it now. ${UNTRUSTED}
+${tag('TITLE', input.title)}
+${charterBlock(input.charter)}
+</OVERVIEW>
+
+<ENTRIES>
+Its stories, oldest first. ${UNTRUSTED}
+${input.entries
+  .map(e => itemBlock('ENTRY', e, ` role="${e.role.role}"${e.role.roleKind ? ` kind="${e.role.roleKind}"` : ''} anchor="${yesNo(e.anchor)}"`))
+  .join('\n')}
+</ENTRIES>
+
+<STORIES>
+Stories kept out of it, newest first, each with the words of it that point past the charter. ${UNTRUSTED}
+${input.stories
+  .map(s =>
+    itemBlock(
+      'STORY',
+      s,
+      '',
+      s.quotes.map(q => tag('SIGNAL', q)),
+    ),
+  )
+  .join('\n')}
+</STORIES>`
+}
+
+export interface RecenterCheckPromptInput {
+  /** The proposed charter: the new IN and END_EVENT, the old OUT with the additions. */
+  charter: Charter
+  /** The same entries, oldest first (`E1`…), with no anchor marks. */
+  entries: RecenterItem[]
+  /** The same stories (`S1`…). */
+  stories: RecenterItem[]
+  /** The open overviews near its newest entries and the stories (`N1`…), each with its IN. */
+  neighbours: { ref: string; title: string; in: string }[]
+}
+
+/**
+ * Cache: off, as the draft. It sees the proposed charter, the entries and stories with no anchor marks
+ * and the neighbors' IN, never the draft's reasons or the old IN, so its judgments are its own. House
+ * order: the rules first, the charter, the stories and the neighbors last.
+ */
+export function buildRecenterCheckPrompt(input: RecenterCheckPromptInput): string {
+  return `<ROLE>
+You are a second editor who checks a proposed charter for a news site's timeline of an ongoing development before it applies.
+</ROLE>
+
+<GOAL>
+Judge each entry in <ENTRIES> and each story in <STORIES> against <CHARTER>; whether a named END_EVENT is a concrete, observable event; and whether the charter's IN takes in any development in <NEIGHBORS>.
+</GOAL>
+
+<RULES>
+<JUDGING>
+- An entry or story belongs when the charter's IN covers what it reports and nothing its OUT list names does.
+- A story that shares only a place, an agency or a theme with the charter does not belong.
+- Judge each one on its own text; the others never make one belong.
+</JUDGING>
+<NEIGHBOR_RULES>
+- A neighbor is covered when the charter's IN would take in the stories that neighbor's IN describes, so the two would be one development.
+- Sharing a place or a theme does not make it covered.
+</NEIGHBOR_RULES>
+- END_EVENT is concrete when a news report could say it has happened on a given day: a declaration, a signature, a ruling, a publication. A trend, a hope or a state no report could date is not. An END_EVENT of none is no fault: answer none for it.
+- Judge the texts as written; what you know from elsewhere does not count.
+</RULES>
+
+<CHARTER>
+The proposed charter. ${UNTRUSTED}
+${charterBlock(input.charter)}
+</CHARTER>
+
+<ENTRIES>
+${input.entries.map(e => itemBlock('ENTRY', e)).join('\n')}
+</ENTRIES>
+
+<STORIES>
+${input.stories.map(s => itemBlock('STORY', s)).join('\n')}
+</STORIES>
+
+<NEIGHBORS>
+${input.neighbours.map(n => [`<NEIGHBOR id="${n.ref}">`, tag('TITLE', n.title), tag('IN', n.in), '</NEIGHBOR>'].join('\n')).join('\n')}
+</NEIGHBORS>`
+}
+
+// ---------------------------------------------------------------------------
 // Prompt versions
 // ---------------------------------------------------------------------------
 
@@ -513,5 +679,23 @@ export const OVERVIEW_PROMPT_VERSIONS = {
       entries: [{ ref: 'E1', title: 'Title', label: 'Label', summary: 'Summary.', date: '2026-01-01', role: CANONICAL_ROLE }],
     }),
     reviewSchema,
+  ),
+  recenter: promptVersionOf(
+    buildRecenterPrompt({
+      title: 'Overview',
+      charter: CANONICAL_CHARTER,
+      entries: [{ ref: 'E1', title: 'Title', label: 'Label', summary: 'Summary.', date: '2026-01-01', role: CANONICAL_ROLE, anchor: true }],
+      stories: [{ ref: 'S1', title: 'Title', label: 'Label', summary: 'Summary.', date: '2026-01-02', quotes: ['Title'] }],
+    }),
+    recenterSchema,
+  ),
+  recenterCheck: promptVersionOf(
+    buildRecenterCheckPrompt({
+      charter: CANONICAL_CHARTER,
+      entries: [{ ref: 'E1', title: 'Title', label: 'Label', summary: 'Summary.', date: '2026-01-01' }],
+      stories: [{ ref: 'S1', title: 'Title', label: 'Label', summary: 'Summary.', date: '2026-01-02' }],
+      neighbours: [{ ref: 'N1', title: 'Neighbor', in: 'In.' }],
+    }),
+    recenterCheckSchema,
   ),
 } as const

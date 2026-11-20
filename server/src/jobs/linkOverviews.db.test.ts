@@ -7,8 +7,9 @@
  * decision with the same change set. The nights cover a founding, joins, the first review making it
  * public, an end-event closing, the closing story unpublished (its entry detached, the closing
  * cancelled, the last entry recomputed), a burst frozen and cleared by its review and not counted
- * again an hour later, a review detaching the newest entry, and a review whose overview is retitled
- * during its call, recorded stale and asked again.
+ * again an hour later, a review detaching the newest entry, a review whose overview is retitled
+ * during its call, recorded stale and asked again, and an automated re-center fired by two stories
+ * linked as wider than the charter, joining both and not tried again without a new signal.
  */
 import { beforeEach, expect, it, vi } from 'vitest'
 import prisma from '../lib/prisma.js'
@@ -49,6 +50,8 @@ const call = <T>(parsed: T, model = 'scripted') => Promise.resolve({ parsed, cos
 const both = (s: string) => ({ story: s, other: s })
 const belongs = (title: string) => title.includes('Ebola') && title.includes('Ituri')
 const offTopic = (title: string) => title.includes('trial')
+/** A story of the wider development: the regional response, outside the charter's IN. */
+const wider = (title: string) => title.includes('eastern Congo')
 /** What happens to the overview while a review's call runs, one per review call: the sandbox's review is asked first, then the job's. */
 const duringReview: (() => unknown)[] = []
 
@@ -64,9 +67,14 @@ const calls: OverviewCalls = {
           place: both('Ituri'),
           end: both('Ebola'),
           reportsEndEvent: story.title.includes('declares'),
-          scope: belongs(story.title) && belongs(c.title) ? ('inside' as const) : ('unrelated' as const),
+          scope:
+            belongs(story.title) && belongs(c.title)
+              ? ('inside' as const)
+              : wider(story.title) && c.ref.startsWith('O')
+                ? ('wider' as const)
+                : ('unrelated' as const),
           centerMoved: false,
-          signalQuote: '',
+          signalQuote: wider(story.title) && c.ref.startsWith('O') ? story.title : '',
           confidence: 0.9,
         })),
         role: 'routine' as const,
@@ -112,6 +120,29 @@ const calls: OverviewCalls = {
     write: () => call({ sentences: [], doing: [] }),
     check: () => call({ items: [] }),
   },
+  // The draft widens to the regional development, keeping every entry and taking in its stories but the trial; the blind check agrees
+  recenter: {
+    draft: ({ charter, entries, stories }) =>
+      call({
+        decision: 'recenter' as const,
+        title: 'Ebola in eastern DR Congo',
+        charter: {
+          in: 'The Ebola outbreak in eastern DR Congo and the regional response.',
+          out: [...charter.out, 'Cholera in eastern DR Congo'],
+          endEvent: charter.endEvent ?? '',
+        },
+        entries: entries.map(e => ({ id: e.ref, belongs: 'yes' as const })),
+        stories: stories.map(s => ({ id: s.ref, belongs: offTopic(s.title) ? ('no' as const) : ('yes' as const), role: 'routine' as const, roleKind: null })),
+        reason: 'The response spans the region.',
+      }),
+    check: ({ entries, stories }) =>
+      call({
+        entries: entries.map(e => ({ id: e.ref, belongs: 'yes' as const, reason: 'It does.' })),
+        stories: stories.map(s => ({ id: s.ref, belongs: offTopic(s.title) ? ('no' as const) : ('yes' as const), reason: 'It does.' })),
+        endEventConcrete: 'yes' as const,
+        neighbours: [],
+      }),
+  },
 }
 
 const HOUR = 3_600_000
@@ -139,6 +170,12 @@ const OVERVIEW_KEYS = [
   'lockedOut',
   'lastEntryAt',
   'foundedAt',
+  'charterModel',
+  'charterPromptVersion',
+  'recenteredAt',
+  'recenteredBy',
+  'recenterTriedAt',
+  'automatedRecenters',
 ] as const
 const ENTRY_KEYS = ['status', 'detachedBy', 'detachReason', 'detachedAt', 'locked', 'role', 'roleKind', 'joinedBy', 'joinedAt'] as const
 
@@ -171,6 +208,7 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
       sandbox,
       () => [],
       () => clock,
+      (id, asOf) => nearestPublished(prisma, id, asOf),
     )
     const { link: linkCalls, ...upkeepCalls } = calls
 
@@ -336,5 +374,29 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
     const later = new Date(at(9, 2).getTime() + HOUR)
     o = only(await run(later))
     expect(o).toMatchObject({ title: retitled, entriesAtLastReview: 12, reviewedAt: later })
+
+    // Night 8: two stories of the regional response are turned away as wider than the charter: the signal fires, both calls agree,
+    // and the re-center widens the charter, joins both and leaves the trial the review detached out; the owner is told
+    notices.length = 0
+    await story('W1', 'Ebola response funding reaches eastern Congo', at(9, 8))
+    await story('W2', 'Ebola vaccination teams spread across eastern Congo', at(9, 9))
+    o = only(await run(at(10, 2)))
+    expect(o).toMatchObject({
+      title: 'Ebola in eastern DR Congo',
+      automatedRecenters: 1,
+      recenteredBy: 'recenter',
+      recenterTriedAt: at(10, 2),
+      charter: { in: 'The Ebola outbreak in eastern DR Congo and the regional response.', out: ['Ebola in Uganda', 'Cholera in eastern DR Congo'] },
+      slug: 'ebola-in-ituri',
+    })
+    expect(o.entries.W1).toMatchObject({ status: 'active', joinedBy: 'recenter' })
+    expect(o.entries.W2).toMatchObject({ status: 'active', joinedBy: 'recenter' })
+    expect(o.entries.E9).toMatchObject({ status: 'detached', detachedBy: 'review' })
+    expect(await prisma.overviewDecision.count({ where: { kind: 'recenter', outcome: 'recentered' } })).toBe(1)
+    expect(notices.filter(n => n.dedupeKey === `overview-recentered:${id}`)).toHaveLength(1)
+
+    // An hour later no signal came since the attempt: nothing is tried again
+    expect(only(await run(new Date(at(10, 2).getTime() + HOUR)))).toMatchObject({ automatedRecenters: 1, recenterTriedAt: at(10, 2) })
+    expect(await prisma.overviewDecision.count({ where: { kind: 'recenter' } })).toBe(1)
   })
 })

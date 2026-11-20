@@ -105,6 +105,7 @@ function detail(over: Partial<AdminOverviewDetail> = {}): AdminOverviewDetail {
       recenteredBy: null,
       lockedUntil: null,
       lockedOut: [],
+      signals: { wider: 0, centerMoved: 0 },
       anchor: {
         standIns: false,
         entries: [
@@ -285,6 +286,7 @@ describe('OverviewDetailPage', () => {
           recenteredAt: '2026-11-05T00:00:00.000Z',
           recenteredBy: 'editor',
           lockedUntil: '2099-05-04T00:00:00.000Z',
+          signals: { wider: 3, centerMoved: 1 },
           history: [
             {
               id: 'r1',
@@ -305,6 +307,8 @@ describe('OverviewDetailPage', () => {
     expect(await screen.findByText('No end event: it closes only by fading')).toBeInTheDocument()
     expect(screen.getByText(/Automatic re-centers: 2 of 2: only an editor can re-center it now/)).toBeInTheDocument()
     expect(screen.getByText(/No automatic re-center until May 4, 2099, after an editor's re-center/)).toBeInTheDocument()
+    // At the limit the signals are still shown, so the editor sees stories pointing past the charter
+    expect(screen.getByText('Since the last re-center: 3 stories pointed past the charter, 1 story reported that its center moved')).toBeInTheDocument()
     const history = within(screen.getByRole('list', { name: 'Charter history' }))
     expect(history.getByText(/Odin, anchor confirmed/)).toBeInTheDocument()
     expect(history.getByText('The ministry declares it over')).toBeInTheDocument()

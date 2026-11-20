@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   applyStatus: vi.fn(),
   applyStands: vi.fn(),
   applyBurst: vi.fn(),
+  recenterCases: vi.fn(),
+  applyRecenter: vi.fn(),
 }))
 
 vi.mock('../services/overviewGate.js', () => ({
@@ -48,8 +50,10 @@ vi.mock('../services/overviewLifecycle.js', () => ({
   applyClosing: vi.fn(),
   applyBurst: mocks.applyBurst,
   applyReview: vi.fn(),
+  applyRecenter: mocks.applyRecenter,
   applyAudit: vi.fn(),
 }))
+vi.mock('../services/overviewRecenterInput.js', () => ({ recenterCases: mocks.recenterCases }))
 vi.mock('../services/overviewUpkeepInput.js', () => ({
   pendingClosings: async () => [],
   overviewStates: mocks.overviewStates,
@@ -64,7 +68,7 @@ vi.mock('../lib/runUsage.js', async importOriginal => ({
   reportRunResult: mocks.reportRunResult,
 }))
 
-const { linkSummary, productionUpkeepDeps, runLinkOverviewsJob, upkeepClock, upkeepSummary } = await import('./linkOverviews.js')
+const { linkSummary, notifyRecenter, productionUpkeepDeps, runLinkOverviewsJob, upkeepClock, upkeepSummary } = await import('./linkOverviews.js')
 const { forgetOverviewStep } = await import('../services/overviewQueue.js')
 
 const story = (id: string, day: number): LinkStory => ({
@@ -89,6 +93,7 @@ describe('runLinkOverviewsJob', () => {
     mocks.applyLink.mockImplementation(async (result: { outcome: string }) => ({ kind: 'written', outcome: result.outcome }))
     mocks.overviewStates.mockResolvedValue([])
     mocks.standsCases.mockResolvedValue([])
+    mocks.recenterCases.mockResolvedValue([])
   })
 
   it('does nothing while its gate is closed, or research passes’ gate is, or its job is disabled', async () => {
@@ -242,6 +247,10 @@ describe('the upkeep clock and summary', () => {
       reviews: 2,
       reviewActions: 3,
       reviewRefusals: 0,
+      recenterAttempts: 2,
+      recentersRefused: 1,
+      recentersStale: 0,
+      recenters: [{ overviewId: 'o1', from: 'A', to: 'B', count: 1 }],
       audits: 5,
       standsRefreshes: 4,
       standsWritten: 3,
@@ -252,10 +261,25 @@ describe('the upkeep clock and summary', () => {
       errors: [],
       stopped: false,
     }
-    expect(upkeepSummary(tally)).toBe('3 overviews refreshed, 2 reviewed, 1 closing, 1 frozen by a burst, 5 audited, 1 upkeep item failed')
-    expect(upkeepSummary({ ...tally, closingsBegun: 0, bursts: 0, audits: 0, failed: 0, standsWritten: 1, reviews: 0 })).toBe(
+    expect(upkeepSummary(tally)).toBe('3 overviews refreshed, 2 reviewed, 1 re-centered, 1 closing, 1 frozen by a burst, 5 audited, 1 upkeep item failed')
+    expect(upkeepSummary({ ...tally, closingsBegun: 0, bursts: 0, audits: 0, failed: 0, standsWritten: 1, reviews: 0, recenters: [] })).toBe(
       '1 overview refreshed, 0 reviewed',
     )
+  })
+
+  it('tells the owner of an automated re-center, with the old and new title and where the limit stands', async () => {
+    mocks.notify.mockClear()
+    await notifyRecenter({ overviewId: 'o1', from: 'Colorado River rules', to: 'Colorado River water shortage', count: 1 })
+    await notifyRecenter({ overviewId: 'o2', from: 'A', to: 'B', count: 2 })
+    expect(mocks.notify.mock.calls.map(([n]) => n)).toEqual([
+      expect.objectContaining({
+        title: 'Ongoing story re-centered: "Colorado River rules" is now "Colorado River water shortage"',
+        message: expect.stringContaining('Automatic re-centers: 1 of 2. '),
+        link: '/admin/overviews/o1',
+        dedupeKey: 'overview-recentered:o1',
+      }),
+      expect.objectContaining({ message: expect.stringContaining('Automatic re-centers: 2 of 2: only an editor can re-center it now.') }),
+    ])
   })
 
   it("reads the tables, calls each step's tier (the audit at high effort) and writes through the lifecycle", async () => {
@@ -279,6 +303,8 @@ describe('the upkeep clock and summary', () => {
     await deps.review.review({ title: 'T', charter, frozen: false, entries }, { audit: true })
     await deps.stands.write({ title: 'T', entries: [], facts: [], today: '2026-06-02', maxSentences: 4, maxDoing: 2 })
     await deps.stands.check([], [])
+    await deps.recenter.draft({ title: 'T', charter, entries: [], stories: [] })
+    await deps.recenter.check({ charter, entries: [], stories: [], neighbours: [] })
     const { tiers } = (await import('../config.js')).config.overviews
     expect(mocks.structuredCall.mock.calls.map(c => [c[0], c[3]])).toEqual([
       [tiers.close, {}],
@@ -287,19 +313,25 @@ describe('the upkeep clock and summary', () => {
       [tiers.review, { effort: 'high' }],
       [tiers.stands, {}],
       [tiers.standsCheck, {}],
+      [tiers.recenter, {}],
+      [tiers.recenterCheck, {}],
     ])
+    expect(await deps.recenterCases({ clock: now, now })).toEqual([])
+    expect(mocks.recenterCases).toHaveBeenCalledWith(expect.anything(), { clock: now, now })
 
     const state = {} as Parameters<typeof deps.applyBurst>[0]
     await deps.applyClosing({} as never, {} as never)
     await deps.applyStatus(state, [], now)
     await deps.applyBurst(state)
     await deps.applyReview({} as never, {} as never, now)
+    await deps.applyRecenter({} as never, {} as never)
     await deps.applyAudit({} as never, {} as never)
     await deps.applyStands({} as never, {} as never, 'sig', '2026-06-02')
     for (const write of [
       lifecycle.applyClosing,
       lifecycle.applyStatus,
       lifecycle.applyBurst,
+      lifecycle.applyRecenter,
       lifecycle.applyReview,
       lifecycle.applyAudit,
       lifecycle.applyStands,

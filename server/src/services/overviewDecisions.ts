@@ -130,13 +130,23 @@ export const standsInputs = z.object({
 
 /**
  * `recenter`, an automated re-center (`.context/overviews.md`, "Re-centering"): the rule a refused
- * attempt failed, the OUT entries an applied one added (an Undo locks them out, as it does a review's
- * narrowing), and the anchor entries with whether both calls judged each to belong.
+ * attempt failed first and every refusal, the OUT entries an applied one added (an Undo locks them out,
+ * as it does a review's narrowing), the anchor entries with whether both calls judged each to belong,
+ * the signals that fired it, and the stories offered and joined and the entries detached and kept.
  */
 export const recenterInputs = z.object({
   rule: z.string().nullable().default(null),
   outAdded: z.array(z.string()).default([]),
   anchor: z.array(z.object({ entryId: z.string(), founding: z.boolean(), passed: z.boolean() })).default([]),
+  /** Every rule that refused it, with why. */
+  refusals: z.array(z.object({ rule: z.string(), reason: z.string() })).default([]),
+  /** The signals since the last attempt that fired it. */
+  fired: z.object({ wider: z.number(), centerMoved: z.number() }).nullable().default(null),
+  /** Ids only: the stories offered, those joined, the entries detached, and the entries both calls kept. */
+  offered: z.array(z.string()).default([]),
+  joined: z.array(z.string()).default([]),
+  detached: z.array(z.string()).default([]),
+  kept: z.number().nullable().default(null),
   ...changeSet,
 })
 
