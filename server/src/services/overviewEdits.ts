@@ -164,9 +164,14 @@ export function planEdit(action: EditorAction, rows: Rows, attach: AttachStory |
       if (e.role === to.role && e.roleKind === to.roleKind) throw new ConflictError('The entry already has that role')
       return decide('set', e.storyId, entryChange(e, { ...to, locked: true }))
     }
-    case 'retitle':
-      if (action.title === o.title) throw new ConflictError('The overview already has that title')
-      return decide('retitled', null, overviewChange(o, { title: action.title }))
+    case 'retitle': {
+      // The editor's rights over the title alone, within the limits every writer is held to; the route's schema holds them already
+      const amended = amendCharter(o, { title: action.title, charter: o.charter }, EDITOR_RIGHTS)
+      const refused = amended.refusals.find(r => r.field === 'title')
+      if (!action.title.trim() || refused) throw new BadRequestError(refused?.reason ?? 'A title is needed')
+      if (amended.title === o.title) throw new ConflictError('The overview already has that title')
+      return decide('retitled', null, overviewChange(o, { title: amended.title }))
+    }
     case 'freeze':
       if (action.frozen === o.frozen) throw new ConflictError(o.frozen ? 'The overview is already frozen' : 'The overview is not frozen')
       return decide(

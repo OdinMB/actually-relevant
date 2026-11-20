@@ -2,16 +2,20 @@
  * The overviews row and its entries as the loaders read them (`.context/overviews.md`, "Files"): one
  * column list for the raw SQL reads, typed so a field the write model's row has and the list forgets is
  * a type error, and one parser each from the columns to the rows (`overviewRowFrom`: the charter and
- * `lockedOut` parsed, the enums held to their values; `caseEntryFrom`). The applier reads the row
+ * `lockedOut` parsed, the enums held to their values; `caseEntryFrom`), and a loader's rows with any
+ * whose charter does not parse left out and logged (`readableOverviews`). The applier reads the row
  * through Prisma and parses it here too.
  */
 import { Prisma } from '@prisma/client'
+import { createLogger } from '../lib/logger.js'
 import type { OverviewRow } from './overviewChanges.js'
 import type { OverviewDb } from './overviewCandidates.js'
 import type { CaseEntry } from './overviewCases.js'
 import { parseCharter } from './overviewInput.js'
 import { ENTRY_ROLES, OVERVIEW_SCOPES, OVERVIEW_STATUSES } from './overviewTypes.js'
 import { oneOf } from './storyContextRecords.js'
+
+const log = createLogger('overview-rows')
 
 /** An overview row as read, before its JSON columns and enums are parsed. */
 export type RawOverview = Omit<OverviewRow, 'charter' | 'lockedOut' | 'scope' | 'status'> & {
@@ -81,6 +85,19 @@ export function overviewRowFrom(raw: RawOverview): OverviewRow | null {
   }
 }
 
+/**
+ * The rows of a read with their charters parsed (`overviewRowFrom`), leaving out each whose charter
+ * does not parse, with a warning naming it and the read (`read`) that skipped it: only a row written
+ * outside the lifecycle can have one, and nothing but the log would say why it gets no upkeep.
+ */
+export function readableOverviews(raws: readonly RawOverview[], read: string): OverviewRow[] {
+  return raws.flatMap(r => {
+    const row = overviewRowFrom(r)
+    if (!row) log.warn({ overviewId: r.id, read }, 'overview left out of the read: its charter does not parse')
+    return row ?? []
+  })
+}
+
 /** An entry as read, before its enums are parsed. */
 type RawCaseEntry = Omit<CaseEntry, 'status' | 'role'> & { status: string; role: string }
 
@@ -133,5 +150,5 @@ export async function readCaseEntries(db: OverviewDb, overviewIds: readonly stri
 export async function readOverviewRows(db: OverviewDb, overviewIds: readonly string[]): Promise<OverviewRow[]> {
   if (overviewIds.length === 0) return []
   const rows = await db.$queryRaw<RawOverview[]>`SELECT ${OVERVIEW_COLUMNS} FROM overviews o WHERE o.id = ANY(${[...overviewIds]}::text[])`
-  return rows.flatMap(r => overviewRowFrom(r) ?? [])
+  return readableOverviews(rows, 'the cases')
 }

@@ -23,7 +23,7 @@ import {
   type RecenterCase,
   type SignalRecord,
 } from './overviewRecenter.js'
-import { OVERVIEW_COLUMNS, overviewRowFrom, readCaseEntries, type RawOverview } from './overviewRow.js'
+import { OVERVIEW_COLUMNS, readableOverviews, readCaseEntries, type RawOverview } from './overviewRow.js'
 
 const signalList = z.array(signalSchema)
 
@@ -62,14 +62,15 @@ export async function signalRecords(db: OverviewDb, overviewId: string, since: D
  * cases it keeps.
  */
 export async function recenterCases(db: OverviewDb, at: { clock: Date; now: Date }, options: AttemptOptions = config.overviews): Promise<RecenterCase[]> {
-  const overviews = (
+  const overviews = readableOverviews(
     await db.$queryRaw<RawOverview[]>`
       SELECT ${OVERVIEW_COLUMNS}
       FROM overviews o
       WHERE o.scope = 'ongoing' AND o.status IN ('open', 'quiet') AND NOT o.frozen AND o.automated_recenters < ${options.maxAutomatedRecenters}
       ORDER BY o.founded_at, o.id
-    `
-  ).flatMap(r => overviewRowFrom(r) ?? [])
+    `,
+    'the re-centers',
+  )
   const cases: RecenterCase[] = []
   for (const o of overviews) {
     if (automatedRecenterBlocked(o, at.now, options)) continue

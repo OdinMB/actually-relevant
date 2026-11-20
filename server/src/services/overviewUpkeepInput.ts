@@ -15,7 +15,7 @@ import { REPORTS_END_EVENT, STANDS_MARKER, STANDS_SIGNATURE, STANDS_UNTIL } from
 import { linkStories } from './overviewInput.js'
 import { publicOverviewSql } from './overviewPublicRule.js'
 import type { ReviewCase } from './overviewReview.js'
-import { OVERVIEW_COLUMNS, overviewRowFrom, readCaseEntries, readOverviewRows, type RawOverview } from './overviewRow.js'
+import { OVERVIEW_COLUMNS, readableOverviews, readCaseEntries, readOverviewRows, type RawOverview } from './overviewRow.js'
 import { overviewStateOf, type StateEntry } from './overviewState.js'
 import { ENTRY_ROLES, type OverviewState } from './overviewTypes.js'
 import type { StandsCase } from './overviewUpkeep.js'
@@ -59,21 +59,22 @@ export async function pendingClosings(db: OverviewDb, options: Pick<typeof confi
  * Every overview with an active entry, oldest founding first, as the status machine reads it
  * (`overviewStateOf`): its row, its active entries with their stories' publication, and the newest
  * reader's report that queued a review (`feedback.queues_review`). One without a readable charter,
- * which no write could be planned on, is left out.
+ * which no write could be planned on, is left out, with a warning (`readableOverviews`).
  */
 export async function overviewStates(
   db: OverviewDb,
   now: Date,
   options: Pick<typeof config.overviews, 'nightHours'> = config.overviews,
 ): Promise<OverviewState[]> {
-  const rows = (
+  const rows = readableOverviews(
     await db.$queryRaw<RawOverview[]>`
       SELECT ${OVERVIEW_COLUMNS}
       FROM overviews o
       WHERE EXISTS (SELECT 1 FROM overview_entries e WHERE e.overview_id = o.id AND e.status = 'active')
       ORDER BY o.founded_at, o.id
-    `
-  ).flatMap(r => overviewRowFrom(r) ?? [])
+    `,
+    'the status machine',
+  )
   if (rows.length === 0) return []
   const ids = rows.map(r => r.id)
   const [entries, reports] = await Promise.all([

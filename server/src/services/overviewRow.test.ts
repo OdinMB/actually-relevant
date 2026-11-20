@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { caseEntryFrom, lockedOutOf, OVERVIEW_COLUMNS, OVERVIEW_SELECT, overviewRowFrom, type RawOverview } from './overviewRow.js'
+import { describe, expect, it, vi } from 'vitest'
+
+const mockLogger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }))
+vi.mock('../lib/logger.js', () => ({ createLogger: () => mockLogger }))
+
+const { caseEntryFrom, lockedOutOf, OVERVIEW_COLUMNS, OVERVIEW_SELECT, overviewRowFrom, readableOverviews } = await import('./overviewRow.js')
+type RawOverview = import('./overviewRow.js').RawOverview
 
 const raw = (over: Partial<RawOverview> = {}): RawOverview => ({
   id: 'o1',
@@ -43,6 +48,13 @@ describe('the overviews row', () => {
 
   it('gives no row for a charter that does not parse', () => {
     expect(overviewRowFrom(raw({ charter: { in: 'x' } }))).toBeNull()
+  })
+
+  it('leaves out of a read the rows whose charter does not parse, and logs each by its id', () => {
+    const rows = readableOverviews([raw(), raw({ id: 'o2', charter: { in: 'x' } })], 'the upkeep')
+    expect(rows.map(r => r.id)).toEqual(['o1'])
+    expect(mockLogger.warn).toHaveBeenCalledTimes(1)
+    expect(mockLogger.warn).toHaveBeenCalledWith({ overviewId: 'o2', read: 'the upkeep' }, expect.stringMatching(/charter/))
   })
 
   it('reads lockedOut as a list of strings, whatever the column holds', () => {

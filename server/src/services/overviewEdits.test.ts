@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { joinResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
-import { ConflictError } from '../utils/errors.js'
+import { config } from '../config.js'
+import { BadRequestError, ConflictError } from '../utils/errors.js'
 import {
   ACTIVE,
   applied,
@@ -195,6 +196,11 @@ describe('planEdit', () => {
       reopenedAt: NOW,
     })
     expect(refusal(() => edit({ kind: 'retitle', overviewId: 'o1', title: 'Ebola in Ituri' }))).toMatch(/already has that title/)
+    // The title limit every writer is held to (`amendCharter`), behind the route's schema
+    const long = 'x'.repeat(config.overviews.maxTitleChars + 1)
+    expect(() => edit({ kind: 'retitle', overviewId: 'o1', title: long })).toThrow(
+      new BadRequestError(`a title longer than ${config.overviews.maxTitleChars} characters`),
+    )
     expect(refusal(() => edit({ kind: 'freeze', overviewId: 'o1', frozen: false }))).toMatch(/not frozen/)
     expect(refusal(() => edit({ kind: 'hide', overviewId: 'o1', hidden: false }))).toMatch(/not hidden/)
     expect(refusal(() => edit({ kind: 'close', overviewId: 'o1', closed: false }))).toMatch(/not closed/)
