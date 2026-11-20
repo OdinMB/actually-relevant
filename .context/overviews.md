@@ -190,18 +190,20 @@ The upkeep's steps, the same pure code over the sandbox (`upkeepSandbox.ts`): `p
 | `services/overviewLink.ts` | `linkStory`, `acceptLink`, `acceptFounding`, `isStale`, `linkInOrder` (pure) |
 | `services/overviewStatus.ts` | `nextState`, `scopeAfter`, `scopeAfterReview`, `anomalies`, `reviewDue`, `reportQueuesReview` (pure) |
 | `services/overviewRecenter.ts` | `anchorOf`, `anchorHolds`, `recenterLockedUntil`, `automatedRecenterBlocked`: the anchor and the fixed limits on a re-center; `signalsSince`, `signalFires`, `turnedAway`, `neighbourOverviews`, `recenterCaseOf`, `recenterOverview`, `acceptRecenter`: the automated re-center (pure but for the neighbor reads it is given) |
-| `services/overviewRecenterInput.ts` | `signalRecords`, `recenterCases` (SELECT only) |
+| `services/overviewRecenterInput.ts` | `signalRecords`, `recenterCases` (SELECT only): the raw rows of a re-center's parts and its neighbors |
+| `services/overviewCases.ts` | `reviewCaseOf`, `closeCasesOf`, `recenterStoryIds`, `recenterPartsOf`, `entryRole`: the review, closing and re-center cases from raw rows, for production's loaders and the sandbox alike (pure; a loader's SQL may leave rows out ahead of them, never in place of them) |
+| `services/overviewRow.ts` | The overviews row and its entries as every loader reads them: one column list (`OVERVIEW_COLUMNS`, `OVERVIEW_SELECT`, typed so a forgotten field is a type error), `overviewRowFrom` (the charter and `lockedOut` parsed in one place, `lockedOutOf`), `readOverviewRows`, `readCaseEntries` (SELECT only) |
 | `services/overviewState.ts` | `overviewStateOf`: an overview's state from its row and entries, the burst count among it, for production's reads and the sandbox's alike (pure) |
 | `services/overviewClose.ts` | `checkClosing`, `acceptClosing` (pure over the two calls) |
 | `services/overviewReview.ts` | `reviewOverview`, `allowedActions`, `braked`, `auditOverview` (pure over the call) |
 | `services/overviewSteps.ts` | `OVERVIEW_STEPS`, `overviewCalls`: each model call's tier, effort, schema and prompt, for production and the evals (pure) |
 | `services/overviewStands.ts` | `standsFacts`, `refreshStands`, `standsCodeChecks`, `standsSignature`, `servedStands` (pure over the calls) |
 | `services/overviewUpkeep.ts` | `runUpkeep`: parts 2 to 5 in order (pure over injected reads, calls and writes) |
-| `services/overviewUpkeepInput.ts` | `pendingClosings`, `overviewStates`, `reviewCase`, `auditPicks`, `standsCases` (SELECT only) |
+| `services/overviewUpkeepInput.ts` | `pendingClosings`, `overviewStates`, `reviewCase`, `auditPicks`, `standsCases` (SELECT only): the closings' and a review's raw rows go through `overviewCases.ts` |
 | `services/passRecords.ts` | `loadMemberFacts`: the members' usable, structured page facts (SELECT only) |
 | `services/overviewChanges.ts` | The write model: plans of row changes, `settle`, `applied`, `leaving`, `removesLink`, the `changeSet` a decision keeps, and Undo's `inverted` and `notHolding` (pure) |
 | `services/overviewPlans.ts` | The pipeline's plans: `planJoin`, `planFounding`, `planAlone`, `planConflict`, `planClosing`, `planStatus`, `planBurst`, `planReview`, `planAudit` (pure) |
-| `services/overviewDecisions.ts` | One Zod schema per decision kind, `readInputs`, `storedChanges`, `decisionMove` (pure) |
+| `services/overviewDecisions.ts` | One Zod schema per decision kind, `readInputs`, `storedChanges`, `decisionMove`, `foundingEntries` (the anchor's founding entries, for the re-center, the sandbox and the admin alike) (pure) |
 | `services/overviewLifecycle.ts`, `services/overviewLifecycle/` | `applyLink`, `applyClosing`, `applyStatus`, `applyBurst`, `applyReview`, `applyAudit`, `applyStands`, `editorAction`, `undoDecision`: the only writer of the four tables; the folder holds the applier (`apply.ts`) and the writes of linking, the upkeep and the editor |
 | `services/overviewEdits.ts` | `planEdit`, `planUndo`, `undoChain`, `undoable`: the editor's actions and Undo as change sets (pure) |
 | `services/overviewViews.ts` | `overviewsAdminState`, `adminOverviewList`, `adminOverview`, `storyOverview`: the admin's reads (SELECT only) |

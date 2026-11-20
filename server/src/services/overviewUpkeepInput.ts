@@ -1,8 +1,8 @@
 /**
  * What the overview step's upkeep reads (`.context/overviews.md`, "The job", parts 2 to 5), SELECT only
- * through the client given: the joined stories flagged as reporting their overview's end event and
- * not yet judged, every overview's state for the status machine (`overviewStateOf`, from its row's
- * columns and its active entries), an overview as its review reads it, the monthly audit's picks, and
+ * through the client given: the raw rows of the closing checks due and of an overview's review, which
+ * `overviewCases.ts` turns into cases as the eval's sandbox does, every overview's state for the status
+ * machine (`overviewStateOf`, from its row and its active entries), the monthly audit's picks, and
  * each public overview's stands case (its members' usable facts, skipped when nothing they are made of
  * changed, and the last refresh's record).
  */
@@ -10,32 +10,27 @@ import { config } from '../config.js'
 import { utcDay } from '../lib/days.js'
 import type { CloseCase } from './overviewClose.js'
 import type { OverviewDb } from './overviewCandidates.js'
+import { closeCasesOf, entryRole, reviewCaseOf, UNSETTLED_CLOSE_OUTCOMES, type CaseDecision } from './overviewCases.js'
 import { REPORTS_END_EVENT } from './overviewDecisions.js'
-import { linkStories, parseCharter } from './overviewInput.js'
+import { linkStories } from './overviewInput.js'
 import { publicOverviewSql } from './overviewPublicRule.js'
-import type { ReviewCase, ReviewEntry } from './overviewReview.js'
-import { overviewStateOf, type StateEntry, type StateRow } from './overviewState.js'
-import { ENTRY_ROLES, OVERVIEW_SCOPES, OVERVIEW_STATUSES, ROLE_KINDS, namesEndEvent, type OverviewState, type Role } from './overviewTypes.js'
+import type { ReviewCase } from './overviewReview.js'
+import { OVERVIEW_COLUMNS, overviewRowFrom, readCaseEntries, readOverviewRows, type RawOverview } from './overviewRow.js'
+import { overviewStateOf, type StateEntry } from './overviewState.js'
+import { ENTRY_ROLES, type OverviewState } from './overviewTypes.js'
 import type { StandsCase } from './overviewUpkeep.js'
 import { loadMemberFacts } from './passRecords.js'
 import { oneOf } from './storyContextRecords.js'
 
-const roleFrom = (role: string, kind: string | null): Role => {
-  const r = oneOf(role, ENTRY_ROLES, 'routine')
-  return { role: r, roleKind: r === 'routine' || kind === null ? null : oneOf(kind, ROLE_KINDS, 'milestone') }
-}
-
 /**
- * The stories a join flagged as reporting their overview's end event (`reportsEndEvent` on a live
- * `joined` link decision), still active members and published, of an overview that is open or quiet,
- * not frozen and names an end event (one with none closes only by fading, whatever was flagged before
- * an editor took it out), with no `close` decision for that pair but a failed or stale one (an undone
- * one included: an editor's undo of a closing is not judged again); oldest first. Each with the
- * overview's charter and its newest `candidateEntries` other entries published on or before the story's day.
+ * The closing checks due (`closeCasesOf`), from the live link decisions flagged as reporting their
+ * overview's end event, their overviews and those overviews' active entries. The SELECT leaves out
+ * ahead what `closeCasesOf` would: a story no longer an active published member, an overview not open
+ * or quiet, frozen or naming no end event, and a pair already judged.
  */
 export async function pendingClosings(db: OverviewDb, options: Pick<typeof config.overviews, 'candidateEntries'> = config.overviews): Promise<CloseCase[]> {
-  const rows = await db.$queryRaw<{ story_id: string; overview_id: string; charter: unknown }[]>`
-    SELECT d.story_id, d.overview_id, o.charter
+  const joins = await db.$queryRaw<CaseDecision[]>`
+    SELECT d.kind::text AS kind, d.outcome, d.overview_id AS "overviewId", d.story_id AS "storyId", (d.undone_at IS NOT NULL) AS undone, d.inputs
     FROM overview_decisions d
     JOIN overview_entries e ON e.story_id = d.story_id AND e.overview_id = d.overview_id AND e.status = 'active'
     JOIN overviews o ON o.id = d.overview_id
@@ -44,109 +39,45 @@ export async function pendingClosings(db: OverviewDb, options: Pick<typeof confi
       AND s.status = 'published' AND o.status IN ('open', 'quiet') AND NOT o.frozen AND o.charter->>'endEvent' IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM overview_decisions c
-        WHERE c.kind = 'close' AND c.story_id = d.story_id AND c.overview_id = d.overview_id AND c.outcome NOT IN ('failed', 'stale')
+        WHERE c.kind = 'close' AND c.story_id = d.story_id AND c.overview_id = d.overview_id AND c.outcome <> ALL(${[...UNSETTLED_CLOSE_OUTCOMES]}::text[])
       )
-    ORDER BY s.date_published, s.id
   `
-  if (rows.length === 0) return []
-  const stories = new Map(
-    (
-      await linkStories(
-        db,
-        rows.map(r => r.story_id),
-      )
-    ).map(s => [s.id, s]),
-  )
-  const cases: CloseCase[] = []
-  for (const r of rows) {
-    const story = stories.get(r.story_id)
-    const charter = parseCharter(r.charter)
-    if (!story || !charter || !namesEndEvent(charter)) continue
-    const entries = await db.$queryRaw<{ title: string; date_published: Date }[]>`
-      SELECT COALESCE(s.title, s.source_title) AS title, s.date_published
-      FROM overview_entries e JOIN stories s ON s.id = e.story_id
-      WHERE e.overview_id = ${r.overview_id} AND e.status = 'active' AND s.status = 'published' AND s.id <> ${r.story_id}
-        AND s.date_published <= ${story.datePublished}
-      ORDER BY s.date_published DESC, s.id
-      LIMIT ${options.candidateEntries}
-    `
-    cases.push({ overviewId: r.overview_id, charter, story, entries: entries.map(e => ({ title: e.title, date: utcDay(e.date_published) })) })
-  }
-  return cases
+  if (joins.length === 0) return []
+  const overviewIds = [...new Set(joins.flatMap(j => j.overviewId ?? []))]
+  const [overviews, entries, stories] = await Promise.all([
+    readOverviewRows(db, overviewIds),
+    readCaseEntries(db, overviewIds, 'active'),
+    linkStories(
+      db,
+      joins.flatMap(j => j.storyId ?? []),
+    ),
+  ])
+  return closeCasesOf({ joins, closes: [], overviews, entries, stories: new Map(stories.map(s => [s.id, s])) }, options)
 }
-
-interface StateQueryRow {
-  id: string
-  title: string
-  scope: string
-  status: string
-  closed_reason: string | null
-  frozen: boolean
-  frozen_by: string | null
-  frozen_at: Date | null
-  hidden: boolean
-  last_entry_at: Date | null
-  closing_since: Date | null
-  closing_story_id: string | null
-  closure_reviewed_at: Date | null
-  entries_at_last_review: number
-  reviewed_at: Date | null
-  reopened_at: Date | null
-  joins_counted_from: Date | null
-  recentered_at: Date | null
-  recentered_by: string | null
-}
-
-const stateRow = (r: StateQueryRow): StateRow => ({
-  id: r.id,
-  title: r.title,
-  scope: oneOf(r.scope, OVERVIEW_SCOPES, 'single'),
-  status: oneOf(r.status, OVERVIEW_STATUSES, 'open'),
-  closedReason: r.closed_reason,
-  frozen: r.frozen,
-  frozenBy: r.frozen_by,
-  frozenAt: r.frozen_at,
-  hidden: r.hidden,
-  lastEntryAt: r.last_entry_at,
-  closingSince: r.closing_since,
-  closingStoryId: r.closing_story_id,
-  closureReviewedAt: r.closure_reviewed_at,
-  entriesAtLastReview: r.entries_at_last_review,
-  reviewedAt: r.reviewed_at,
-  reopenedAt: r.reopened_at,
-  joinsCountedFrom: r.joins_counted_from,
-  recenteredAt: r.recentered_at,
-  recenteredBy: r.recentered_by,
-})
 
 /**
  * Every overview with an active entry, oldest founding first, as the status machine reads it
  * (`overviewStateOf`): its row, its active entries with their stories' publication, and the newest
- * reader's report that queued a review (`feedback.queues_review`).
+ * reader's report that queued a review (`feedback.queues_review`). One without a readable charter,
+ * which no write could be planned on, is left out.
  */
 export async function overviewStates(
   db: OverviewDb,
   now: Date,
   options: Pick<typeof config.overviews, 'nightHours'> = config.overviews,
 ): Promise<OverviewState[]> {
-  const rows = await db.$queryRaw<StateQueryRow[]>`
-    SELECT o.id, o.title, o.scope::text AS scope, o.status::text AS status, o.closed_reason, o.frozen, o.frozen_by, o.frozen_at, o.hidden,
-           o.last_entry_at, o.closing_since, o.closing_story_id, o.closure_reviewed_at, o.entries_at_last_review, o.reviewed_at,
-           o.reopened_at, o.joins_counted_from, o.recentered_at, o.recentered_by
-    FROM overviews o
-    WHERE EXISTS (SELECT 1 FROM overview_entries e WHERE e.overview_id = o.id AND e.status = 'active')
-    ORDER BY o.founded_at, o.id
-  `
+  const rows = (
+    await db.$queryRaw<RawOverview[]>`
+      SELECT ${OVERVIEW_COLUMNS}
+      FROM overviews o
+      WHERE EXISTS (SELECT 1 FROM overview_entries e WHERE e.overview_id = o.id AND e.status = 'active')
+      ORDER BY o.founded_at, o.id
+    `
+  ).flatMap(r => overviewRowFrom(r) ?? [])
   if (rows.length === 0) return []
   const ids = rows.map(r => r.id)
   const [entries, reports] = await Promise.all([
-    db.$queryRaw<
-      { id: string; overview_id: string; story_id: string | null; joined_by: string; joined_at: Date; published: boolean; date_published: Date | null }[]
-    >`
-      SELECT e.id, e.overview_id, e.story_id, e.joined_by, e.joined_at, (s.status = 'published') AS published, s.date_published
-      FROM overview_entries e JOIN stories s ON s.id = e.story_id
-      WHERE e.status = 'active' AND e.overview_id = ANY(${ids}::text[])
-    `,
+    readCaseEntries(db, ids, 'active'),
     db.$queryRaw<{ overview_id: string; report_at: Date }[]>`
       SELECT f.overview_id, MAX(f.created_at) AS report_at
       FROM feedback f
@@ -155,73 +86,15 @@ export async function overviewStates(
     `,
   ])
   return rows.map(r => {
-    const own: StateEntry[] = entries
-      .filter(e => e.overview_id === r.id)
-      .map(e => ({
-        id: e.id,
-        storyId: e.story_id,
-        status: 'active',
-        joinedBy: e.joined_by,
-        joinedAt: e.joined_at,
-        published: e.published,
-        datePublished: e.date_published,
-      }))
-    return overviewStateOf(stateRow(r), own, reports.find(f => f.overview_id === r.id)?.report_at ?? null, now, options)
+    const own: StateEntry[] = entries.filter(e => e.overviewId === r.id)
+    return overviewStateOf(r, own, reports.find(f => f.overview_id === r.id)?.report_at ?? null, now, options)
   })
 }
 
-/**
- * An overview as its review reads it: title, charter, scope and freeze, its active entries of
- * published stories oldest first, while closing the story whose end-event report began it, and the OUT
- * entries an editor's undo locked out. Null for an overview gone or without a readable charter.
- */
+/** An overview as its review reads it (`reviewCaseOf`); null for an overview gone or without a readable charter. */
 export async function reviewCase(db: OverviewDb, overviewId: string): Promise<ReviewCase | null> {
-  const [o] = await db.$queryRaw<
-    { title: string; charter: unknown; scope: string; status: string; frozen: boolean; closing_story_id: string | null; locked_out: unknown }[]
-  >`
-    SELECT title, charter, scope::text AS scope, status::text AS status, frozen, closing_story_id, locked_out FROM overviews WHERE id = ${overviewId}
-  `
-  const charter = o ? parseCharter(o.charter) : null
-  if (!o || !charter) return null
-  const rows = await db.$queryRaw<
-    {
-      id: string
-      story_id: string
-      title: string
-      label: string
-      summary: string
-      date_published: Date
-      role: string
-      role_kind: string | null
-      locked: boolean
-    }[]
-  >`
-    SELECT e.id, e.story_id, COALESCE(s.title, s.source_title) AS title, COALESCE(s.title_label, '') AS label, COALESCE(s.summary, '') AS summary,
-           s.date_published, e.role::text AS role, e.role_kind, e.locked
-    FROM overview_entries e JOIN stories s ON s.id = e.story_id
-    WHERE e.overview_id = ${overviewId} AND e.status = 'active' AND s.status = 'published' AND s.date_published IS NOT NULL
-    ORDER BY s.date_published, s.id
-  `
-  const entries: ReviewEntry[] = rows.map(r => ({
-    entryId: r.id,
-    storyId: r.story_id,
-    title: r.title,
-    label: r.label,
-    summary: r.summary,
-    date: utcDay(r.date_published),
-    role: roleFrom(r.role, r.role_kind),
-    locked: r.locked,
-  }))
-  return {
-    overviewId,
-    title: o.title,
-    charter,
-    scope: oneOf(o.scope, OVERVIEW_SCOPES, 'single'),
-    frozen: o.frozen,
-    entries,
-    closingStoryId: o.status === 'closing' ? o.closing_story_id : null,
-    lockedOut: Array.isArray(o.locked_out) ? o.locked_out.filter((x): x is string => typeof x === 'string') : [],
-  }
+  const [o] = await readOverviewRows(db, [overviewId])
+  return o ? reviewCaseOf(o, await readCaseEntries(db, [overviewId], 'active')) : null
 }
 
 /**
@@ -283,7 +156,12 @@ export async function standsCases(db: OverviewDb, today: string): Promise<Stands
     cases.push({
       overviewId: o.id,
       title: o.title,
-      entries: entries.map(e => ({ storyId: e.story_id, title: e.title, date: utcDay(e.date_published), role: roleFrom(e.role, e.role_kind) })),
+      entries: entries.map(e => ({
+        storyId: e.story_id,
+        title: e.title,
+        date: utcDay(e.date_published),
+        role: entryRole({ role: oneOf(e.role, ENTRY_ROLES, 'routine'), roleKind: e.role_kind }),
+      })),
       members: facts.map(f => ({ ...f, published: true })),
       lastSignature: o.signature,
       marker,

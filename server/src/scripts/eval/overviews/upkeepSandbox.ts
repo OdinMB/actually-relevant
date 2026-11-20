@@ -1,33 +1,26 @@
 /**
  * The upkeep's reads and writes over the overview sandbox (`overviewSandbox.ts`), by production's
- * rules: the state each overview is judged on is production's (`overviewStateOf`), the closings due
- * are read from the decisions as production's loader reads them (`pendingClosings`), and every write
- * is production's plan (`overviewPlans.ts`) applied to memory. So the `replay` step runs production's
+ * rules: the state each overview is judged on is production's (`overviewStateOf`), the review, closing
+ * and re-center cases are built from the sandbox's rows by production's own case assembly
+ * (`overviewCases.ts`), and every write is production's plan (`overviewPlans.ts`) applied to memory. So
+ * the `replay` step runs production's
  * upkeep (`runUpkeep`) day by day after each day's linking: the closing checks of the joins flagged as
  * reporting the end event, the status machine, bursts, reviews and the stands refreshes, each
  * overview's members' facts given by the step. Every story is published in a replay, so no member is
  * ever unpublished; the monthly audit does not run. Writes nothing to the database.
  */
-import { config } from '../../../config.js'
 import type { CloseCase } from '../../../services/overviewClose.js'
-import { foundInputs, linkInputs, readInputs } from '../../../services/overviewDecisions.js'
+import { closeCasesOf, entryRole, recenterPartsOf, recenterStoryIds, reviewCaseOf, type CaseEntry } from '../../../services/overviewCases.js'
+import { foundingEntries, linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import type { Neighbour } from '../../../services/overviewCandidates.js'
 import { STALE_RECENTER, STALE_REVIEW, planAudit, planBurst, planClosing, planRecenter, planReview, planStatus } from '../../../services/overviewPlans.js'
-import {
-  neighbourOverviews,
-  neighbourStories,
-  recenterCaseOf,
-  type RecenterCase,
-  type SignalRecord,
-  type TurnedAwayRow,
-} from '../../../services/overviewRecenter.js'
+import { neighbourOverviews, neighbourStories, recenterCaseOf, type RecenterCase, type SignalRecord } from '../../../services/overviewRecenter.js'
 import type { ReviewCase } from '../../../services/overviewReview.js'
 import { overviewStateOf } from '../../../services/overviewState.js'
-import { namesEndEvent } from '../../../services/overviewTypes.js'
 import type { MemberFact } from '../../../services/overviewStands.js'
 import type { StandsCase, UpkeepDeps } from '../../../services/overviewUpkeep.js'
 import { applied } from '../../../services/overviewChanges.js'
-import { activeEntries, roleOf, safeguardsOf, type Sandbox, type SandboxEntry, type SandboxOverview } from './overviewSandbox.js'
+import { activeEntries, safeguardsOf, type Sandbox, type SandboxOverview } from './overviewSandbox.js'
 
 /** What the upkeep did that the replay reports: each safeguard's firings, by name. */
 export type Safeguards = Map<string, number>
@@ -51,115 +44,48 @@ export function sandboxUpkeep(
   neighbours: (storyId: string, asOf: Date) => Promise<Neighbour[]> = async () => [],
 ): UpkeepSandbox {
   const get = (id: string) => sandbox.overviews.get(id)
-  const story = (id: string) => sandbox.stories.get(id)!
   const ctx = () => ({ ...sandbox.context(), now: now() })
 
-  /** Production's `reviewCase` over memory: the active entries of published stories, oldest first. */
+  /** An overview's entries as production's loaders read them: each row with its story's text. */
+  const caseEntries = (o: SandboxOverview): CaseEntry[] =>
+    o.entries.map(e => ({ ...e, label: sandbox.stories.get(e.storyId)?.label ?? '', summary: sandbox.stories.get(e.storyId)?.summary ?? '' }))
+
+  /** Production's `reviewCase` over memory: the same rule (`reviewCaseOf`). */
   const reviewCase = async (id: string): Promise<ReviewCase | null> => {
     const o = get(id)
-    if (!o) return null
-    return {
-      overviewId: o.id,
-      title: o.title,
-      charter: o.charter,
-      scope: o.scope,
-      frozen: o.frozen,
-      entries: activeEntries(o)
-        .filter(e => e.published && e.datePublished !== null)
-        .sort(byDate)
-        .map(e => ({
-          entryId: e.id,
-          storyId: e.storyId!,
-          title: e.title,
-          label: story(e.storyId!).label,
-          summary: story(e.storyId!).summary,
-          date: e.date,
-          role: roleOf(e),
-          locked: e.locked,
-        })),
-      closingStoryId: o.status === 'closing' ? o.closingStoryId : null,
-      lockedOut: o.lockedOut,
-    }
+    return o ? reviewCaseOf(o, caseEntries(o)) : null
   }
 
-  /** `pendingClosings` over memory: live joins flagged as reporting the end event, of open or quiet unfrozen overviews that name one, with no settling close decision. */
+  /** `pendingClosings` over memory: every decision and overview given to the same rule (`closeCasesOf`). */
   const closings = async (): Promise<CloseCase[]> => {
-    const judged = new Set(
-      sandbox.decisions.filter(d => d.kind === 'close' && d.outcome !== 'failed' && d.outcome !== 'stale').map(d => `${d.overviewId}:${d.storyId}`),
-    )
-    const flagged = sandbox.decisions.filter(d => d.kind === 'link' && d.outcome === 'joined' && !d.undone && readInputs(linkInputs, d.inputs)?.reportsEndEvent)
-    return flagged
-      .flatMap(d => {
-        const o = d.overviewId ? get(d.overviewId) : undefined
-        const e = o && activeEntries(o).find(x => x.storyId === d.storyId)
-        if (!o || !e || !e.published || judged.has(`${o.id}:${d.storyId}`) || !(o.status === 'open' || o.status === 'quiet') || o.frozen) return []
-        const charter = o.charter
-        if (!namesEndEvent(charter)) return []
-        return [
-          {
-            overviewId: o.id,
-            charter,
-            story: story(e.storyId!),
-            entries: activeEntries(o)
-              .filter(x => x.storyId !== e.storyId && x.datePublished!.getTime() <= e.datePublished!.getTime())
-              .sort((a, b) => byDate(b, a))
-              .slice(0, config.overviews.candidateEntries)
-              .map(x => ({ title: x.title, date: x.date })),
-          },
-        ]
-      })
-      .sort((a, b) => a.story.datePublished.getTime() - b.story.datePublished.getTime())
+    const overviews = [...sandbox.overviews.values()]
+    return closeCasesOf({
+      joins: sandbox.decisions.filter(d => d.kind === 'link'),
+      closes: sandbox.decisions.filter(d => d.kind === 'close'),
+      overviews,
+      entries: overviews.flatMap(caseEntries),
+      stories: sandbox.stories,
+    })
   }
 
   /**
-   * Production's `recenterCases` over memory: the same parts, built by the same rules (`recenterCaseOf`),
-   * oldest founding first. Every story of a replay is published.
+   * Production's `recenterCases` over memory: the same parts, built and decided by the same rules
+   * (`recenterPartsOf`, `recenterCaseOf`), oldest founding first. Every story of a replay is published.
    */
   const recenterCases = async (at: { clock: Date; now: Date }): Promise<RecenterCase[]> => {
     const cases: RecenterCase[] = []
     const overviews = [...sandbox.overviews.values()].sort((a, b) => a.foundedAt.getTime() - b.foundedAt.getTime())
     for (const o of overviews) {
-      const review = await reviewCase(o.id)
-      if (!review) continue
       const records: SignalRecord[] = sandbox.decisions.flatMap(d => {
         const inputs = d.kind === 'link' && !d.undone && d.storyId ? readInputs(linkInputs, d.inputs) : null
         return inputs && inputs.signals.some(s => s.overviewId === o.id) ? [{ storyId: d.storyId!, signals: inputs.signals, linkedAt: inputs.linkedAt }] : []
       })
-      const reviewDetached = o.entries.filter(e => e.status === 'detached' && e.detachedBy === 'review').map(e => e.storyId)
-      const ids = [...new Set([...records.map(r => r.storyId), ...reviewDetached])].filter(id => sandbox.stories.has(id))
-      const active = (await sandbox.memberships(ids)).active
-      const rows: TurnedAwayRow[] = ids.map(id => {
-        const s = story(id)
-        const here = o.entries.filter(e => e.storyId === id && e.status === 'detached')
-        const newest = here.reduce<SandboxEntry | null>((a, e) => (!a || (e.detachedAt?.getTime() ?? 0) > (a.detachedAt?.getTime() ?? 0) ? e : a), null)
-        return {
-          storyId: id,
-          title: s.title,
-          label: s.label,
-          summary: s.summary,
-          date: s.date,
-          datePublished: s.datePublished,
-          published: true,
-          active: active.has(id),
-          quotes: records.filter(r => r.storyId === id).flatMap(r => r.signals.filter(x => x.overviewId === o.id).map(x => x.quote)),
-          row: newest ? { entryId: newest.id, detachedBy: newest.detachedBy, locked: here.some(e => e.locked) } : null,
-        }
-      })
-      // The entries its founding made, from the found decision's change set as production reads them
-      const founding = sandbox.decisions
-        .filter(d => d.kind === 'found' && d.outcome === 'founded' && d.overviewId === o.id && !d.undone)
-        .flatMap(d => (readInputs(foundInputs, d.inputs)?.created ?? []).flatMap(c => (c.table === 'entry' ? [c.id] : [])))
-      const partial = recenterCaseOf(
-        {
-          review,
-          state: o,
-          entryDates: new Map(o.entries.flatMap(e => (e.datePublished ? [[e.id, e.datePublished] as const] : []))),
-          founding,
-          records,
-          rows,
-        },
-        at,
-      )
+      const entries = caseEntries(o)
+      const ids = recenterStoryIds(o.id, entries, records)
+      const stories = ids.flatMap(id => sandbox.stories.get(id) ?? [])
+      const active = new Set((await sandbox.memberships(ids)).active.keys())
+      const founding = foundingEntries(sandbox.decisions.filter(d => d.overviewId === o.id))
+      const partial = recenterCaseOf(recenterPartsOf({ overview: o, entries, founding, records, stories, active }), at)
       if (!partial) continue
       const near = await neighbourOverviews(o.id, neighbourStories(partial), at.clock, {
         neighbours,
@@ -178,7 +104,7 @@ export function sandboxUpkeep(
     return {
       overviewId: o.id,
       title: o.title,
-      entries: entries.map(e => ({ storyId: e.storyId!, title: e.title, date: e.date, role: roleOf(e) })),
+      entries: entries.map(e => ({ storyId: e.storyId, title: e.title, date: e.date, role: entryRole(e) })),
       members,
       lastSignature: o.lastSignature,
       marker,

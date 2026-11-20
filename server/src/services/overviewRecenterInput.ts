@@ -1,15 +1,16 @@
 /**
  * What an automated re-center reads (`.context/overviews.md`, "Re-centering"), SELECT only through the
  * client given: the overviews automation may re-center, and for each whose link signals fire an attempt
- * its review case, its entries' dates, its founding entries, the stories it may take in and its
- * neighbors. The rules are `overviewRecenter.ts`'s (`recenterCaseOf`), which the eval's sandbox applies
- * to memory alike.
+ * the raw rows of its parts (its row, its entries, its founding decisions, the stories it may take in
+ * and their membership) and its neighbors. The parts are built by `overviewCases.ts` (`recenterPartsOf`)
+ * and decided by `overviewRecenter.ts` (`recenterCaseOf`), as the eval's sandbox does over memory.
  */
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { config } from '../config.js'
 import { membershipsOf, nearestPublished, type OverviewDb } from './overviewCandidates.js'
-import { foundInputs, LINKED_AT, readInputs, signalSchema, SIGNALS } from './overviewDecisions.js'
+import { recenterPartsOf, recenterStoryIds } from './overviewCases.js'
+import { foundingEntries, LINKED_AT, signalSchema, SIGNALS } from './overviewDecisions.js'
 import { candidateOverviews, linkStories } from './overviewInput.js'
 import {
   automatedRecenterBlocked,
@@ -21,11 +22,8 @@ import {
   type AttemptOptions,
   type RecenterCase,
   type SignalRecord,
-  type TurnedAwayRow,
 } from './overviewRecenter.js'
-import { OVERVIEW_SCOPES, OVERVIEW_STATUSES } from './overviewTypes.js'
-import { reviewCase } from './overviewUpkeepInput.js'
-import { oneOf } from './storyContextRecords.js'
+import { OVERVIEW_COLUMNS, overviewRowFrom, readCaseEntries, type RawOverview } from './overviewRow.js'
 
 const signalList = z.array(signalSchema)
 
@@ -58,97 +56,37 @@ export async function signalRecords(db: OverviewDb, overviewId: string, since: D
  * `now`, oldest founding first, each with its neighbors: of the ongoing overviews, open or quiet, not
  * frozen and below the limit of automated re-centers, those no lock keeps from automation; the live
  * link decisions naming each in a signal since its last attempt (the GIN index
- * `overview_decisions_link_signals`), and for one whose signals fire them all; the
- * stories those name and those a review detached from it, with their membership and its newest row
- * there; then `recenterCaseOf` decides, and the neighbors are read for the cases it keeps.
+ * `overview_decisions_link_signals`), and for one whose signals fire them all; its entries and its
+ * `found` decisions; the stories `recenterStoryIds` names, with their membership; then
+ * `recenterPartsOf` builds the parts, `recenterCaseOf` decides, and the neighbors are read for the
+ * cases it keeps.
  */
 export async function recenterCases(db: OverviewDb, at: { clock: Date; now: Date }, options: AttemptOptions = config.overviews): Promise<RecenterCase[]> {
-  const overviews = await db.$queryRaw<
-    {
-      id: string
-      scope: string
-      status: string
-      frozen: boolean
-      automated_recenters: number
-      recentered_at: Date | null
-      recentered_by: string | null
-      recenter_undone_at: Date | null
-      recenter_tried_at: Date | null
-    }[]
-  >`
-    SELECT id, scope::text AS scope, status::text AS status, frozen, automated_recenters, recentered_at, recentered_by, recenter_undone_at, recenter_tried_at
-    FROM overviews
-    WHERE scope = 'ongoing' AND status IN ('open', 'quiet') AND NOT frozen AND automated_recenters < ${options.maxAutomatedRecenters}
-    ORDER BY founded_at, id
-  `
+  const overviews = (
+    await db.$queryRaw<RawOverview[]>`
+      SELECT ${OVERVIEW_COLUMNS}
+      FROM overviews o
+      WHERE o.scope = 'ongoing' AND o.status IN ('open', 'quiet') AND NOT o.frozen AND o.automated_recenters < ${options.maxAutomatedRecenters}
+      ORDER BY o.founded_at, o.id
+    `
+  ).flatMap(r => overviewRowFrom(r) ?? [])
   const cases: RecenterCase[] = []
   for (const o of overviews) {
-    const state = {
-      scope: oneOf(o.scope, OVERVIEW_SCOPES, 'single'),
-      status: oneOf(o.status, OVERVIEW_STATUSES, 'open'),
-      frozen: o.frozen,
-      automatedRecenters: o.automated_recenters,
-      recenteredAt: o.recentered_at,
-      recenteredBy: o.recentered_by,
-      recenterUndoneAt: o.recenter_undone_at,
-      recenterTriedAt: o.recenter_tried_at,
-    }
-    if (automatedRecenterBlocked(state, at.now, options)) continue
+    if (automatedRecenterBlocked(o, at.now, options)) continue
     // Only the signals since the last attempt fire one; the stories an attempt may take in are flagged by any signal (D-RC6), so the whole history is read only for an overview whose signals fire
-    const fresh = await signalRecords(db, o.id, o.recenter_tried_at)
-    if (!signalFires(signalsSince(o.id, fresh, o.recenter_tried_at), options)) continue
-    const records = o.recenter_tried_at === null ? fresh : await signalRecords(db, o.id)
-    const review = await reviewCase(db, o.id)
-    if (!review) continue
-    const [entryDates, founding, rowsHere] = await Promise.all([
-      db.$queryRaw<{ id: string; date_published: Date }[]>`
-        SELECT e.id, s.date_published FROM overview_entries e JOIN stories s ON s.id = e.story_id
-        WHERE e.overview_id = ${o.id} AND e.status = 'active' AND s.date_published IS NOT NULL
-      `,
-      db.$queryRaw<{ inputs: unknown }[]>`
-        SELECT inputs FROM overview_decisions WHERE overview_id = ${o.id} AND kind = 'found' AND outcome = 'founded' AND undone_at IS NULL
-      `,
-      // Each story's newest detached row here, and whether an editor locked any of its rows
-      db.$queryRaw<{ story_id: string; id: string; detached_by: string | null; locked: boolean }[]>`
-        SELECT story_id, (array_agg(id ORDER BY detached_at DESC NULLS LAST, id))[1] AS id,
-               (array_agg(detached_by ORDER BY detached_at DESC NULLS LAST, id))[1] AS detached_by, bool_or(locked) AS locked
-        FROM overview_entries
-        WHERE overview_id = ${o.id} AND status = 'detached' AND story_id IS NOT NULL
-        GROUP BY story_id
+    const fresh = await signalRecords(db, o.id, o.recenterTriedAt)
+    if (!signalFires(signalsSince(o.id, fresh, o.recenterTriedAt), options)) continue
+    const records = o.recenterTriedAt === null ? fresh : await signalRecords(db, o.id)
+    const [entries, decisions] = await Promise.all([
+      readCaseEntries(db, [o.id], 'all'),
+      db.$queryRaw<{ kind: string; outcome: string; undone: boolean; inputs: unknown }[]>`
+        SELECT kind::text AS kind, outcome, (undone_at IS NOT NULL) AS undone, inputs FROM overview_decisions WHERE overview_id = ${o.id} AND kind = 'found'
       `,
     ])
-    const ids = [...new Set([...records.map(r => r.storyId), ...rowsHere.filter(r => r.detached_by === 'review').map(r => r.story_id)])]
+    const ids = recenterStoryIds(o.id, entries, records)
     const [stories, memberships] = await Promise.all([linkStories(db, ids), membershipsOf(db, ids)])
-    const rowOf = new Map(rowsHere.map(r => [r.story_id, r]))
-    const quotesOf = (storyId: string) =>
-      records.filter(r => r.storyId === storyId).flatMap(r => r.signals.filter(s => s.overviewId === o.id).map(s => s.quote))
-    const rows: TurnedAwayRow[] = stories.map(s => {
-      const row = rowOf.get(s.id)
-      return {
-        storyId: s.id,
-        title: s.title,
-        label: s.label,
-        summary: s.summary,
-        date: s.date,
-        datePublished: s.datePublished,
-        published: true,
-        active: memberships.active.has(s.id),
-        quotes: quotesOf(s.id),
-        row: row ? { entryId: row.id, detachedBy: row.detached_by, locked: row.locked } : null,
-      }
-    })
-    const partial = recenterCaseOf(
-      {
-        review,
-        state,
-        entryDates: new Map(entryDates.map(e => [e.id, e.date_published])),
-        founding: founding.flatMap(f => (readInputs(foundInputs, f.inputs)?.created ?? []).flatMap(c => (c.table === 'entry' ? [c.id] : []))),
-        records,
-        rows,
-      },
-      at,
-      options,
-    )
+    const parts = recenterPartsOf({ overview: o, entries, founding: foundingEntries(decisions), records, stories, active: new Set(memberships.active.keys()) })
+    const partial = recenterCaseOf(parts, at, options)
     if (!partial) continue
     const neighbours = await neighbourOverviews(
       o.id,

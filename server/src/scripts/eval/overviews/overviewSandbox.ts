@@ -20,6 +20,7 @@ import {
   type Plan,
   type Rows,
 } from '../../../services/overviewChanges.js'
+import { entryRole } from '../../../services/overviewCases.js'
 import { linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import { isStale, type ApplyLink } from '../../../services/overviewLink.js'
 import type { LinkAttempt, OwedStory } from '../../../services/overviewOwed.js'
@@ -82,10 +83,6 @@ export interface Sandbox {
 const SETTLES: ReadonlySet<LinkOutcome> = new Set(SETTLING_OUTCOMES)
 
 export const activeEntries = (o: SandboxOverview): SandboxEntry[] => o.entries.filter(e => e.status === 'active')
-
-/** An entry's role as linking reads it. */
-export const roleOf = (e: Pick<EntryRow, 'role' | 'roleKind'>): Role =>
-  e.role === 'routine' ? { role: 'routine', roleKind: null } : ({ role: 'turning_point', roleKind: e.roleKind } as Role)
 
 export function createSandbox(): Sandbox {
   const overviews = new Map<string, SandboxOverview>()
@@ -190,9 +187,9 @@ export function createSandbox(): Sandbox {
     if (linked.outcome === 'founded') {
       const partner = result.founding!.partner.id
       const entry = [...overviews.values()].flatMap(o => o.entries).find(e => e.storyId === partner && e.status === 'active')
-      results.set(partner, { outcome: 'founded', role: entry ? roleOf(entry) : null })
+      results.set(partner, { outcome: 'founded', role: entry ? entryRole(entry) : null })
       const own = [...overviews.values()].flatMap(o => o.entries).find(e => e.storyId === result.story.id && e.status === 'active')
-      if (own) results.set(result.story.id, { outcome: 'founded', role: roleOf(own) })
+      if (own) results.set(result.story.id, { outcome: 'founded', role: entryRole(own) })
     }
     return { kind: 'written', outcome: linked.outcome }
   }

@@ -11,13 +11,14 @@ import { z } from 'zod'
 import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { NotFoundError } from '../utils/errors.js'
-import { decisionMove, editorRecenterInputs, foundInputs, readInputs, storedChanges } from './overviewDecisions.js'
+import { decisionMove, editorRecenterInputs, foundingEntries, readInputs, storedChanges } from './overviewDecisions.js'
 import { undoable } from './overviewEdits.js'
 import { parseCharter } from './overviewInput.js'
 import { isPublicOverview } from './overviewPublicRule.js'
 import { overviewStepOn } from './overviewQueue.js'
 import { anchorOf, type AnchorEntry, recenterLock, signalsSince, type SignalRecord } from './overviewRecenter.js'
 import { signalRecords } from './overviewRecenterInput.js'
+import { lockedOutOf } from './overviewRow.js'
 import { usable } from './researchPool.js'
 
 /** The decisions the status history lists: the status machine's, end-event closings, an editor's close and freeze. */
@@ -26,9 +27,6 @@ const STATUS_KINDS = ['status', 'close', 'editor_close', 'editor_freeze'] as con
 /** The decisions the re-centering reads: the founding (whose entries anchor the overview) and every applied re-center. */
 const CHARTER_KINDS = ['found', 'recenter', 'editor_recenter'] as const
 const RECENTER_KINDS: readonly string[] = ['recenter', 'editor_recenter']
-
-/** The entries a founding made (its change set's `created`): the anchor's founding entries. */
-const foundingEntries = (inputs: unknown): string[] => (readInputs(foundInputs, inputs)?.created ?? []).flatMap(c => (c.table === 'entry' ? [c.id] : []))
 
 /** What a re-center changed of the title and the charter, from its change set; null for what it left. */
 function charterMove(d: { kind: string; outcome: string; inputs: unknown }) {
@@ -70,7 +68,7 @@ function recenteringView(
   signals: readonly SignalRecord[],
   names: ReadonlyMap<string, string>,
 ) {
-  const founding = charterDecisions.filter(d => d.kind === 'found' && d.undoneAt === null).flatMap(d => foundingEntries(d.inputs))
+  const founding = foundingEntries(charterDecisions.map(d => ({ ...d, undone: d.undoneAt !== null })))
   const anchor = anchorOf(
     entries.map(e => ({
       entryId: e.id,
@@ -98,7 +96,7 @@ function recenteringView(
     lockedUntil: holding?.until ?? null,
     lockedBy: holding?.by ?? null,
     /** OUT entries an Undo took out, which no review adds again; an editor's charter that names one again lifts its lock. */
-    lockedOut: Array.isArray(o.lockedOut) ? o.lockedOut.filter((x): x is string => typeof x === 'string') : [],
+    lockedOut: lockedOutOf(o.lockedOut),
     /** Stories linked since the last re-center (since founding before one) that pointed past the charter: still counted at the limit, so the editor sees them. */
     signals: signalsSince(o.id, signals, o.recenteredAt),
     anchor: { standIns: anchor.standIns, entries: [...anchor.founding.map(anchorEntry(true)), ...anchor.turningPoints.map(anchorEntry(false))] },

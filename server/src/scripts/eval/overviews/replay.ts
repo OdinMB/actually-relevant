@@ -27,7 +27,8 @@ import type { KeyFile } from './keyFiles.js'
 import { awaitingReview, type AnswerKey } from './keySchema.js'
 import { evalCalls, replaySlugs } from './link.js'
 import { developmentOf, keyIndex } from './linkScore.js'
-import { activeEntries, createSandbox, owedOf, roleOf, type Sandbox } from './overviewSandbox.js'
+import { entryRole } from '../../../services/overviewCases.js'
+import { activeEntries, createSandbox, owedOf, type Sandbox } from './overviewSandbox.js'
 import { readInputs, recenterInputs } from '../../../services/overviewDecisions.js'
 import {
   checkpointsOf,
@@ -255,7 +256,7 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
     for (const [name, n] of upkeep.safeguards()) add(name, n)
     const overviews = [...sandbox.overviews.values()]
     const roles = new Map([...sandbox.results].flatMap(([id, r]) => (r.role ? [[slugOf(id), r.role] as const] : [])))
-    for (const ov of overviews) for (const e of activeEntries(ov)) roles.set(slugOf(e.storyId), roleOf(e))
+    for (const ov of overviews) for (const e of activeEntries(ov)) roles.set(slugOf(e.storyId), entryRole(e))
     const ended = overviews.map(ov => ({
       id: ov.id,
       members: activeEntries(ov).map(e => slugOf(e.storyId)),

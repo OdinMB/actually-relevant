@@ -193,6 +193,17 @@ export function storedChanges(kind: string, outcome: string, inputs: unknown): S
   return read?.changes ?? []
 }
 
+/**
+ * The entries an overview's founding made, from its live `found` decisions' change sets (`created`):
+ * the anchor's founding entries, as the re-center, the eval's sandbox and the admin read them. Given
+ * the overview's own decisions.
+ */
+export function foundingEntries(decisions: readonly { kind: string; outcome: string; undone: boolean; inputs: unknown }[]): string[] {
+  return decisions
+    .filter(d => d.kind === 'found' && d.outcome === 'founded' && !d.undone)
+    .flatMap(d => (readInputs(foundInputs, d.inputs)?.created ?? []).flatMap(c => (c.table === 'entry' ? [c.id] : [])))
+}
+
 /** A status-like move as the admin's history shows it: from, to and why. */
 export interface DecisionMove {
   from: string | null

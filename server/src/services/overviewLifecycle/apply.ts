@@ -21,46 +21,13 @@ import {
   type Plan,
   type Rows,
 } from '../overviewChanges.js'
-import { parseCharter } from '../overviewInput.js'
 import { PIPELINE } from '../overviewPlans.js'
+import { OVERVIEW_SELECT, overviewRowFrom } from '../overviewRow.js'
 
 export type Tx = Prisma.TransactionClient
 
 /** A value as the JSON columns store it: dates as strings, nothing undefined. */
 export const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue
-
-const ROW = {
-  id: true,
-  issueId: true,
-  foundedAt: true,
-  title: true,
-  slug: true,
-  scope: true,
-  status: true,
-  closedAt: true,
-  closedReason: true,
-  closingSince: true,
-  closingStoryId: true,
-  closureReviewedAt: true,
-  frozen: true,
-  frozenBy: true,
-  frozenAt: true,
-  hidden: true,
-  charter: true,
-  charterModel: true,
-  charterPromptVersion: true,
-  recenteredAt: true,
-  recenteredBy: true,
-  recenterUndoneAt: true,
-  recenterTriedAt: true,
-  automatedRecenters: true,
-  entriesAtLastReview: true,
-  reviewedAt: true,
-  reopenedAt: true,
-  joinsCountedFrom: true,
-  lockedOut: true,
-  lastEntryAt: true,
-} as const
 
 const ENTRY = {
   id: true,
@@ -89,13 +56,12 @@ export const ENTRY_ROW = ENTRY
 /** An overview's rows, its row locked for the rest of the transaction; null when it is gone. */
 export async function readRows(tx: Tx, overviewId: string): Promise<Rows | null> {
   await tx.$queryRaw`SELECT id FROM overviews WHERE id = ${overviewId} FOR UPDATE`
-  const o = await tx.overview.findUnique({ where: { id: overviewId }, select: ROW })
-  if (!o) return null
-  const charter = parseCharter(o.charter)
-  if (!charter) throw new ConflictError('The overview has no readable charter')
-  const lockedOut = Array.isArray(o.lockedOut) ? o.lockedOut.filter((x): x is string => typeof x === 'string') : []
+  const raw = await tx.overview.findUnique({ where: { id: overviewId }, select: OVERVIEW_SELECT })
+  if (!raw) return null
+  const overview = overviewRowFrom(raw)
+  if (!overview) throw new ConflictError('The overview has no readable charter')
   const entries = (await tx.overviewEntry.findMany({ where: { overviewId }, select: ENTRY, orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }] })).map(asEntryRow)
-  return { overview: { ...o, charter, lockedOut }, entries }
+  return { overview, entries }
 }
 
 /** A free slug for an overview going public: its title's, or with `-2`, `-3` … when taken. */
