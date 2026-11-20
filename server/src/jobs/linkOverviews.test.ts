@@ -246,6 +246,9 @@ describe('runLinkOverviewsJob', () => {
     await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
     const titles = mocks.notify.mock.calls.map(([n]) => (n as { title: string; dedupeKey: string }).dedupeKey)
     expect(titles).toContain('upkeep-failing:link_overviews')
+    // The notice names every kind of item that can fail, the re-center attempts among them
+    const failing = mocks.notify.mock.calls.map(([n]) => n as { message: string; dedupeKey: string }).find(n => n.dedupeKey === 'upkeep-failing:link_overviews')
+    expect(failing?.message).toContain('automated re-center attempts')
     mocks.applyStatus.mockResolvedValue(undefined)
     mocks.notify.mockClear()
     await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))

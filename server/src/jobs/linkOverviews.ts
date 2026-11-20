@@ -136,7 +136,7 @@ async function notifyFailedUpkeep(items: number, failed: number): Promise<void> 
     severity: 'warning',
     title: `${jobDisplayName(LINK_OVERVIEWS_JOB)}: ${failed.toLocaleString('en-US')} of ${countOf(items, 'upkeep item', 'upkeep items')} failed in the last run`,
     message:
-      'A technical problem stopped end-event checks, status moves, reviews or "Where this stands" refreshes: the AI service did not answer, or an error of ours. ' +
+      'A technical problem stopped end-event checks, status moves, automated re-center attempts, reviews, the monthly audit or "Where this stands" refreshes: the AI service did not answer, or an error of ours. ' +
       'Nothing paused, and the overviews keep what they had. They are tried again at the next run. ' +
       'Switch the step off on the Jobs page if it keeps happening.',
     link: '/admin/jobs',
