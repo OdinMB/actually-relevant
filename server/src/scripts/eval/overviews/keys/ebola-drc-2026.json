@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "ebola-drc-2026",
   "title": "Ebola outbreak in eastern DR Congo",
   "charter": {
@@ -2058,6 +2058,267 @@
       "date": "2026-11-04",
       "title": "Polio vaccines still cannot reach every child",
       "why": "Rotary polio interview that mentions Ebola contact tracing in general."
+    }
+  ],
+  "responses": [
+    {
+      "date": "2026-05-17",
+      "what": "WHO declaring a public health emergency of international concern for the Bundibugyo outbreak.",
+      "slug": "who-declares-international-emergency-after-deaths-in-drc-and-uganda",
+      "quote": "WHO has declared a PHEIC for Ebola disease caused by Bundibugyo virus after confirmed cases in Ituri province (DRC) and cases in Kampala and Kinshasa.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-05-23",
+      "what": "UN agencies mobilizing staff, $60 million and supplies for the outbreak response.",
+      "slug": "who-raises-national-risk-to-very-high-in-eastern-drc",
+      "quote": "UN agencies mobilized staff, $60 million and supplies; two cases reached Uganda.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-05-25",
+      "what": "WHO placing the outbreak under a global public health emergency declaration.",
+      "slug": "goma-cases-surge-past-500-after-who-emergency-call",
+      "quote": "An Ebola outbreak in eastern DRC was declared a global public health emergency on 17 May 2026 after rapid case growth: over 500 cases and 130 deaths by 19 May.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-05-29",
+      "what": "Uganda closing its border to contain cross-border Ebola transmission.",
+      "slug": "who-warns-of-ebola-and-conflict-colliding-in-eastern-congo",
+      "quote": "Uganda closed its border and WHO escalated cross-border surveillance as regional health systems strain under the combined crises.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-06-10",
+      "what": "The US imposing entry bans in response to the outbreak.",
+      "slug": "dr-congo-reports-nearly-600-infections-and-115-deaths",
+      "quote": "The US is urging travel restrictions and has imposed entry bans, which raises the profile of the outbreak and affects travel and event planning during the World Cup.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-06-18",
+      "what": "Ebola response teams following up known contacts in northeastern DR Congo, despite severely limited coverage.",
+      "slug": "who-says-unchecked-ebola-circulates-in-northeastern-drc",
+      "quote": "For example, only 28.4% of known contacts were followed up on June 11, allowing chains of transmission to continue.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-06-20",
+      "what": "WHO and international teams mobilizing assistance for the outbreak.",
+      "slug": "75-health-workers-infected-as-drc-cases-surge",
+      "quote": "Poor sanitation, crowded displacement camps, and cuts to WASH funding are hampering the response while WHO and international teams rush to help.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-06-24",
+      "what": "Neighboring states using border and airport closures to restrict movement during the outbreak.",
+      "slug": "conflict-blocks-health-teams-risking-regional-ebola-spread",
+      "quote": "Neighbouring states have used unilateral border and airport closures instead of coordinated WHO-guided responses, which undermines joint action across DRC, Uganda, Rwanda and Burundi.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-07-09",
+      "what": "Bundibugyo treatment-trial teams beginning participant enrollment.",
+      "slug": "health-workers-walk-off-over-unpaid-wages",
+      "quote": "The outbreak has recorded 1,708 cases and 580 deaths, treatment centers are near capacity, and clinical trial enrollment for a Bundibugyo treatment has just begun.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-07-15",
+      "what": "Post-exposure prophylaxis trial teams recruiting roughly 1,000 contacts in Ituri.",
+      "slug": "who-drc-cases-may-be-two-to-four-times-higher",
+      "quote": "A post-exposure prophylaxis trial has begun recruiting roughly 1,000 contacts in Ituri, offering a potential tool to prevent infections if results are positive.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-07-16",
+      "what": "WHO maintaining the outbreak under an international public health emergency declaration.",
+      "slug": "drc-hospitals-overwhelmed-as-cases-surge",
+      "quote": "The virus is spreading faster than response teams can contain it, health services are strained, and WHO has declared an international public health emergency.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-07-21",
+      "what": "The WHO-sponsored PARTNERS trial beginning to test treatment options for Bundibugyo.",
+      "slug": "drc-outbreak-reaches-2-124-cases-exposing-global-gaps",
+      "quote": "That scientific gap means care is limited to supportive treatment while the WHO-sponsored PARTNERS trial only now begins to test options.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-07-22",
+      "what": "Rapid-response teams carrying out safe burials and clinical case management in affected towns.",
+      "slug": "dr-congo-cases-top-2-400-amid-insecurity",
+      "quote": "Rapid response teams, safe and dignified burials, and clinical case management have produced local stabilization in places like Mongbwalu and parts of Goma, showing that focused measures can slow transmission.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-07-26",
+      "what": "Oxford Vaccine Group starting a rapid experimental vaccine trial.",
+      "slug": "death-toll-tops-1-300-as-rare-ebola-spreads-fast",
+      "quote": "Oxford Vaccine Group has started a rapid experimental trial, but that is an early step with uncertain timelines and coverage.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-07-27",
+      "what": "Experimental Bundibugyo vaccine trial teams beginning first-dose trials.",
+      "slug": "dr-congo-reports-3-000-confirmed-cases-and-1-354-deaths",
+      "quote": "The experimental Bundibugyo vaccine has started first-dose trials, but remains preliminary and will not mitigate near-term risk until proven effective and widely deployed.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-08-05",
+      "what": "Clinical-trial teams running two post-exposure drug trials for the outbreak.",
+      "slug": "eastern-congo-deaths-top-1-700-as-response-falters",
+      "quote": "Two post-exposure drug trials and vaccine trials abroad have started, but they are experimental and will take time to change outcomes.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-08-08",
+      "what": "Gavi making stockpiled Ervebo doses available for trials against Bundibugyo.",
+      "slug": "drc-cases-top-4-000-as-vaccine-trial-urged",
+      "quote": "Gavi holds a 500,000-dose Ervebo stockpile and has made doses available for trials, creating a concrete, near-term path to test whether an existing vaccine can be reused.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-08-16",
+      "what": "DR Congo authorities scaling up treatment and monitoring.",
+      "slug": "4-665-cases-and-2-184-deaths-reported-in-six-provinces",
+      "quote": "Cases have spread from one health zone to 54 across six provinces, and insecurity and population movement are complicating surveillance and response while authorities scale up treatment and monitoring.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-08-19",
+      "what": "WHO recruiting motorbike riders for community Ebola surveillance.",
+      "slug": "motorbike-riders-recruited-to-track-cases-and-boost-response",
+      "quote": "WHO is scaling up community engagement, recruiting motorbike riders for surveillance, adding beds, and deploying hundreds of health workers, while facing community resistance and attacks on responders.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-08-21",
+      "what": "WHO releasing 70,000 Ervebo doses for a trial and frontline-worker vaccination.",
+      "slug": "dr-congo-to-get-70-000-doses-as-ebola-deaths-rise",
+      "quote": "The WHO has allocated 70,000 doses of the Ervebo vaccine — 20,000 for a late-stage trial and 50,000 for health workers — while Gavi pledged $13m to support shipment and vaccination efforts amid a declared global emergency.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-08-22",
+      "what": "The US providing $80 million for the outbreak response.",
+      "slug": "funding-gap-risks-response-in-eastern-dr-congo",
+      "quote": "The US provided $80 million but that does not close the gap.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-09-05",
+      "what": "Ebola response teams conducting contact tracing, with effective coverage as low as 19%.",
+      "slug": "drc-deaths-top-3-000-as-cases-surge-across-provinces",
+      "quote": "Contact tracing is far below targets, with an effective tracing rate as low as 19%, which raises the chance the epidemic continues to grow and escape containment—this has clear regional implications for disease control.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-09-20",
+      "what": "DR Congo authorities beginning Ervebo vaccination of frontline health workers.",
+      "slug": "dr-congo-gives-frontline-workers-ervebo-doses-as-deaths-rise",
+      "quote": "Health workers in northeastern DR Congo have started receiving the Ervebo vaccine as authorities fight a Bundibugyo Ebola outbreak.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-10-04",
+      "what": "Mobile laboratory teams shortening Ebola testing turnaround from 72 hours to six.",
+      "slug": "congo-death-toll-tops-4-000-as-treatment-site-burns",
+      "quote": "Mobile laboratories cut the time for test results from 72 hours to six, helping health teams identify cases and bring testing to hard-to-reach places.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-10-07",
+      "what": "Kenya quarantining eight relatives and 21 healthcare workers exposed to its imported case.",
+      "slug": "kenya-quarantines-contacts-after-traveler-dies",
+      "quote": "Kenya quarantined eight relatives and 21 healthcare workers and was tracing 27 people from his flight.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-10-11",
+      "what": "Kenya and Uganda tracing and monitoring contacts of the imported Kenyan case.",
+      "slug": "drc-reports-8-728-cases-as-kenya-confirms-imported-death",
+      "quote": "Kenya and Uganda are tracing contacts and monitoring people who may have been exposed.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-10-22",
+      "what": "Nigerian health officials tracing 44 contacts of the imported case.",
+      "slug": "nigeria-confirms-first-case-from-congo-outbreak",
+      "quote": "Health officials are tracing 44 contacts, while the outbreak has caused more than 9,000 cases and 4,000 deaths in the DRC and spread to other African countries.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-10-24",
+      "what": "Health teams expanding Ebola treatment-bed capacity in DR Congo.",
+      "slug": "dr-congo-deaths-near-4-700-as-cases-cross-borders",
+      "quote": "Health teams are tracking contacts, expanding treatment beds and trying to get patients diagnosed and referred to care sooner.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-10-24",
+      "what": "DR Congo running the Tumaini vaccine trial in Bunia.",
+      "slug": "drc-tests-three-candidates-as-deaths-pass-4-600",
+      "quote": "The DRC has started the Tumaini trial in Bunia to test whether Ervebo and two experimental candidates protect against the Bundibugyo Ebola strain.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-10-28",
+      "what": "Health authorities imposing 21-day quarantine on returning travelers with Congo travel histories.",
+      "slug": "congo-outbreak-passes-10-000-cases-kills-4-887",
+      "quote": "Health authorities have imposed 21-day quarantine for returning travelers with Congo travel histories as officials investigate how the virus is spreading.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-10-30",
+      "what": "Bundibugyo vaccine-trial teams conducting ongoing vaccine trials.",
+      "slug": "nearly-5-000-deaths-expose-gaps-in-regional-response",
+      "quote": "Trials for a vaccine against the Bundibugyo virus are underway, but results are expected in three to six months and no approved treatment is available.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-11-01",
+      "what": "Nigerian health officials isolating two suspected patients, testing samples and tracing contacts.",
+      "slug": "nigeria-isolates-two-suspected-patients",
+      "quote": "Nigeria is investigating two suspected Ebola cases in its northeast, isolating the individuals while testing samples and tracing contacts.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-11-03",
+      "what": "Ervebo trial teams testing the vaccine against Bundibugyo.",
+      "slug": "ebola-outbreak-kills-over-5-300-across-three-countries",
+      "quote": "Trials of the Ervebo vaccine have started for this strain, an early step toward protecting people from future infections.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-11-07",
+      "what": "WHO and its partners coordinating ongoing vaccine research during the outbreak.",
+      "slug": "two-ebola-shots-join-congo-outbreak-trial",
+      "quote": "WHO and its partners are coordinating vaccine research during an active outbreak, which can build evidence and experience for responding to future Ebola emergencies.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-11-07",
+      "what": "A WHO-backed treatment trial testing an antibody treatment and remdesivir.",
+      "slug": "who-advances-two-candidates-for-a-deadly-ebola-strain",
+      "quote": "A WHO-backed study is testing an antibody treatment and the antiviral remdesivir, which could provide additional ways to improve survival if they prove effective.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-11-11",
+      "what": "Response teams screening travelers across DR Congo and 11 neighboring countries, reaching 55 million screenings.",
+      "slug": "ebola-teams-urged-to-monitor-unofficial-crossings",
+      "quote": "Teams have screened 55 million people across the country and 11 neighboring countries, but funding is $60 million short.",
+      "reviewed": true
+    },
+    {
+      "date": "2026-11-16",
+      "what": "DR Congo Ebola responders providing diagnostic and care capacity through more than two dozen labs and nearly 2,000 beds.",
+      "slug": "insecurity-strains-effort-to-contain-drc-ebola-outbreak",
+      "quote": "Testing and treatment capacity can help responders find cases and provide care: the response now has more than two dozen diagnostic labs and nearly 2,000 beds across treatment and transit centres.",
+      "reviewed": true
     }
   ],
   "notes": "FIGURES. Cases are confirmed cases, the wording of most of our stories (32 of the 49 entries with a matching case count). The other stories write 'cases', 'reported cases', 'recorded cases' or 'people infected', but their numbers sit on the same running tally (e.g. 5,290 'infected' on 22 Aug between 5,208 and 5,794 confirmed on 21 and 29 Aug), so they match. Marked false: suspected counts (17 to 29 May), the WHO total of over 500 cases and 130 deaths by 19 May (our text does not say suspected, but 82 cases and 7 deaths were confirmed on 23 May, so it must include suspected ones), counts for Uganda or Kenya alone, one place (Kigonze camp, Beni), health workers only, and deaths since 21 October. A DR Congo-only total and an all-country total both match, since other countries add only a few dozen cases.\n\nNARROWER OR STALE COUNTS. 2 Nov (CIDRAP): 2,950 deaths among 6,100 cases, 'latest government numbers', against more than 10,400 cases and 5,103 deaths by 31 Oct (11 Nov story) and 5,126 by 1 Nov (7 Nov story). Our text does not say why, so both values are matches false and asOf is the story date. 16 Oct (Lancet): its title gives 2,788 deaths when the toll was over 4,000, but the text dates the count to 26 Aug, so asOf is 26 Aug and it matches. 22 Jul: the Sudan roundup's 2,344 cases and 930 deaths are lower than the 2,423 and 967 as of 19 Jul in the same day's UN story.\n\nMID-NOVEMBER DEATHS. The 14 Nov story itself flags that the UN said 'more than 5,000' while Africa CDC said 'more than 5,400' as of 12 Nov. The 16 Nov story's confirmed count of 5,433 as of 12 Nov supports Africa CDC: the UN figure is a loose floor rather than a different definition, so both match. Also notable: 5,376 deaths on 3 Nov (Al Jazeera) is about 250 above the UN's 5,126 by 1 Nov, and 'over 5,300' on 7 Nov sits beside 5,126 in the same-day UN story. No definitions are given, so all of them match.\n\nCOUNTRIES. Kenya: the 7 Oct story reports its first confirmed case (a traveler who died in Nairobi), 11 and 24 Oct repeat it, 28 Oct says 'Kenya reported nine cases', and 3 Nov says 'Kenya recorded its first cases'. The 3 Nov wording contradicts the earlier stories, and the status row keeps it as worded. Nigeria: the 22 Oct story reports its first confirmed case (travel from Uganda), 30 Oct repeats one imported case, 1 Nov reports two suspected cases isolated, and 3 Nov says the suspected cases tested negative. The negative tests concern the two suspected cases only, not the confirmed October case. Yet the 3 Nov title counts 'three countries' (DR Congo, Uganda, Kenya), leaving out Nigeria and France, where the 30 Oct Africa CDC story counted five countries. France's imported case is first reported on 16 Aug. Uganda: cases from 17 May, no new cases by 3 Jul, outbreak declared over in the 24 Oct story. That is a status inside this development, not its end, so closed stays null: no story reports DR Congo's outbreak declared over.\n\nOTHER INCONSISTENCIES. The 25 May title says 'Goma cases surge past 500', but the text counts all of DR Congo. The 17 May story says 'eight lab-confirmed cases' in its summary and antifactors, but its reasons say 'eight in Ituri, plus cases in Kinshasa and Kampala'. The key reads eight as the total. The 6 Sep African Arguments piece says Africa's systems 'are containing spread' while same-week stories report more than 3,000 deaths and uncontrolled spread.\n\nCONVENTIONS. Quotes come only from title, summary, relevance reasons, antifactors and research paragraphs. When a story states one number both rounded and exact, the key lists the exact one. In 'more than X cases and Y deaths', the qualifier also applies to Y when Y is a round number (2,700, 4,000). Single-case country firsts are statuses, not values. Weekly incidence ('400 to 500 a week') is not recorded. Optional joins: two roundups that give Ebola one paragraph (3 Jul, 22 Jul) and two essays that use the outbreak as the opening case for a wider argument (6 Sep, 19 Sep). Of the two 7 Nov stories on the same vaccine decision, both are turning points because they were published at the same time. The 2 Nov CIDRAP quick take is a must because the outbreak is its lead item and title."

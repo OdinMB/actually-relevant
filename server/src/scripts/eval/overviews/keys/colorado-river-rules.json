@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "colorado-river-rules",
   "title": "Colorado River post-2026 operating rules",
   "charter": {
@@ -167,6 +167,15 @@
       "date": "2026-08-26",
       "title": "Fossil firms tied to half of Western water losses",
       "why": "The most tempting: Lake Mead, 40 million people and a source URL about the 'Colorado River crisis', but it is an attribution study on the causes of Western water loss, not the operating rules."
+    }
+  ],
+  "responses": [
+    {
+      "date": "2026-05-11",
+      "what": "The Interior Department has intervened to protect hydropower generation at Lake Powell.",
+      "slug": "summer-drought-threatens-water-and-power-for-40-million",
+      "quote": "The Interior Department has already intervened to try to protect generation at Lake Powell, showing immediate energy-system consequences.",
+      "reviewed": true
     }
   ],
   "notes": "Not closed. Neither federal plan is the end event. The June story describes a framework the government 'will issue' only 'if seven basin states fail to agree'; its caveats say the plan is 'not final and can be supplanted' and that a final environmental impact statement and decision come 'this summer'. The August story is a proposal ('Proposal not final'), with 'binding guidelines expected by October 1'. On 18 August the plan is still 'contested'. No story reports the final binding guidelines or a seven-state deal, so the development is open on 16 November. Figures are []: the only number in 3 or more entries is the roughly 40 million people who depend on the river (all six state it), which is a fixed description, not a figure to track. The proposed cut appears twice: 'up to 3 million acre-feet' a year on 1 Aug, and 'about 3.7 billion cubic metres per year' on 18 Aug, which is the same cut in metric units. Lake Mead's '17 feet above its record low' appears once. The stories differ on the river's flow decline ('roughly 20% over the last century' on 28 Feb, 'about a third over a century' on 6 Jun). The 11 May story says deadlines were missed without naming them. Six stories carry the 'Colorado River' label (the brief said five); all six belong."
