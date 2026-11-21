@@ -17,7 +17,8 @@ const SERVER_SRC = fileURLToPath(new URL('.', import.meta.url))
 const REPO_ROOT = resolve(SERVER_SRC, '..', '..')
 const CLIENT_SRC = join(REPO_ROOT, 'client', 'src')
 
-const readRepoFile = (...parts: string[]) => readFileSync(join(REPO_ROOT, ...parts), 'utf8')
+// Line endings as git stores them: a Windows checkout has CRLF, which the line-anchored patterns below would miss
+const readRepoFile = (...parts: string[]) => readFileSync(join(REPO_ROOT, ...parts), 'utf8').replace(/\r\n/g, '\n')
 
 // ---------------------------------------------------------------------------
 // What the code reads

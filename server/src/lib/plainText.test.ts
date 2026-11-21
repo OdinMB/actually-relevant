@@ -2,9 +2,9 @@ import { readFileSync } from 'fs'
 import { describe, it, expect } from 'vitest'
 import { markdownToPlainText } from './plainText.js'
 
-/** The helper's code after its header comment, which names the other copy. */
+/** The helper's code after its header comment, which names the other copy; line endings as git stores them, whatever the checkout. */
 function rules(relativePath: string): string {
-  const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+  const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const start = source.indexOf('/** An escaped')
   expect(start, `${relativePath} has lost the comment its rules start at`).toBeGreaterThan(0)
   return source.slice(start)

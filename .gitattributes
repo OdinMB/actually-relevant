@@ -1,0 +1,4 @@
+# Text files check out with LF everywhere, Windows included: CI (Linux), Prettier's check and the
+# tests that read repository files all expect LF, and Git for Windows would otherwise write CRLF.
+# Binary files (images, audio) are detected and left as they are.
+* text=auto eol=lf

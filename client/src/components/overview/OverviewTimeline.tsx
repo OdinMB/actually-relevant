@@ -6,7 +6,7 @@ import { getHeadline } from '../../lib/title-label'
 import StoryTitleLabel from '../StoryTitleLabel'
 import { OverviewHeading } from './OverviewStands'
 import { roleLine } from './overviewCopy'
-import { offersFilter, timelineMonths, type TimelineFilter, type TimelineMonth } from './overviewTimeline'
+import { offersFilter, timelineMonths, type TimelineFilter, type TimelineMonth } from './timelineMonths'
 
 const SHORT_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 const shortDay = (iso: string) => SHORT_DAY.format(new Date(iso))

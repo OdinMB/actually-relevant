@@ -10,6 +10,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // On Windows a test that first loads a large library (LangChain, OpenAI, Bluesky) can take over
+    // vitest's 5s under a full run (file scanning of node_modules); CI runs on Linux at the defaults.
+    ...(process.platform === 'win32' ? { testTimeout: 30_000, hookTimeout: 30_000 } : {}),
     // `npm run test:coverage` (CI) measures the unit and db projects together, so a db test that
     // replaces a mock test keeps the lines it covers counted (.context/ci.md, "Coverage floor").
     // A ratchet set just below the coverage measured: raise a threshold when coverage rises; never

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { PublicOverviewEntry } from '@shared/types'
-import { offersFilter, timelineMonths } from './overviewTimeline'
+import { offersFilter, timelineMonths } from './timelineMonths'
 
 const entry = (slug: string, date: string, role: PublicOverviewEntry['role'] = 'routine'): PublicOverviewEntry => ({
   slug,

@@ -107,6 +107,9 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // Tests see the defaults, not a local `.env` (which Vite also loads in test mode): an API address
+    // there turns every same-origin `/api/...` the tests expect into `http://localhost:3001/api/...`
+    env: { VITE_API_URL: '', VITE_TURNSTILE_SITE_KEY: '' },
     // `npm run test:coverage` (CI): a ratchet set just below the coverage measured when it was
     // introduced. Raise a threshold when coverage rises; never lower one to land a change.
     coverage: {

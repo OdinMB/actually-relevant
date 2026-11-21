@@ -123,9 +123,11 @@ describe('Content-Usage (AI usage preference)', () => {
 
   it('states the same preference in robots.txt and on the static site (render.yaml)', () => {
     const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-    const robots = readFileSync(resolve(repo, 'client/public/robots.txt'), 'utf8')
+    // Line endings as git stores them, whatever the checkout (Windows has CRLF)
+    const read = (path: string) => readFileSync(resolve(repo, path), 'utf8').replace(/\r\n/g, '\n')
+    const robots = read('client/public/robots.txt')
     expect(robots).toMatch(new RegExp(`^User-agent: \\*\\n(?:.*\\n)*?Content-Usage: ${config.contentUsage}$`, 'm'))
-    const blueprint = readFileSync(resolve(repo, 'render.yaml'), 'utf8')
+    const blueprint = read('render.yaml')
     expect(blueprint).toMatch(/- path: \/\*\n\s+name: Content-Usage\n\s+value: "train-ai=n, search=y"/)
   })
 })

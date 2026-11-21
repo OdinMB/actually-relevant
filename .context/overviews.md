@@ -215,7 +215,7 @@ The upkeep's steps, the same pure code over the sandbox (`upkeepSandbox.ts`): `p
 | `services/overviewCaches.ts` | `OVERVIEW_LINK_CACHES`, `forgetOverviewLinks` |
 | `services/overviewReport.ts` | `overviewReport`: a reader's report and the review it queues |
 | `routes/public/overviews.ts` | `GET /api/overviews`, `GET /api/overviews/:slug` |
-| `client/src/pages/OverviewPage.tsx`, `OverviewsIndexPage.tsx`, `components/overview/`, `hooks/usePublicOverviews.ts` | The `/ongoing` pages, the story page's callout and the card's chip (`OngoingLink.tsx`), the timeline's folds (`overviewTimeline.ts`), their words (`overviewCopy.ts`) |
+| `client/src/pages/OverviewPage.tsx`, `OverviewsIndexPage.tsx`, `components/overview/`, `hooks/usePublicOverviews.ts` | The `/ongoing` pages, the story page's callout and the card's chip (`OngoingLink.tsx`), the timeline's folds (`timelineMonths.ts`; not `overviewTimeline.ts`, which Windows would resolve for `OverviewTimeline.tsx`), their words (`overviewCopy.ts`) |
 | `routes/admin/overviews.ts` | The admin endpoints |
 | `client/src/pages/admin/OverviewsPage.tsx`, `OverviewDetailPage.tsx`, `components/admin/StoryOverview.tsx`, `Overview*.tsx`, `overviewLabels.ts`, `hooks/useOverviews.ts` | The admin's pages, the story's block, their words |
 | `services/overviewQueue.ts` | The switch (`overviewSwitchRefusal`, `overviewPassConflict`, `overviewStepOn`) and the owed stories (`owedStories`, SELECT only) |
