@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LinkStory } from '../../../services/overviewTypes.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
+import { inDevelopmentHalf } from './developmentHalves.js'
 import { readKeyFiles, type KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
 import { offeredOn, plannedCases, runRecenterStep, signalQuote } from './recenter.js'
@@ -13,8 +14,12 @@ const FILES = readKeyFiles()
 const KEYS = FILES.flatMap(f => (f.key ? [f.key] : []))
 const byId = new Map(KEYS.map(k => [k.id, k]))
 
-/** Every slug of the keys, each a published story on its key date; near misses that are no key's entry are titled NEAR, so the fake model turns them away. */
-const entrySlugs = new Set(KEYS.flatMap(k => k.entries.map(e => e.slug)))
+/**
+ * Every slug of the keys, each a published story on its key date; near misses that are no judged
+ * key's entry are titled NEAR, so the fake model turns them away. Only the judged half counts: a
+ * near miss of Lebanon's may be an entry of a tuned key (its Iran-war look-alikes are the Iran key's).
+ */
+const entrySlugs = new Set(KEYS.filter(k => inDevelopmentHalf(k.id, 'judge')).flatMap(k => k.entries.map(e => e.slug)))
 const STORIES = new Map<string, LinkStory>()
 for (const k of KEYS)
   for (const x of [...k.entries, ...k.nearMisses])

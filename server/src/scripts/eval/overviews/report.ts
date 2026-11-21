@@ -114,12 +114,23 @@ function keyLines(keys: KeyResult[]): string[] {
   }
   const withErrors = keys.filter(k => k.errors.length > 0)
   const toReview = keys.reduce((sum, k) => sum + (k.summary?.toReview ?? 0), 0)
+  const shared = [...new Map(keys.flatMap(k => k.sharedMusts).map(s => [s.slug, s])).values()]
   return [
     `${keys.length} keys. An error is a mistake in the key, to fix there; it passes or fails nothing in production.${toReview > 0 ? ` ${toReview} drafted responses and ends are not reviewed yet (\`"reviewed": false\`): \`stands\`, \`closure\` and \`replay\` refuse a half that holds one.` : ''}`,
     '',
     '| Development | File | Entries (must / optional) | Near misses | Figures | Values | Responses | Closed | Entries with a research run | To review | Errors |',
     '|---|---|---|---|---|---|---|---|---|---|---|',
     ...keys.map(row),
+    ...(shared.length > 0
+      ? [
+          '',
+          '### Must entries of more than one key',
+          '',
+          `${shared.length} stor${shared.length === 1 ? 'y is a must entry' : 'ies are must entries'} of more than one development. The linking eval counts a join to either one's overview as right; production files a story under one overview only.`,
+          '',
+          ...shared.map(s => `- ${s.slug}: ${s.keys.join(', ')}`),
+        ]
+      : []),
     ...(withErrors.length > 0 ? ['', '### Key errors', '', ...withErrors.flatMap(k => [`**${k.file}**`, '', ...k.errors.map(e => `- ${e}`), ''])] : []),
   ]
 }

@@ -3,7 +3,7 @@
  * on the sandbox's replay of a half's developments (`link.ts`). Each replayed overview stands for the
  * development most of its members are `must` entries of. `link`: precision over `must` entries and
  * near misses that ended in an overview (`optional` entries ignored; a near miss in its development's
- * overview, or an entry in another's, is wrong), and recall of `must` entries. `found`: foundings whose
+ * overview, or an entry in another's, is wrong; a must entry of two keys is right in either one's), and recall of `must` entries. `found`: foundings whose
  * pair is not two entries of one development (of any key, the other half's too), and founded charters
  * naming an end event other than the key's (the strong judge's verdicts, passed in; one naming none is
  * never wrong). `role`: turning point or routine against the key, over the must entries found in their
@@ -77,21 +77,54 @@ export function rateBar(name: string, value: number | null, target: number, judg
   return { ...b, met: null, forOwner: `${judgments} judgment${judgments === 1 ? '' : 's'}, fewer than the ${MIN_RATE_SAMPLE} an automatic verdict needs` }
 }
 
+/** What the keys make of one entry story (`keyIndex`). */
+export interface IndexedEntry {
+  /** Its first must key, or with none the key of its last optional entry. */
+  key: string
+  /** `must` when any key holds it as must: a must outweighs another key's optional. */
+  join: 'must' | 'optional'
+  /** Its role in `key`. */
+  role: Role['role']
+  /**
+   * Every key it is a must entry of, with its role there. A story may be a must of two developments
+   * (a deal that ends a war and reopens a strait); joining either one's overview is right, and its
+   * role is judged against the key of the overview it joined.
+   */
+  musts: ReadonlyMap<string, Role['role']>
+  /** The keys it is an optional entry of: joining one of their overviews is neither right nor wrong. */
+  optionalIn: ReadonlySet<string>
+}
+
 /**
- * Which development each slug is a must or optional entry of, and which it is a near miss of. A
+ * Which developments each slug is a must or optional entry of, and which it is a near miss of. A
  * center's entries count as `optional` entries of its key, so the linking bars skip them, and a base
  * entry of any key takes precedence over them; a center's near misses are its key's near misses.
  */
 export function keyIndex(keys: readonly AnswerKey[]) {
-  const entry = new Map<string, { key: string; join: 'must' | 'optional'; role: Role['role'] }>()
+  const musts = new Map<string, Map<string, Role['role']>>()
+  const optional = new Map<string, Map<string, Role['role']>>()
+  const add = (to: typeof musts, slug: string, key: string, role: Role['role']) => to.set(slug, (to.get(slug) ?? new Map()).set(key, role))
   const nearMiss = new Map<string, string[]>()
   for (const k of keys) {
-    for (const e of k.entries) entry.set(e.slug, { key: k.id, join: e.join, role: e.role })
+    for (const e of k.entries) add(e.join === 'must' ? musts : optional, e.slug, k.id, e.role)
     for (const n of [...k.nearMisses, ...k.centers.flatMap(c => c.nearMisses)]) nearMiss.set(n.slug, [...new Set([...(nearMiss.get(n.slug) ?? []), k.id])])
   }
+  const entry = new Map<string, IndexedEntry>()
+  for (const slug of new Set([...musts.keys(), ...optional.keys()])) {
+    const m = musts.get(slug) ?? new Map<string, Role['role']>()
+    const o = optional.get(slug) ?? new Map<string, Role['role']>()
+    const [key, role] = m.size > 0 ? [...m][0]! : [...o].at(-1)!
+    entry.set(slug, { key, join: m.size > 0 ? 'must' : 'optional', role, musts: m, optionalIn: new Set(o.keys()) })
+  }
   for (const k of keys)
-    for (const e of k.centers.flatMap(c => c.entries)) if (!entry.has(e.slug)) entry.set(e.slug, { key: k.id, join: 'optional', role: e.role })
+    for (const e of k.centers.flatMap(c => c.entries))
+      if (!entry.has(e.slug)) entry.set(e.slug, { key: k.id, join: 'optional', role: e.role, musts: new Map(), optionalIn: new Set([k.id]) })
   return { entry, nearMiss }
+}
+
+/** The stories that two or more keys hold as must entries, with those keys: the keys check lists them. */
+export function sharedMusts(keys: readonly AnswerKey[]): { slug: string; keys: string[] }[] {
+  return [...keyIndex(keys).entry].filter(([, e]) => e.musts.size > 1).map(([slug, e]) => ({ slug, keys: [...e.musts.keys()] }))
 }
 
 /** A re-center signal a link decision kept (`linkInputs.signals`), by the story's slug. */
@@ -139,13 +172,13 @@ export function scoreSignals(
   }
 }
 
-/** The development an overview stands for: the key most of its members are must entries of (ties to the first founded member's key); null with none. */
+/**
+ * The development an overview stands for: the key most of its members are must entries of (a must of
+ * two keys counts for both; ties to the first founded member's key); null with none.
+ */
 export function developmentOf(members: readonly string[], entry: ReturnType<typeof keyIndex>['entry']): string | null {
   const counts = new Map<string, number>()
-  for (const m of members) {
-    const e = entry.get(m)
-    if (e?.join === 'must') counts.set(e.key, (counts.get(e.key) ?? 0) + 1)
-  }
+  for (const m of members) for (const key of entry.get(m)?.musts.keys() ?? []) counts.set(key, (counts.get(key) ?? 0) + 1)
   let best: string | null = null
   for (const [key, n] of counts) if (best === null || n > counts.get(best)!) best = key
   return best
@@ -194,10 +227,11 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others:
     const e = entry.get(slug)
     if (e?.join === 'optional') continue
     if (e?.join === 'must') {
-      if (dev === e.key) right++
+      if (dev !== null && e.musts.has(dev)) right++
+      else if (dev !== null && e.optionalIn.has(dev)) continue
       else {
         wrong++
-        mistakes.push(`${slug} (${e.key}) joined ${dev ?? 'an overview of no development'}`)
+        mistakes.push(`${slug} (${[...e.musts.keys()].join(' or ')}) joined ${dev ?? 'an overview of no development'}`)
       }
     } else if (dev !== null && (nearMiss.get(slug) ?? []).includes(dev)) {
       wrong++
@@ -205,8 +239,10 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others:
     }
   }
   const musts = [...entry].filter(([, e]) => e.join === 'must')
-  const found = musts.filter(([slug, e]) => placed.get(slug) === e.key).length
-  const judged = musts.filter(([slug, e]) => placed.get(slug) === e.key && run.roles.has(slug))
+  /** The role the key of the overview a must entry joined gives it; undefined when it joined none of its developments' overviews. */
+  const roleWhere = (slug: string, e: IndexedEntry) => e.musts.get(placed.get(slug) ?? '')
+  const found = musts.filter(([slug, e]) => roleWhere(slug, e) !== undefined).length
+  const judged = musts.filter(([slug, e]) => roleWhere(slug, e) !== undefined && run.roles.has(slug))
   return {
     run: run.run,
     right,
@@ -215,7 +251,7 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others:
     must: musts.length,
     foundings: run.overviews.length,
     wrongFoundings,
-    rolesAgreeing: judged.filter(([slug, e]) => run.roles.get(slug)!.role === e.role).length,
+    rolesAgreeing: judged.filter(([slug, e]) => run.roles.get(slug)!.role === roleWhere(slug, e)).length,
     rolesJudged: judged.length,
     developments,
     mistakes,

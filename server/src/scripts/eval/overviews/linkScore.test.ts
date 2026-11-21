@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseOverviewOptions } from '../options.js'
 import type { AnswerKey } from './keySchema.js'
 import { linkLines } from './linkReport.js'
-import { keyIndex, scoreLinking, scoreLinkRun, scoreSignals, type EndEventVerdict, type ReplayRun } from './linkScore.js'
+import { keyIndex, scoreLinking, scoreLinkRun, scoreSignals, sharedMusts, type EndEventVerdict, type ReplayRun } from './linkScore.js'
 import { createSandbox, owedOf } from './overviewSandbox.js'
 import type { LinkResult } from '../../../services/overviewLink.js'
 import { owedStanding } from '../../../services/overviewOwed.js'
@@ -129,6 +129,83 @@ describe('scoreLinkRun', () => {
     expect(scoreLinkRun(keys, founded, [strait])).toMatchObject({ wrongFoundings: 0, mistakes: [] })
     const mixed = run([{ id: 'o1', members: ['e1', 's1'], foundedFrom: ['e1', 's1'], endEvent: null }])
     expect(scoreLinkRun(keys, mixed, [strait]).wrongFoundings).toBe(1)
+  })
+
+  describe('a must entry of two keys', () => {
+    // `deal` ends the war and reopens the strait: a must of both, a turning point of the war's only
+    const war = key('war', [
+      ['w1', 'must', 'routine'],
+      ['w2', 'must', 'routine'],
+      ['deal', 'must', 'turning_point'],
+    ])
+    const strait = key('strait', [
+      ['s1', 'must', 'routine'],
+      ['s2', 'must', 'routine'],
+      ['deal', 'must', 'routine'],
+    ])
+    const both = [war, strait]
+
+    it("is right in either development's overview, found once, its role judged against the key of the overview it joined", () => {
+      for (const [members, dev] of [
+        [['w1', 'w2', 'deal'], 'war'],
+        [['s1', 's2', 'deal'], 'strait'],
+      ] as const) {
+        const s = scoreLinkRun(
+          both,
+          run([{ id: 'o1', members: [...members], foundedFrom: [members[0], members[1]], endEvent: null }], [['deal', 'turning_point']]),
+        )
+        expect(s).toMatchObject({ right: 3, wrong: 0, found: 3, must: 5, rolesJudged: 1, rolesAgreeing: dev === 'war' ? 1 : 0 })
+        expect(s.developments.get(dev)).toBe('o1')
+      }
+    })
+
+    it("is wrong in a third development's overview, naming both its keys", () => {
+      const s = scoreLinkRun([...both, KEYS[1]!], run([{ id: 'o1', members: ['c1', 'c2', 'deal'], foundedFrom: ['c1', 'c2'], endEvent: null }]))
+      expect(s).toMatchObject({ right: 2, wrong: 1 })
+      expect(s.mistakes).toEqual(['deal (war or strait) joined cholera'])
+    })
+
+    it('counts for both developments when deciding which one an overview stands for', () => {
+      const s = scoreLinkRun(both, run([{ id: 'o1', members: ['deal', 's1'], foundedFrom: ['deal', 's1'], endEvent: null }]))
+      expect(s.developments.get('strait')).toBe('o1')
+    })
+  })
+
+  it("keeps a must over another key's optional, whichever loads last: right in the must's overview, neither right nor wrong in the optional's", () => {
+    const war = key('war', [
+      ['w1', 'must', 'routine'],
+      ['w2', 'must', 'routine'],
+      ['deal', 'optional', 'routine'],
+    ])
+    const strait = key('strait', [
+      ['s1', 'must', 'routine'],
+      ['s2', 'must', 'routine'],
+      ['deal', 'must', 'turning_point'],
+    ])
+    for (const keys of [
+      [war, strait],
+      [strait, war],
+    ]) {
+      expect(keyIndex(keys).entry.get('deal')).toMatchObject({ key: 'strait', join: 'must', role: 'turning_point' })
+      const inWar = scoreLinkRun(keys, run([{ id: 'o1', members: ['w1', 'w2', 'deal'], foundedFrom: ['w1', 'w2'], endEvent: null }]))
+      expect(inWar).toMatchObject({ right: 2, wrong: 0, found: 2 })
+      const inStrait = scoreLinkRun(keys, run([{ id: 'o1', members: ['s1', 's2', 'deal'], foundedFrom: ['s1', 's2'], endEvent: null }]))
+      expect(inStrait).toMatchObject({ right: 3, wrong: 0, found: 3 })
+    }
+  })
+})
+
+describe('sharedMusts', () => {
+  it('lists the stories two keys hold as must, never one that is a must of one key and optional in another', () => {
+    const war = key('war', [
+      ['deal', 'must', 'turning_point'],
+      ['talks', 'optional', 'routine'],
+    ])
+    const strait = key('strait', [
+      ['deal', 'must', 'routine'],
+      ['talks', 'must', 'routine'],
+    ])
+    expect(sharedMusts([war, strait])).toEqual([{ slug: 'deal', keys: ['war', 'strait'] }])
   })
 })
 

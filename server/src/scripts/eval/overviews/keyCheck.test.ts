@@ -216,10 +216,25 @@ describe('checkKeyFiles', () => {
         file: 'ebola.json',
         summary: expect.objectContaining({ id: 'ebola', must: 1 }),
         errors: ['figure deaths has 1 values, fewer than 3', 'entry b: no story with this slug'],
+        sharedMusts: [],
       },
-      { file: 'broken.json', summary: null, errors: ['not valid JSON'] },
+      { file: 'broken.json', summary: null, errors: ['not valid JSON'], sharedMusts: [] },
     ])
     expect(loads).toEqual([['a', 'b', 'x']])
+  })
+
+  it('lists on each key the must entries another key holds as must too, as no error', async () => {
+    // `a` is a must of both, `b` optional in both
+    const strait = { ...answerKey(), id: 'strait' }
+    const files = [
+      { file: 'ebola.json', key: answerKey(), errors: [] },
+      { file: 'strait.json', key: strait, errors: [] },
+    ]
+    const stories = async () => byslug(story('a'), story('b'), story('x'))
+    const results = await checkKeyFiles(files, stories)
+    const alone = await checkKeyFiles(files.slice(0, 1), stories)
+    expect(results.map(r => r.sharedMusts)).toEqual([[{ slug: 'a', keys: ['ebola', 'strait'] }], [{ slug: 'a', keys: ['ebola', 'strait'] }]])
+    expect(results.map(r => r.errors)).toEqual(alone.flatMap(r => [r.errors, r.errors]))
   })
 
   it('reads no stories when no key parses', async () => {

@@ -3,7 +3,8 @@
  * is a published story, each entry's date is its publication day (UTC), and every quote (a value's,
  * a response's, the end's) occurs in that story's published text. A miss is an error in the key, to
  * fix there, never a pass or fail of anything in production. Also the per-development counts the
- * report shows, the drafts still to review among them. The loader
+ * report shows, the drafts still to review among them, and the stories two keys both hold as must
+ * (the linking eval counts either one's overview as right for them). The loader
  * issues one SELECT through the read-only session; the rest is pure but for the loader it is given.
  */
 import { utcDay } from '../../../lib/days.js'
@@ -12,6 +13,7 @@ import { storedResearchText } from '../../../services/researchedStory.js'
 import type { SelectDb } from '../readOnlyDb.js'
 import type { KeyFile } from './keyFiles.js'
 import { unreviewed, type AnswerKey } from './keySchema.js'
+import { sharedMusts } from './linkScore.js'
 
 /** A story an answer key or a gap key names, as the checks read it. */
 export interface KeyStory {
@@ -155,15 +157,19 @@ export interface KeyResult {
   file: string
   summary: KeySummary | null
   errors: string[]
+  /** Its must entries that another key holds as must too, with every key holding each (`sharedMusts`): not an error, listed so each one is a deliberate call. */
+  sharedMusts: { slug: string; keys: string[] }[]
 }
 
 /** The `keys` step: every parsed key against the stories it names, loaded once for all of them. */
 export async function checkKeyFiles(files: KeyFile[], loadStories: (slugs: string[]) => Promise<ReadonlyMap<string, KeyStory>>): Promise<KeyResult[]> {
   const slugs = [...new Set(files.flatMap(f => (f.key ? keySlugs(f.key) : [])))]
   const stories = slugs.length === 0 ? new Map<string, KeyStory>() : await loadStories(slugs)
+  const shared = sharedMusts(files.flatMap(f => (f.key ? [f.key] : [])))
   return files.map(f => ({
     file: f.file,
     summary: f.key ? summarizeKey(f.key, stories) : null,
     errors: [...f.errors, ...(f.key ? checkKey(f.key, stories) : [])],
+    sharedMusts: f.key ? shared.filter(s => s.keys.includes(f.key!.id)) : [],
   }))
 }

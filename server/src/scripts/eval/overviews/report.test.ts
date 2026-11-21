@@ -72,7 +72,7 @@ describe('renderOverviewReport', () => {
   it('has a section for each step that ran, then the spend', () => {
     const md = renderOverviewReport(
       input({
-        keys: [{ file: 'ebola.json', summary: null, errors: ['entries.0.date: must be a date written YYYY-MM-DD'] }],
+        keys: [{ file: 'ebola.json', summary: null, errors: ['entries.0.date: must be a date written YYYY-MM-DD'], sharedMusts: [] }],
         baseline: summarizeBaseline([]),
         skipped: [{ step: 'fact-check', reason: 'estimate $4.00 exceeds the remaining budget $3.00' }],
       }),
@@ -247,6 +247,7 @@ describe('renderOverviewReport', () => {
               toReview: 2,
             },
             errors: ['entry a: quote not found: "x"'],
+            sharedMusts: [{ slug: 'deal', keys: ['ebola', 'strait'] }],
           },
         ],
         factCheck: {
@@ -285,6 +286,8 @@ describe('renderOverviewReport', () => {
     expect(md).toContain('| Ebola | ebola.json | 3 / 1 | 2 | 1 | 4 | 2 | open | 2 | 2 | 1 |')
     expect(md).toContain('2 drafted responses and ends are not reviewed yet')
     expect(md).toContain('- entry a: quote not found: "x"')
+    expect(md).toContain('1 story is a must entry of more than one development.')
+    expect(md).toContain('- deal: ebola, strait')
     expect(md).toContain('Languages: fr 1.')
     expect(md).toContain('- Shortfall: 1 of 300 facts')
     expect(md).toContain('(the first 1 of the sample, --limit: a smoke run, not evidence)')

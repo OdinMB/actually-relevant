@@ -186,7 +186,7 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
   /** What the keys make of a story: an entry, a near miss, or neither. */
   const what = (slug: string): string => {
     const e = entry.get(slug)
-    if (e) return `${e.join} entry of ${e.key}`
+    if (e) return `${e.join} entry of ${e.join === 'must' ? [...e.musts.keys()].join(' and ') : e.key}`
     const outside = [...(anyEntry.get(slug) ?? [])].filter(k => otherIds.has(k))
     if (outside.length > 0) return `entry of ${outside.join(', ')} (other half)`
     const near = nearMiss.get(slug)
@@ -218,9 +218,11 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
     if (e.join !== 'must') continue
     const t = d.traces.get(slug)
     const date = t?.date ?? dateOf.get(slug) ?? ''
-    const miss = (cause: MissCause, detail: string) => missed.push({ slug, key: e.key, date, cause, detail })
+    const miss = (cause: MissCause, detail: string) => missed.push({ slug, key: [...e.musts.keys()].join(' or '), date, cause, detail })
+    /** Whether an overview stands for one of the story's developments (a must of two keys has two). */
+    const isOurs = (overviewId: string) => e.musts.has(devOf.get(overviewId) ?? '')
     const placedIn = overviewOf.get(slug)
-    if (placedIn && devOf.get(placedIn.id) === e.key) continue
+    if (placedIn && isOurs(placedIn.id)) continue
     if (placedIn) {
       miss('in another overview', `in ${titled(placedIn.id)}${t?.outcome ? `, ${t.outcome}` : ''}`)
       continue
@@ -248,7 +250,7 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
       miss('no candidate', `${neighbourText(t.neighbours) || 'no neighbour'}${when(e.key, t.date)}`)
       continue
     }
-    const ours = [...t.overviews.filter(c => devOf.get(c.id) === e.key), ...t.partners.filter(c => anyEntry.get(c.id)?.has(e.key) ?? false)]
+    const ours = [...t.overviews.filter(c => isOurs(c.id)), ...t.partners.filter(c => [...e.musts.keys()].some(k => anyEntry.get(c.id)?.has(k) ?? false))]
     const at = when(e.key, t.date)
     if (ours.length === 0) {
       miss('not offered', `offered ${offered(t) || 'nothing of it'}; ${neighbourText(t.neighbours)}${at}`)
@@ -274,9 +276,11 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
   for (const [slug, e] of entry) {
     const placedIn = overviewOf.get(slug)
     const given = d.roles.get(slug)
-    if (e.join !== 'must' || !placedIn || devOf.get(placedIn.id) !== e.key || !given) continue
+    const dev = placedIn ? devOf.get(placedIn.id) : undefined
+    const expected = dev ? e.musts.get(dev) : undefined
+    if (!dev || !expected || !given) continue
     rolesJudged++
-    if (given.role !== e.role) roleMisses.push({ slug, key: e.key, expected: e.role, given })
+    if (given.role !== expected) roleMisses.push({ slug, key: dev, expected, given })
   }
 
   const charters = d.overviews.map((o): CharterLine => {
@@ -284,7 +288,8 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
     const members = { must: 0, optional: 0, nearMisses: 0, other: 0 }
     for (const m of o.members) {
       const e = entry.get(m)
-      if (dev && e?.key === dev) members[e.join === 'must' ? 'must' : 'optional']++
+      if (dev && e?.musts.has(dev)) members.must++
+      else if (dev && e?.optionalIn.has(dev)) members.optional++
       else if (dev && (nearMiss.get(m) ?? []).includes(dev)) members.nearMisses++
       else members.other++
     }
