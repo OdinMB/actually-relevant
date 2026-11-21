@@ -315,6 +315,8 @@ export interface OverviewOptions {
   /** Cap on the folder's ledger total. */
   budget: number
   dryRun: boolean
+  /** Answer every call from the folder's cache and make none: a missed call answers nothing, as one past the budget does, and the steps go on (a free rerun). */
+  cacheOnly: boolean
   concurrency: number
   /** Runs of each arm on the variants (the label pass runs once); run k ≥ 2 has its own cache key. */
   repeat: number
@@ -353,6 +355,7 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
       steps: { type: 'string' },
       budget: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
+      'cache-only': { type: 'boolean', default: false },
       concurrency: { type: 'string' },
       repeat: { type: 'string' },
       size: { type: 'string' },
@@ -364,6 +367,7 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
     },
   })
   if (!values.out) throw new Error('--out is required')
+  if (values['cache-only'] && values['dry-run']) throw new Error('--cache-only reruns the steps from the cache; --dry-run only estimates them: name one')
   const size = positiveInt('--size', values.size, OVERVIEW_DEFAULT_SIZE) ?? OVERVIEW_DEFAULT_SIZE
   if (size > OVERVIEW_MAX_SIZE) throw new Error(`--size must be at most ${OVERVIEW_MAX_SIZE}`)
   const repeat = positiveInt('--repeat', values.repeat, 1) ?? 1
@@ -390,6 +394,7 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
     steps,
     budget: budgetOf(values.budget, OVERVIEW_DEFAULT_BUDGET_USD),
     dryRun: values['dry-run'] ?? false,
+    cacheOnly: values['cache-only'] ?? false,
     concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
     repeat,
     size,

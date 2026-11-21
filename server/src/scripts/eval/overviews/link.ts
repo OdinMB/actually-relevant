@@ -8,8 +8,9 @@
  * linking reads them. Then the strong judge compares each development's founded end event with the
  * key's, and `linkScore.ts` scores the bars, and counts how often the link calls flagged the re-center
  * signals: on a key's center entries (replayed too; the bars skip them as optional), on base near
- * misses, and as false shifts. Each run k ≥ 2 has its own cache keys. It refuses, before any read or
- * call, while a key of its half holds a center no one has reviewed.
+ * misses, and as false shifts; and `linkDiagnostics.ts` says why each missed must entry was missed,
+ * which roles disagree and what each founding chartered. Each run k ≥ 2 has its own cache keys. It
+ * refuses, before any read or call, while a key of its half holds a center no one has reviewed.
  */
 import type { Neighbour } from '../../../services/overviewCandidates.js'
 import { linkInOrder, type LinkDeps, type ModelCall } from '../../../services/overviewLink.js'
@@ -21,7 +22,9 @@ import { arm, versionedSchemaName } from '../models.js'
 import { runNumbers, runSchemaName } from '../repeats.js'
 import type { Arm, SuiteContext } from '../types.js'
 import { JUDGE_ARM } from './contextJudge.js'
-import { inDevelopmentHalf } from './developmentHalves.js'
+import { config } from '../../../config.js'
+import { keysOfHalf } from './developmentHalves.js'
+import { diagnoseRun, traceOf, type FoundedOverview, type NeighbourCount, type RunDiagnostics, type StoryTrace } from './linkDiagnostics.js'
 import { linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import type { KeyFile } from './keyFiles.js'
 import { awaitingReview, centerSlugs, type AnswerKey } from './keySchema.js'
@@ -68,6 +71,10 @@ export interface LinkStepReport {
   endEvents: { key: string; run: number; verdict: EndEventVerdict; why: string }[]
   /** How often each run's link calls flagged the re-center signals (no bars). */
   signals: SignalRunScore[]
+  /** Each run's missed must entries with why, role disagreements and founded charters (no bars). */
+  diagnostics: RunDiagnostics[]
+  /** Calls that got no answer because none was made: past the budget, or not in the cache with `--cache-only`. */
+  unanswered: number
   /** The replay's model spend per run, and per story. */
   costUsd: number
   perStoryUsd: number | null
@@ -98,7 +105,7 @@ export function sandboxSignals(sandbox: Sandbox, slug: (id: string) => string): 
 }
 
 export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
-  const keys = o.files.flatMap(f => (f.key && f.errors.length === 0 && inDevelopmentHalf(f.key.id, o.half) ? [f.key] : []))
+  const { keys, others } = keysOfHalf(o.files, o.half)
   const left: LinkStepReport['left'] = o.files
     .filter(f => !f.key || f.errors.length > 0)
     .map(f => ({ what: f.file, reason: `${f.errors.length} format errors: fix the key` }))
@@ -115,6 +122,8 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
       score,
       endEvents: [],
       signals: [],
+      diagnostics: [],
+      unanswered: 0,
       costUsd: 0,
       perStoryUsd: null,
       stopped: refused,
@@ -136,18 +145,36 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
   const byId = new Map(replayed.map(s => [s.id, s]))
   const spentBefore = o.ctx.spentUsd()
   let stopped: string | undefined
+  // The calls given no answer because none was made (past the budget, or not cached with --cache-only)
+  let unanswered = 0
+  const ctx: LinkStepOptions['ctx'] = {
+    ...o.ctx,
+    call: async (a, schemaName, schema, prompt) => {
+      const rec = await o.ctx.call(a, schemaName, schema, prompt)
+      if (rec.outcome === 'skipped') unanswered++
+      return rec
+    },
+  }
   const runs: ReplayRun[] = []
   const signalsOf = new Map<number, StorySignal[]>()
+  const diagnosed: { run: number; overviews: FoundedOverview[]; traces: Map<string, StoryTrace> }[] = []
   for (const run of runNumbers(o.repeat)) {
     const sandbox = createSandbox()
+    // What each story's last read of its neighbours gave, before and after keeping them to the replayed stories
+    const counts = new Map<string, NeighbourCount>()
     const deps: LinkDeps = {
-      neighbours: async s => (await o.neighbours(s)).filter(n => ids.has(n.id)),
+      neighbours: async s => {
+        const all = await o.neighbours(s)
+        const kept = all.filter(n => ids.has(n.id))
+        counts.set(s.id, { read: all.length, near: all.filter(n => n.via === 'near').length, kept: kept.length })
+        return kept
+      },
       memberships: sandbox.memberships,
       overviews: sandbox.candidateOverviews,
       stories: async wanted => wanted.flatMap(id => (byId.has(id) ? [byId.get(id)!] : [])),
-      ...evalCalls(o.ctx, run).link,
+      ...evalCalls(ctx, run).link,
     }
-    await linkInOrder(replayed, deps, sandbox.apply, {
+    const ordered = await linkInOrder(replayed, deps, sandbox.apply, {
       concurrency: o.concurrency,
       keepGoing: async () => {
         if (o.ctx.spentUsd() < o.budgetUsd) return true
@@ -167,11 +194,25 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
       roles: new Map([...sandbox.results].flatMap(([id, r]) => (r.role ? [[slug(id), r.role] as const] : []))),
     })
     signalsOf.set(run, sandboxSignals(sandbox, slug))
+    diagnosed.push({
+      run,
+      overviews: [...sandbox.overviews.values()].map(ov => ({
+        id: ov.id,
+        title: ov.title,
+        charter: ov.charter,
+        foundedFrom: [slug(ov.foundedFrom[0]), slug(ov.foundedFrom[1])],
+        foundedOn: byId.get(ov.foundedFrom[1])?.date ?? '',
+        members: ov.entries.map(e => slug(e.storyId)),
+      })),
+      traces: new Map(
+        ordered.results.map(r => [slug(r.story.id), traceOf(r, sandbox.results.get(r.story.id)?.outcome ?? null, counts.get(r.story.id) ?? null, slug)]),
+      ),
+    })
     if (stopped) break
   }
 
   // The strong judge on each development's founded end event, per run: only where the founding names one
-  const provisional = scoreLinking(keys, runs)
+  const provisional = scoreLinking(keys, runs, new Map(), others)
   const endEvents: LinkStepReport['endEvents'] = []
   for (const r of provisional.runs) {
     const run = runs.find(x => x.run === r.run)!
@@ -188,7 +229,7 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
       }
       // A key that names no end event shows the judge none: a founding that names one is then judged against it
       const prompt = buildEndEventJudgePrompt({ development: k.title, key: k.charter.endEvent ?? 'none (it ends by fading)', founded: founded.endEvent })
-      const answer = await evalCall(o.ctx, JUDGE_ARM, END_EVENT_SCHEMA, endEventJudgeSchema, prompt, r.run)
+      const answer = await evalCall(ctx, JUDGE_ARM, END_EVENT_SCHEMA, endEventJudgeSchema, prompt, r.run)
       endEvents.push({
         key: k.id,
         run: r.run,
@@ -207,9 +248,22 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
     keys: keys.map(k => k.id),
     stories: replayed.length,
     left,
-    score: scoreLinking(keys, runs, verdicts),
+    score: scoreLinking(keys, runs, verdicts, others),
     endEvents,
     signals: provisional.runs.map(r => scoreSignals(keys, replayedSlugs, signalsOf.get(r.run) ?? [], r.developments, r.run)),
+    diagnostics: diagnosed.map(x =>
+      diagnoseRun({
+        keys,
+        others,
+        run: x.run,
+        overviews: x.overviews,
+        traces: x.traces,
+        roles: runs.find(r => r.run === x.run)!.roles,
+        replayed: replayedSlugs,
+        neighbourLimit: config.overviews.neighbourLimit,
+      }),
+    ),
+    unanswered,
     costUsd,
     perStoryUsd: replayed.length === 0 || runs.length === 0 ? null : costUsd / (replayed.length * runs.length),
     ...(stopped ? { stopped } : {}),

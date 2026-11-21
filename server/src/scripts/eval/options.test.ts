@@ -184,6 +184,7 @@ describe('parseOverviewOptions', () => {
       steps: ['keys', 'fact-check', 'baseline'],
       budget: 3,
       dryRun: false,
+      cacheOnly: false,
       concurrency: 4,
       repeat: 1,
       size: 300,
@@ -193,6 +194,11 @@ describe('parseOverviewOptions', () => {
       half: 'all',
     })
     expect(OVERVIEW_DEFAULT_STEPS).toEqual(OVERVIEW_STEPS.filter(s => OVERVIEW_DEFAULT_STEPS.includes(s)))
+  })
+
+  it('takes --cache-only, a rerun that makes no call, and refuses it with --dry-run', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--cache-only']).cacheOnly).toBe(true)
+    expect(() => parseOverviewOptions(['--out', 'x', '--cache-only', '--dry-run'])).toThrow(/--cache-only/)
   })
 
   it("runs story context's steps only when named, in the order the run takes them", () => {

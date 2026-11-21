@@ -122,6 +122,14 @@ describe('createEvalContext', () => {
     expect(ctx.spentUsd()).toBeCloseTo(1.1)
   })
 
+  it('answers an uncached call skipped, with no call and no cost, in a cache-only run', async () => {
+    const ctx = createEvalContext({ cacheFile: tempLedger(), budgetUsd: 10, concurrency: 1, offline: false, cacheOnly: true })
+    const rec = await ctx.call(luna, 's', schema, 'prompt')
+    expect(rec).toMatchObject({ outcome: 'skipped', parsed: null, costUsd: 0, error: 'not in the cache (--cache-only)' })
+    expect(ctx.liveCalls()).toBe(0)
+    expect(ctx.spentUsd()).toBe(0)
+  })
+
   it('refuses any uncached call in an offline (dry) run', async () => {
     const ctx = createEvalContext({ cacheFile: tempLedger(), budgetUsd: 10, concurrency: 1, offline: true })
     await expect(ctx.call(luna, 's', schema, 'prompt')).rejects.toThrow(/offline/)

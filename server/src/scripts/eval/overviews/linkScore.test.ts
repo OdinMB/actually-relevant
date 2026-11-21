@@ -98,19 +98,37 @@ describe('scoreLinkRun', () => {
     expect(s).toMatchObject({ right: 2, wrong: 1, must: 5 })
   })
 
-  it('judges roles of must entries against the key', () => {
-    const s = scoreLinkRun(
-      KEYS,
-      run(
-        [],
-        [
-          ['e1', 'turning_point'],
-          ['e2', 'turning_point'],
-          ['e4', 'routine'],
-        ],
-      ),
-    )
+  it('judges roles of the must entries found in their development, never of a story left alone or placed elsewhere', () => {
+    const roles: [string, 'turning_point' | 'routine'][] = [
+      ['e1', 'turning_point'],
+      ['e2', 'turning_point'],
+      ['e3', 'turning_point'],
+      ['e4', 'routine'],
+      ['c1', 'routine'],
+    ]
+    // e3 is left alone and c1 sits in Ebola's overview: neither role is judged
+    const s = scoreLinkRun(KEYS, run([{ id: 'o1', members: ['e1', 'e2', 'e4', 'c1'], foundedFrom: ['e1', 'e2'], endEvent: 'End.' }], roles))
     expect(s).toMatchObject({ rolesAgreeing: 1, rolesJudged: 2 })
+    expect(scoreLinkRun(KEYS, run([], roles))).toMatchObject({ rolesAgreeing: 0, rolesJudged: 0 })
+  })
+
+  it("judges a founding pair against the other half's keys too: two entries of a development the half does not score found it rightly", () => {
+    const strait = key('strait', [
+      ['s1', 'must', 'routine'],
+      ['deal', 'must', 'turning_point'],
+    ])
+    // `deal` is also an optional entry of Ebola's here, as a deal story is of Lebanon's and of the strait's
+    const keys = [
+      key('ebola', [
+        ...KEYS[0]!.entries.map(e => [e.slug, e.join, e.role] as [string, 'must' | 'optional', 'turning_point' | 'routine']),
+        ['deal', 'optional', 'routine'],
+      ]),
+    ]
+    const founded = run([{ id: 'o1', members: ['s1', 'deal'], foundedFrom: ['s1', 'deal'], endEvent: null }])
+    expect(scoreLinkRun(keys, founded).wrongFoundings).toBe(1)
+    expect(scoreLinkRun(keys, founded, [strait])).toMatchObject({ wrongFoundings: 0, mistakes: [] })
+    const mixed = run([{ id: 'o1', members: ['e1', 's1'], foundedFrom: ['e1', 's1'], endEvent: null }])
+    expect(scoreLinkRun(keys, mixed, [strait]).wrongFoundings).toBe(1)
   })
 })
 
@@ -174,6 +192,8 @@ describe('scoreLinking', () => {
       score,
       endEvents: [],
       signals,
+      diagnostics: [],
+      unanswered: 0,
       costUsd: 0.01,
       perStoryUsd: 0.003,
     }

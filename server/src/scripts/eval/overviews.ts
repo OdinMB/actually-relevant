@@ -189,17 +189,20 @@ async function main(): Promise<void> {
   mkdirSync(cacheDir, { recursive: true })
   console.log(`OPENAI_API_KEY: ${presence(process.env.OPENAI_API_KEY)}; TAVILY_API_KEY: ${presence(process.env.TAVILY_API_KEY)}`)
   const runs = (step: OverviewStep) => opts.steps.includes(step)
-  const canCall = Boolean(process.env.OPENAI_API_KEY)
+  // A cache-only rerun answers every call from the cache, so it needs no key
+  const canCall = Boolean(process.env.OPENAI_API_KEY) || opts.cacheOnly
   const tavily = createTavilyClient({
     cacheFile: join(cacheDir, 'tavily.jsonl'),
     apiKey: process.env.TAVILY_API_KEY,
-    offline: opts.dryRun || !(runs('context') || runs('pass-pool')),
+    // A cache-only rerun searches nothing either: a search not in the cache throws, as in a dry run
+    offline: opts.dryRun || opts.cacheOnly || !(runs('context') || runs('pass-pool')),
   })
   const ctx = createEvalContext({
     cacheFile: join(cacheDir, 'calls.jsonl'),
     budgetUsd: opts.budget,
     concurrency: opts.concurrency,
     offline: opts.dryRun || !CALLING_STEPS.some(runs),
+    cacheOnly: opts.cacheOnly,
     externalSpendUsd: () => tavily.creditsRecorded() * TAVILY_USD_PER_CREDIT,
   })
   const session = lazySession()

@@ -1,10 +1,13 @@
 /**
  * The overview linking steps' report sections (`link.ts`): what was replayed, then the bars of each
- * step that ran (`link`, `found`, `role`) and the runs' details. Pure.
+ * step that ran (`link`, `found`, `role`) and the runs' details, and the diagnostics
+ * (`linkDiagnostics.ts`): the missed must entries with why, the role disagreements, the founded
+ * charters. Pure.
  */
 import type { OverviewStep } from '../options.js'
 import { cell, usd } from './reportText.js'
 import type { LinkStepReport } from './link.js'
+import { MISS_CAUSES, missesByDevelopment } from './linkDiagnostics.js'
 import type { Bar } from './linkScore.js'
 
 const value = (b: Bar) => (b.value === null ? 'n/a' : b.direction === 'atMost' ? b.value.toFixed(2) : `${(b.value * 100).toFixed(1)}%`)
@@ -32,10 +35,74 @@ function signalLines(r: LinkStepReport): string[] {
   ]
 }
 
+/** Every must entry not found in its development's overview, by development and cause, then one line each. */
+function missedLines(r: LinkStepReport): string[] {
+  if (r.diagnostics.every(d => d.missed.length === 0)) return []
+  const table = missesByDevelopment(r.diagnostics)
+  const causes = MISS_CAUSES.filter(c => table.some(t => t.causes.has(c)))
+  return [
+    '### Missed must entries (diagnostics; no bar)',
+    '',
+    `Summed over the ${r.diagnostics.length} run${r.diagnostics.length === 1 ? '' : 's'}. **no candidate**: the story was shown nothing and no call was made; **not offered**: its development's overview or a partner of its development was not among the candidates shown; **refused by code**: the model said yes and the quote checks refused it (the rule is given); **founding not agreed**: a founding with a partner of its development was drafted and refused or not agreed by the check; **model no / unsure**: the model's answer for its development's candidates (confidence, and scope when not inside; the link answer gives no reason). "Before … was founded" marks a story linked before its development had an overview.`,
+    '',
+    `| Development | ${causes.join(' | ')} | All |`,
+    `|---|${causes.map(() => '---|').join('')}---|`,
+    ...table.map(t => `| ${t.key} | ${causes.map(c => t.causes.get(c) ?? 0).join(' | ')} | ${t.total} |`),
+    '',
+    ...r.diagnostics.flatMap(d => d.missed.map(m => `- Run ${d.run}, ${m.slug} (${m.key}, ${m.date}): **${m.cause}**: ${cell(m.detail)}`)),
+    '',
+  ]
+}
+
+/** Found must entries whose role disagrees with the key's, per run. */
+function roleLines(r: LinkStepReport): string[] {
+  if (r.diagnostics.length === 0) return []
+  return [
+    '### Role disagreements (diagnostics; no bar)',
+    '',
+    '| Run | Judged | Agreeing | Key turning point, given routine | Key routine, given turning point |',
+    '|---|---|---|---|---|',
+    ...r.diagnostics.map(d => {
+      const under = d.roleMisses.filter(m => m.expected === 'turning_point').length
+      return `| ${d.run} | ${d.rolesJudged} | ${d.rolesJudged - d.roleMisses.length} | ${under} | ${d.roleMisses.length - under} |`
+    }),
+    '',
+    ...r.diagnostics.flatMap(d =>
+      d.roleMisses.map(
+        m => `- Run ${d.run}, ${m.slug} (${m.key}): key ${m.expected}, given ${m.given.role}${m.given.roleKind ? ` (${m.given.roleKind})` : ''}`,
+      ),
+    ),
+    '',
+  ]
+}
+
+/** Every founded overview's charter, per run. */
+function charterLines(r: LinkStepReport): string[] {
+  if (r.diagnostics.every(d => d.charters.length === 0)) return []
+  return [
+    '### Founded charters (diagnostics; no bar)',
+    '',
+    ...r.diagnostics.flatMap(d =>
+      d.charters.flatMap(c => [
+        `- Run ${d.run}: **${cell(c.title)}**, standing for ${c.development ?? 'no development'}; founded ${c.foundedOn} from ${c.foundedFrom.map(f => `${f.slug} (${f.as})`).join(' and ')}; members: ${c.members.must} must, ${c.members.optional} optional, ${c.members.nearMisses} near misses of its development, ${c.members.other} other`,
+        `  - IN: ${cell(c.charter.in)}`,
+        `  - OUT: ${c.charter.out.length === 0 ? 'none' : c.charter.out.map(cell).join(' · ')}`,
+        `  - END_EVENT: ${c.charter.endEvent === null ? 'none (closes by fading)' : cell(c.charter.endEvent)}`,
+      ]),
+    ),
+    '',
+  ]
+}
+
 export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): string[] {
   const shown = (step: OverviewStep) => steps.includes(step)
   return [
     `**Replay:** ${r.stories} stories (entries and near misses) of ${r.keys.length} answer keys (half ${r.half}: ${r.keys.join(', ') || 'none'}${r.limit !== undefined ? `; the first ${r.limit} stories only, a smoke run, not evidence` : ''}), ${r.repeat} run${r.repeat === 1 ? '' : 's'} through production's linking against the in-memory sandbox, oldest first. Model spend ${usd(r.costUsd)}${r.perStoryUsd !== null ? `, ${usd(r.perStoryUsd)} a story` : ''}.`,
+    ...(r.unanswered > 0
+      ? [
+          `- Calls not made: ${r.unanswered} (past the budget, or not in the cache with --cache-only); a story whose call got no answer is linked as failed, so this run is not the one cached.`,
+        ]
+      : []),
     ...(r.stopped ? [`- Stopped: ${cell(r.stopped)}`] : []),
     ...r.left.map(x => `- Left out: ${x.what}: ${cell(x.reason)}`),
     '',
@@ -67,5 +134,8 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
     ...(r.score.runs.some(s => s.mistakes.length > 0)
       ? ['### Wrong joins and foundings', '', ...r.score.runs.flatMap(s => s.mistakes.map(m => `- Run ${s.run}: ${cell(m)}`)), '']
       : []),
+    ...(shown('link') ? missedLines(r) : []),
+    ...(shown('role') ? roleLines(r) : []),
+    ...(shown('found') || shown('link') ? charterLines(r) : []),
   ]
 }

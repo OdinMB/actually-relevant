@@ -162,6 +162,11 @@ export interface EvalContextOptions {
   /** When true, any uncached call throws: a dry run must not reach the API. */
   offline: boolean
   /**
+   * When true, an uncached call is not made and answers `skipped` ("not in the cache"), as a call
+   * past the budget does: a rerun that costs nothing and goes on, its misses counted by the step.
+   */
+  cacheOnly?: boolean
+  /**
    * Spend outside the model calls (eval:research's Tavily credits), added to the ledger total by
    * the budget guard and `spentUsd()`. Unset: none.
    */
@@ -200,7 +205,8 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
 
   async function invoke<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: Prompt, key: string): Promise<CallRecord<T>> {
     const base = { key, arm: armKey(a), schema: schemaName, at: new Date().toISOString() }
-    if (spent + external() >= options.budgetUsd) {
+    const unmade = options.cacheOnly ? 'not in the cache (--cache-only)' : spent + external() >= options.budgetUsd ? 'budget exhausted' : null
+    if (unmade) {
       return {
         ...base,
         outcome: 'skipped',
@@ -210,7 +216,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
         usage: ZERO_USAGE,
         costUsd: 0,
         latencyMs: 0,
-        error: 'budget exhausted',
+        error: unmade,
       }
     }
     const model = createChatModel({ name: a.model, reasoningEffort: a.effort })

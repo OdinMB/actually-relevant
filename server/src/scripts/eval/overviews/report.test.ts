@@ -31,6 +31,9 @@ describe('overviewReportName', () => {
     expect(name({ steps: ['fact-check'], repeat: 3 })).toBe('overview-eval-steps-fact-check-repeat-3.md')
     expect(name({ arms: [{ model: 'gpt-6-luna', effort: 'medium' }], size: 100, limit: 5 })).toBe('overview-eval-arms-gpt-6-luna@medium-size-100-limit-5.md')
     expect(name({ steps: [...OVERVIEW_STEPS] })).toBe(`overview-eval-steps-${OVERVIEW_STEPS.join('-')}.md`)
+    expect(name({ steps: ['link', 'found', 'role'], half: 'judge', repeat: 3, cacheOnly: true })).toBe(
+      'overview-eval-steps-link-found-role-half-judge-repeat-3-cache-only.md',
+    )
   })
 
   it('names the gate run apart from the tuning runs', () => {

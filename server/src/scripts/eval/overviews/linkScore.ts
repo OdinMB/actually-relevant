@@ -4,9 +4,10 @@
  * development most of its members are `must` entries of. `link`: precision over `must` entries and
  * near misses that ended in an overview (`optional` entries ignored; a near miss in its development's
  * overview, or an entry in another's, is wrong), and recall of `must` entries. `found`: foundings whose
- * pair is not two entries of one development, and founded charters naming an end event other than the
- * key's (the strong judge's verdicts, passed in; one naming none is never wrong). `role`: turning point or routine against
- * the key. Means over runs. And how often the link calls flagged the re-center signals
+ * pair is not two entries of one development (of any key, the other half's too), and founded charters
+ * naming an end event other than the key's (the strong judge's verdicts, passed in; one naming none is
+ * never wrong). `role`: turning point or routine against the key, over the must entries found in their
+ * development's overview. Means over runs. And how often the link calls flagged the re-center signals
  * (`scoreSignals`), with no bar. Pure.
  */
 import type { Role } from '../../../services/overviewTypes.js'
@@ -47,7 +48,7 @@ export interface LinkRunScore {
   must: number
   foundings: number
   wrongFoundings: number
-  /** Roles agreeing with the key, of must entries with a stored role. */
+  /** Roles agreeing with the key, of must entries found in their development's overview. */
   rolesAgreeing: number
   rolesJudged: number
   /** Development id → its overview's id in this run, for the end-event judge. */
@@ -150,9 +151,30 @@ export function developmentOf(members: readonly string[], entry: ReturnType<type
   return best
 }
 
-/** One run against the keys. */
-export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun): LinkRunScore {
+/**
+ * Every key each slug is an entry of (must or optional, its centers' entries too), over the keys
+ * given: a story may be an entry of two keys (a deal story of Lebanon's and of the strait's).
+ */
+export function entryKeysOf(keys: readonly AnswerKey[]): Map<string, Set<string>> {
+  const of = new Map<string, Set<string>>()
+  for (const k of keys) for (const e of [...k.entries, ...k.centers.flatMap(c => c.entries)]) of.set(e.slug, new Set([...(of.get(e.slug) ?? []), k.id]))
+  return of
+}
+
+/** Whether two stories are entries of one development: of one key among `entryKeys` (`entryKeysOf`). */
+export const oneDevelopment = (entryKeys: ReadonlyMap<string, ReadonlySet<string>>, a: string, b: string): boolean =>
+  [...(entryKeys.get(a) ?? [])].some(k => entryKeys.get(b)?.has(k) ?? false)
+
+/**
+ * One run against the keys. A founding is right when its pair are two entries of one development,
+ * judged over the half's keys and `others` (the keys of the other half): two entries of a development
+ * the half does not score (two of the strait's stories in the judged half) still found it rightly.
+ * Roles are judged only on must entries found in their development's overview: a role is an entry's,
+ * so a story left alone has none to judge.
+ */
+export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others: readonly AnswerKey[] = []): LinkRunScore {
   const { entry, nearMiss } = keyIndex(keys)
+  const entryKeys = entryKeysOf([...keys, ...others])
   const placed = new Map<string, string | null>() // slug → its overview's development
   const developments = new Map<string, string>()
   const mistakes: string[] = []
@@ -161,8 +183,7 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun): LinkRu
     const dev = developmentOf(o.members, entry)
     if (dev && !developments.has(dev)) developments.set(dev, o.id)
     for (const m of o.members) placed.set(m, dev)
-    const [a, b] = o.foundedFrom.map(s => entry.get(s))
-    if (!a || !b || a.key !== b.key) {
+    if (!oneDevelopment(entryKeys, o.foundedFrom[0], o.foundedFrom[1])) {
       wrongFoundings++
       mistakes.push(`founded from ${o.foundedFrom.join(' and ')}, not two entries of one development`)
     }
@@ -185,7 +206,7 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun): LinkRu
   }
   const musts = [...entry].filter(([, e]) => e.join === 'must')
   const found = musts.filter(([slug, e]) => placed.get(slug) === e.key).length
-  const judged = musts.filter(([slug]) => run.roles.has(slug))
+  const judged = musts.filter(([slug, e]) => placed.get(slug) === e.key && run.roles.has(slug))
   return {
     run: run.run,
     right,
@@ -222,8 +243,13 @@ export type EndEventVerdict = 'right' | 'wrong' | 'none' | 'unjudged' | null
  * development id → its verdict per run; no verdict while a named one is unjudged); roles agreeing ≥85%
  * (`role`).
  */
-export function scoreLinking(keys: readonly AnswerKey[], runs: readonly ReplayRun[], endEvents: ReadonlyMap<string, EndEventVerdict[]> = new Map()): LinkScore {
-  const scored = runs.map(r => scoreLinkRun(keys, r))
+export function scoreLinking(
+  keys: readonly AnswerKey[],
+  runs: readonly ReplayRun[],
+  endEvents: ReadonlyMap<string, EndEventVerdict[]> = new Map(),
+  others: readonly AnswerKey[] = [],
+): LinkScore {
+  const scored = runs.map(r => scoreLinkRun(keys, r, others))
   const verdicts = keys.map(k => endEvents.get(k.id) ?? [])
   const unjudged = verdicts.some(v => v.includes('unjudged'))
   const wrongEnds = runs.length === 0 || unjudged ? null : mean(runs.map((_, i) => verdicts.filter(v => v[i] === 'wrong').length))

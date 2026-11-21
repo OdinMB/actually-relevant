@@ -22,7 +22,7 @@ import { standsFacts, type MemberFact } from '../../../services/overviewStands.j
 import type { LinkStory } from '../../../services/overviewTypes.js'
 import { runNumbers } from '../repeats.js'
 import type { SuiteContext } from '../types.js'
-import { inDevelopmentHalf } from './developmentHalves.js'
+import { keysOfHalf } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
 import { awaitingReview, type AnswerKey } from './keySchema.js'
 import { evalCalls, replaySlugs } from './link.js'
@@ -115,7 +115,7 @@ function checkpoint(
 }
 
 export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepReport> {
-  const keys = o.files.flatMap(f => (f.key && f.errors.length === 0 && inDevelopmentHalf(f.key.id, o.half) ? [f.key] : []))
+  const { keys, others } = keysOfHalf(o.files, o.half)
   const left: ReplayStepReport['left'] = o.files
     .filter(f => !f.key || f.errors.length > 0)
     .map(f => ({ what: f.file, reason: `${f.errors.length} format errors: fix the key` }))
@@ -285,7 +285,7 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
     stories: replayed.length,
     left,
     runs,
-    score: scoreReplay(keys, runs, config.overviews.minStandsFacts, replayed.length),
+    score: scoreReplay(keys, runs, config.overviews.minStandsFacts, replayed.length, others),
     costUsd: o.ctx.spentUsd() - spentBefore,
     ...(stopped ? { stopped } : {}),
   }

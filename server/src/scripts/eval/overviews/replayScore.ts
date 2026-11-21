@@ -179,14 +179,20 @@ export function scoreClosures(keys: readonly AnswerKey[], r: ReplayRunResult): C
   return { run: r.run, premature, closable: closable.length, closedInTime }
 }
 
-/** The bars over every run, and the replay's figures. */
-export function scoreReplay(keys: readonly AnswerKey[], runs: readonly ReplayRunResult[], minStandsFacts: number, stories: number): ReplayScore {
+/** The bars over every run, and the replay's figures; `others`, the other half's keys, only judge foundings (`scoreLinkRun`). */
+export function scoreReplay(
+  keys: readonly AnswerKey[],
+  runs: readonly ReplayRunResult[],
+  minStandsFacts: number,
+  stories: number,
+  others: readonly AnswerKey[] = [],
+): ReplayScore {
   const closureRuns = runs.map(r => scoreClosures(keys, r))
   const names = [...new Set(runs.flatMap(r => Object.keys(r.safeguards)))].sort()
   const totalUsd = runs.reduce((s, r) => s + r.costUsd, 0)
   const founded = runs.reduce((s, r) => s + r.founded, 0)
   return {
-    link: scoreLinking(keys, runs),
+    link: scoreLinking(keys, runs, new Map(), others),
     closure: [
       bar('premature closures', mean(closureRuns.map(c => c.premature.length)), 0, 'atMost'),
       rateBar(

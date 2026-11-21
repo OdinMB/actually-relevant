@@ -34,14 +34,16 @@ import type { ReviewStepReport } from './review.js'
 import type { StandsStepReport } from './stands.js'
 import { passPoolLines, recenterLines, replayLines, reviewLines, standsLines } from './upkeepReport.js'
 
-export type ReportNameInput = Pick<OverviewOptions, 'steps' | 'arms' | 'size' | 'repeat' | 'limit' | 'facts' | 'half'>
+export type ReportNameInput = Pick<OverviewOptions, 'steps' | 'arms' | 'size' | 'repeat' | 'limit' | 'facts' | 'half'> &
+  Partial<Pick<OverviewOptions, 'cacheOnly'>>
 
 const sameArms = (arms: ReportNameInput['arms']) =>
   arms.length === OVERVIEW_DEFAULT_ARMS.length && arms.every((a, i) => armKey(a) === armKey(OVERVIEW_DEFAULT_ARMS[i]!))
 
 const defaultSteps = (steps: OverviewStep[]) => steps.length === OVERVIEW_DEFAULT_STEPS.length && steps.every((s, i) => s === OVERVIEW_DEFAULT_STEPS[i])
 
-export function overviewReportName({ steps, arms, size, repeat, limit, facts, half }: ReportNameInput): string {
+/** A cache-only rerun is tagged `cache-only`, so it never overwrites the report of the run it reruns. */
+export function overviewReportName({ steps, arms, size, repeat, limit, facts, half, cacheOnly }: ReportNameInput): string {
   const tags = [
     ...(defaultSteps(steps) ? [] : [`steps-${steps.join('-')}`]),
     ...(facts === 'research' ? [] : [`facts-${facts}`]),
@@ -50,6 +52,7 @@ export function overviewReportName({ steps, arms, size, repeat, limit, facts, ha
     ...(size === OVERVIEW_DEFAULT_SIZE ? [] : [`size-${size}`]),
     ...(repeat > 1 ? [`repeat-${repeat}`] : []),
     ...(limit !== undefined ? [`limit-${limit}`] : []),
+    ...(cacheOnly ? ['cache-only'] : []),
   ]
   return `overview-eval${tags.map(t => `-${t}`).join('')}.md`
 }
