@@ -12,7 +12,7 @@ import type { AnswerKey } from './keySchema.js'
 
 export const DEVELOPMENT_HALVES: Readonly<Record<Half, readonly string[]>> = {
   judge: ['ebola-drc-2026', 'el-nino-2026', 'lebanon-war-2026', 'pandemic-agreement-pabs', 'colorado-river-rules'],
-  tune: ['hormuz-shipping-2026', 'autonomous-weapons-talks', 'sudan-el-fasher', 'h5n1-australia'],
+  tune: ['hormuz-shipping-2026', 'iran-war-2026', 'autonomous-weapons-talks', 'sudan-el-fasher', 'h5n1-australia'],
 }
 
 /** The half a development key is in, by its id; null for a key in neither list. */

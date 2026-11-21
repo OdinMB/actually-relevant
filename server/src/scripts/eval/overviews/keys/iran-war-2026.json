@@ -1,0 +1,3115 @@
+{
+  "schemaVersion": 1,
+  "id": "iran-war-2026",
+  "title": "War between Israel, the US and Iran",
+  "charter": {
+    "in": "The war between Israel and the United States on one side and Iran on the other that began with the US-Israeli strikes on Iran of 28 February 2026: Israeli and US strikes on Iran, Iran's missile and drone strikes on Israel, on US forces and on the Gulf states, the deaths and damage they cause, the killing of Iran's leaders, threats and decisions to widen, pause or resume the strikes, and the ceasefires, deals and talks to end the war. A story belongs when that war is its main subject.",
+    "out": [
+      "The Israel–Hezbollah war in and over Lebanon",
+      "Disruption of shipping through the Strait of Hormuz: closures and reopenings, attacks on or seizures of merchant ships, stranded ships, insurance, escorts, blockades of the strait's traffic, tolls and passage terms",
+      "Houthi attacks, the Red Sea and the war in Yemen",
+      "Iran's nuclear program, enriched uranium, inspections and nuclear talks, except as terms in talks to end the war",
+      "Oil, gas and fuel prices and markets; energy, fertilizer and food shortages in importing countries",
+      "The pre-war standoff, military buildup and nuclear talks before 28 February 2026",
+      "Iran's internal politics, protests and crackdowns not caused by the war",
+      "US sanctions on Iran and the US land blockade ('Iron Gate')",
+      "Gaza, the West Bank and Syria"
+    ],
+    "endEvent": "A lasting end to the fighting between Israel/the US and Iran: strikes on Iran and Iran's strikes on Israel, US forces and the Gulf states stop under a ceasefire or deal that our later stories do not show broken by renewed strikes. A truce later broken does not count."
+  },
+  "closed": null,
+  "figures": [
+    {
+      "key": "iran_deaths",
+      "name": "Deaths in Iran",
+      "unit": "people",
+      "definition": "People killed in Iran by the US and Israeli strikes since 28 February 2026, civilians and military, all of Iran, by whichever source our story cites (Iranian officials, the Red Crescent, HRANA). Cumulative. Not deaths in Lebanon, Israel, Iraq or the Gulf states, and not the crew of the frigate Dena sunk off Sri Lanka.",
+      "cumulative": true,
+      "variants": [
+        "civilians only (e.g. \"at least 1,332 Iranian civilians\", UN experts' \"about 1,000 civilian deaths\")",
+        "a war toll with no stated place, which may include Lebanon (e.g. \"has killed over 2,000 people\")",
+        "Tehran and Beirut together",
+        "one strike round or one strike only (e.g. \"US strikes previously killed 14 people\")",
+        "all war dead on every front (\"more than 7,000 dead\")"
+      ]
+    },
+    {
+      "key": "us_troops_killed",
+      "name": "US service members killed",
+      "unit": "people",
+      "definition": "US service members killed in the war since 28 February 2026, by Iranian or Iran-aligned attacks anywhere in the region. Cumulative.",
+      "cumulative": true,
+      "variants": ["one strike only (e.g. three soldiers killed at a Jordanian air base)"]
+    }
+  ],
+  "entries": [
+    {
+      "slug": "us-and-israel-launch-strikes-on-iran-missiles-fired-back",
+      "date": "2026-03-01",
+      "title": "US and Israel launch strikes on Iran; missiles fired back",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "Start of the war: the US-Israeli strikes of 28 February and Iran's missiles fired back at Israel."
+    },
+    {
+      "slug": "us-and-israeli-strikes-kill-over-200-in-iran",
+      "date": "2026-03-01",
+      "title": "US and Israeli strikes kill over 200 in Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 201,
+          "approx": "at_least",
+          "asOf": "2026-03-01",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed at least 201 people and wounded 747"
+        }
+      ],
+      "statuses": [],
+      "why": "First death toll of the opening strikes and Iran's retaliation on Israel and US bases; same event as the launch story."
+    },
+    {
+      "slug": "israeli-and-us-strikes-coincide-with-mass-online-shutdown",
+      "date": "2026-03-01",
+      "title": "Israeli and US strikes coincide with mass online shutdown",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mainly the internet blackout and censorship inside Iran (\"the event mainly changes internal information flow and repression tactics\"), with the opening strikes and cyberattacks as its setting: the cyber angle."
+    },
+    {
+      "slug": "us-and-israel-attack-iran-tehran-launches-missile-strikes",
+      "date": "2026-03-02",
+      "title": "US and Israel attack Iran; Tehran launches missile strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 51,
+          "approx": "at_least",
+          "asOf": "2026-03-02",
+          "matches": false,
+          "countedAs": "deaths in one strike (the Minab school) only",
+          "quote": "a school in Minab that killed at least 51"
+        }
+      ],
+      "statuses": [],
+      "why": "Maps the opening strikes (ministries, the Minab school) and Iran's missile and drone waves; repeats the opening event."
+    },
+    {
+      "slug": "israel-strikes-tehran-after-khamenei-killing-iran-retaliates",
+      "date": "2026-03-02",
+      "title": "Israel strikes Tehran after Khamenei killing; Iran retaliates",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "people",
+      "values": [],
+      "statuses": [],
+      "why": "Khamenei's killing and heavy strikes on Tehran with Iranian barrages; the Hormuz closure is a side strand (a Hormuz near miss)."
+    },
+    {
+      "slug": "khamenei-killed-iran-s-leaders-scramble-amid-war-threats",
+      "date": "2026-03-02",
+      "title": "Khamenei killed, Iran's leaders scramble amid war threats",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The succession crisis after Khamenei's killing; same event and day as the turning point."
+    },
+    {
+      "slug": "blasts-hit-dubai-and-doha-key-hubs-damaged",
+      "date": "2026-03-02",
+      "title": "Blasts hit Dubai and Doha, key hubs damaged",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [],
+      "statuses": [],
+      "why": "Iran widens its retaliation from US bases to Gulf cities' airports, hotels and ports: a new target set."
+    },
+    {
+      "slug": "missiles-overwhelm-israel-s-defenses-at-least-ten-killed",
+      "date": "2026-03-02",
+      "title": "Missiles overwhelm Israel's defenses, at least ten killed",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iranian salvos kill at least ten in Israel (nine in Bet Shemesh); a heavy round of the retaliation already reported."
+    },
+    {
+      "slug": "trump-says-fighting-could-last-a-month-after-heavy-strikes",
+      "date": "2026-03-02",
+      "title": "Trump says fighting could last a month after heavy strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Trump's month-long campaign statement, the strike tally and the first US casualties."
+    },
+    {
+      "slug": "starmer-allows-us-to-use-uk-bases-against-iran",
+      "date": "2026-03-02",
+      "title": "Starmer allows US to use UK bases against Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "An ally's decision to support the US campaign."
+    },
+    {
+      "slug": "leaders-urged-to-avoid-steps-that-could-provoke-iran",
+      "date": "2026-03-02",
+      "title": "Leaders urged to avoid steps that could provoke Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Saudi push for Gulf restraint after the strikes: the Gulf states' decisions about the war."
+    },
+    {
+      "slug": "iran-strikes-shut-saudi-and-qatari-oil-and-gas-production",
+      "date": "2026-03-03",
+      "title": "Iran strikes shut Saudi and Qatari oil and gas production",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "First Iranian strikes on Gulf energy sites (Ras Tanura, Qatar's LNG) that force shutdowns; the production halt is a secondary energy strand."
+    },
+    {
+      "slug": "heavy-israeli-strikes-hit-tehran-broadcaster-and-prison",
+      "date": "2026-03-03",
+      "title": "Heavy Israeli strikes hit Tehran broadcaster and prison",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A further Israeli strike round on Tehran's state targets."
+    },
+    {
+      "slug": "us-and-israel-strike-iran-as-counterstrikes-spread",
+      "date": "2026-03-03",
+      "title": "US and Israel strike Iran as counterstrikes spread",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Continued strikes framed as regime change and Iranian counterstrikes in several countries."
+    },
+    {
+      "slug": "u-s-interceptors-deplete-risking-pacific-readiness",
+      "date": "2026-03-03",
+      "title": "U.S. interceptors deplete, risking Pacific readiness",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mainly US interceptor stocks and Pacific readiness: munitions drained by the war, as in the optional arms-depletion story of 3 May."
+    },
+    {
+      "slug": "us-risks-running-out-of-missile-defenses-in-iran-conflict",
+      "date": "2026-03-03",
+      "title": "US risks running out of missile defenses in Iran conflict",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mainly interceptor stocks against Iran's barrages: munitions drained by the war; same theme as the day's other depletion story."
+    },
+    {
+      "slug": "israel-and-us-strike-iran-as-region-teeters-toward-war",
+      "date": "2026-03-04",
+      "title": "Israel and US strike Iran as region teeters toward war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 600,
+          "approx": "at_least",
+          "asOf": "2026-03-04",
+          "matches": false,
+          "countedAs": "people killed in Tehran and Beirut together (includes Lebanon)",
+          "quote": "killing over 600 people"
+        }
+      ],
+      "statuses": [],
+      "why": "Strikes on Tehran and Iran's broadcaster and Trump's four-week campaign; Beirut and Hormuz are side strands (a Lebanon near miss)."
+    },
+    {
+      "slug": "us-israel-strike-iran-dubai-embassy-hit-oil-disrupted",
+      "date": "2026-03-04",
+      "title": "US, Israel strike Iran; Dubai embassy hit, oil disrupted",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 787,
+          "approx": "at_least",
+          "asOf": "2026-03-04",
+          "matches": false,
+          "countedAs": "war dead with no stated place; the story covers strikes on Iran and Lebanon",
+          "quote": "including strikes on Qom and at least 787 dead"
+        }
+      ],
+      "statuses": [],
+      "why": "Strikes on Qom, the death toll and an Iranian hit on the US embassy in Dubai."
+    },
+    {
+      "slug": "us-and-israeli-strikes-hit-qom-assembly-building",
+      "date": "2026-03-04",
+      "title": "US and Israeli strikes hit Qom assembly building",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A strike on the body choosing Khamenei's successor; part of the leadership strand."
+    },
+    {
+      "slug": "iran-hits-arab-states-and-us-bases-damaging-energy-sites",
+      "date": "2026-03-04",
+      "title": "Iran hits Arab states and US bases, damaging energy sites",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iranian strikes on Gulf states, energy sites and US bases; follows the Gulf turning points."
+    },
+    {
+      "slug": "trump-team-seeks-congressional-backing-for-iran-strikes",
+      "date": "2026-03-04",
+      "title": "Trump team seeks congressional backing for Iran strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The administration briefs Congress on the war ahead of war-powers votes."
+    },
+    {
+      "slug": "france-sends-flagship-to-mediterranean-amid-iran-strikes",
+      "date": "2026-03-04",
+      "title": "France sends flagship to Mediterranean amid Iran strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A French carrier deployment in response to the war: an ally's decision."
+    },
+    {
+      "slug": "russia-suspends-work-after-losing-contact-with-iran-s-atomic-leaders",
+      "date": "2026-03-04",
+      "title": "Russia suspends work after losing contact with Iran’s atomic leaders",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Rosatom halts work at Bushehr because of the fighting: war harm, but its nuclear-facility framing borders on the nuclear exclusion."
+    },
+    {
+      "slug": "us-sinks-iranian-ship-nato-downs-missile-toward-turkiye",
+      "date": "2026-03-05",
+      "title": "US sinks Iranian ship, NATO downs missile toward Türkiye",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [],
+      "statuses": [],
+      "why": "The war reaches the Indian Ocean and NATO: a US submarine sinks an Iranian warship and NATO downs a missile aimed at Türkiye."
+    },
+    {
+      "slug": "us-and-israel-hit-iran-attacks-spark-strikes-oil-shock",
+      "date": "2026-03-05",
+      "title": "US and Israel hit Iran; attacks spark strikes, oil shock",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 555,
+          "approx": "at_least",
+          "asOf": "2026-03-05",
+          "matches": true,
+          "countedAs": null,
+          "quote": "at least 555 reported in Iran"
+        },
+        {
+          "figure": "iran_deaths",
+          "value": 180,
+          "approx": "exact",
+          "asOf": "2026-03-05",
+          "matches": false,
+          "countedAs": "schoolgirls killed in one strike (the Minab school) only",
+          "quote": "180 schoolgirls in a single strike"
+        },
+        { "figure": "us_troops_killed", "value": 6, "approx": "exact", "asOf": "2026-03-05", "matches": true, "countedAs": null, "quote": "six US soldiers" }
+      ],
+      "statuses": [],
+      "why": "Roundup of strikes, Iranian retaliation and casualties; the oil shock is secondary."
+    },
+    {
+      "slug": "us-adds-b-52s-and-reports-nearly-2-000-targets-hit",
+      "date": "2026-03-05",
+      "title": "US adds B-52s and reports nearly 2,000 targets hit",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The US adds B-52s and reports its target tally; the Hormuz closure is a side strand."
+    },
+    {
+      "slug": "senate-fails-to-rein-in-trump-s-iran-strikes",
+      "date": "2026-03-05",
+      "title": "Senate fails to rein in Trump's Iran strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The Senate rejects a war-powers resolution 47-52: a decision by Congress about the war that keeps the status quo."
+    },
+    {
+      "slug": "fact-finding-mission-says-us-israel-violated-iran-s-sovereignty",
+      "date": "2026-03-05",
+      "title": "Fact-finding mission says US, Israel violated Iran's sovereignty",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A UN probe finds the strikes and Iran's reprisals breached the UN Charter, with child deaths from the war; the detainee strand is secondary."
+    },
+    {
+      "slug": "us-to-raze-iran-s-ballistic-weapons-plants",
+      "date": "2026-03-06",
+      "title": "US to raze Iran's ballistic weapons plants",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "The US announces a next phase, from launchers to Iran's missile industry, with ground options not ruled out: a new target set."
+    },
+    {
+      "slug": "us-and-israel-intensify-strikes-on-tehran-sites",
+      "date": "2026-03-06",
+      "title": "US and Israel intensify strikes on Tehran sites",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 1230,
+          "approx": "at_least",
+          "asOf": "2026-03-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "Iranian officials report at least 1,230 dead"
+        }
+      ],
+      "statuses": [],
+      "why": "Sixth day of strikes on Iran, the civilian toll and attacks on health facilities."
+    },
+    {
+      "slug": "house-rejects-bid-to-halt-trump-s-iran-war",
+      "date": "2026-03-06",
+      "title": "House rejects bid to halt Trump's Iran war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "us_troops_killed",
+          "value": 6,
+          "approx": "exact",
+          "asOf": "2026-03-06",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed six US service members"
+        }
+      ],
+      "statuses": [],
+      "why": "The House rejects a war-powers resolution 219-212; same strand as the Senate vote."
+    },
+    {
+      "slug": "u-s-strikes-topple-iran-government-demand-unconditional-surrender",
+      "date": "2026-03-08",
+      "title": "U.S. strikes topple Iran government, demand unconditional surrender",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The air campaign that killed Iran's leaders and the US demand for unconditional surrender; the killings were reported on 1-2 March."
+    },
+    {
+      "slug": "us-and-israel-strikes-kill-over-1-200-rattle-markets",
+      "date": "2026-03-08",
+      "title": "US and Israel strikes kill over 1,200, rattle markets",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 1230,
+          "approx": "at_least",
+          "asOf": "2026-03-08",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed at least 1,230 people"
+        }
+      ],
+      "statuses": [],
+      "why": "The death toll, Trump's \"unconditional surrender\" demand and a 4-6 week timeline; markets are secondary."
+    },
+    {
+      "slug": "president-vows-to-confront-threats-amid-iran-strikes",
+      "date": "2026-03-08",
+      "title": "President vows to confront threats amid Iran strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Continued Iranian strikes on the UAE (airports, a US consulate, desalination) and the UAE's response."
+    },
+    {
+      "slug": "israel-uses-ai-to-guide-strikes-on-iran",
+      "date": "2026-03-08",
+      "title": "Israel uses AI to guide strikes on Iran",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "About military AI targeting, with the strikes on Iran and their civilian toll as its case: a split subject."
+    },
+    {
+      "slug": "mojtaba-khamenei-named-iran-s-new-leader-after-strikes",
+      "date": "2026-03-09",
+      "title": "Mojtaba Khamenei named Iran's new leader after strikes",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "people",
+      "values": [],
+      "statuses": [],
+      "why": "First story on the hardline successor named after the strikes killed his father, with new Israeli and US threats against successors."
+    },
+    {
+      "slug": "us-israel-bomb-iranian-sites-toxic-rain-35-oil-price-spike",
+      "date": "2026-03-09",
+      "title": "US, Israel bomb Iranian sites; toxic rain, 35% oil price spike",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "First story on strikes on Tehran's fuel depots, a new civilian-energy target set, with toxic rain over the city."
+    },
+    {
+      "slug": "trump-rejects-talks-suggests-killing-iran-s-leaders",
+      "date": "2026-03-09",
+      "title": "Trump rejects talks, suggests killing Iran's leaders",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 1332,
+          "approx": "at_least",
+          "asOf": "2026-03-09",
+          "matches": false,
+          "countedAs": "Iranian civilians reported killed only",
+          "quote": "at least 1,332 Iranian civilians were reported killed"
+        }
+      ],
+      "statuses": [],
+      "why": "Trump's war aims (no talks, destroying the military and leaders); restates the surrender line of the day before."
+    },
+    {
+      "slug": "dubai-airport-briefly-closed-after-missile-and-drone-barrage",
+      "date": "2026-03-09",
+      "title": "Dubai airport briefly closed after missile and drone barrage",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's strikes on the Gulf states (Dubai, Doha, Bahrain); those strikes began in the first days."
+    },
+    {
+      "slug": "trump-says-iran-campaign-very-soon-as-oil-tops-100",
+      "date": "2026-03-10",
+      "title": "Trump says Iran campaign 'very soon' as oil tops $100",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Leads on the US strike campaign and Trump's claims about its gains and length; Lebanon and oil are background (a Lebanon near miss)."
+    },
+    {
+      "slug": "trump-says-he-s-not-happy-after-tehran-names-khamenei-s-son",
+      "date": "2026-03-10",
+      "title": "Trump says he's 'not happy' after Tehran names Khamenei's son",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 1250,
+          "approx": "at_least",
+          "asOf": "2026-03-10",
+          "matches": false,
+          "countedAs": "the regional war's toll with no stated place; may include Lebanon",
+          "quote": "has killed over 1,250 people"
+        }
+      ],
+      "statuses": [],
+      "why": "Trump's reaction to Mojtaba Khamenei's appointment reported the day before."
+    },
+    {
+      "slug": "u-s-submarine-sank-iranian-frigate-104-reported-dead",
+      "date": "2026-03-10",
+      "title": "U.S. submarine sank Iranian frigate; 104 reported dead",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The frigate Dena's sinking, first reported on 5 March; updates the crew toll."
+    },
+    {
+      "slug": "iran-escalates-missile-and-energy-attacks-to-wear-down-foes",
+      "date": "2026-03-10",
+      "title": "Iran escalates missile and energy attacks to wear down foes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of Iran's war strategy: IRGC control and an attrition campaign of missiles and drones."
+    },
+    {
+      "slug": "saudi-warns-iran-threatens-retaliation-and-us-base-use",
+      "date": "2026-03-10",
+      "title": "Saudi warns Iran, threatens retaliation and US base use",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Riyadh threatens to retaliate or open its bases to the US after Iranian strikes, and Iran's president apologizes to neighbors: the war's Gulf front."
+    },
+    {
+      "slug": "revolutionary-guards-install-new-supreme-leader-stir-regional-tensions",
+      "date": "2026-03-11",
+      "title": "Revolutionary Guards install new supreme leader, stir regional tensions",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 1000,
+          "approx": "at_least",
+          "asOf": "2026-03-11",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed over a thousand Iranians"
+        }
+      ],
+      "statuses": [],
+      "why": "The IRGC's role in the wartime succession and what it means for the war; follows the 9 March appointment."
+    },
+    {
+      "slug": "senator-says-us-may-send-forces-into-iran",
+      "date": "2026-03-11",
+      "title": "Senator says US may send forces into Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "us_troops_killed",
+          "value": 8,
+          "approx": "exact",
+          "asOf": "2026-03-11",
+          "matches": true,
+          "countedAs": null,
+          "quote": "at least 150 U.S. troops wounded and eight killed"
+        }
+      ],
+      "statuses": [],
+      "why": "A possible widening to ground forces, US casualties and the fight over authorization; a senator's reading, not a decision."
+    },
+    {
+      "slug": "mojtaba-khamenei-named-iran-s-top-authority",
+      "date": "2026-03-11",
+      "title": "Mojtaba Khamenei named Iran's top authority",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The succession follows the war's killing of Khamenei, but this explainer frames it as domestic politics and never mentions the war."
+    },
+    {
+      "slug": "us-estimates-11-3-billion-cost-after-six-day-iran-campaign",
+      "date": "2026-03-12",
+      "title": "US estimates $11.3 billion cost after six-day Iran campaign",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "money",
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 2000,
+          "approx": "about",
+          "asOf": "2026-03-12",
+          "matches": false,
+          "countedAs": "war toll with no stated place (the conflict \"spread regionally\"); may include Lebanon",
+          "quote": "has killed about 2,000 people"
+        }
+      ],
+      "statuses": [],
+      "why": "First official figure for what the war costs the US, with depleted munitions and a coming funding request."
+    },
+    {
+      "slug": "senate-democrats-demand-probe-after-girls-deaths",
+      "date": "2026-03-12",
+      "title": "Senate Democrats demand probe after girls' deaths",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 1000,
+          "approx": "about",
+          "asOf": "2026-03-12",
+          "matches": false,
+          "countedAs": "civilians killed over the campaign, Iran's claim given as a range (hundreds to over a thousand)",
+          "quote": "killed hundreds to over a thousand civilians"
+        }
+      ],
+      "statuses": [],
+      "why": "Civilian deaths from the 28 February strikes, likely US responsibility for them, and congressional oversight of the war."
+    },
+    {
+      "slug": "israel-strikes-spark-toxic-black-rain-over-tehran",
+      "date": "2026-03-12",
+      "title": "Israel strikes spark toxic black rain over Tehran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Health and environmental harm in Tehran from the depot strikes first reported on 9 March."
+    },
+    {
+      "slug": "iran-linked-hackers-hit-major-device-maker",
+      "date": "2026-03-12",
+      "title": "Iran-linked hackers hit major device maker",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [],
+      "statuses": [],
+      "why": "A cyberattack framed as retaliation for a deadly strike in Iran opens a cyber front, but the story is mostly one company's outage."
+    },
+    {
+      "slug": "us-sends-thousands-of-marines-to-middle-east-after-attacks",
+      "date": "2026-03-14",
+      "title": "US sends thousands of Marines to Middle East after attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Prompted by ship attacks near Hormuz, but it reports a war buildup that could become a ground operation (Kharg Island): split with shipping."
+    },
+    {
+      "slug": "israel-and-us-expand-attacks-after-cross-border-rocket-fire",
+      "date": "2026-03-15",
+      "title": "Israel and US expand attacks after cross-border rocket fire",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A regional photo roundup led by Beirut; US bombers flying from UK bases against Iran are one strand of several."
+    },
+    {
+      "slug": "trump-urges-allies-to-keep-strait-open-amid-strikes",
+      "date": "2026-03-15",
+      "title": "Trump urges allies to keep Strait open amid strikes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 15,
+          "approx": "at_least",
+          "asOf": "2026-03-15",
+          "matches": false,
+          "countedAs": "deaths in one round of strikes on Isfahan province only",
+          "quote": "killing at least 15 people"
+        }
+      ],
+      "statuses": [],
+      "why": "Splits its subject between US-Israeli strikes on Isfahan and Trump's call to keep Hormuz open."
+    },
+    {
+      "slug": "trump-rejects-mediation-orders-continued-strikes-in-iran",
+      "date": "2026-03-16",
+      "title": "Trump rejects mediation, orders continued strikes in Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 2000,
+          "approx": "at_least",
+          "asOf": "2026-03-16",
+          "matches": false,
+          "countedAs": "the conflict's toll with no stated place; may include Lebanon",
+          "quote": "has killed over 2,000 people"
+        }
+      ],
+      "statuses": [],
+      "why": "Washington turns down mediators' ceasefire overtures and Iran refuses a ceasefire while strikes go on; repeats the no-talks stance reported on 9 March."
+    },
+    {
+      "slug": "zelensky-accuses-russia-of-aiding-iran-attacks",
+      "date": "2026-03-16",
+      "title": "Zelensky accuses Russia of aiding Iran attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Russian drones and intelligence for Iran's strikes on US and regional bases, but told from Ukraine's side and its own war: outside support, as in the October China-Russia piece."
+    },
+    {
+      "slug": "u-s-shifts-missiles-and-ships-to-middle-east-allies-worry",
+      "date": "2026-03-16",
+      "title": "U.S. shifts missiles and ships to Middle East, allies worry",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Missile defenses and ships moved from the Indo-Pacific for the war, but mainly about allies' deterrence worries and strained munitions stocks, as in the 3 March interceptor stories."
+    },
+    {
+      "slug": "millions-flee-as-regional-war-widens",
+      "date": "2026-03-16",
+      "title": "Millions flee as regional war widens",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A humanitarian roundup in which displacement inside Iran from the campaign is one strand next to Lebanon, Gaza and Sudan."
+    },
+    {
+      "slug": "israel-warns-of-thousands-more-targets-in-iran",
+      "date": "2026-03-17",
+      "title": "Israel warns of thousands more targets in Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Led by the Israel-Iran exchanges, Israel's warning of thousands more targets and strikes on bases hosting US forces; Lebanon and Hormuz are secondary (a Lebanon near miss)."
+    },
+    {
+      "slug": "top-hardline-coordinator-killed-in-israeli-strike",
+      "date": "2026-03-18",
+      "title": "Top hardline coordinator killed in Israeli strike",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "people",
+      "values": [],
+      "statuses": [],
+      "why": "Israel kills Ali Larijani, Iran's security coordinator and an interlocutor in talks: another senior leader removed."
+    },
+    {
+      "slug": "us-israel-strikes-widen-conflict-across-nearly-a-dozen-states",
+      "date": "2026-03-18",
+      "title": "US, Israel strikes widen conflict across nearly a dozen states",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 1000,
+          "approx": "about",
+          "asOf": "2026-03-18",
+          "matches": false,
+          "countedAs": "civilian deaths in Iran only (independent UN experts)",
+          "quote": "about 1,000 civilian deaths"
+        },
+        {
+          "figure": "iran_deaths",
+          "value": 1300,
+          "approx": "at_least",
+          "asOf": "2026-03-18",
+          "matches": true,
+          "countedAs": null,
+          "quote": "Iran claiming over 1,300 killed"
+        },
+        {
+          "figure": "iran_deaths",
+          "value": 168,
+          "approx": "at_least",
+          "asOf": "2026-03-18",
+          "matches": false,
+          "countedAs": "children killed in one airstrike on the Minab school only",
+          "quote": "killing more than 168 children"
+        }
+      ],
+      "statuses": [],
+      "why": "UN experts on deaths, displacement and damage inside Iran from the strikes, and the war's spread."
+    },
+    {
+      "slug": "iran-strikes-qatar-hub-missiles-hit-saudi-targets",
+      "date": "2026-03-19",
+      "title": "Iran strikes Qatar hub, missiles hit Saudi targets",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "After Iran's Pars gas field is hit, Iran strikes Qatar's Ras Laffan and Saudi Arabia: a tit-for-tat round against energy sites."
+    },
+    {
+      "slug": "u-s-weighs-thousands-of-troops-for-strait-and-oil-missions",
+      "date": "2026-03-19",
+      "title": "U.S. weighs thousands of troops for Strait and oil missions",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A possible US ground deployment, split between Hormuz and oil missions (the strait, Kharg Island) and securing uranium."
+    },
+    {
+      "slug": "iran-strikes-tel-aviv-with-cluster-missiles",
+      "date": "2026-03-20",
+      "title": "Iran strikes Tel Aviv with cluster missiles",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 3000,
+          "approx": "at_least",
+          "asOf": "2026-03-20",
+          "matches": true,
+          "countedAs": null,
+          "quote": "HRANA estimates 3,000-plus killed in Iran"
+        }
+      ],
+      "statuses": [],
+      "why": "Iran's retaliatory missile strikes on Israel and Israeli strikes on Iran; Lebanon is background (a Lebanon near miss)."
+    },
+    {
+      "slug": "trump-urges-israel-not-to-hit-iranian-gas-facilities",
+      "date": "2026-03-20",
+      "title": "Trump urges Israel not to hit Iranian gas facilities",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [],
+      "why": "The US tells Israel not to repeat strikes on Iranian energy sites after Ras Laffan: a first restraint on how the war is fought, and a US-Israel split."
+    },
+    {
+      "slug": "strikes-leadership-assassination-push-iran-conflict-toward-wider-war",
+      "date": "2026-03-20",
+      "title": "Strikes, leadership assassination push Iran conflict toward wider war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of the war's escalation (assassinations, deep strikes, a House vote leaving the president free to act)."
+    },
+    {
+      "slug": "us-approves-16-5bn-sale-to-uae-kuwait-and-jordan",
+      "date": "2026-03-20",
+      "title": "US approves $16.5bn sale to UAE, Kuwait and Jordan",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "An emergency arms sale to Gulf allies justified by the war; the subject is the arms transfer and Congress being bypassed."
+    },
+    {
+      "slug": "iran-warns-zero-restraint-after-strikes-cut-qatar-lng-17",
+      "date": "2026-03-21",
+      "title": "Iran warns 'zero restraint' after strikes cut Qatar LNG 17%",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's threat of \"zero restraint\" and the Ras Laffan damage from the energy round first reported on 19 March."
+    },
+    {
+      "slug": "israel-launches-fresh-strikes-on-iran",
+      "date": "2026-03-21",
+      "title": "Israel launches fresh strikes on Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "New Israeli strikes on Iran, Iranian counterattacks on Gulf states and allies split over joining in."
+    },
+    {
+      "slug": "iran-missiles-hit-southern-israel-more-than-100-injured",
+      "date": "2026-03-22",
+      "title": "Iran missiles hit southern Israel, more than 100 injured",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "Iran's fiercest attack on Israel so far hits near the Dimona nuclear site after Natanz was struck."
+    },
+    {
+      "slug": "trump-threatens-to-obliterate-iran-power-plants",
+      "date": "2026-03-22",
+      "title": "Trump threatens to obliterate Iran power plants",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 2000,
+          "approx": "at_least",
+          "asOf": "2026-03-22",
+          "matches": true,
+          "countedAs": null,
+          "quote": "killed more than 2,000 people in Iran"
+        }
+      ],
+      "statuses": [],
+      "why": "Trump threatens to destroy Iran's power plants, a new civilian target set, and Iran fires 4,000-km missiles; reopening Hormuz is the ultimatum's condition (Hormuz optional)."
+    },
+    {
+      "slug": "pakistan-rushes-to-avert-iran-saudi-direct-war",
+      "date": "2026-03-22",
+      "title": "Pakistan rushes to avert Iran‑Saudi direct war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mediation to keep Iran's strikes on the Gulf from becoming an Iran-Saudi war."
+    },
+    {
+      "slug": "us-issues-48-hour-ultimatum-to-iran-over-hormuz",
+      "date": "2026-03-23",
+      "title": "US issues 48-hour ultimatum to Iran over Hormuz",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mass Iranian missile launches, Israeli strikes on Tehran and damage to water and power; follows the 22 March ultimatum, with Hormuz its condition."
+    },
+    {
+      "slug": "us-threatens-iran-power-plants-after-waterway-blockade",
+      "date": "2026-03-23",
+      "title": "US threatens Iran power plants after waterway blockade",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The power-plant threat, Iran's counter-threats against US energy and desalination, and missiles near Dimona; the blockade is background."
+    },
+    {
+      "slug": "democrats-demand-hearings-after-missiles-target-israel-and-diego-garcia",
+      "date": "2026-03-23",
+      "title": "Democrats demand hearings after missiles target Israel and Diego Garcia",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iranian missiles at southern Israel and toward Diego Garcia, and the fight in Congress over oversight of the war."
+    },
+    {
+      "slug": "trump-s-threats-and-mixed-messages-raise-regional-conflict-risks",
+      "date": "2026-03-24",
+      "title": "Trump’s threats and mixed messages raise regional conflict risks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Where the war stands in week four: Iran surviving its leadership losses, its strikes, and Trump's contradictory threats."
+    },
+    {
+      "slug": "us-says-it-sent-15-point-proposal-to-iran",
+      "date": "2026-03-25",
+      "title": "US says it sent 15-point proposal to Iran",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [],
+      "why": "The first concrete US offer to settle the war."
+    },
+    {
+      "slug": "iran-fires-missiles-at-israel-energy-trade-hit",
+      "date": "2026-03-25",
+      "title": "Iran fires missiles at Israel, energy trade hit",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Leads with the direct Iran-Israel missile and air exchange (Tel Aviv damage, Tehran command centers hit); Hormuz and markets are secondary."
+    },
+    {
+      "slug": "baghdad-summons-us-and-iranian-envoys-after-deadly-strikes",
+      "date": "2026-03-26",
+      "title": "Baghdad summons US and Iranian envoys after deadly strikes",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [],
+      "statuses": [],
+      "why": "Mainly Iraq's diplomatic response, but the strikes on the PMF and a Kurdish headquarters are the war spilling into Iraq."
+    },
+    {
+      "slug": "white-house-says-goals-met-in-two-weeks-despite-lawmakers",
+      "date": "2026-03-26",
+      "title": "White House says goals met in two weeks despite lawmakers",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US war aims and timeline (two more weeks, leadership change) and pushback in Congress."
+    },
+    {
+      "slug": "trump-pauses-attacks-for-10-days-as-talks-continue",
+      "date": "2026-03-27",
+      "title": "Trump pauses attacks for 10 days as talks continue",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [],
+      "why": "The first announced pause of US attacks (on energy plants) during talks."
+    },
+    {
+      "slug": "israel-strikes-across-iran-as-us-says-talks-continue",
+      "date": "2026-03-27",
+      "title": "Israel strikes across Iran as US says talks continue",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Wide Israeli strikes across Iran and Iranian launches."
+    },
+    {
+      "slug": "israel-strikes-iran-s-uranium-plant-tehran-vows-retaliation",
+      "date": "2026-03-28",
+      "title": "Israel strikes Iran's uranium plant, Tehran vows retaliation",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 1900,
+          "approx": "at_least",
+          "asOf": "2026-03-28",
+          "matches": false,
+          "countedAs": "reported casualties with no stated place or kind; may count Iran's dead only",
+          "quote": "rising casualties (over 1,900 reported)"
+        }
+      ],
+      "statuses": [],
+      "why": "Israeli strikes on a uranium plant, a heavy-water complex and industry: war strikes on nuclear sites (hit since the first week), not nuclear talks."
+    },
+    {
+      "slug": "trump-slams-nato-as-us-israeli-strikes-hit-iran",
+      "date": "2026-03-28",
+      "title": "Trump slams NATO as US-Israeli strikes hit Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The same day's strikes on Iran's nuclear and energy sites and Trump's NATO criticism over the war."
+    },
+    {
+      "slug": "twelve-wounded-at-saudi-air-base-in-iranian-attack",
+      "date": "2026-03-28",
+      "title": "Twelve wounded at Saudi air base in Iranian attack",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "An Iranian strike on US forces at a Saudi base; a casualty update."
+    },
+    {
+      "slug": "millions-flee-after-strikes-disrupt-aid-routes",
+      "date": "2026-03-28",
+      "title": "Millions flee after strikes disrupt aid routes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Splits its subject between strikes on Iran's health services and Lebanon's displacement (optional in the Lebanon key too)."
+    },
+    {
+      "slug": "houthis-strike-israel-as-us-marines-arrive",
+      "date": "2026-03-29",
+      "title": "Houthis strike Israel as US Marines arrive",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [],
+      "statuses": [],
+      "why": "Headline is the Houthis' first strikes on Israel (the Houthi front is out), but it frames them as widening the Iran war and gives the US Marine buildup its own strand."
+    },
+    {
+      "slug": "senate-fails-to-limit-us-role-in-iran-conflict",
+      "date": "2026-03-29",
+      "title": "Senate fails to limit US role in Iran conflict",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Another failed war-powers vote: Congress on the war itself."
+    },
+    {
+      "slug": "house-democrats-demand-hearing-after-us-casualties-and-missile-strikes",
+      "date": "2026-03-30",
+      "title": "House Democrats demand hearing after US casualties and missile strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        { "figure": "us_troops_killed", "value": 13, "approx": "exact", "asOf": "2026-03-30", "matches": true, "countedAs": null, "quote": "13 US dead" },
+        {
+          "figure": "iran_deaths",
+          "value": 1000,
+          "approx": "at_least",
+          "asOf": "2026-03-30",
+          "matches": false,
+          "countedAs": "civilian deaths with no stated place",
+          "quote": "over 1,000 civilian deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Congressional oversight of the US campaign, with US and civilian casualty counts."
+    },
+    {
+      "slug": "pakistan-offers-to-host-us-iran-talks-amid-troop-buildup",
+      "date": "2026-03-30",
+      "title": "Pakistan offers to host US–Iran talks amid troop buildup",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mediation to end the war and fears of a US ground assault."
+    },
+    {
+      "slug": "security-council-condemns-iran-missile-and-drone-strikes",
+      "date": "2026-03-31",
+      "title": "Security Council condemns Iran missile and drone strikes",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "response",
+      "values": [],
+      "statuses": [],
+      "why": "Security Council Resolution 2817 on Iran's strikes on its Gulf neighbors: a formal international response to the war."
+    },
+    {
+      "slug": "trump-warns-of-destroying-iran-s-energy-infrastructure",
+      "date": "2026-03-31",
+      "title": "Trump warns of destroying Iran’s energy infrastructure",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A threat against Iran's power, oil and water sites with Hormuz as the lever; repeats the earlier power-plant threats (Hormuz optional)."
+    },
+    {
+      "slug": "iran-strikes-tanker-near-dubai-after-trump-threats",
+      "date": "2026-04-01",
+      "title": "Iran strikes tanker near Dubai after Trump threats",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "An attack on a merchant tanker, but off Dubai and \"part of multiple missile and drone attacks\" amid US threats against Iran's energy sites: split between shipping and the war (Hormuz optional)."
+    },
+    {
+      "slug": "diplomacy-stalls-as-strikes-and-tanker-attack-disrupt-oil-flows",
+      "date": "2026-04-02",
+      "title": "Diplomacy stalls as strikes and tanker attack disrupt oil flows",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "War diary: US-Israeli strikes, Iranian retaliation and stalled talks; the shipping strand is secondary (Hormuz optional)."
+    },
+    {
+      "slug": "u-s-and-israel-strikes-kill-supreme-leader-spark-wider-war",
+      "date": "2026-04-02",
+      "title": "U.S. and Israel strikes kill supreme leader, spark wider war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Longform on the decapitation strike and the widening war, a month after the killing."
+    },
+    {
+      "slug": "vance-told-pakistan-intermediaries-us-open-to-ceasefire-warned-strikes",
+      "date": "2026-04-02",
+      "title": "Vance told Pakistan intermediaries US open to ceasefire, warned strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US ceasefire signals and strike threats through Pakistan: talks to end the war."
+    },
+    {
+      "slug": "us-and-israel-strike-iran-amid-heated-legal-debate",
+      "date": "2026-04-02",
+      "title": "US and Israel strike Iran amid heated legal debate",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Opinion on whether the strikes break the ban on force: about the war's legality, but mainly international law."
+    },
+    {
+      "slug": "trump-vows-extremely-hard-strikes-as-war-continues",
+      "date": "2026-04-03",
+      "title": "Trump vows 'extremely hard' strikes as war continues",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Escalation threats and claims of a crippled Iranian military."
+    },
+    {
+      "slug": "experts-warn-us-strikes-threaten-iran-s-power-and-water",
+      "date": "2026-04-03",
+      "title": "Experts warn US strikes threaten Iran's power and water",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 175,
+          "approx": "exact",
+          "asOf": "2026-04-03",
+          "matches": false,
+          "countedAs": "deaths in one strike (a girls' school) only",
+          "quote": "Iran says a girls' school strike killed 175"
+        }
+      ],
+      "statuses": [],
+      "why": "Legal experts on US strikes and infrastructure threats, and civilian deaths in Iran."
+    },
+    {
+      "slug": "red-cross-strikes-on-schools-power-may-be-war-crimes",
+      "date": "2026-04-03",
+      "title": "Red Cross: strikes on schools, power may be war crimes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 175,
+          "approx": "exact",
+          "asOf": "2026-04-03",
+          "matches": false,
+          "countedAs": "pupils killed in one missile strike in Minab only",
+          "quote": "a missile strike in Minab killed 175 pupils"
+        }
+      ],
+      "statuses": [],
+      "why": "Civilian harm from the strikes and the Red Cross's war-crimes warning."
+    },
+    {
+      "slug": "iran-strikes-amazon-facilities-in-gulf",
+      "date": "2026-04-03",
+      "title": "Iran strikes Amazon facilities in Gulf",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's strikes on Gulf data centers are part of the war, but the piece is mainly about cloud and AI infrastructure as a target."
+    },
+    {
+      "slug": "us-vows-heavier-strikes-threatens-bridges-and-power-plants",
+      "date": "2026-04-04",
+      "title": "US vows heavier strikes, threatens bridges and power plants",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A US threat against Iranian infrastructure (a Hormuz near miss)."
+    },
+    {
+      "slug": "who-over-20-strikes-hit-iranian-medical-sites",
+      "date": "2026-04-04",
+      "title": "WHO: over 20 strikes hit Iranian medical sites",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 9,
+          "approx": "at_least",
+          "asOf": "2026-04-04",
+          "matches": false,
+          "countedAs": "deaths in WHO-verified attacks on health facilities only",
+          "quote": "with at least nine deaths"
+        }
+      ],
+      "statuses": [],
+      "why": "Humanitarian harm in Iran from the strikes."
+    },
+    {
+      "slug": "pakistan-led-bid-to-bridge-us-and-tehran-stalls",
+      "date": "2026-04-04",
+      "title": "Pakistan-led bid to bridge US and Tehran stalls",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Stalled mediation to end the war."
+    },
+    {
+      "slug": "trump-and-israel-threaten-attacks-on-iran-s-energy-sites",
+      "date": "2026-04-05",
+      "title": "Trump and Israel threaten attacks on Iran's energy sites",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [],
+      "why": "Two US warplanes shot down and an airman missing, the first such loss, with US-Israeli threats against energy sites (Hormuz optional)."
+    },
+    {
+      "slug": "iran-fires-missiles-at-israel-and-kuwait-after-trump-threat",
+      "date": "2026-04-06",
+      "title": "Iran fires missiles at Israel and Kuwait after Trump threat",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iranian retaliation on Israel and a Gulf state, with strikes near Bushehr."
+    },
+    {
+      "slug": "trump-sets-final-deadline-threatens-strikes-on-iran",
+      "date": "2026-04-07",
+      "title": "Trump sets final deadline, threatens strikes on Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The ultimatum, infrastructure threats, Iran's proposal to end hostilities and an Israeli strike on South Pars (Hormuz optional)."
+    },
+    {
+      "slug": "trump-warns-of-one-night-strike-as-major-attacks-loom",
+      "date": "2026-04-07",
+      "title": "Trump warns of one-night strike as major attacks loom",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Escalation threats and the rescue of a downed airman inside Iran."
+    },
+    {
+      "slug": "us-and-iran-meet-as-oil-disruption-roils-markets",
+      "date": "2026-04-11",
+      "title": "US and Iran meet as oil disruption roils markets",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [],
+      "why": "First story to report the 7 April ceasefire that halted US and Israeli strikes (none published 8-10 April) and the first direct talks; oil is secondary (Hormuz optional, a Lebanon near miss)."
+    },
+    {
+      "slug": "major-powers-flout-protections-for-civilians",
+      "date": "2026-04-11",
+      "title": "Major powers flout protections for civilians",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "HRW opinion on the US, Israel and Iran flouting civilian protections in this war; mainly about humanitarian law, and it covers Lebanon too."
+    },
+    {
+      "slug": "trump-threatens-to-destroy-iran-s-desalination-plants",
+      "date": "2026-04-12",
+      "title": "Trump threatens to destroy Iran’s desalination plants",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A newsletter roundup whose lead item is the desalination threat; its other items are unrelated."
+    },
+    {
+      "slug": "trump-announces-two-week-ceasefire-as-israel-bombs-lebanon",
+      "date": "2026-04-14",
+      "title": "Trump announces two-week ceasefire as Israel bombs Lebanon",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of the 7 April ceasefire and its strain, later than the 11 April report; Lebanon is the second strand (Lebanon optional)."
+    },
+    {
+      "slug": "trump-orders-blockade-warns-china-and-iran",
+      "date": "2026-04-14",
+      "title": "Trump orders blockade, warns China and Iran",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: mainly the naval blockade of the strait, but the only story to report that the first peace talks failed, with vows of strikes on Iranian infrastructure that \"risks blowing up a fragile ceasefire\" (a Hormuz must)."
+    },
+    {
+      "slug": "mediators-pursue-ceasefire-while-iran-nuclear-dispute-persists",
+      "date": "2026-04-17",
+      "title": "Mediators pursue ceasefire while Iran nuclear dispute persists",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Talks to extend the ceasefire; nuclear suspension is a term in talks to end the war (a near miss in both neighbor keys)."
+    },
+    {
+      "slug": "u-s-iran-talks-progress-as-oil-route-stays-closed",
+      "date": "2026-04-20",
+      "title": "U.S.-Iran talks progress as oil route stays closed",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Talks to end the war as the ceasefire nears expiry; control of the strait is one term (Hormuz optional)."
+    },
+    {
+      "slug": "ceasefire-masks-economic-ruin-and-fear-of-crackdown",
+      "date": "2026-04-20",
+      "title": "Ceasefire masks economic ruin and fear of crackdown",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "War damage and ruin inside Iran under the ceasefire, split with fear of domestic repression."
+    },
+    {
+      "slug": "us-seizes-iranian-ship-as-ceasefire-talks-falter",
+      "date": "2026-04-21",
+      "title": "US seizes Iranian ship as ceasefire talks falter",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: a Hormuz must (ship seizure, blockade), but half its subject is this war's ceasefire talks faltering and Iran refusing further talks."
+    },
+    {
+      "slug": "trump-extends-ceasefire-while-keeping-iranian-ports-blockaded",
+      "date": "2026-04-22",
+      "title": "Trump extends ceasefire while keeping Iranian ports blockaded",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [],
+      "why": "The ceasefire is extended indefinitely with conditions for talks; the blockade is secondary (Hormuz optional)."
+    },
+    {
+      "slug": "islamabad-brokered-talks-halt-direct-u-s-iran-fighting",
+      "date": "2026-04-24",
+      "title": "Islamabad brokered talks halt direct U.S.–Iran fighting",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Credits the talks with pausing the fighting, but its main subject is why Pakistan mediates."
+    },
+    {
+      "slug": "trump-scraps-talks-as-iran-and-us-remain-deadlocked",
+      "date": "2026-04-27",
+      "title": "Trump scraps talks as Iran and US remain deadlocked",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [],
+      "why": "The US cancels envoy visits and the talks to end the war break down under a fragile ceasefire."
+    },
+    {
+      "slug": "us-israeli-strikes-damage-hospitals-and-medicine-factories-in-iran",
+      "date": "2026-04-29",
+      "title": "US–Israeli strikes damage hospitals and medicine factories in Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 3636,
+          "approx": "at_least",
+          "asOf": "2026-04-29",
+          "matches": true,
+          "countedAs": null,
+          "quote": "at least 3,636 deaths"
+        },
+        {
+          "figure": "iran_deaths",
+          "value": 1700,
+          "approx": "about",
+          "asOf": "2026-04-29",
+          "matches": false,
+          "countedAs": "civilians among the dead in Iran only",
+          "quote": "about 1,700 civilians"
+        }
+      ],
+      "statuses": [],
+      "why": "Deaths and damage inside Iran from the campaign, added up; not a new turn."
+    },
+    {
+      "slug": "trump-warns-iran-consults-oil-firms-on-months-long-export-squeeze",
+      "date": "2026-04-30",
+      "title": "Trump warns Iran, consults oil firms on months-long export squeeze",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mostly the naval squeeze on Iran's oil exports (out), with a war strand of its own: Trump pressing for a deal, Iran threatening retaliation and the war's $25bn cost."
+    },
+    {
+      "slug": "white-house-says-iran-hostilities-have-terminated",
+      "date": "2026-05-03",
+      "title": "White House says Iran hostilities have terminated",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [],
+      "why": "The US formally tells Congress the hostilities have \"terminated\" as the 60-day War Powers clock runs out; not an end event, since strikes resume on 10 May."
+    },
+    {
+      "slug": "trump-hurt-by-prolonged-iran-war-and-oil-shock",
+      "date": "2026-05-03",
+      "title": "Trump hurt by prolonged Iran war and oil shock",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Where the war stands after two months: no exit, Iran's offer rejected and renewed strikes weighed."
+    },
+    {
+      "slug": "war-spikes-prices-and-wipes-out-millions-of-jobs",
+      "date": "2026-05-03",
+      "title": "War spikes prices and wipes out millions of jobs",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's economic collapse, blamed on the war and bombardment but also on sanctions, the naval blockade and the internet shutdown (\"Mixed causes reduce attribution\"): split with themes that are out."
+    },
+    {
+      "slug": "iran-ceasefire-follows-rapid-u-s-arms-depletion",
+      "date": "2026-05-03",
+      "title": "Iran ceasefire follows rapid U.S. arms depletion",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "About US missile stocks, but it recounts how the 40-day war was fought and ties the 7 April ceasefire to interceptor exhaustion."
+    },
+    {
+      "slug": "us-bypasses-congress-approves-8-6-billion-middle-east-weapons-deal",
+      "date": "2026-05-03",
+      "title": "US bypasses Congress, approves $8.6 billion Middle East weapons deal",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "An arms-sales decision justified by the war emergency to restock Israel and the Gulf states, not about the war's course."
+    },
+    {
+      "slug": "us-and-iran-clash-over-gulf-oil-route",
+      "date": "2026-05-05",
+      "title": "US and Iran clash over Gulf oil route",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: the fight is over the strait (a Hormuz must), but it is also the first US-Iran exchange of strikes after the 7 April truce, with Iran hitting a UAE oil port."
+    },
+    {
+      "slug": "us-hits-iranian-military-sites-after-attacks",
+      "date": "2026-05-10",
+      "title": "US hits Iranian military sites after attacks",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "US strikes on missile, drone and command sites in Iran after attacks on US forces, which Iran calls a ceasefire violation: strikes on Iranian soil resume during the truce."
+    },
+    {
+      "slug": "us-rejects-iran-peace-offer-as-tensions-rise",
+      "date": "2026-05-11",
+      "title": "US rejects Iran peace offer as tensions rise",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [],
+      "why": "The talks break down when the US publicly rejects Iran's reply; threats from Iran and Israel follow (Hormuz optional)."
+    },
+    {
+      "slug": "iran-rejects-us-terms-hormuz-shipping-nearly-halted",
+      "date": "2026-05-14",
+      "title": "Iran rejects US terms, Hormuz shipping nearly halted",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Trump calls the ceasefire \"on life support\" after Tehran rejects US terms; continues the 11 May breakdown, the Hormuz strand secondary (Hormuz optional)."
+    },
+    {
+      "slug": "house-vote-leaves-trump-free-to-keep-striking-iran",
+      "date": "2026-05-15",
+      "title": "House vote leaves Trump free to keep striking Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A tied House vote on halting US military action against Iran; the third close vote, changing nothing on the ground."
+    },
+    {
+      "slug": "trump-says-he-paused-attack-signals-possible-iran-deal",
+      "date": "2026-05-20",
+      "title": "Trump says he paused attack, signals possible Iran deal",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [],
+      "why": "A decision to pause renewed strikes after Iran's peace proposal, with a threat of a full assault if talks fail."
+    },
+    {
+      "slug": "uae-s-barakah-plant-back-online-after-gulf-strike",
+      "date": "2026-05-20",
+      "title": "UAE's Barakah plant back online after Gulf strike",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Damage in a Gulf state from a wartime strike, but the story is the restart and our text never names the attacker."
+    },
+    {
+      "slug": "khamenei-orders-enriched-uranium-to-remain-in-iran",
+      "date": "2026-05-23",
+      "title": "Khamenei orders enriched uranium to remain in Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Khamenei's order hardens Iran's position in the peace talks and \"could ... complicate efforts to end the US‑Israeli war on Iran\": uranium as a term of the talks to end the war."
+    },
+    {
+      "slug": "u-s-says-spain-denied-base-access-questions-alliance-membership",
+      "date": "2026-05-23",
+      "title": "U.S. says Spain denied base access, questions alliance membership",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mainly a US-NATO rift, caused by allies denying base access for the Iran war."
+    },
+    {
+      "slug": "us-and-iran-report-progress-toward-ending-gulf-war",
+      "date": "2026-05-24",
+      "title": "US and Iran report progress toward ending Gulf war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Talks to end the war on Iran's 14-point proposal; progress, not a deal (Hormuz optional)."
+    },
+    {
+      "slug": "us-strikes-hit-southern-iran-during-qatar-peace-talks",
+      "date": "2026-05-26",
+      "title": "US strikes hit southern Iran during Qatar peace talks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US strikes on missile sites and mine-laying boats in Iran during the Qatar talks; another round of the tit-for-tat begun on 10 May."
+    },
+    {
+      "slug": "trump-must-approve-60-day-us-iran-truce-amid-strikes",
+      "date": "2026-05-29",
+      "title": "Trump must approve 60-day US–Iran truce amid strikes",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [],
+      "why": "Negotiators reach a memorandum on a 60-day truce extension, while strikes on Bandar Abbas and Iranian attacks test it."
+    },
+    {
+      "slug": "arab-states-restrict-us-military-access-after-regional-strikes",
+      "date": "2026-05-29",
+      "title": "Arab states restrict US military access after regional strikes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Gulf damage and Saudi limits on US basing for the war are a major strand, but the Gulf economic outlook dominates."
+    },
+    {
+      "slug": "u-s-strikes-iranian-radar-after-drones-threatened-shipping",
+      "date": "2026-06-06",
+      "title": "U.S. strikes Iranian radar after drones threatened shipping",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US strikes on Iranian coastal radar after drone shoot-downs, complicating the talks; another tit-for-tat round (Hormuz optional)."
+    },
+    {
+      "slug": "us-says-missiles-intercepted-as-talks-stall",
+      "date": "2026-06-06",
+      "title": "US says missiles intercepted as talks stall",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Renewed Iranian missile and drone attacks, US strikes on Qeshm and stalled talks; Lebanon is context (a Lebanon near miss)."
+    },
+    {
+      "slug": "trump-s-ceasefires-haven-t-stopped-cross-border-strikes",
+      "date": "2026-06-06",
+      "title": "Trump's ceasefires haven't stopped cross-border strikes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A roundup of three fraying truces (Gaza, Lebanon, Iran); the US-Iran strikes are one strand (Lebanon optional)."
+    },
+    {
+      "slug": "us-and-iran-exchange-strikes-as-missiles-cross-borders",
+      "date": "2026-06-07",
+      "title": "US and Iran exchange strikes as missiles cross borders",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The same exchange as the 6 June radar story, reported a day later."
+    },
+    {
+      "slug": "trump-orders-strikes-after-helicopter-downing",
+      "date": "2026-06-10",
+      "title": "Trump orders strikes after helicopter downing",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "A US Apache is shot down and Trump orders strikes inside Iran just as a deal was reported close."
+    },
+    {
+      "slug": "trump-says-strikes-will-resume-as-sanctions-hit-iran-networks",
+      "date": "2026-06-11",
+      "title": "Trump says strikes will resume as sanctions hit Iran networks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Trump says strikes will resume amid the exchange after the helicopter downing; sanctions and IAEA figures are secondary."
+    },
+    {
+      "slug": "us-hits-key-facilities-in-iran-during-renewed-attacks",
+      "date": "2026-06-11",
+      "title": "US hits key facilities in Iran during renewed attacks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Hegseth confirms repeated strikes on Iranian facilities as pressure for a deal; the round begun on 10 June."
+    },
+    {
+      "slug": "iran-strikes-hit-us-allies-raise-shipping-and-oil-fears",
+      "date": "2026-06-12",
+      "title": "Iran strikes hit US allies, raise shipping and oil fears",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The GCC condemns Iran's retaliatory strikes on Bahrain, Kuwait and Jordan; same round, Hormuz fears secondary."
+    },
+    {
+      "slug": "us-and-iran-agree-to-end-war-and-reopen-hormuz",
+      "date": "2026-06-18",
+      "title": "US and Iran agree to end war and reopen Hormuz",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: the deal to end the war (\"immediate and permanent termination of military operations on all fronts\") leads the title, but reopening Hormuz is a headline term and the Hormuz key holds it as must; later strikes break the deal."
+    },
+    {
+      "slug": "ceasefire-ends-strikes-and-reopens-key-shipping-lane",
+      "date": "2026-06-18",
+      "title": "Ceasefire ends strikes and reopens key shipping lane",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: the UN welcomes the 18 June agreement for a permanent ceasefire that also reopens Hormuz, its subject split equally (a Hormuz must)."
+    },
+    {
+      "slug": "us-iran-reach-provisional-deal-to-reopen-strait-of-hormuz",
+      "date": "2026-06-18",
+      "title": "US, Iran reach provisional deal to reopen Strait of Hormuz",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 7000,
+          "approx": "at_least",
+          "asOf": "2026-06-18",
+          "matches": false,
+          "countedAs": "all war dead with no stated place (may include Lebanon, Israel and the Gulf)",
+          "quote": "The conflict left more than 7,000 dead"
+        }
+      ],
+      "statuses": [],
+      "why": "Dual fit: the same 18 June deal, a provisional peace ending nearly four months of war, but the title leads with Hormuz (a Hormuz must)."
+    },
+    {
+      "slug": "u-s-and-iran-agree-60-day-roadmap-open-shipping-lane",
+      "date": "2026-06-23",
+      "title": "U.S. and Iran agree 60-day roadmap, open shipping lane",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: a 60-day roadmap to a final deal ending the war, alongside a line for reopening Hormuz (a Hormuz must)."
+    },
+    {
+      "slug": "us-and-iran-clash-over-strait-tolls-and-inspections",
+      "date": "2026-06-24",
+      "title": "US and Iran clash over Strait tolls and inspections",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: talks on the final deal to end the war, but its sticking points are Hormuz tolls and nuclear inspections (a Hormuz must)."
+    },
+    {
+      "slug": "u-s-hits-iranian-missile-and-drone-sites-after-tanker-attack",
+      "date": "2026-06-27",
+      "title": "U.S. hits Iranian missile and drone sites after tanker attack",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "First US strikes on Iran after the June ceasefire memorandum; the tanker attack is only the trigger (Hormuz optional)."
+    },
+    {
+      "slug": "irgc-strikes-us-forces-in-kuwait-and-bahrain",
+      "date": "2026-06-28",
+      "title": "IRGC strikes US forces in Kuwait and Bahrain",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's retaliation on US bases for the strikes a day earlier; same flare-up."
+    },
+    {
+      "slug": "us-launches-second-night-of-strikes-on-iran",
+      "date": "2026-06-29",
+      "title": "US launches second night of strikes on Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A second night of US strikes threatening the ceasefire; same flare-up (Hormuz optional)."
+    },
+    {
+      "slug": "us-and-iran-pause-strikes-and-agree-to-doha-talks",
+      "date": "2026-06-30",
+      "title": "US and Iran pause strikes and agree to Doha talks",
+      "join": "optional",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: a pause in mutual strikes ends the late-June flare-up, but the agreed talks are about Hormuz shipping security (a Hormuz must)."
+    },
+    {
+      "slug": "shehbaz-to-visit-iran-turkiye-to-press-ceasefire-deal",
+      "date": "2026-06-30",
+      "title": "Shehbaz to visit Iran, Turkiye to press ceasefire deal",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Pakistani mediation of the Islamabad memorandum to end the war amid fresh strikes."
+    },
+    {
+      "slug": "pakistan-brokers-iran-u-s-roadmap-to-reopen-strait",
+      "date": "2026-07-02",
+      "title": "Pakistan brokers Iran–U.S. roadmap to reopen Strait",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of the Islamabad memorandum, a roadmap both to end the war and to reopen Hormuz (Hormuz optional)."
+    },
+    {
+      "slug": "khamenei-mourned-by-millions-as-trump-vows-calm",
+      "date": "2026-07-05",
+      "title": "Khamenei mourned by millions as Trump vows calm",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The funeral of the leader killed on 28 February, Trump's pledge of no strikes during it and talks going on."
+    },
+    {
+      "slug": "mass-rally-risks-regional-war-as-strikes-continue",
+      "date": "2026-07-06",
+      "title": "Mass rally risks regional war as strikes continue",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A liveblog split between Khamenei's funeral procession and Israeli strikes in Gaza and southern Lebanon (Lebanon optional)."
+    },
+    {
+      "slug": "us-strikes-iranian-air-defenses-after-tanker-attacks",
+      "date": "2026-07-08",
+      "title": "US strikes Iranian air defenses after tanker attacks",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "Heavy US strikes inside Iran end the 30 June pause, which Iran calls a breach; the tanker attacks are the trigger (Hormuz optional)."
+    },
+    {
+      "slug": "us-strikes-iran-after-trump-declares-ceasefire-over",
+      "date": "2026-07-09",
+      "title": "US strikes Iran after Trump declares ceasefire over",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [],
+      "why": "Trump formally declares the provisional ceasefire over as the US strikes Iran (a Hormuz near miss)."
+    },
+    {
+      "slug": "u-s-hits-dozens-of-iranian-targets-after-revoking-oil-license",
+      "date": "2026-07-09",
+      "title": "U.S. hits dozens of Iranian targets after revoking oil license",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US strikes on more than 80 Iranian targets; scales up the strikes resumed on 8 July."
+    },
+    {
+      "slug": "us-launches-at-least-90-strikes-as-funerals-heighten-tensions",
+      "date": "2026-07-10",
+      "title": "US launches at least 90 strikes as funerals heighten tensions",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "An expert interview on about 90 US strikes during Khamenei's funerals and Iran's retaliation."
+    },
+    {
+      "slug": "iran-and-us-clash-over-shipping-rules-sparking-strikes",
+      "date": "2026-07-10",
+      "title": "Iran and US clash over shipping rules, sparking strikes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: how a dispute over the memorandum's Hormuz navigation terms grew into renewed fighting (a Hormuz must)."
+    },
+    {
+      "slug": "iran-hits-us-military-targets-in-gulf-after-us-strikes",
+      "date": "2026-07-11",
+      "title": "Iran hits US military targets in Gulf after US strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 14,
+          "approx": "exact",
+          "asOf": "2026-07-11",
+          "matches": false,
+          "countedAs": "killed by the July round of US strikes only, not the war's total",
+          "quote": "US strikes previously killed 14 people"
+        }
+      ],
+      "statuses": [],
+      "why": "Iranian strikes on US bases in the Gulf that \"collapsed a three-week ceasefire\"; continues the July round."
+    },
+    {
+      "slug": "iran-expands-strikes-across-gulf-as-u-s-launches-counterattacks",
+      "date": "2026-07-13",
+      "title": "Iran expands strikes across Gulf as U.S. launches counterattacks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Heavy US-Iran exchanges reach Qatar, a mediator, and the UAE, Gulf states hit since 2 March, two days after Iran's strikes on US bases in the Gulf; the closure is a strand (Hormuz optional)."
+    },
+    {
+      "slug": "trump-warns-he-ll-strike-pickaxe-mountain",
+      "date": "2026-07-14",
+      "title": "Trump warns he'll strike Pickaxe Mountain",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Trump threatens to strike a buried Iranian nuclear site while nightly US strikes go on: a threat to widen the strikes."
+    },
+    {
+      "slug": "us-hits-iran-warns-of-future-power-plant-and-bridge-attacks",
+      "date": "2026-07-15",
+      "title": "US hits Iran, warns of future power-plant and bridge attacks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A fourth day of US strikes, Iranian and proxy counterattacks and threats against power plants and bridges (Hormuz optional)."
+    },
+    {
+      "slug": "us-strikes-iranian-coastal-defenses-after-naval-blockade-resumed",
+      "date": "2026-07-16",
+      "title": "US strikes Iranian coastal defenses after naval blockade resumed",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US strikes on coastal defenses and missile sites and Iran's \"existential war\" warning (Hormuz optional)."
+    },
+    {
+      "slug": "us-strikes-iran-after-hormuz-blockade-us-bases-targeted-abroad",
+      "date": "2026-07-16",
+      "title": "US strikes Iran after Hormuz blockade; US bases targeted abroad",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: a third night of US strikes and IRGC attacks on US facilities in Bahrain lead, with the blockade, the 20% fee and tanker hits as triggers (a Hormuz must)."
+    },
+    {
+      "slug": "trump-expands-strikes-risks-wider-middle-east-war",
+      "date": "2026-07-17",
+      "title": "Trump expands strikes, risks wider Middle East war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of Trump widening the air campaign and threatening energy sites after the ceasefire collapsed (Hormuz optional)."
+    },
+    {
+      "slug": "us-hits-airport-bridges-and-railway-in-southern-iran",
+      "date": "2026-07-17",
+      "title": "US hits airport, bridges and railway in southern Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 2,
+          "approx": "at_least",
+          "asOf": "2026-07-17",
+          "matches": false,
+          "countedAs": "killed in the strikes on Bandar Abbas transport sites only",
+          "quote": "killing at least two and wounding four"
+        }
+      ],
+      "statuses": [],
+      "why": "US strikes on an airport, rail station and bridges in southern Iran, with casualties and retaliation (a Hormuz near miss)."
+    },
+    {
+      "slug": "us-conducts-seventh-night-of-strikes-on-iran",
+      "date": "2026-07-18",
+      "title": "US conducts seventh night of strikes on Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A seventh night of strikes and Iran's threat to shift to full offensive operations."
+    },
+    {
+      "slug": "us-strikes-bridges-as-iran-hits-kuwait-power-plant",
+      "date": "2026-07-18",
+      "title": "US strikes bridges as Iran hits Kuwait power plant",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US and Iranian strikes on civilian infrastructure, including a Kuwaiti power and desalination plant."
+    },
+    {
+      "slug": "us-strikes-iranian-bases-hormuz-shipping-halts",
+      "date": "2026-07-19",
+      "title": "US strikes Iranian bases, Hormuz shipping halts",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Daily US strikes on coastal and logistics sites and Iranian strikes on US bases lead; the halted shipping is a strand (Hormuz optional)."
+    },
+    {
+      "slug": "us-launches-strikes-after-troops-killed",
+      "date": "2026-07-20",
+      "title": "US launches strikes after troops killed",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [
+        {
+          "figure": "us_troops_killed",
+          "value": 17,
+          "approx": "at_least",
+          "asOf": "2026-07-20",
+          "matches": true,
+          "countedAs": null,
+          "quote": "at least 17 American fatalities"
+        }
+      ],
+      "statuses": [],
+      "why": "US service members killed in this round and US retaliatory strikes, with a hit on an unfinished nuclear plant: a marked escalation."
+    },
+    {
+      "slug": "mediators-deliver-proposals-as-strikes-stall-hormuz-shipping",
+      "date": "2026-07-22",
+      "title": "Mediators deliver proposals as strikes stall Hormuz shipping",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran receives mediators' proposals while strikes go on and the interim deal has collapsed (Hormuz optional)."
+    },
+    {
+      "slug": "un-chief-urges-diplomacy-as-us-and-iran-escalate-attacks",
+      "date": "2026-07-22",
+      "title": "UN chief urges diplomacy as US and Iran escalate attacks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Guterres calls for diplomacy and an end to attacks on civilian infrastructure as the exchanges escalate."
+    },
+    {
+      "slug": "iran-strike-kills-three-us-soldiers-in-jordan",
+      "date": "2026-07-23",
+      "title": "Iran strike kills three US soldiers in Jordan",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "us_troops_killed",
+          "value": 18,
+          "approx": "exact",
+          "asOf": "2026-07-23",
+          "matches": true,
+          "countedAs": null,
+          "quote": "The US has 18 military fatalities"
+        }
+      ],
+      "statuses": [],
+      "why": "An Iranian strike kills three US soldiers in Jordan, after US deaths were reported on 20 July."
+    },
+    {
+      "slug": "u-s-bombs-iranian-military-sites-after-repeated-ship-attacks",
+      "date": "2026-07-23",
+      "title": "U.S. bombs Iranian military sites after repeated ship attacks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A twelfth straight night of US strikes inside Iran; ship attacks are the trigger (Hormuz optional)."
+    },
+    {
+      "slug": "us-missiles-strike-targets-as-escalation-threat-rises",
+      "date": "2026-07-25",
+      "title": "US missiles strike targets as escalation threat rises",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US missile strikes across Iran after the interim truce collapsed and Trump's threat of heavier strikes."
+    },
+    {
+      "slug": "u-s-pause-ends-nightly-strikes-but-iran-stays-ready",
+      "date": "2026-07-27",
+      "title": "U.S. pause ends nightly strikes but Iran stays ready",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [],
+      "why": "The US halts two weeks of nightly strikes and Iran says it will hold its attacks while the pause lasts."
+    },
+    {
+      "slug": "strikes-paused-for-talks-after-shipping-attacks",
+      "date": "2026-07-28",
+      "title": "Strikes paused for talks after shipping attacks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A third night of the pause for talks; same pause as 27 July."
+    },
+    {
+      "slug": "us-saudi-strikes-kill-20-us-launches-strikes-inside-iran",
+      "date": "2026-07-30",
+      "title": "US-Saudi strikes kill 20; US launches strikes inside Iran",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "spread",
+      "values": [],
+      "statuses": [],
+      "why": "Joint US-Saudi strikes on Iran-linked militias in Iraq, Iranian missiles and resumed US strikes inside Iran end the pause and bring Saudi Arabia into the fighting."
+    },
+    {
+      "slug": "us-iran-trade-strikes-as-jordan-and-kuwait-are-hit",
+      "date": "2026-08-01",
+      "title": "US, Iran trade strikes as Jordan and Kuwait are hit",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Fresh barrages, a death in Kuwait and casualties on Qeshm; the fighting resumed on 30 July."
+    },
+    {
+      "slug": "us-embassies-tell-citizens-to-consider-leaving-region",
+      "date": "2026-08-02",
+      "title": "US embassies tell citizens to consider leaving region",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US embassies in more than ten countries urge Americans to leave over unpredictable Iranian attacks."
+    },
+    {
+      "slug": "trump-says-talks-start-monday-with-no-deadline",
+      "date": "2026-08-04",
+      "title": "Trump says talks start Monday with no deadline",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Trump announces talks with Iran while Israel threatens to strike again."
+    },
+    {
+      "slug": "trump-says-tehran-not-ready-to-make-the-right-deal",
+      "date": "2026-08-25",
+      "title": "Trump says Tehran not ready to make the right deal",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Trump says Tehran is not ready for a deal to end the six-month war; the planned sanctions are a strand."
+    },
+    {
+      "slug": "iran-says-diplomacy-possible-if-us-drops-pressure",
+      "date": "2026-08-29",
+      "title": "Iran says diplomacy possible if US drops pressure",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's terms for diplomacy six months into the war, noting that a ceasefire has eased the worst fighting."
+    },
+    {
+      "slug": "us-hits-irgc-targets-iran-vows-heavy-retaliation",
+      "date": "2026-09-02",
+      "title": "US hits IRGC targets; Iran vows heavy retaliation",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "US strikes on IRGC targets inside Iran and Iranian retaliation on US bases after the August ceasefire had eased the fighting: a resumption."
+    },
+    {
+      "slug": "trump-warns-of-largest-strike-as-us-bombs-iran",
+      "date": "2026-09-02",
+      "title": "Trump warns of largest strike as US bombs Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Trump threatens to all but wipe out Iran as US bombing resumes; same event and timestamp as the IRGC-targets story."
+    },
+    {
+      "slug": "us-destroys-three-iran-linked-oil-ships-after-attacks",
+      "date": "2026-09-06",
+      "title": "US destroys three Iran-linked oil ships after attacks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A US-Iran naval clash after attacks on US ships, but its targets are oil tankers, split with attacks on merchant shipping (Hormuz optional)."
+    },
+    {
+      "slug": "us-energy-secretary-says-iran-nuclear-deal-may-fail",
+      "date": "2026-09-07",
+      "title": "US energy secretary says Iran nuclear deal may fail",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A nuclear-deal remark framed as a turn from diplomacy to strikes amid resumed attacks: split."
+    },
+    {
+      "slug": "un-finds-us-likely-killed-150-civilians-at-iranian-school",
+      "date": "2026-09-18",
+      "title": "UN finds US likely killed 150 civilians at Iranian school",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 150,
+          "approx": "about",
+          "asOf": "2026-09-18",
+          "matches": false,
+          "countedAs": "deaths in US strikes on one school and a sports hall only (the UN's finding)",
+          "quote": "killing about 150 people"
+        }
+      ],
+      "statuses": [],
+      "why": "A UN finding on civilian deaths from an earlier US strike in Iran: the war's harm and accountability."
+    },
+    {
+      "slug": "trump-says-talks-with-iran-have-momentum-threatens-annihilation",
+      "date": "2026-09-23",
+      "title": "Trump says talks with Iran have momentum, threatens annihilation",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Talks to end the war and threats to strike Iran."
+    },
+    {
+      "slug": "pezeshkian-rejects-us-threats-at-un-vows-resistance",
+      "date": "2026-09-24",
+      "title": "Pezeshkian rejects US threats at UN, vows resistance",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's president on the war at the UN, refusing surrender."
+    },
+    {
+      "slug": "congress-faces-pressure-over-trump-s-iran-campaign",
+      "date": "2026-09-25",
+      "title": "Congress faces pressure over Trump’s Iran campaign",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "iran_deaths",
+          "value": 150,
+          "approx": "at_least",
+          "asOf": "2026-09-25",
+          "matches": false,
+          "countedAs": "deaths in one girls' school strike only",
+          "quote": "killed more than 150 people"
+        }
+      ],
+      "statuses": [],
+      "why": "An open letter on Congress authorizing the war, with its casualties and damage; no new decision."
+    },
+    {
+      "slug": "us-and-iran-weigh-reopening-a-key-oil-route",
+      "date": "2026-09-25",
+      "title": "US and Iran weigh reopening a key oil route",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: a phased deal to reopen Hormuz and lift the blockade, pitched as ending the seven-month conflict (a Hormuz must)."
+    },
+    {
+      "slug": "tehran-rejects-uranium-concessions-in-ceasefire-talks",
+      "date": "2026-09-26",
+      "title": "Tehran rejects uranium concessions in ceasefire talks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's stance in the ceasefire talks; uranium and Hormuz appear as terms in talks to end the war (Hormuz optional)."
+    },
+    {
+      "slug": "iran-offers-seven-day-plan-to-reopen-shipping",
+      "date": "2026-09-26",
+      "title": "Iran offers seven-day plan to reopen shipping",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: Iran's plan is both a regional ceasefire and a Hormuz reopening (a Hormuz must)."
+    },
+    {
+      "slug": "iran-s-cheap-missiles-force-costly-defenses",
+      "date": "2026-09-26",
+      "title": "Iran’s cheap missiles force costly defenses",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "How Iran survived the strikes and struck back, but mainly the wider shift in military technology and spending."
+    },
+    {
+      "slug": "trump-rejects-iran-s-plan-to-reopen-vital-oil-route",
+      "date": "2026-09-27",
+      "title": "Trump rejects Iran's plan to reopen vital oil route",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: the rejection of a plan that would both reopen Hormuz and pause the fighting (a Hormuz must)."
+    },
+    {
+      "slug": "iran-vows-to-fight-if-the-us-attacks-again",
+      "date": "2026-09-28",
+      "title": "Iran vows to fight if the US attacks again",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's threat to answer renewed US strikes and Trump's hint of more bombing (Hormuz optional)."
+    },
+    {
+      "slug": "trump-predicts-tehran-will-eventually-surrender",
+      "date": "2026-09-30",
+      "title": "Trump predicts Tehran will eventually surrender",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A war-aims remark with the war's toll; no change in policy."
+    },
+    {
+      "slug": "trump-threatens-us-strikes-unless-tehran-accepts-a-deal",
+      "date": "2026-10-01",
+      "title": "Trump threatens US strikes unless Tehran accepts a deal",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A threat to resume strikes unless Iran makes a deal, with Hegseth's damage claims."
+    },
+    {
+      "slug": "us-sends-thousands-more-troops-and-another-carrier",
+      "date": "2026-10-02",
+      "title": "US sends thousands more troops and another carrier",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A US buildup during the war, but the forces are cast as enforcing the naval blockade of Iran's coast."
+    },
+    {
+      "slug": "vance-makes-enrichment-cuts-a-condition-for-ending-war",
+      "date": "2026-10-07",
+      "title": "Vance makes enrichment cuts a condition for ending war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A US condition for ending the war: enrichment as a term of the talks."
+    },
+    {
+      "slug": "guterres-urges-washington-and-tehran-to-resume-talks",
+      "date": "2026-10-07",
+      "title": "Guterres urges Washington and Tehran to resume talks",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A UN call for US-Iran talks that leans on stranded ships and Pakistan's UN role (Hormuz optional)."
+    },
+    {
+      "slug": "tehran-aims-to-drive-u-s-troops-from-gulf",
+      "date": "2026-10-10",
+      "title": "Tehran aims to drive U.S. troops from Gulf",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of Iran's war aims and the war's damage inside Iran."
+    },
+    {
+      "slug": "tehran-calls-us-offer-inadequate-after-deadly-airport-strike",
+      "date": "2026-10-12",
+      "title": "Tehran calls US offer inadequate after deadly airport strike",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's response to US terms for ending the war, with attacks across the region; its stance unchanged."
+    },
+    {
+      "slug": "iran-says-us-offer-fails-to-reopen-key-sea-route",
+      "date": "2026-10-12",
+      "title": "Iran says US offer fails to reopen key sea route",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: the same reply to the US offer, framed as conditions for reopening Hormuz (a Hormuz must)."
+    },
+    {
+      "slug": "china-and-russia-aid-iran-s-attacks-on-us-bases",
+      "date": "2026-10-17",
+      "title": "China and Russia aid Iran’s attacks on US bases",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [
+        {
+          "figure": "us_troops_killed",
+          "value": 3,
+          "approx": "exact",
+          "asOf": "2026-10-17",
+          "matches": false,
+          "countedAs": "US soldiers killed in one missile strike on a Jordanian air base, not the war's total",
+          "quote": "three US soldiers killed and four wounded in a missile strike on a Jordanian air base"
+        }
+      ],
+      "statuses": [],
+      "why": "An explanatory piece on Russian and Chinese help for Iran's war and the strain on US alliances: outside support and alliances, with the war as its setting."
+    },
+    {
+      "slug": "trump-again-threatens-attack-on-pickaxe-mountain",
+      "date": "2026-10-18",
+      "title": "Trump again threatens attack on Pickaxe Mountain",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A threat to strike a site in Iran and a decision to hold off until after 3 November."
+    },
+    {
+      "slug": "iran-threatens-us-bases-as-tankers-burn",
+      "date": "2026-10-23",
+      "title": "Iran threatens US bases as tankers burn",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: tanker attacks (a Hormuz must) with Iran's threat to US bases and reported US-Israeli strike plans as a strand of its own."
+    },
+    {
+      "slug": "us-prepares-for-possible-strikes-after-midterms",
+      "date": "2026-10-24",
+      "title": "US prepares for possible strikes after midterms",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A possible resumption of large-scale strikes on Iran after the elections."
+    },
+    {
+      "slug": "trump-warns-of-possible-new-strikes-as-oil-tops-117",
+      "date": "2026-10-24",
+      "title": "Trump warns of possible new strikes as oil tops $117",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A roundup of a Hebron operation, oil prices and Trump's warning that strikes on Iran may resume."
+    },
+    {
+      "slug": "us-and-israel-prepare-for-renewed-strikes",
+      "date": "2026-10-25",
+      "title": "US and Israel prepare for renewed strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "US-Israeli preparations for renewed strikes after the failed ceasefire; Hormuz and Yemen are secondary (Hormuz optional)."
+    },
+    {
+      "slug": "trump-weighs-renewed-strikes-on-iran",
+      "date": "2026-10-30",
+      "title": "Trump weighs renewed strikes on Iran",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Options to restart strikes briefed to Trump; no decision."
+    },
+    {
+      "slug": "qatar-hosts-talks-as-washington-weighs-new-attacks",
+      "date": "2026-11-01",
+      "title": "Qatar hosts talks as Washington weighs new attacks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Mediation to prevent renewed strikes and Iran's threat of retaliation."
+    },
+    {
+      "slug": "gulf-leaders-warn-new-strikes-could-widen-the-war",
+      "date": "2026-11-02",
+      "title": "Gulf leaders warn new strikes could widen the war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Gulf fears of renewed strikes and Iranian retaliation."
+    },
+    {
+      "slug": "trump-names-targets-as-tehran-warns-of-retaliation",
+      "date": "2026-11-02",
+      "title": "Trump names targets as Tehran warns of retaliation",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Trump names strike targets in Iran and Iran threatens retaliation."
+    },
+    {
+      "slug": "washington-used-pause-to-secure-oil-shipping-lanes",
+      "date": "2026-11-02",
+      "title": "Washington used pause to secure oil shipping lanes",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: opinion on the memorandum as a ceasefire pause used to secure tanker routes (a Hormuz must)."
+    },
+    {
+      "slug": "us-and-iran-signal-talks-to-end-eight-month-war",
+      "date": "2026-11-03",
+      "title": "US and Iran signal talks to end eight-month war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Indirect talks to end the war, with a Hormuz offer among the terms; a signal, no deal (Hormuz optional)."
+    },
+    {
+      "slug": "trump-must-choose-between-iran-deal-and-escalation",
+      "date": "2026-11-06",
+      "title": "Trump must choose between Iran deal and escalation",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Analysis of the war's state and the choice between a settlement and escalation."
+    },
+    {
+      "slug": "us-strikes-iran-as-shipping-falls-by-90",
+      "date": "2026-11-06",
+      "title": "US strikes Iran as shipping falls by 90%",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Dual fit: a US strike on Iran after Iran attacked US aircraft, paired with the 90% fall in shipping (a Hormuz must)."
+    },
+    {
+      "slug": "iran-reviews-nuclear-proposals-amid-us-strike-threat",
+      "date": "2026-11-07",
+      "title": "Iran reviews nuclear proposals amid US strike threat",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Led by nuclear proposals (out), but these are the talks that decide whether strikes resume."
+    },
+    {
+      "slug": "iran-says-its-military-has-grown-stronger-during-war",
+      "date": "2026-11-08",
+      "title": "Iran says its military has grown stronger during war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Iran's claims about its strength, limited strikes and mediation to stop renewed fighting (Hormuz optional)."
+    },
+    {
+      "slug": "trump-says-iran-fighting-is-over-but-keeps-forces-ready",
+      "date": "2026-11-10",
+      "title": "Trump says Iran fighting is over but keeps forces ready",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "deescalation",
+      "values": [],
+      "statuses": [],
+      "why": "The president declares the war effectively over, with no ceasefire or deal and the blockade kept: not an end event."
+    },
+    {
+      "slug": "iran-war-leaves-shipping-and-investment-at-risk",
+      "date": "2026-11-10",
+      "title": "Iran war leaves shipping and investment at risk",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A UAE warning about Gulf economies, shipping and investment under prolonged instability; Iranian strikes on the Gulf and possible renewed US strikes are one strand."
+    },
+    {
+      "slug": "rubio-says-us-does-not-need-new-iran-strikes",
+      "date": "2026-11-11",
+      "title": "Rubio says US does not need new Iran strikes",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "The US rules out major new strikes as talks gain momentum; repeats Trump's line of the day before (Hormuz optional)."
+    },
+    {
+      "slug": "israel-prepares-for-possible-strike-as-iran-threatens-wider-war",
+      "date": "2026-11-12",
+      "title": "Israel prepares for possible strike as Iran threatens wider war",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Israel orders its military to prepare to strike Iran and Iran threatens retaliation beyond the region; conditional."
+    },
+    {
+      "slug": "trump-pulls-vance-from-iran-negotiations",
+      "date": "2026-11-13",
+      "title": "Vance shifted from Iran diplomacy to domestic issues",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [],
+      "why": "Trump drops the Vance-led talks and says a deal is unnecessary: a change in the path to ending the war."
+    },
+    {
+      "slug": "trump-keeps-pressure-on-iran-as-nuclear-talks-stall",
+      "date": "2026-11-15",
+      "title": "Trump keeps pressure on Iran as nuclear talks stall",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "Follows the Vance story: talks shelved for pressure and the blockade, framed around nuclear talks (out)."
+    },
+    {
+      "slug": "iranian-drones-target-us-radar-base-in-bahrain",
+      "date": "2026-11-17",
+      "title": "Iranian drones target US radar base in Bahrain",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "escalation",
+      "values": [],
+      "statuses": [],
+      "why": "The first Iranian attack on a US base reported after Trump said on 10 November that the fighting was effectively over and the talks were shelved on 13 November (Bahrain reports no damage): a turning point only against that statement; the earliest story of the 17 November exchange."
+    },
+    {
+      "slug": "us-strike-on-qeshm-is-followed-by-gulf-attacks",
+      "date": "2026-11-18",
+      "title": "US strike on Qeshm is followed by Gulf attacks",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "A US strike on an Iranian missile site and Iranian attacks on bases in Kuwait and Bahrain: the same exchange as the Bahrain story."
+    }
+  ],
+  "nearMisses": [
+    {
+      "slug": "iran-s-revolutionary-guards-say-vital-strait-is-de-facto-closed",
+      "date": "2026-03-01",
+      "title": "Iran's Revolutionary Guards say vital strait is 'de facto closed'",
+      "why": "Published the day after the opening strikes, but its subject is the IRGC closing the strait and shipping advisories: the Hormuz key's start."
+    },
+    {
+      "slug": "u-s-sinks-iranian-boats-opens-shipping-route",
+      "date": "2026-05-05",
+      "title": "U.S. sinks Iranian boats, opens shipping route",
+      "why": "A US-Iran naval fight during the truce, but it belongs to the operation to reopen the strait (a Hormuz must)."
+    },
+    {
+      "slug": "iran-facility-struck-amid-mass-civilian-casualties-in-lebanon",
+      "date": "2026-03-22",
+      "title": "Iran facility struck amid mass civilian casualties in Lebanon",
+      "why": "The title leads with a strike on an Iranian nuclear facility, but the story is the UN's Lebanon humanitarian update (a Lebanon must)."
+    },
+    {
+      "slug": "us-prepares-weeks-long-strikes-on-iranian-sites",
+      "date": "2026-02-15",
+      "title": "US prepares weeks-long strikes on Iranian sites",
+      "why": "Describes the campaign that later came, but two weeks before it began: the pre-war buildup."
+    },
+    {
+      "slug": "israel-strikes-beirut-after-hezbollah-rocket-barrage",
+      "date": "2026-03-13",
+      "title": "Israel strikes Beirut after Hezbollah rocket barrage",
+      "why": "Mentions a joint Iran-Hezbollah salvo, but it is the Israel-Hezbollah exchange over Beirut (a Lebanon must)."
+    },
+    {
+      "slug": "iran-says-strategic-waterway-closed-global-shipping-and-oil-hit",
+      "date": "2026-06-22",
+      "title": "Iran says strategic waterway closed; global shipping and oil hit",
+      "why": "Strains the 18 June deal, but it is a closure of the strait after Israeli attacks on Lebanon, not renewed strikes between Israel/the US and Iran."
+    },
+    {
+      "slug": "us-waives-oil-sanctions-to-release-12-billion",
+      "date": "2026-06-23",
+      "title": "US waives oil sanctions to release $12 billion",
+      "why": "Reads like a term of the war-ending package, but its text is about sanctions relief and inspections and never mentions the fighting."
+    },
+    {
+      "slug": "iran-still-holds-enriched-uranium-in-deep-tunnels",
+      "date": "2026-03-19",
+      "title": "Iran still holds enriched uranium in deep tunnels",
+      "why": "Assesses what the strikes left, but its subject is the surviving uranium stockpile: the nuclear program."
+    },
+    {
+      "slug": "brent-jumps-8-after-us-saudi-strikes-widen-middle-east-fighting",
+      "date": "2026-07-30",
+      "title": "Brent jumps 8% after US-Saudi strikes widen Middle East fighting",
+      "why": "Names the 30 July US-Saudi strikes in its title, but it reports the oil-price reaction."
+    },
+    {
+      "slug": "us-israel-strikes-trigger-historic-fuel-disruption-through-hormuz",
+      "date": "2026-03-13",
+      "title": "US-Israel strikes trigger historic fuel disruption through Hormuz",
+      "why": "Names the US-Israel strikes in its title, but it reports the IEA's verdict on oil flows and the emergency stock release: an energy-market story (a Hormuz near miss too)."
+    },
+    {
+      "slug": "iran-warns-firm-blow-if-us-attacks-after-naval-buildup",
+      "date": "2026-02-26",
+      "title": "Iran warns 'firm blow' if US attacks after naval buildup",
+      "why": "Two days before the war: Iranian threats during the Geneva talks, the pre-war standoff."
+    },
+    {
+      "slug": "iran-asks-houthis-to-close-route-if-us-hits-power",
+      "date": "2026-07-17",
+      "title": "Iran asks Houthis to close route if US hits power",
+      "why": "Tied to US threats against Iran's power plants, but the threat is a Houthi closure of the Bab el-Mandeb: Yemen and the Red Sea."
+    },
+    {
+      "slug": "israel-strikes-kill-civilians-amid-wider-iran-conflict",
+      "date": "2026-03-09",
+      "title": "Israel strikes kill civilians amid wider Iran conflict",
+      "why": "Names the Iran conflict in its title, but reports Israeli strikes in Gaza and the West Bank."
+    },
+    {
+      "slug": "iran-lawmakers-move-to-quit-npt-after-strikes",
+      "date": "2026-03-29",
+      "title": "Iran lawmakers move to quit NPT after strikes",
+      "why": "Prompted by the strikes, but it is a bill to leave the NPT: the nuclear program."
+    },
+    {
+      "slug": "trump-puts-land-blockade-on-iran-in-effect",
+      "date": "2026-11-09",
+      "title": "Trump puts land blockade on Iran in effect",
+      "why": "Remarks that new strikes are unlikely, but its subject is the \"Iron Gate\" land blockade, which is out."
+    }
+  ],
+  "notes": "Provenance: drafted by Claude Opus 5.5 on 2026-11-21 from the local copy of published stories (to 2026-11-18), with an adversarial second pass; the owner accepted it without a person reviewing the entries, near misses or values. Boundary: an entry is a must when the war itself is its main subject: strike rounds, Iran's retaliation on Israel, US forces and the Gulf states, deaths and damage from them, the killing of Iran's leaders, war aims and threats to widen or resume strikes, ceasefires, pauses and their breakdowns, talks and deals to end the war, and decisions by Congress or allies about the war. Nuclear points count when they are terms in the talks to end the war (\"mediators-pursue-ceasefire-while-iran-nuclear-dispute-persists\", \"vance-makes-enrichment-cuts-a-condition-for-ending-war\", \"tehran-rejects-uranium-concessions-in-ceasefire-talks\", \"khamenei-orders-enriched-uranium-to-remain-in-iran\"); strikes on nuclear sites are war strikes. Optional entries are mainly about something else but give the war a major strand of their own, or split their subject with another front: deals and talks that both end the fighting and reopen Hormuz, regional roundups, arms sales, munitions stocks and force moves justified by the war (the 3 March interceptor stories, the 16 March missile shift, the 3 May arms depletion), outside support for Iran (Russia's drones and intelligence, the October China-Russia piece), legality and humanitarian-law opinions that are not about the strikes' own harm (HRW's piece covers Lebanon too; the legal experts' letter and the Red Cross warning are must, since they report the strikes' civilian harm in Iran), the cyber, internet-blackout and AI-targeting angles, Iran's and the Gulf's wartime economies where sanctions, the blockade or shipping share the blame (\"war-spikes-prices-and-wipes-out-millions-of-jobs\", \"iran-war-leaves-shipping-and-investment-at-risk\"), tanker attacks off the Gulf states framed by the war, Pakistan's mediation as foreign policy. Stories mainly about Hormuz shipping, Lebanon, the pre-war standoff, the nuclear program, oil and fuel markets, Yemen and the Houthis, sanctions or the \"Iron Gate\" land blockade are out; the 15 most tempting are near misses. Start: the US-Israeli strikes of 28 February, first reported on 1 March; February buildup and nuclear-talk stories are out (the 15 February strike plans and the 26 February threats are near misses). Same-event clusters: stories published on one day often share one timestamp (02:15 UTC), so the turning point inside a same-day cluster is a judgment call: 1 March (the launch story over the first toll), 2 March (the Khamenei strike story over the succession analysis), 18 June (the end-the-war story over the two other deal stories), 2 September (\"us-hits-irgc-targets-iran-vows-heavy-retaliation\" over \"trump-warns-of-largest-strike-as-us-bombs-iran\") and 17-18 November (the Bahrain drone story over the Qeshm strike story); another story of the same cluster is an equally valid turning point. Later same-event stories are routine (the opening strikes, Khamenei's succession, the frigate Dena, the 22 March power-plant ultimatum, the 7 April ceasefire, the 6-7 June and 10-12 June rounds, the July resumption, the late-July pause). Stories that only repeat an earlier first are routine: the 28 March uranium-plant strike (nuclear sites were struck from the first week), the 16 March rejection of mediation (Trump refused talks on 9 March) and the 13 July strikes on Qatar and the UAE (Gulf states hit since 2 March, US bases in the Gulf two days earlier). No stories were published 8-10 April, so the 11 April story is the first to report the 7 April ceasefire. 8 July (strikes resume) and 9 July (Trump declares the ceasefire over) are kept as two turning points. No story reports the August ceasefire that a 29 August story says \"eased the worst fighting\"; the 2 September strikes are marked as the resumption. Numbers: deaths in Iran are not a clean series across sources: at least 201 (1 March), at least 555 \"in Iran\" (5 March, below the 787 of 4 March, likely an older tally), at least 1,230 (6 and 8 March), over 1,300 by Iran's claim (18 March), HRANA's 3,000-plus (20 March) against \"more than 2,000 people in Iran\" two days later, and at least 3,636 (29 April), the last cumulative Iran toll; later stories give only round or strike counts. War tolls with no stated place (over 1,250, about 2,000, over 2,000, over 1,900 casualties, more than 7,000), civilian-only counts and every count for one strike or one strike round are recorded as values that do not match: the Minab school (at least 51, 180, more than 168, 175 twice, about 150 in the UN's later finding, more than 150), Isfahan (at least 15), WHO-verified attacks on health facilities (at least nine), and the 14 and 2 of July strikes. US service members killed: 6 (5 and 6 March), 8 (11 March), 13 (30 March), at least 17 (20 July), 18 (23 July). Not tracked: US wounded (at least 150 on 11 March, more than 300 on 28 March but 290 on 30 March, about 500 on 23 July), the Minab school toll as a figure of its own (its counts are non-matching values of deaths in Iran), deaths in Israel and the Gulf states (stated per incident only) and target counts. Dual fits: 18 stories are must entries of hormuz-shipping-2026 and optional here, so no story is a must in both keys: \"us-seizes-iranian-ship-as-ceasefire-talks-falter\", \"trump-orders-blockade-warns-china-and-iran\" (the only story to report that the first direct peace talks failed), \"us-and-iran-clash-over-gulf-oil-route\", \"us-and-iran-agree-to-end-war-and-reopen-hormuz\", \"ceasefire-ends-strikes-and-reopens-key-shipping-lane\", \"us-iran-reach-provisional-deal-to-reopen-strait-of-hormuz\", \"u-s-and-iran-agree-60-day-roadmap-open-shipping-lane\", \"us-and-iran-clash-over-strait-tolls-and-inspections\", \"us-and-iran-pause-strikes-and-agree-to-doha-talks\", \"iran-and-us-clash-over-shipping-rules-sparking-strikes\", \"us-strikes-iran-after-hormuz-blockade-us-bases-targeted-abroad\", \"us-and-iran-weigh-reopening-a-key-oil-route\", \"iran-offers-seven-day-plan-to-reopen-shipping\", \"trump-rejects-iran-s-plan-to-reopen-vital-oil-route\", \"iran-says-us-offer-fails-to-reopen-key-sea-route\", \"iran-threatens-us-bases-as-tankers-burn\", \"washington-used-pause-to-secure-oil-shipping-lanes\" and \"us-strikes-iran-as-shipping-falls-by-90\". As a result no must entry here reports the 18 June deal or the 30 June pause; \"us-and-iran-agree-to-end-war-and-reopen-hormuz\" leads on ending the war and would be a must here if the Hormuz key held it as optional; that call is the owner's. \"iran-strikes-tanker-near-dubai-after-trump-threats\" is optional in both keys. Stories that are near misses or optional in a neighbor key and must here (e.g. \"trump-says-iran-campaign-very-soon-as-oil-tops-100\", \"iran-strikes-tel-aviv-with-cluster-missiles\", \"trump-threatens-to-obliterate-iran-power-plants\") are consistent with those keys. Open on 16 November 2026: every truce in our stories was broken by later strikes (the 7 April ceasefire by 10 May, the 29 May memorandum by the 6-12 June rounds, the 18 June deal by the 27 June strikes and Trump's 9 July declaration, the 30 June and 27 July pauses by 8 and 30 July, the August ceasefire by 2 September). Trump's 10 November statement that the fighting is \"effectively over\" comes with no ceasefire or deal and with US forces ready to resume attacks, and the talks are shelved on 13 November: no end event by 16 November. The open call rests on that evidence alone; the 17-18 November stories (Iranian drones at a US base in Bahrain, the US strike on Qeshm) postdate 16 November, are entries, and only confirm it. \"trump-pulls-vance-from-iran-negotiations\" is published as \"Vance shifted from Iran diplomacy to domestic issues\"."
+}
