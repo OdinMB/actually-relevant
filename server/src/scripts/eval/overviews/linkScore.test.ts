@@ -373,6 +373,7 @@ describe('scoreLinking', () => {
       signals,
       diagnostics: [],
       unanswered: 0,
+      errored: 0,
       costUsd: 0.01,
       perStoryUsd: 0.003,
     }

@@ -101,13 +101,30 @@ function replayed(r: LinkStepReport): string {
   return `${r.stories} stories: ${r.stories - r.background.stories} (entries and near misses) of ${half}, and ${r.background.stories} background stories of ${r.background.keys.join(', ')}, unscored unless they join a judged development's overview`
 }
 
+/** A rescore's line: the saved replay it scored, and whether today's keys replay the stories it replayed. */
+function rescoredLine(r: LinkStepReport): string[] {
+  if (!r.rescored) return []
+  const { file, savedAt, added, removed } = r.rescored
+  const scored = `- Rescored: ${file}, saved ${savedAt}, scored again under today's keys and scorer with no model call; the end-event judge answered from the cache only.`
+  if (added.length === 0 && removed.length === 0) return [scored]
+  return [
+    `${scored} Against keys that replay another set of stories: not evidence for the gate. ${added.length} the keys name since the run (left out, below), ${removed.length} the run replayed that they no longer name${removed.length > 0 ? ` (${removed.join(', ')})` : ''}, scored as they fell.`,
+  ]
+}
+
 export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): string[] {
   const shown = (step: OverviewStep) => steps.includes(step)
   return [
-    `**Replay:** ${replayed(r)}, ${r.repeat} run${r.repeat === 1 ? '' : 's'} through production's linking against the in-memory sandbox, oldest first. Model spend ${usd(r.costUsd)}${r.perStoryUsd !== null ? `, ${usd(r.perStoryUsd)} a story` : ''}.`,
+    `**Replay:** ${replayed(r)}, ${r.repeat} run${r.repeat === 1 ? '' : 's'} through production's linking against the in-memory sandbox, oldest first. The replay's calls as made (cached ones at what they cost then) and the end-event judge's: ${usd(r.costUsd)}${r.perStoryUsd !== null ? `, ${usd(r.perStoryUsd)} a story` : ''}.`,
+    ...rescoredLine(r),
     ...(r.unanswered > 0
       ? [
           `- Calls not made: ${r.unanswered} (past the budget, or not in the cache with --cache-only); a story whose call got no answer is linked as failed, so this run is not the one cached.`,
+        ]
+      : []),
+    ...(r.errored > 0
+      ? [
+          `- Calls that failed: ${r.errored} (an API error after the client's retries, a rate limit among them); a story whose call failed is linked as failed. If they persist, run again at a lower --concurrency.`,
         ]
       : []),
     ...(r.stopped ? [`- Stopped: ${cell(r.stopped)}`] : []),

@@ -75,3 +75,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0071 · Overviews may be re-centered, within an anchor and a limit, and a charter may have no end event](decisions/0071-overviews-recentering-anchor-limit-no-end-event.md) — amended 2026-11-20: the Undo's lock in a column of its own, so a chain of re-centers undoes newest first; amended 2026-11-22 by ADR-0072: no closing for an editor's changed END_EVENT to cancel (D-RC10) or a re-center join to start (D-RC12)
 - [ADR-0072 · Overviews close only by fading or an editor's Close, and a story reporting the END_EVENT becomes a turning point](decisions/0072-overviews-close-only-by-fading-or-editor.md)
 - [ADR-0073 · The judged linking replay carries neighbouring developments as unscored background](decisions/0073-judged-linking-replay-background.md)
+- [ADR-0074 · Linking eval runs save their replay, and their bars are scored again from it](decisions/0074-linking-eval-saved-replay.md)

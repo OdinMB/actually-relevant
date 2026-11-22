@@ -21,6 +21,7 @@
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps context,fact-check --facts context --half judge --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval --steps update --half judge --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --repeat 3
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --repeat 3 --rescore
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool --half judge --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,stands,fact-check --facts stands --half judge --budget 13
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,replay --half judge --budget 18
@@ -28,7 +29,8 @@
  *
  * Reads the database through the read-only session and writes nothing to any database; its only
  * HTTP is OpenAI, and Tavily for the `context` and `pass-pool` steps. Writes overview-eval[-tags].md into --out, the
- * gap-key drafts into --out/gap-drafts and its caches into --out/.cache; `key-draft`, run on its
+ * linking replay into --out/linking-replay[-tags].json (which `--rescore` scores again with no call and no
+ * database), the gap-key drafts into --out/gap-drafts and its caches into --out/.cache; `key-draft`, run on its
  * own, writes its drafts into the committed answer keys for the owner's review. Prints only
  * present/missing for the keys and local/remote for the database. See .context/model-eval.md.
  */
@@ -63,8 +65,9 @@ import { KEYS_DIR, readGapKeyFiles, readKeyFiles } from './overviews/keyFiles.js
 import { overviewReportName, renderOverviewReport, type FactCheckReport, type FactSample, type OverviewReportInput } from './overviews/report.js'
 import { runUpdateStep, type UpdateStepOptions } from './overviews/update.js'
 import type { UpdateStory } from './overviews/updateFixtures.js'
-import { LINK_DESK_USD_PER_STORY, linkReplayStories, runLinkStep } from './overviews/link.js'
+import { LINK_DESK_USD_PER_STORY, linkReplayStories, rescoreLinkStep, runLinkStep } from './overviews/link.js'
 import { verdict } from './overviews/linkReport.js'
+import { replayNotSaved, savedReplayName, writeSavedReplay } from './overviews/savedLinkReplay.js'
 import { MEMBERS_PER_CHECKPOINT, passPoolStories, runPassPool } from './overviews/passPool.js'
 import { runReplayStep } from './overviews/replay.js'
 import { runRecenterStep } from './overviews/recenter.js'
@@ -188,8 +191,8 @@ async function main(): Promise<void> {
   mkdirSync(cacheDir, { recursive: true })
   console.log(`OPENAI_API_KEY: ${presence(process.env.OPENAI_API_KEY)}; TAVILY_API_KEY: ${presence(process.env.TAVILY_API_KEY)}`)
   const runs = (step: OverviewStep) => opts.steps.includes(step)
-  // A cache-only rerun answers every call from the cache, so it needs no key
-  const canCall = Boolean(process.env.OPENAI_API_KEY) || opts.cacheOnly
+  // A cache-only rerun and a rescore answer every call from the cache, so they need no key
+  const canCall = Boolean(process.env.OPENAI_API_KEY) || opts.cacheOnly || opts.rescore
   const tavily = createTavilyClient({
     cacheFile: join(cacheDir, 'tavily.jsonl'),
     apiKey: process.env.TAVILY_API_KEY,
@@ -201,7 +204,8 @@ async function main(): Promise<void> {
     budgetUsd: opts.budget,
     concurrency: opts.concurrency,
     offline: opts.dryRun || !CALLING_STEPS.some(runs),
-    cacheOnly: opts.cacheOnly,
+    // A rescore makes no call: its end-event judge is answered from the cache, or not at all
+    cacheOnly: opts.cacheOnly || opts.rescore,
     externalSpendUsd: () => tavily.creditsRecorded() * TAVILY_USD_PER_CREDIT,
   })
   const session = lazySession()
@@ -457,17 +461,32 @@ async function main(): Promise<void> {
         })
       } else {
         try {
-          report.link = await runLinkStep({
-            ctx,
-            files: keyFiles,
-            half: opts.half,
-            ...limit,
-            stories: async slugs => (await session.get()).read(q => linkStoriesBySlug(q, slugs)),
-            neighbours: async s => (await session.get()).read(q => nearestPublished(q, s.id, s.datePublished)),
-            repeat: opts.repeat,
-            concurrency: opts.concurrency,
-            budgetUsd: opts.budget,
-          })
+          // One replay serves the three steps: saved beside the report, and scored again from there by --rescore (ADR-0074)
+          const savedFile = join(out, savedReplayName({ half: opts.half, repeat: opts.repeat, ...limit }))
+          if (opts.rescore) {
+            report.link = await rescoreLinkStep({ ctx, files: keyFiles, half: opts.half, repeat: opts.repeat, ...limit, file: savedFile })
+          } else {
+            const linked = await runLinkStep({
+              ctx,
+              files: keyFiles,
+              half: opts.half,
+              ...limit,
+              stories: async slugs => (await session.get()).read(q => linkStoriesBySlug(q, slugs)),
+              neighbours: async s => (await session.get()).read(q => nearestPublished(q, s.id, s.datePublished)),
+              repeat: opts.repeat,
+              concurrency: opts.concurrency,
+              budgetUsd: opts.budget,
+              cacheOnly: opts.cacheOnly,
+            })
+            report.link = linked.report
+            const notSaved = linked.replay && replayNotSaved(linked.replay, opts)
+            if (linked.replay && !notSaved) {
+              writeSavedReplay(savedFile, linked.replay)
+              console.log(`${steps}: saved the replay to ${savedFile}; --rescore scores it again for free`)
+            } else if (notSaved) {
+              console.log(`${steps}: replay not saved: ${notSaved}; ${savedFile} is left as it was`)
+            }
+          }
           if (report.link.stopped) skipped.push({ step: steps, reason: report.link.stopped })
           for (const b of [...report.link.score.link, ...report.link.score.found, ...report.link.score.role])
             console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)

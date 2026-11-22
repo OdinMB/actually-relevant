@@ -170,6 +170,8 @@ export interface DiagnoseInput {
   replayed: ReadonlySet<string>
   /** Production's neighbour limit, to say when the read was cut at it. */
   neighbourLimit: number
+  /** Why a slug was not replayed, where the replay knows another reason than that it is not published (a rescore: the keys name it since the run). */
+  absent?: ReadonlyMap<string, string>
 }
 
 const pctOf = (v: number | null) => (v === null ? '?' : v.toFixed(2))
@@ -233,7 +235,8 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
       continue
     }
     if (!t) {
-      miss(d.replayed.has(slug) ? 'not linked' : 'not replayed', d.replayed.has(slug) ? 'the replay stopped before it' : 'not published in this database')
+      if (d.replayed.has(slug)) miss('not linked', 'the replay stopped before it')
+      else miss('not replayed', d.absent?.get(slug) ?? 'not published in this database')
       continue
     }
     if (t.outcome === 'held' || t.outcome === 'conflict') {

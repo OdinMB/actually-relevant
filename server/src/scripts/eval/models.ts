@@ -145,6 +145,15 @@ export function versionedSchemaName(name: string, schema: z.ZodType): string {
 // Eval context: cache + ledger + budget + concurrency
 // ---------------------------------------------------------------------------
 
+/**
+ * The output tokens a live call is held at against the budget while it is in flight (before the
+ * arm's output and effort factors): above what the eval's structured answers write, so a hold
+ * rarely falls short of the call's real cost.
+ */
+export const HOLD_OUTPUT_TOKENS = 4_000
+/** Why a call past the budget is answered `skipped`; a step that stops at the budget reads it. */
+export const BUDGET_EXHAUSTED = 'budget exhausted'
+
 export interface EvalContext extends SuiteContext {
   /** Total USD recorded in the ledger (all runs against this output dir), plus `externalSpendUsd`. */
   spentUsd(): number
@@ -192,6 +201,8 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
   let spent = [...ledger.values()].reduce((sum, r) => sum + r.costUsd, 0)
   let spentThisRun = 0
   let live = 0
+  /** The holds of the live calls in flight (`HOLD_OUTPUT_TOKENS`), released as each is recorded or fails. */
+  let held = 0
 
   function record<T>(rec: CallRecord<T>): CallRecord<T> {
     // Errors are not cached, so a resumed run retries them; they cost nothing.
@@ -203,9 +214,16 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
     return rec
   }
 
+  /**
+   * A live call starts only while the recorded spend, the external spend, the holds of the calls in
+   * flight and its own hold stay within the budget. The check and the hold are one synchronous step
+   * before the call's first await, so two calls cannot both pass on one remaining slice; what is left
+   * of an overshoot is how far a call's real cost exceeds its hold.
+   */
   async function invoke<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: Prompt, key: string): Promise<CallRecord<T>> {
     const base = { key, arm: armKey(a), schema: schemaName, at: new Date().toISOString() }
-    const unmade = options.cacheOnly ? 'not in the cache (--cache-only)' : spent + external() >= options.budgetUsd ? 'budget exhausted' : null
+    const hold = options.cacheOnly ? 0 : estimateCallUsd({ arm: a, schemaName, prompt, baseOutputTokens: HOLD_OUTPUT_TOKENS })
+    const unmade = options.cacheOnly ? 'not in the cache (--cache-only)' : spent + external() + held + hold > options.budgetUsd ? BUDGET_EXHAUSTED : null
     if (unmade) {
       return {
         ...base,
@@ -223,6 +241,7 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
     const structured = model.withStructuredOutput(schema, { includeRaw: true })
     const started = Date.now()
     live++
+    held += hold
     try {
       const result = await structured.invoke([promptMessage(prompt, a.model)])
       const latencyMs = Date.now() - started
@@ -253,6 +272,9 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
         latencyMs: Date.now() - started,
         error: err instanceof Error ? err.message.slice(0, 500) : String(err),
       }
+    } finally {
+      // Released in the same step that recorded the real cost: no other call sees both or neither
+      held -= hold
     }
   }
 

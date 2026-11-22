@@ -300,6 +300,12 @@ export type OverviewFactSource = (typeof OVERVIEW_FACT_SOURCES)[number]
 const OVERVIEW_HALVES = ['tune', 'judge', 'all'] as const
 export type OverviewHalf = (typeof OVERVIEW_HALVES)[number]
 export const OVERVIEW_DEFAULT_BUDGET_USD = 3
+/**
+ * Calls in flight at once across the run, above the other evals' 4: the linking replay's repeats run
+ * side by side, each at production's look-ahead of 3 (`config.overviews.concurrency`), so three of
+ * them ask for 9 calls at once.
+ */
+export const OVERVIEW_DEFAULT_CONCURRENCY = 8
 /** Facts sampled for the fact check. */
 export const OVERVIEW_DEFAULT_SIZE = 300
 export const OVERVIEW_MAX_SIZE = 600
@@ -314,6 +320,9 @@ export interface OverviewOptions {
   dryRun: boolean
   /** Answer every call from the folder's cache and make none: a missed call answers nothing, as one past the budget does, and the steps go on (a free rerun). */
   cacheOnly: boolean
+  /** Score the linking steps' saved replay again under today's keys and scorer, with no model call and no database (`link.ts`, `rescoreLinkStep`). */
+  rescore: boolean
+  /** Calls in flight at once; the linking replay's look-ahead within a run is production's, at most. */
   concurrency: number
   /** Runs of each arm on the variants (the label pass runs once); run k ≥ 2 has its own cache key. */
   repeat: number
@@ -353,6 +362,7 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
       budget: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
       'cache-only': { type: 'boolean', default: false },
+      rescore: { type: 'boolean', default: false },
       concurrency: { type: 'string' },
       repeat: { type: 'string' },
       size: { type: 'string' },
@@ -371,6 +381,14 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
   if (repeat > MAX_REPEAT) throw new Error(`--repeat must be at most ${MAX_REPEAT}`)
   const limit = positiveInt('--limit', values.limit)
   const steps = listOf('--steps', values.steps, OVERVIEW_STEPS, OVERVIEW_DEFAULT_STEPS)
+  if (values.rescore) {
+    if (values['dry-run']) throw new Error('--rescore scores the saved linking replay and makes no call; --dry-run only estimates a run: name one')
+    if (values['cache-only'])
+      throw new Error('--rescore already answers only from the cache, and scores the saved replay rather than replaying: drop --cache-only')
+    if (steps.some(s => !LINKING_STEPS.includes(s))) {
+      throw new Error(`--rescore scores the linking steps' saved replay: --steps takes only ${LINKING_STEPS.join(', ')} with it`)
+    }
+  }
   if (steps.includes('key-draft') && steps.length > 1) {
     throw new Error('--steps key-draft runs on its own: it writes the answer keys the other steps read; review its drafts, then run the others')
   }
@@ -392,7 +410,8 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
     budget: budgetOf(values.budget, OVERVIEW_DEFAULT_BUDGET_USD),
     dryRun: values['dry-run'] ?? false,
     cacheOnly: values['cache-only'] ?? false,
-    concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
+    rescore: values.rescore ?? false,
+    concurrency: positiveInt('--concurrency', values.concurrency, OVERVIEW_DEFAULT_CONCURRENCY) ?? OVERVIEW_DEFAULT_CONCURRENCY,
     repeat,
     size,
     ...(limit !== undefined ? { limit } : {}),

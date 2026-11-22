@@ -1,10 +1,36 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { AIMessage } from '@langchain/core/messages'
 import { z } from 'zod'
-import { costOf, classifyOutcome, estimateInputTokens, estimateCallUsd, arm, cacheKey, createEvalContext, versionedSchemaName } from './models.js'
+import {
+  costOf,
+  classifyOutcome,
+  estimateInputTokens,
+  estimateCallUsd,
+  arm,
+  cacheKey,
+  createEvalContext,
+  HOLD_OUTPUT_TOKENS,
+  versionedSchemaName,
+} from './models.js'
 import type { CallRecord } from './types.js'
+
+/** The client factory's model: each live call waits until the test answers it, or fails it. */
+const llm = vi.hoisted(() => ({ waiting: [] as ((outcome: 'answer' | 'fail') => void)[] }))
+vi.mock('../../services/llm.js', () => ({
+  createChatModel: () => ({
+    withStructuredOutput: () => ({
+      invoke: () =>
+        new Promise((resolve, reject) => {
+          llm.waiting.push(outcome =>
+            outcome === 'fail' ? reject(new Error('429 rate limit')) : resolve({ raw: new AIMessage({ content: '{"ok":true}' }), parsed: { ok: true } }),
+          )
+        }),
+    }),
+  }),
+}))
 
 const M = 1_000_000
 
@@ -133,6 +159,30 @@ describe('createEvalContext', () => {
   it('refuses any uncached call in an offline (dry) run', async () => {
     const ctx = createEvalContext({ cacheFile: tempLedger(), budgetUsd: 10, concurrency: 1, offline: true })
     await expect(ctx.call(luna, 's', schema, 'prompt')).rejects.toThrow(/offline/)
+  })
+
+  it('counts each live call against the budget while it is in flight, so calls running at once cannot pass it together, and frees it once recorded or failed', async () => {
+    // Prompts of one length hold the same estimate; the budget covers one hold, not two
+    const hold = estimateCallUsd({ arm: luna, schemaName: 's', prompt: 'prompt 1', baseOutputTokens: HOLD_OUTPUT_TOKENS })
+    const ctx = createEvalContext({ cacheFile: tempLedger(), budgetUsd: hold * 1.5, concurrency: 4, offline: false })
+    /** Starts a call, waits until it is the one call in flight, and ends it so. */
+    const settle = async (prompt: string, outcome: 'answer' | 'fail') => {
+      const call = ctx.call(luna, 's', schema, prompt)
+      await vi.waitFor(() => expect(llm.waiting).toHaveLength(1))
+      llm.waiting.shift()!(outcome)
+      return call
+    }
+    const first = ctx.call(luna, 's', schema, 'prompt 1')
+    const second = ctx.call(luna, 's', schema, 'prompt 2')
+    // Only the first reached the model; the second was answered at once
+    await vi.waitFor(() => expect(llm.waiting).toHaveLength(1))
+    expect(await second).toMatchObject({ outcome: 'skipped', error: 'budget exhausted' })
+    llm.waiting.shift()!('answer')
+    expect((await first).outcome).toBe('ok')
+    // The first call cost nothing as recorded, and a failed call costs nothing: neither hold stands in the way after
+    expect((await settle('prompt 3', 'fail')).outcome).toBe('error')
+    expect((await settle('prompt 4', 'answer')).outcome).toBe('ok')
+    expect(ctx.liveCalls()).toBe(3)
   })
 })
 
