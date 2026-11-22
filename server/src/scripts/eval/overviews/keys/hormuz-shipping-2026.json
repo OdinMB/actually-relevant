@@ -79,6 +79,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; tankers damaged and shipments suspended, the same day as the turning point 'Two ships struck near key oil route; Maersk suspends crossings': a same-time report of one event, which the Ebola key makes a turning point too (7 Nov).",
       "values": [],
       "statuses": [],
       "why": "Reports tankers damaged and traders and majors suspending shipments through the strait."
@@ -729,6 +731,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; the first ship fired on and seized under the US blockade ordered on 13 Apr is a first enforcement, or the blockade going on.",
       "values": [],
       "statuses": [],
       "why": "US blockade enforcement: an Iranian-flagged cargo ship fired on and seized."
@@ -800,6 +804,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; the first combat around the escorts launched on 4 May, which the Iran-war key holds as a turning point (the first exchange of strikes after the 7 April truce).",
       "values": [],
       "statuses": [],
       "why": "Escorted tankers, Iranian reprisals, shippers avoiding the route."
@@ -811,6 +817,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; the same day's combat around the escorts as 'US and Iran clash over Gulf oil route', marked the same way.",
       "values": [],
       "statuses": [],
       "why": "Project Freedom combat in the strait."
@@ -1027,6 +1035,8 @@
       "join": "must",
       "role": "turning_point",
       "kind": "deescalation",
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning turning point; three of our stories report the 18 June deal on the same day, and which counts as the first report is arbitrary, so all three accept either.",
       "values": [],
       "statuses": [
         {
@@ -1044,6 +1054,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; three of our stories report the 18 June deal on the same day, and which counts as the first report is arbitrary, so all three accept either.",
       "values": [],
       "statuses": [],
       "why": "Same deal: provisional memorandum to reopen the strait."
@@ -1055,6 +1067,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; three of our stories report the 18 June deal on the same day, and which counts as the first report is arbitrary, so all three accept either.",
       "values": [],
       "statuses": [
         {
@@ -1276,8 +1290,9 @@
       "date": "2026-07-16",
       "title": "US strikes Iran after Hormuz blockade; US bases targeted abroad",
       "join": "must",
-      "role": "routine",
-      "kind": null,
+      "role": "turning_point",
+      "kind": "decision",
+      "roleReview": "AI (claude-code), 2026-11-22: was routine; Trump announcing a 20% fee on cargo through the strait is a new condition on passage, a decision like Iran's yuan condition (21 Mar) and its paid permits (7 Nov), both turning points here. The strikes that lead the story are the Iran war's, where it stays routine.",
       "values": [],
       "statuses": [],
       "why": "Trump announces a 20% fee on Strait of Hormuz cargo; IRGC says it struck ships in the strait."
@@ -1580,6 +1595,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; the first ships reported sunk near the strait, a day after Iran changed tactics to target more ships (14 Oct, a turning point), or the attacks going on.",
       "values": [],
       "statuses": [],
       "why": "Two ships sink near the strait after attacks; traffic slowing."
@@ -1646,6 +1663,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; underwater drones are a new weapon against shipping, marked as the Iran-war key's cluster missiles (20 Mar), while the mines and attacks are not new.",
       "values": [],
       "statuses": [],
       "why": "Stepped-up attacks, mines and underwater drones threaten shipping in the strait."
@@ -1851,5 +1870,5 @@
       "why": "Blockade vocabulary and a mention of reopening the strait, but \"Iron Gate\" blockades Iran’s land supply routes."
     }
   ],
-  "notes": "Boundary: entries report on passage through the strait itself. Optional entries are mainly about something else (war strikes, ultimatums, ceasefire talks, oil markets) but carry a substantive passage on the strait: a traffic figure, stranded ships, insurance, or a threat or strike whose stated purpose is reopening the strait or protecting ships in it. War, nuclear, price and Lebanon stories that only recap the closure in a clause are left out; the 15 most tempting are near misses. Start: the development begins with the 1 March IRGC \"de facto closed\" declaration. The 23 February explainer on drills that temporarily closed parts of the corridor is optional as a precursor; February drill and standoff stories are out. Same-event clusters: 13 and 14 April (US blockade order), 4 and 5 May (Project Freedom launch and first escorts) and 18 June (three stories on the deal reopening the strait). The earliest-published story of each event is marked as the turning point and the later same-event stories are routine; another story from the same cluster is an equally valid turning point. The 26 September offer and its 27 September rejection are two events and both are turning points. Our stories contradict each other on the 11 April reopening: \"iran-proposes-paid-passage-for-oil-and-gas-ships\" says Iran reopened the strait under the truce, while \"us-and-iran-meet-as-oil-disruption-roils-markets\" (same day) says the truce halted strikes \"but not Iran’s blockade\". The 19 April story confirms a brief reopening. Stranded ships disagree: about 2,000 ships (1 and 3 April, 24 May) versus more than 600 (13 April) and 900+ (4 May), with the same 20,000 seafarers cited for both 2,000 and 600 ships. Earlier counts (400+ vessels on 12 March, about 500 tankers on 18 March) are smaller and partly tankers only. Traffic disagrees too: \"us-strikes-iran-as-shipping-falls-by-90\" (6 November) says transits are down more than 90% since February, while six days later two stories citing UKMTO put traffic about 65% below prewar. \"us-and-israel-prepare-for-renewed-strikes\" (25 October) says Middle East oil exports have returned to pre-war levels and \"iran-charges-ships-to-cross-the-world-s-key-oil-route\" (7 November) puts Gulf exports at about 86% of pre-war: those count oil exports (partly via bypass routes), not transits, so they are not recorded as traffic values. Early traffic values (10, 12 and 29 March) count tanker traffic only and are marked matches false. \"iran-tactics-paralyze-asian-oil-and-gas-flows\" (12 May) gives the 95% collapse \"within weeks\" of the start; asOf is the story date because the text gives no date. Daily transits: \"shipping-cuts-push-fuel-prices-and-food-costs-higher\" gives a range (\"as few as two to 16\"), recorded as under 16. \"u-s-will-keep-ships-to-halt-iran-oil-transit\" (14 August) says transits fell \"to single digits\", which is not a number and is not recorded. Not tracked: oil flows lost (8–20 million barrels a day) appear mostly in energy-market near misses and in entries with inconsistent definitions; counts of ships attacked use different windows (about 20 vessels by 12 March, over 30 by 23 July, at least 27 in October, five in 48 hours). Tolls range from $1 a barrel to $2 million per vessel; Trump’s 20% fee on strait cargo (16 July) is reported only once. Open on 16 November 2026: no story reports the end event; the 14 November story still has traffic about 65% below normal."
+  "notes": "Boundary: entries report on passage through the strait itself. Optional entries are mainly about something else (war strikes, ultimatums, ceasefire talks, oil markets) but carry a substantive passage on the strait: a traffic figure, stranded ships, insurance, or a threat or strike whose stated purpose is reopening the strait or protecting ships in it. War, nuclear, price and Lebanon stories that only recap the closure in a clause are left out; the 15 most tempting are near misses. Start: the development begins with the 1 March IRGC \"de facto closed\" declaration. The 23 February explainer on drills that temporarily closed parts of the corridor is optional as a precursor; February drill and standoff stories are out. Same-event clusters: 13 and 14 April (US blockade order), 4 and 5 May (Project Freedom launch and first escorts) and 18 June (three stories on the deal reopening the strait). The earliest-published story of each event is marked as the turning point and the later same-event stories are routine; another story from the same cluster is an equally valid turning point. The 26 September offer and its 27 September rejection are two events and both are turning points. Our stories contradict each other on the 11 April reopening: \"iran-proposes-paid-passage-for-oil-and-gas-ships\" says Iran reopened the strait under the truce, while \"us-and-iran-meet-as-oil-disruption-roils-markets\" (same day) says the truce halted strikes \"but not Iran’s blockade\". The 19 April story confirms a brief reopening. Stranded ships disagree: about 2,000 ships (1 and 3 April, 24 May) versus more than 600 (13 April) and 900+ (4 May), with the same 20,000 seafarers cited for both 2,000 and 600 ships. Earlier counts (400+ vessels on 12 March, about 500 tankers on 18 March) are smaller and partly tankers only. Traffic disagrees too: \"us-strikes-iran-as-shipping-falls-by-90\" (6 November) says transits are down more than 90% since February, while six days later two stories citing UKMTO put traffic about 65% below prewar. \"us-and-israel-prepare-for-renewed-strikes\" (25 October) says Middle East oil exports have returned to pre-war levels and \"iran-charges-ships-to-cross-the-world-s-key-oil-route\" (7 November) puts Gulf exports at about 86% of pre-war: those count oil exports (partly via bypass routes), not transits, so they are not recorded as traffic values. Early traffic values (10, 12 and 29 March) count tanker traffic only and are marked matches false. \"iran-tactics-paralyze-asian-oil-and-gas-flows\" (12 May) gives the 95% collapse \"within weeks\" of the start; asOf is the story date because the text gives no date. Daily transits: \"shipping-cuts-push-fuel-prices-and-food-costs-higher\" gives a range (\"as few as two to 16\"), recorded as under 16. \"u-s-will-keep-ships-to-halt-iran-oil-transit\" (14 August) says transits fell \"to single digits\", which is not a number and is not recorded. Not tracked: oil flows lost (8–20 million barrels a day) appear mostly in energy-market near misses and in entries with inconsistent definitions; counts of ships attacked use different windows (about 20 vessels by 12 March, over 30 by 23 July, at least 27 in October, five in 48 hours). Tolls range from $1 a barrel to $2 million per vessel; Trump’s 20% fee on strait cargo (16 July) is reported only once. Open on 16 November 2026: no story reports the end event; the 14 November story still has traffic about 65% below normal. ROLES: entries with `eitherRole` accept either verdict, and the 16 July entry became a turning point (decision); each says why in `roleReview` (an AI session's review of 2026-11-22, not yet checked by a person). Blockade enforcement, analyses and UN appeals that repeat the known state stay routine."
 }

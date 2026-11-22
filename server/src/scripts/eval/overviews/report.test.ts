@@ -243,7 +243,9 @@ describe('renderOverviewReport', () => {
               values: 4,
               responses: 2,
               withResearchRun: 2,
+              eitherRoles: 3,
               toReview: 2,
+              rolesToReview: 1,
             },
             errors: ['entry a: quote not found: "x"'],
             sharedMusts: [{ slug: 'deal', keys: ['ebola', 'strait'] }],
@@ -282,8 +284,9 @@ describe('renderOverviewReport', () => {
         ]),
       }),
     )
-    expect(md).toContain('| Ebola | ebola.json | 3 / 1 | 2 | 1 | 4 | 2 | 2 | 2 | 1 |')
+    expect(md).toContain('| Ebola | ebola.json | 3 / 1 | 2 | 1 | 4 | 2 | 2 | 3 | 2 | 1 | 1 |')
     expect(md).toContain('2 drafted responses and centers are not reviewed yet')
+    expect(md).toContain('1 entry carries a role an AI session changed (`roleReview`')
     expect(md).toContain('- entry a: quote not found: "x"')
     expect(md).toContain('1 story is a must entry of more than one development.')
     expect(md).toContain('- deal: ebola, strait')

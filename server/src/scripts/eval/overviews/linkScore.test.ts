@@ -106,8 +106,47 @@ describe('scoreLinkRun', () => {
     ]
     // e3 is left alone and c1 sits in Ebola's overview: neither role is judged
     const s = scoreLinkRun(KEYS, run([{ id: 'o1', members: ['e1', 'e2', 'e4', 'c1'], foundedFrom: ['e1', 'e2'], endEvent: 'End.' }], roles))
-    expect(s).toMatchObject({ rolesAgreeing: 1, rolesJudged: 2 })
+    expect(s).toMatchObject({ rolesAgreeing: 1, rolesJudged: 2, rolesEither: 0 })
     expect(scoreLinkRun(KEYS, run([], roles))).toMatchObject({ rolesAgreeing: 0, rolesJudged: 0 })
+  })
+
+  it('counts an entry that accepts either role as agreeing with a turning point of any kind or routine, and counts those entries apart', () => {
+    const ebola = KEYS[0]!
+    const either: AnswerKey = { ...ebola, entries: ebola.entries.map(e => (e.slug === 'e2' || e.slug === 'e3' ? { ...e, eitherRole: true } : e)) }
+    expect(keyIndex([either]).entry.get('e2')).toMatchObject({ role: 'either', musts: new Map([['ebola', 'either']]) })
+    const overview = [{ id: 'o1', members: ['e1', 'e2', 'e3'], foundedFrom: ['e1', 'e2'] as [string, string], endEvent: 'End.' }]
+    const given: ReplayRun = {
+      run: 1,
+      overviews: overview,
+      roles: new Map([
+        ['e1', role('routine')],
+        ['e2', { role: 'turning_point', roleKind: 'setback' }],
+        ['e3', role('routine')],
+      ]),
+    }
+    expect(scoreLinkRun([either, KEYS[1]!], given)).toMatchObject({ rolesJudged: 3, rolesAgreeing: 2, rolesEither: 2 })
+    // the key's lean still decides where no entry accepts either
+    expect(scoreLinkRun(KEYS, given)).toMatchObject({ rolesJudged: 3, rolesAgreeing: 1, rolesEither: 0 })
+    const text = linkLines(
+      {
+        half: 'judge',
+        repeat: 1,
+        keys: ['ebola', 'cholera'],
+        stories: 4,
+        background: { keys: [], stories: 0 },
+        left: [],
+        score: scoreLinking([either, KEYS[1]!], [given]),
+        endEvents: [],
+        signals: [],
+        diagnostics: [],
+        unanswered: 0,
+        errored: 0,
+        costUsd: 0,
+        perStoryUsd: 0,
+      },
+      ['role'],
+    ).join('\n')
+    expect(text).toContain('| 2 of 3 (2) |')
   })
 
   it("judges a founding pair against the other half's keys too: two entries of a development the half does not score found it rightly", () => {

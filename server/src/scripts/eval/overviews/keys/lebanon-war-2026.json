@@ -142,6 +142,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; a helicopter raid in eastern Lebanon and a threat against the Lebanese state itself are a new target in an ongoing war, while the strikes on Beirut repeat 7 Mar.",
       "values": [
         {
           "figure": "deaths",
@@ -217,6 +219,8 @@
       "join": "must",
       "role": "routine",
       "kind": null,
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning routine; it reports the same day's strikes on Beirut as the turning point 'Israel hits central Beirut, killing hundreds and uprooting 800,000', and the Ebola key makes both same-time reports of one event turning points (7 Nov) where this key made the second routine.",
       "values": [
         {
           "figure": "deaths",
@@ -278,6 +282,8 @@
       "join": "must",
       "role": "turning_point",
       "kind": "milestone",
+      "eitherRole": true,
+      "roleReview": "AI (claude-code), 2026-11-22: either role accepted, the key leaning turning point; deaths passing 1,000 is a round count, which the Ebola key reads as routine (deaths top 3,000, 5 Sep), while displacement jumping from 800,000 to more than 1.2 million is a marked jump.",
       "values": [
         {
           "figure": "deaths",
@@ -856,5 +862,5 @@
       "reviewed": true
     }
   ],
-  "notes": "Start: our stories date the war from 2 March 2026 ('Since March 2'); the first story is 4 March. Not closed on 16 November 2026, and two events must not be read as the end. (1) The April truce: the 25 April story is the first to report it ('a fragile three‑week ceasefire', 'A temporary truce extended for three weeks'), without naming its parties; on 6 June the truces had 'cut major battles but not stopped strikes and deaths' and the Lebanon toll had risen from more than 2,400 to more than 3,500. (2) The 18 June US-Iran deal declared 'immediate and permanent termination of military operations on all fronts, including in Lebanon', but the same day's UN story notes Israeli strikes on Beirut despite a ceasefire, Iran re-closed Hormuz on 22 June 'after Israeli attacks on Lebanon', strikes hit Nabatieh on 6 July, Israeli attacks 'continued in Gaza and Lebanon' on 4 October, the 2 November analysis describes 'Israel’s continued occupation and destruction of villages', and the 10 November story ('Trump says Iran fighting is over but keeps forces ready', not listed) names 'renewed conflict involving ... Israel in Lebanon'. After 25 April no story is mainly about Lebanon, so the later state comes only from optional entries and near misses. Counts: deaths are Lebanese health ministry or UN totals and do not separate civilians from fighters (6 June antifactor). Several stories restate a count loosely ('more than 1,000' after '1,029'; 'over one million' displaced after '1.2 million'); these are not falls. The 9 March 300,000 is given as displaced but the same story also says 'About 300,000 people were ordered to evacuate', so it may count only those under evacuation orders. The 7 March 400,000 is the population of the area under an evacuation order, not a displacement count. Near misses carry Lebanon numbers too (nearly 700,000 displaced on 10 March, 850 dead on 17 March, more than 900 dead and 800,000 displaced on 20 March, 1.2 million displaced on 6 June); a system that rightly leaves those stories out records none of them. Boundary rule used: optional when a wider-war story names Lebanon in its title or gives the Lebanon front a strand of its own with Lebanon-specific facts; near miss when Lebanon is a clause or one bullet in a list of fronts."
+  "notes": "Start: our stories date the war from 2 March 2026 ('Since March 2'); the first story is 4 March. Not closed on 16 November 2026, and two events must not be read as the end. (1) The April truce: the 25 April story is the first to report it ('a fragile three‑week ceasefire', 'A temporary truce extended for three weeks'), without naming its parties; on 6 June the truces had 'cut major battles but not stopped strikes and deaths' and the Lebanon toll had risen from more than 2,400 to more than 3,500. (2) The 18 June US-Iran deal declared 'immediate and permanent termination of military operations on all fronts, including in Lebanon', but the same day's UN story notes Israeli strikes on Beirut despite a ceasefire, Iran re-closed Hormuz on 22 June 'after Israeli attacks on Lebanon', strikes hit Nabatieh on 6 July, Israeli attacks 'continued in Gaza and Lebanon' on 4 October, the 2 November analysis describes 'Israel’s continued occupation and destruction of villages', and the 10 November story ('Trump says Iran fighting is over but keeps forces ready', not listed) names 'renewed conflict involving ... Israel in Lebanon'. After 25 April no story is mainly about Lebanon, so the later state comes only from optional entries and near misses. Counts: deaths are Lebanese health ministry or UN totals and do not separate civilians from fighters (6 June antifactor). Several stories restate a count loosely ('more than 1,000' after '1,029'; 'over one million' displaced after '1.2 million'); these are not falls. The 9 March 300,000 is given as displaced but the same story also says 'About 300,000 people were ordered to evacuate', so it may count only those under evacuation orders. The 7 March 400,000 is the population of the area under an evacuation order, not a displacement count. Near misses carry Lebanon numbers too (nearly 700,000 displaced on 10 March, 850 dead on 17 March, more than 900 dead and 800,000 displaced on 20 March, 1.2 million displaced on 6 June); a system that rightly leaves those stories out records none of them. Boundary rule used: optional when a wider-war story names Lebanon in its title or gives the Lebanon front a strand of its own with Lebanon-specific facts; near miss when Lebanon is a clause or one bullet in a list of fronts. ROLES: entries with `eitherRole` accept either verdict, each saying why in `roleReview` (an AI session's review of 2026-11-22, not yet checked by a person). Background (22 Mar), one minister's demand (24 Mar), a report on orders already reported (24 Mar) and strikes with an updated toll (6 Apr) stay routine."
 }

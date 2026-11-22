@@ -10,7 +10,8 @@
  * with a story of the half whose pair is not two entries of one development (of any key), and founded
  * charters naming an end event other than the key's (the strong judge's verdicts, passed in; one naming
  * none is never wrong). `role`: turning point or routine against the key of the overview a `must` entry
- * was found in. Means over runs. And how often the link calls flagged the re-center signals
+ * was found in, any answer agreeing with an entry that accepts either (`eitherRole`), counted apart so
+ * the bar's meaning stays visible. Means over runs. And how often the link calls flagged the re-center signals
  * (`scoreSignals`), with no bar. Pure.
  */
 import type { Role } from '../../../services/overviewTypes.js'
@@ -55,6 +56,8 @@ export interface LinkRunScore {
   /** Roles agreeing with the key, of must entries found in an overview whose key holds them as must. */
   rolesAgreeing: number
   rolesJudged: number
+  /** The judged entries that accept either role (`eitherRole`): agreeing whatever role was given. */
+  rolesEither: number
   /** The half's development id → its overview's id in this run, for the end-event judge. */
   developments: Map<string, string>
   /** What each wrong join was, for the report. */
@@ -81,6 +84,15 @@ export function rateBar(name: string, value: number | null, target: number, judg
   return { ...b, met: null, forOwner: `${judgments} judgment${judgments === 1 ? '' : 's'}, fewer than the ${MIN_RATE_SAMPLE} an automatic verdict needs` }
 }
 
+/** An entry's role as the role bars read it: `either` for one that accepts both (`eitherRole`). */
+export type KeyRole = Role['role'] | 'either'
+
+/** A key entry's role for the bars: `either` when it accepts both, else its role. */
+export const keyRoleOf = (e: Pick<AnswerKey['entries'][number], 'role' | 'eitherRole'>): KeyRole => (e.eitherRole ? 'either' : e.role)
+
+/** Whether a given role agrees with the key's: any answer agrees with an entry that accepts either. */
+export const roleAgrees = (expected: KeyRole, given: Role['role']): boolean => expected === 'either' || expected === given
+
 /** What the keys make of one entry story (`keyIndex`). */
 export interface IndexedEntry {
   /** Its first must key, or with none the key of its last optional entry. */
@@ -88,13 +100,13 @@ export interface IndexedEntry {
   /** `must` when any key holds it as must: a must outweighs another key's optional. */
   join: 'must' | 'optional'
   /** Its role in `key`. */
-  role: Role['role']
+  role: KeyRole
   /**
    * Every key it is a must entry of, with its role there. A story may be a must of two developments
    * (a deal that ends a war and reopens a strait); joining either one's overview is right, and its
    * role is judged against the key of the overview it joined.
    */
-  musts: ReadonlyMap<string, Role['role']>
+  musts: ReadonlyMap<string, KeyRole>
   /** The keys it is an optional entry of: joining one of their overviews is neither right nor wrong. */
   optionalIn: ReadonlySet<string>
 }
@@ -106,24 +118,24 @@ export interface IndexedEntry {
  * key's near misses.
  */
 export function keyIndex(keys: readonly AnswerKey[]) {
-  const musts = new Map<string, Map<string, Role['role']>>()
-  const optional = new Map<string, Map<string, Role['role']>>()
-  const add = (to: typeof musts, slug: string, key: string, role: Role['role']) => to.set(slug, (to.get(slug) ?? new Map()).set(key, role))
+  const musts = new Map<string, Map<string, KeyRole>>()
+  const optional = new Map<string, Map<string, KeyRole>>()
+  const add = (to: typeof musts, slug: string, key: string, role: KeyRole) => to.set(slug, (to.get(slug) ?? new Map()).set(key, role))
   const nearMiss = new Map<string, string[]>()
   for (const k of keys) {
-    for (const e of k.entries) add(e.join === 'must' ? musts : optional, e.slug, k.id, e.role)
+    for (const e of k.entries) add(e.join === 'must' ? musts : optional, e.slug, k.id, keyRoleOf(e))
     for (const n of [...k.nearMisses, ...k.centers.flatMap(c => c.nearMisses)]) nearMiss.set(n.slug, [...new Set([...(nearMiss.get(n.slug) ?? []), k.id])])
   }
   const entry = new Map<string, IndexedEntry>()
   for (const slug of new Set([...musts.keys(), ...optional.keys()])) {
-    const m = musts.get(slug) ?? new Map<string, Role['role']>()
-    const o = optional.get(slug) ?? new Map<string, Role['role']>()
+    const m = musts.get(slug) ?? new Map<string, KeyRole>()
+    const o = optional.get(slug) ?? new Map<string, KeyRole>()
     const [key, role] = m.size > 0 ? [...m][0]! : [...o].at(-1)!
     entry.set(slug, { key, join: m.size > 0 ? 'must' : 'optional', role, musts: m, optionalIn: new Set(o.keys()) })
   }
   for (const k of keys)
     for (const e of k.centers.flatMap(c => c.entries))
-      if (!entry.has(e.slug)) entry.set(e.slug, { key: k.id, join: 'optional', role: e.role, musts: new Map(), optionalIn: new Set([k.id]) })
+      if (!entry.has(e.slug)) entry.set(e.slug, { key: k.id, join: 'optional', role: keyRoleOf(e), musts: new Map(), optionalIn: new Set([k.id]) })
   return { entry, nearMiss }
 }
 
@@ -302,8 +314,9 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others:
     must: musts.length,
     foundings: run.overviews.length,
     wrongFoundings,
-    rolesAgreeing: judged.filter(slug => run.roles.get(slug)!.role === roleWhere(slug)).length,
+    rolesAgreeing: judged.filter(slug => roleAgrees(roleWhere(slug)!, run.roles.get(slug)!.role)).length,
     rolesJudged: judged.length,
+    rolesEither: judged.filter(slug => roleWhere(slug) === 'either').length,
     developments,
     mistakes,
   }

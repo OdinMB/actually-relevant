@@ -12,7 +12,7 @@ import type { LinkResult } from '../../../services/overviewLink.js'
 import type { Charter, FoundingOutcome, LinkOutcome, Role } from '../../../services/overviewTypes.js'
 import { isLabelDevelopment } from './developmentHalves.js'
 import type { AnswerKey } from './keySchema.js'
-import { linkKeys } from './linkScore.js'
+import { linkKeys, type KeyRole } from './linkScore.js'
 
 /** A story's neighbours as the replay read them: production's (`read`, `near` of them within the distance) and those kept to the replayed stories. */
 export interface NeighbourCount {
@@ -152,8 +152,9 @@ export interface CharterLine {
 export interface RunDiagnostics {
   run: number
   missed: MissedEntry[]
-  /** Found must entries with a role, and those whose role disagrees with the key. */
+  /** Found must entries with a role, those that accept either role (never a miss), and those whose role disagrees with the key. */
   rolesJudged: number
+  rolesEither: number
   roleMisses: RoleMiss[]
   charters: CharterLine[]
 }
@@ -183,7 +184,7 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
   const otherIds = new Set(d.others.map(x => x.id))
   const devOf = new Map(d.overviews.map(o => [o.id, k.standsFor(o.members)]))
   /** Every key a must entry of the half is a must of, the outside keys included: an overview of any of them is its own. */
-  const mustKeys = (slug: string) => k.all.get(slug)?.musts ?? new Map<string, Role['role']>()
+  const mustKeys = (slug: string) => k.all.get(slug)?.musts ?? new Map<string, KeyRole>()
   const overviewOf = new Map<string, FoundedOverview>()
   for (const o of d.overviews) for (const m of o.members) overviewOf.set(m, o)
   const titled = (id: string) => {
@@ -284,6 +285,7 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
 
   const roleMisses: RoleMiss[] = []
   let rolesJudged = 0
+  let rolesEither = 0
   for (const [slug, e] of entry) {
     if (e.join !== 'must') continue
     const placedIn = overviewOf.get(slug)
@@ -292,7 +294,8 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
     const expected = dev ? mustKeys(slug).get(dev) : undefined
     if (!dev || !expected || !given) continue
     rolesJudged++
-    if (given.role !== expected) roleMisses.push({ slug, key: dev, expected, given })
+    if (expected === 'either') rolesEither++
+    else if (given.role !== expected) roleMisses.push({ slug, key: dev, expected, given })
   }
 
   const charters = d.overviews.map((o): CharterLine => {
@@ -309,7 +312,7 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
       charter: o.charter,
     }
   })
-  return { run: d.run, missed, rolesJudged, roleMisses, charters }
+  return { run: d.run, missed, rolesJudged, rolesEither, roleMisses, charters }
 }
 
 /** Each development's missed must entries by cause, summed over the runs, in `MISS_CAUSES` order. */

@@ -12,7 +12,7 @@ import { normalizeQuote } from '../../../lib/quoteMatch.js'
 import { storedResearchText } from '../../../services/researchedStory.js'
 import type { SelectDb } from '../readOnlyDb.js'
 import type { KeyFile } from './keyFiles.js'
-import { unreviewed, type AnswerKey } from './keySchema.js'
+import { eitherRoles, rolesToReview, unreviewed, type AnswerKey } from './keySchema.js'
 import { sharedMusts } from './linkScore.js'
 
 /** A story an answer key or a gap key names, as the checks read it. */
@@ -128,6 +128,10 @@ export interface KeySummary {
   withResearchRun: number
   /** Drafted responses and centers a person has not reviewed yet (`unreviewed`). */
   toReview: number
+  /** Entries that accept either role (`eitherRoles`). */
+  eitherRoles: number
+  /** Entries whose role an AI session changed and no person has checked yet (`rolesToReview`): counted, never refused on. */
+  rolesToReview: number
 }
 
 export function summarizeKey(key: AnswerKey, stories: ReadonlyMap<string, KeyStory>): KeySummary {
@@ -142,6 +146,8 @@ export function summarizeKey(key: AnswerKey, stories: ReadonlyMap<string, KeySto
     responses: key.responses.length,
     withResearchRun: key.entries.filter(e => stories.get(e.slug)?.hasResearchRun).length,
     toReview: unreviewed(key, 'responses') + unreviewed(key, 'centers'),
+    eitherRoles: eitherRoles(key),
+    rolesToReview: rolesToReview(key),
   }
 }
 

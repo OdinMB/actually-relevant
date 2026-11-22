@@ -4,8 +4,9 @@
  * with our published stories. The Zod schema holds the shape and the format rules (in its
  * `.describe()`s, from the drafting brief's "Field rules"); `validateKey` holds the rules across
  * fields. A drafted response or center carries `reviewed: false` until a person has checked it, and
- * the steps that read it refuse while one is left (`awaitingReview`). Every later overview eval
- * scores against these keys. Pure.
+ * the steps that read it refuse while one is left (`awaitingReview`). An entry may accept either role
+ * (`eitherRole`), and one whose role an AI session changed says so in `roleReview` until a person has
+ * checked it (counted, never refused on). Every later overview eval scores against these keys. Pure.
  */
 import { z } from 'zod'
 
@@ -65,6 +66,20 @@ const entrySchema = z.object({
     .default(null)
     .describe(
       'One short lowercase word for a turning point (setback, response, spread, decision, escalation, deescalation, money, science, people, milestone); null for a routine entry.',
+    ),
+  eitherRole: z
+    .boolean()
+    .default(false)
+    .describe(
+      'True when careful editors could call it either a turning point or routine (a big renewed warning, a strike on a new target in an ongoing war, a same-day second report of a turning point): the role bars count either answer as right. `role` and `kind` still give the reading the key leans to, which the steps that need one role use. False (or absent) otherwise.',
+    ),
+  roleReview: z
+    .string()
+    .min(1)
+    .nullable()
+    .default(null)
+    .describe(
+      'Set when an AI session changed `role`, `kind` or `eitherRole`, until a person has checked it: who and when, what was there before and why, e.g. "AI (claude-code), 2026-11-22: was routine; ...". The person deletes it to keep the change, or restores what it says was there. Null (or absent) otherwise. No step refuses on it; the keys check counts them.',
     ),
   values: z.array(valueSchema).default([]).describe('Every number the story states for one of the figures, from our published text only.'),
   statuses: z
@@ -243,6 +258,15 @@ export function unreviewed(key: AnswerKey, field: 'responses' | 'centers'): numb
   if (field === 'responses') return key.responses.filter(r => !r.reviewed).length
   return key.centers.filter(c => !c.reviewed).length
 }
+
+/** Every entry of the key, its centers' included. */
+const allEntries = (key: AnswerKey): AnswerKey['entries'] => [...key.entries, ...key.centers.flatMap(c => c.entries)]
+
+/** Entries, its centers' included, whose role an AI session changed and no person has checked yet (`roleReview`). */
+export const rolesToReview = (key: AnswerKey): number => allEntries(key).filter(e => e.roleReview !== null).length
+
+/** Entries, its centers' included, that accept either role (`eitherRole`). */
+export const eitherRoles = (key: AnswerKey): number => allEntries(key).filter(e => e.eitherRole).length
 
 /** Each development's center in force on `day`: the newest whose `from` is on or before it; null for the base charter. */
 export function centerOn(key: AnswerKey, day: string): AnswerKey['centers'][number] | null {

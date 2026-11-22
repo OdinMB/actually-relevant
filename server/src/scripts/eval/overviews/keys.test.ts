@@ -84,6 +84,15 @@ describe('parseKey', () => {
     expect(errorsOf(k)).toEqual([])
   })
 
+  it('takes a missing eitherRole as false and roleReview as null, keeps them when set, and rejects an empty roleReview', () => {
+    expect(parseKey(key()).key!.entries[1]).toMatchObject({ eitherRole: false, roleReview: null })
+    const k = key()
+    Object.assign(k.entries[1]!, { eitherRole: true, roleReview: 'AI (claude-code), 2026-11-22: either role accepted; a big renewed warning' })
+    expect(parseKey(k)).toMatchObject({ errors: [], key: { entries: [{}, { role: 'routine', eitherRole: true }, {}] } })
+    k.entries[1]!.roleReview = ''
+    expect(errorsOf(k)).toEqual([expect.stringMatching(/^entries\.1\.roleReview: /)])
+  })
+
   it('rejects a date not written YYYY-MM-DD', () => {
     const k = key()
     k.entries[0]!.date = '2026-6-1'

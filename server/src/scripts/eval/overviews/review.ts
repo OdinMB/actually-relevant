@@ -2,7 +2,8 @@
  * The `review` step (`.context/model-eval.md`, "Overview evals"; plan "Evals and bars"): production's
  * review (`reviewOverview`, the actions code allows) of each development of the half with at least 3
  * must entries, its overview built from the key with errors planted: up to `PLANTED_JOINS` of its near
- * misses inserted as entries, one entry's role flipped, the charter's OUT list emptied. On the eval's
+ * misses inserted as entries, one entry's role flipped (never one that accepts either role, whose
+ * relabel is never a demotion either), the charter's OUT list emptied. On the eval's
  * cached calls at the review tier; `reviewScore.ts` scores the bars. Each run k ≥ 2 has its own cache
  * keys; developments start only while the budget lasts.
  */
@@ -62,10 +63,14 @@ export function plantedCase(
     return s ? [{ e, s }] : []
   })
   if (musts.length < 3) return null
-  const flip = musts[Math.floor(musts.length / 2)]!
+  // The middle must entry is flipped; flipping one that accepts either role plants nothing, so then the nearest that does not (the earlier one first).
+  const middle = Math.floor(musts.length / 2)
+  const byNearness = musts.map((m, i) => ({ m, d: Math.abs(i - middle) + (i < middle ? 0 : 0.5) })).sort((a, b) => a.d - b.d)
+  const flip = byNearness.find(({ m }) => !m.e.eitherRole)?.m ?? null
   const correct = musts.map(({ e, s }) => ({
-    entry: entry(s, e === flip.e ? flipped(keyRole(e)) : keyRole(e), `key:${e.slug}`),
+    entry: entry(s, e === flip?.e ? flipped(keyRole(e)) : keyRole(e), `key:${e.slug}`),
     keyRole: keyRole(e),
+    eitherRole: e.eitherRole,
     slug: e.slug,
   }))
   const joins = key.nearMisses
@@ -78,8 +83,8 @@ export function plantedCase(
   return {
     key: key.id,
     plantedJoins: joins.map(j => j.entryId),
-    plantedRole: { entryId: `key:${flip.e.slug}`, keyRole: keyRole(flip.e) },
-    correct: correct.filter(c => c.slug !== flip.e.slug).map(c => ({ entryId: c.entry.entryId, keyRole: c.keyRole })),
+    plantedRole: flip ? { entryId: `key:${flip.e.slug}`, keyRole: keyRole(flip.e) } : null,
+    correct: correct.filter(c => c.slug !== flip?.e.slug).map(c => ({ entryId: c.entry.entryId, keyRole: c.keyRole, eitherRole: c.eitherRole })),
     review: {
       overviewId: `review:${key.id}`,
       title: key.title,
