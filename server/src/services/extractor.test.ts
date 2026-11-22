@@ -4,6 +4,7 @@ const mockAxiosGet = vi.hoisted(() => vi.fn())
 const mockAxiosPost = vi.hoisted(() => vi.fn())
 const mockReadabilityParse = vi.hoisted(() => vi.fn())
 const mockWindowClose = vi.hoisted(() => vi.fn())
+const mockJsdomOptions = vi.hoisted(() => vi.fn())
 
 vi.mock('axios', () => ({
   default: {
@@ -15,6 +16,14 @@ vi.mock('axios', () => ({
 vi.mock('jsdom', () => ({
   JSDOM: class MockJSDOM {
     window = { document: {}, close: mockWindowClose }
+    constructor(_html: string, options: unknown) {
+      mockJsdomOptions(options)
+    }
+  },
+  VirtualConsole: class MockVirtualConsole {
+    on() {
+      return this
+    }
   },
 }))
 
@@ -339,6 +348,14 @@ describe('JSDOM cleanup', () => {
 
     await extractContent('https://example.com/article')
     expect(mockWindowClose).toHaveBeenCalled()
+  })
+
+  it("parses the page with the crawl console, which keeps jsdom's CSS noise out of the logs", async () => {
+    mockAxiosGet.mockResolvedValue({ data: '<html><body><p>Content</p></body></html>' })
+    mockReadabilityParse.mockReturnValue(null)
+
+    await extractContent('https://example.com/article')
+    expect(mockJsdomOptions).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://example.com/article', virtualConsole: expect.anything() }))
   })
 
   it('calls window.close() when readability returns null', async () => {

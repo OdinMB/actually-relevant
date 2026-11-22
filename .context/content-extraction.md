@@ -43,6 +43,8 @@ If the feed has an `htmlSelector` configured (e.g., `article.post-content`), the
 
 Uses `@mozilla/readability` with `jsdom` to extract the main article content. Works well for standard news articles. This is the primary extraction method for most feeds.
 
+The page's JSDOM reports to its own console (`lib/crawlVirtualConsole.ts`), not jsdom's default, which prints straight to stderr. jsdom's "Could not parse CSS stylesheet" errors, raised by publishers' modern inline CSS, are dropped: extraction never reads styles. Any other jsdom error is logged as a warning with the page URL. Pages run no scripts, so their own console calls are ignored.
+
 ### Tier 3: External API
 
 Only the configured `config.crawl.extractionApi` (default `diffbot`) is called — there is no fallback to the other API. Requires `DIFFBOT_TOKEN` or `PIPFEED_API_KEY` depending on which API is configured. Skipped if the required key isn't set.
