@@ -29,6 +29,16 @@ You don't need to check completeness: a missed item only means one test case few
 - **Shortcut per file:** once you have read every item of a file and deleted the wrong ones, replace every `"reviewed": false` in that file with `"reviewed": true`.
 - **Add one by hand** (optional): copy an item, set the story's `slug`, its `date` (the story's entry date in the same file), the story's exact words as `quote`, and `"reviewed": true`.
 
+## Roles an AI session changed (2026-11-22)
+
+A second kind of item, separate from the responses: an AI session reviewed every key's turning point / routine labels against the role disagreements of the linking runs. Each entry it changed carries a `roleReview` line saying who and when, what was there before and why. Most add `"eitherRole": true`: careful editors could call the story either (a big renewed warning, a strike on a new target in an ongoing war, a same-day second report of a turning point), so the role bar counts either answer as right, while `role` and `kind` keep the reading the key leans to. One relabels (Hormuz, 16 July). The `keys` report's "Roles to review" column counts them per key; nothing refuses on them, so the linking bars already read them.
+
+- **Keep it:** delete the `roleReview` line.
+- **Reject an "either":** delete both the `eitherRole` and `roleReview` lines; the entry keeps the role it had.
+- **Reject a relabel or a kind change:** put back the role or kind the line says was there, and delete the line.
+
+Mark "either" only where both readings hold for a careful editor, never to raise the bar: a routine count update the model calls a setback stays routine. Each key's `notes` ends with what stayed routine and any gap (the Iran war's August ceasefire has no turning point yet).
+
 ## When you are done
 
 ```bash

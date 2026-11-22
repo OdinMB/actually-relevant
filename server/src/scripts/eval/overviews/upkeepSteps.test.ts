@@ -138,6 +138,18 @@ describe('plantedCase', () => {
     expect(p.review.entries.map(e => e.entryId)).toEqual(['key:e1', 'key:e2', 'key:e3', 'key:e4', 'planted:n1', 'planted:n3'])
   })
 
+  it('flips the must entry nearest the middle that does not accept either role, and plants no flip when all do', () => {
+    const marked = (slugs: string[]): AnswerKey => ({ ...key, entries: key.entries.map(e => (slugs.includes(e.slug) ? { ...e, eitherRole: true } : e)) })
+    expect(plantedCase(marked(['e2']), stories)!.plantedRole).toMatchObject({ entryId: 'key:e3' })
+    const p = plantedCase(marked(['e3']), stories)!
+    expect(p.plantedRole).toEqual({ entryId: 'key:e2', keyRole: { role: 'routine', roleKind: null } })
+    expect(plantedCase(marked(['e2', 'e3']), stories)!.plantedRole).toMatchObject({ entryId: 'key:e4' })
+    expect(p.correct.find(c => c.entryId === 'key:e3')).toMatchObject({ eitherRole: true })
+    const none = plantedCase(marked(['e1', 'e2', 'e3', 'e4']), stories)!
+    expect(none.plantedRole).toBeNull()
+    expect(none.correct.map(c => c.entryId)).toEqual(['key:e1', 'key:e2', 'key:e3', 'key:e4'])
+  })
+
   it('plants nothing in a development with fewer than 3 must entries published here', () => {
     expect(plantedCase(key, new Map([...stories, ['e3', null], ['e4', null]]))).toBeNull()
   })

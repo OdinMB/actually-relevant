@@ -60,11 +60,13 @@ function roleLines(r: LinkStepReport): string[] {
   return [
     '### Role disagreements (diagnostics; no bar)',
     '',
-    '| Run | Judged | Agreeing | Key turning point, given routine | Key routine, given turning point |',
-    '|---|---|---|---|---|',
+    '"Key accepts either": judged entries the key marks `eitherRole`, where careful editors could call the story either; they count as agreeing whatever role was given, so the agreeing share holds them.',
+    '',
+    '| Run | Judged | Agreeing | Key accepts either | Key turning point, given routine | Key routine, given turning point |',
+    '|---|---|---|---|---|---|',
     ...r.diagnostics.map(d => {
       const under = d.roleMisses.filter(m => m.expected === 'turning_point').length
-      return `| ${d.run} | ${d.rolesJudged} | ${d.rolesJudged - d.roleMisses.length} | ${under} | ${d.roleMisses.length - under} |`
+      return `| ${d.run} | ${d.rolesJudged} | ${d.rolesJudged - d.roleMisses.length} | ${d.rolesEither} | ${under} | ${d.roleMisses.length - under} |`
     }),
     '',
     ...r.diagnostics.flatMap(d =>
@@ -138,10 +140,11 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
     '',
     '### Per run',
     '',
-    '| Run | Joins right / wrong | Must entries found | Overviews founded / wrong | Roles agreeing |',
+    '| Run | Joins right / wrong | Must entries found | Overviews founded / wrong | Roles agreeing (of them, the key accepting either) |',
     '|---|---|---|---|---|',
     ...r.score.runs.map(
-      s => `| ${s.run} | ${s.right} / ${s.wrong} | ${s.found} of ${s.must} | ${s.foundings} / ${s.wrongFoundings} | ${s.rolesAgreeing} of ${s.rolesJudged} |`,
+      s =>
+        `| ${s.run} | ${s.right} / ${s.wrong} | ${s.found} of ${s.must} | ${s.foundings} / ${s.wrongFoundings} | ${s.rolesAgreeing} of ${s.rolesJudged} (${s.rolesEither}) |`,
     ),
     '',
     ...(shown('found') && r.endEvents.length > 0

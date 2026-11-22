@@ -290,6 +290,13 @@ describe('the review bars', () => {
     expect(s).toEqual({ planted: 4, caught: 3, correct: 2, demoted: 1 })
   })
 
+  it('never counts a relabel of an entry that accepts either role as demoted', () => {
+    const relabel = { kind: 'relabel' as const, entryId: 'key:e1', storyId: 'e1', from: routine, to: turning }
+    expect(scoreReviewRun([reviewCase([relabel])])).toMatchObject({ correct: 2, demoted: 1 })
+    const either = reviewCase([relabel], { correct: [{ entryId: 'key:e1', keyRole: routine, eitherRole: true }] })
+    expect(scoreReviewRun([either])).toMatchObject({ correct: 1, demoted: 0 })
+  })
+
   it('scores the bars as means over runs', () => {
     const s = scoreReviews([reviewCase([]), reviewCase([{ kind: 'detach', entryId: 'planted:n1', storyId: 'n1', reason: 'no' }], { run: 2 })])
     expect(s.runs.map(r => [r.run, r.caught, r.planted])).toEqual([

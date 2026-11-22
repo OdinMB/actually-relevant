@@ -110,17 +110,18 @@ function keyLines(keys: KeyResult[]): string[] {
   if (keys.length === 0) return ['No answer keys committed yet (`server/src/scripts/eval/overviews/keys/`).']
   const row = (k: KeyResult) => {
     const s = k.summary
-    if (!s) return `| ${k.file} | (does not parse) | | | | | | | | ${k.errors.length} |`
-    return `| ${cell(s.title)} | ${k.file} | ${s.must} / ${s.optional} | ${s.nearMisses} | ${s.figures} | ${s.values} | ${s.responses} | ${s.withResearchRun} | ${s.toReview} | ${k.errors.length} |`
+    if (!s) return `| ${k.file} | (does not parse) | | | | | | | | | | ${k.errors.length} |`
+    return `| ${cell(s.title)} | ${k.file} | ${s.must} / ${s.optional} | ${s.nearMisses} | ${s.figures} | ${s.values} | ${s.responses} | ${s.withResearchRun} | ${s.eitherRoles} | ${s.toReview} | ${s.rolesToReview} | ${k.errors.length} |`
   }
   const withErrors = keys.filter(k => k.errors.length > 0)
   const toReview = keys.reduce((sum, k) => sum + (k.summary?.toReview ?? 0), 0)
+  const rolesToReview = keys.reduce((sum, k) => sum + (k.summary?.rolesToReview ?? 0), 0)
   const shared = [...new Map(keys.flatMap(k => k.sharedMusts).map(s => [s.slug, s])).values()]
   return [
-    `${keys.length} keys. An error is a mistake in the key, to fix there; it passes or fails nothing in production.${toReview > 0 ? ` ${toReview} drafted responses and centers are not reviewed yet (\`"reviewed": false\`): \`stands\` refuses a half that holds one, and \`link\`, \`recenter\` and \`replay\` a half that holds a center.` : ''}`,
+    `${keys.length} keys. An error is a mistake in the key, to fix there; it passes or fails nothing in production.${toReview > 0 ? ` ${toReview} drafted responses and centers are not reviewed yet (\`"reviewed": false\`): \`stands\` refuses a half that holds one, and \`link\`, \`recenter\` and \`replay\` a half that holds a center.` : ''}${rolesToReview > 0 ? ` ${rolesToReview} entr${rolesToReview === 1 ? 'y carries' : 'ies carry'} a role an AI session changed (\`roleReview\`, which says what was there and why): delete the line to keep the change, or restore what it says; no step refuses on them.` : ''}`,
     '',
-    '| Development | File | Entries (must / optional) | Near misses | Figures | Values | Responses | Entries with a research run | To review | Errors |',
-    '|---|---|---|---|---|---|---|---|---|---|',
+    '| Development | File | Entries (must / optional) | Near misses | Figures | Values | Responses | Entries with a research run | Either role | To review | Roles to review | Errors |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...keys.map(row),
     ...(shared.length > 0
       ? [

@@ -148,6 +148,32 @@ describe('diagnoseRun', () => {
       ['e2', 'routine', 'turning_point'],
       ['e4', 'turning_point', 'routine'],
     ])
+    expect(d.rolesEither).toBe(0)
+  })
+
+  it('never lists an entry that accepts either role as a disagreement, and counts it apart', () => {
+    const either: AnswerKey = { ...EBOLA, entries: EBOLA.entries.map(e => (e.slug === 'e2' ? { ...e, eitherRole: true } : e)) }
+    const d = diagnoseRun({ ...diagnoseInput(), keys: [either, CHOLERA] })
+    expect(d).toMatchObject({ rolesJudged: 3, rolesEither: 1 })
+    expect(d.roleMisses.map(m => m.slug)).toEqual(['e4'])
+    const report = {
+      half: 'judge' as const,
+      repeat: 1,
+      keys: ['ebola', 'cholera'],
+      stories: 9,
+      background: { keys: [], stories: 0 },
+      left: [],
+      score: scoreLinking([either, CHOLERA], []),
+      endEvents: [],
+      signals: [],
+      diagnostics: [d],
+      unanswered: 0,
+      errored: 0,
+      costUsd: 0,
+      perStoryUsd: 0,
+    }
+    // run 2: 3 judged, 2 agreeing, 1 accepting either, 1 key turning point given routine, 0 the other way
+    expect(linkLines(report, ['role']).join('\n')).toContain('| 2 | 3 | 2 | 1 | 1 | 0 |')
   })
 
   it("gives each founded charter with what the keys make of its pair and members, the other half's keys included", () => {
@@ -217,7 +243,7 @@ describe('diagnoseRun', () => {
     expect(text).toContain('Calls not made: 2')
     expect(text).toContain('### Missed must entries')
     expect(text).toContain('- Run 2, e7 (ebola, 2026-05-07): **model unsure**: O1 0.30: unsure 0.40, unrelated')
-    expect(text).toContain('| 2 | 3 | 1 | 1 | 1 |')
+    expect(text).toContain('| 2 | 3 | 1 | 0 | 1 | 1 |')
     expect(text).toContain('**Ebola in DRC**, standing for ebola; founded 2026-05-02 from e1 (must entry of ebola) and e2 (must entry of ebola)')
     expect(text).toContain('  - OUT: cholera')
     expect(linkLines(report, ['role']).join('\n')).not.toContain('### Missed must entries')

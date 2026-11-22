@@ -21,8 +21,8 @@ export interface ReviewCaseRun {
   plantedJoins: string[]
   /** The entry whose role was flipped, with the key's role. */
   plantedRole: { entryId: string; keyRole: Role } | null
-  /** Correct entries (the key's), by entry id, with their key roles. */
-  correct: { entryId: string; keyRole: Role }[]
+  /** Correct entries (the key's), by entry id, with their key roles; one that accepts either role (`eitherRole`) is not demoted by a relabel. */
+  correct: { entryId: string; keyRole: Role; eitherRole?: boolean }[]
   /** The review's outcome and the actions code allowed. */
   outcome: 'reviewed' | 'failed'
   actions: ReviewAction[]
@@ -59,7 +59,7 @@ export function scoreReviewRun(cases: readonly ReviewCaseRun[]): Omit<ReviewRunS
     for (const e of c.correct) {
       correct++
       const to = relabeled.get(e.entryId)
-      if (detached.has(e.entryId) || (to && to.role !== e.keyRole.role)) demoted++
+      if (detached.has(e.entryId) || (to && !e.eitherRole && to.role !== e.keyRole.role)) demoted++
     }
   }
   return { planted, caught, correct, demoted }

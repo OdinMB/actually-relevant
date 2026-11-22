@@ -170,12 +170,32 @@ describe('keySlugs and summarizeKey', () => {
       values: 1,
       responses: 0,
       withResearchRun: 1,
+      eitherRoles: 0,
       toReview: 0,
+      rolesToReview: 0,
     })
     const reviewed = answerKey(k => {
       Object.assign(k, { schemaVersion: 2, responses: [{ date: '2026-06-02', what: 'Vaccination', slug: 'a', quote: '4,887', reviewed: true }] })
     })
     expect(summarizeKey(reviewed, byslug())).toMatchObject({ responses: 1, toReview: 0 })
+  })
+
+  it("counts the entries that accept either role and those whose role an AI changed, a center's too, apart from the drafts that block a step", () => {
+    const relabeled = answerKey(k => {
+      Object.assign(k.entries[0], { eitherRole: true, roleReview: 'AI (claude-code), 2026-11-22: either role accepted; a big renewed warning' })
+      Object.assign(k.entries[1], { roleReview: 'AI (claude-code), 2026-11-22: was routine; a first' })
+      k.centers = [
+        {
+          from: '2026-06-03',
+          title: 'Regional Ebola',
+          charter: { in: 'Wider.', out: [], endEvent: null },
+          why: 'It spread',
+          entries: [{ slug: 'c', date: '2026-06-03', title: 'C', join: 'must', role: 'routine', eitherRole: true, why: 'x' }],
+          reviewed: true,
+        },
+      ]
+    })
+    expect(summarizeKey(relabeled, byslug())).toMatchObject({ eitherRoles: 2, rolesToReview: 2, toReview: 0 })
   })
 })
 
