@@ -67,7 +67,7 @@ import { runUpdateStep, type UpdateStepOptions } from './overviews/update.js'
 import type { UpdateStory } from './overviews/updateFixtures.js'
 import { LINK_DESK_USD_PER_STORY, linkReplayStories, rescoreLinkStep, runLinkStep } from './overviews/link.js'
 import { verdict } from './overviews/linkReport.js'
-import { keepsSavedReplay, savedReplayName, writeSavedReplay } from './overviews/savedLinkReplay.js'
+import { replayNotSaved, savedReplayName, writeSavedReplay } from './overviews/savedLinkReplay.js'
 import { MEMBERS_PER_CHECKPOINT, passPoolStories, runPassPool } from './overviews/passPool.js'
 import { runReplayStep } from './overviews/replay.js'
 import { runRecenterStep } from './overviews/recenter.js'
@@ -476,15 +476,15 @@ async function main(): Promise<void> {
               repeat: opts.repeat,
               concurrency: opts.concurrency,
               budgetUsd: opts.budget,
+              cacheOnly: opts.cacheOnly,
             })
             report.link = linked.report
-            if (linked.replay && keepsSavedReplay(linked.replay, opts)) {
+            const notSaved = linked.replay && replayNotSaved(linked.replay, opts)
+            if (linked.replay && !notSaved) {
               writeSavedReplay(savedFile, linked.replay)
               console.log(`${steps}: saved the replay to ${savedFile}; --rescore scores it again for free`)
-            } else if (linked.replay) {
-              console.log(
-                `${steps}: replay not saved: ${linked.replay.unanswered} calls were not in the cache, so this rerun drifted from the run it reruns; ${savedFile} is left as it was`,
-              )
+            } else if (notSaved) {
+              console.log(`${steps}: replay not saved: ${notSaved}; ${savedFile} is left as it was`)
             }
           }
           if (report.link.stopped) skipped.push({ step: steps, reason: report.link.stopped })

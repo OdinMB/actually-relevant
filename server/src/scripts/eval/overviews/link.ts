@@ -65,6 +65,8 @@ export interface LinkStepOptions {
   /** Calls in flight across the runs (the eval context's own cap); within a run, link calls run ahead of the writes by production's look-ahead at most. */
   concurrency: number
   budgetUsd: number
+  /** A rerun answered from the cache only (`--cache-only`): it makes no call, so it spends nothing, and the folder's recorded spend does not stop it. */
+  cacheOnly?: boolean
   /** Replay only the first N stories in date order (a smoke run). */
   limit?: number
 }
@@ -310,8 +312,9 @@ export async function runLinkStep(o: LinkStepOptions): Promise<{ report: LinkSte
     neighbours: o.neighbours,
     ctx,
     lookAhead: Math.min(o.concurrency, config.overviews.concurrency),
-    // A call the budget refused stops the runs as the spend reaching it does: the holds of the calls in flight can keep the spend just below it
-    withinBudget: () => o.ctx.spentUsd() < o.budgetUsd && !meter.budgetRefused,
+    // A call the budget refused stops the runs as the spend reaching it does: the holds of the calls in flight can keep the spend just below it.
+    // A cache-only rerun spends nothing, so the folder's spend, the paid run it rebuilds included, never stops it
+    withinBudget: () => (o.cacheOnly === true || o.ctx.spentUsd() < o.budgetUsd) && !meter.budgetRefused,
   }
   const runs = await Promise.all(runNumbers(o.repeat).map(run => replayRun(run, input)))
   const replay: SavedLinkReplay = {

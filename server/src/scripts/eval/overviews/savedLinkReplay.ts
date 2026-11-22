@@ -53,11 +53,19 @@ export function savedReplayName({ half, repeat, limit }: { half: SavedLinkReplay
 }
 
 /**
- * Whether a run's replay is saved: always, but for a cache-only rerun that left a call unanswered.
- * That rerun drifted from the run it reruns, and saving it would replace a real outcome with a
- * drifted one; one with every call answered is made of recorded answers only.
+ * Why a run's replay is not saved, or null where it is: it is saved from every run but a cache-only
+ * rerun that is not the run it reruns, because it left a call unanswered (it drifted) or a run of it
+ * stopped before its last story. Saving that rerun would replace a real outcome with a lesser one;
+ * one with every call answered and every run carried through is made of recorded answers only.
  */
-export const keepsSavedReplay = (replay: Pick<SavedLinkReplay, 'unanswered'>, run: { cacheOnly: boolean }): boolean => !(run.cacheOnly && replay.unanswered > 0)
+export function replayNotSaved(replay: Pick<SavedLinkReplay, 'unanswered' | 'runs'>, run: { cacheOnly: boolean }): string | null {
+  if (!run.cacheOnly) return null
+  if (replay.unanswered > 0) return `${replay.unanswered} calls were not in the cache, so this rerun drifted from the run it reruns`
+  const stopped = replay.runs.filter(r => r.stopped).map(r => r.run)
+  if (stopped.length > 0)
+    return `run${stopped.length === 1 ? '' : 's'} ${stopped.join(', ')} stopped before the last story, so this rerun is not the run it reruns`
+  return null
+}
 
 export function writeSavedReplay(file: string, replay: SavedLinkReplay): void {
   writeFileSync(file, JSON.stringify(replay, null, 1))

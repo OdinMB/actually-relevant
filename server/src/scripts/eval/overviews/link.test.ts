@@ -14,7 +14,7 @@ import type { KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
 import { backgroundOf, END_EVENT_SCHEMA, rescoreLinkStep, runLinkStep } from './link.js'
 import { linkLines } from './linkReport.js'
-import { savedReplayName, writeSavedReplay } from './savedLinkReplay.js'
+import { replayNotSaved, savedReplayName, writeSavedReplay } from './savedLinkReplay.js'
 
 const DAYS = { a: 1, b: 2, c: 3, x: 2 } as const
 const story = (slug: keyof typeof DAYS): LinkStory => ({
@@ -266,7 +266,7 @@ function fromCache(recorded: ReadonlyMap<string, CallRecord>) {
   return { ctx: { call }, asked }
 }
 
-const replayOf = (files: KeyFile[], ctx: Parameters<typeof runLinkStep>[0]['ctx']) =>
+const replayOf = (files: KeyFile[], ctx: Parameters<typeof runLinkStep>[0]['ctx'], over: Partial<Parameters<typeof runLinkStep>[0]> = {}) =>
   runLinkStep({
     ctx,
     files,
@@ -281,6 +281,7 @@ const replayOf = (files: KeyFile[], ctx: Parameters<typeof runLinkStep>[0]['ctx'
     repeat: 2,
     concurrency: 8,
     budgetUsd: 1,
+    ...over,
   })
 
 describe('runLinkStep, its repeats side by side', () => {
@@ -315,6 +316,19 @@ describe('runLinkStep, its repeats side by side', () => {
     const { report } = await replayOf(outbreak(), refusing)
     expect(report.stopped).toMatch(/runs 1, 2/)
     for (const d of report.diagnostics) expect(d.missed.filter(m => m.cause === 'not linked').map(m => m.slug)).toContain('s5')
+  })
+
+  it("rebuilds from the cache, in a folder whose recorded spend has reached the budget, the paid run's replay, since a cache-only rerun spends nothing", async () => {
+    const model = fixedModel()
+    const paid = await replayOf(outbreak(), model.ctx, { concurrency: 1 })
+    // The folder's ledger now holds the paid run and more: past --budget
+    const overBudget = { ...fromCache(model.recorded).ctx, spentUsd: () => 5 }
+    const rebuilt = await replayOf(outbreak(), overBudget, { concurrency: 1, cacheOnly: true })
+    expect(rebuilt.replay!.runs.map(r => r.stopped)).toEqual([false, false])
+    expect(replayNotSaved(rebuilt.replay!, { cacheOnly: true })).toBeNull()
+    expect(rebuilt.report).toEqual(paid.report)
+    // A run that may spend is still stopped there
+    expect((await replayOf(outbreak(), overBudget, { concurrency: 1 })).report.stopped).toMatch(/runs 1, 2/)
   })
 })
 

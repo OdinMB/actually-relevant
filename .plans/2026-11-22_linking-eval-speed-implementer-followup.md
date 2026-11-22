@@ -32,7 +32,6 @@ Plan: `.plans/completed/2026-11-22_linking-eval-speed.md`. Branch `claude/eval-s
 - **The other steps' budget stop.** `context`, `update`, `pass-pool`, `stands`, `review` and `replay` stop when recorded spend reaches the budget. Under the in-flight holds, a step close to its budget can work through its remaining items with refused calls instead of stopping. `replay.ts`'s `keepGoing` would gain most from the same refusal stop `link.ts` now has. Cost: a small change per step.
 - **Split `link.ts` along replay and scoring.** The seam: `link.ts` keeps the replay (`replayRun`, `runLinkStep`, `evalCall(s)`, `linkReplayStories`, `backgroundOf`, `sandboxSignals`); a new `linkStepScore.ts` takes `LinkStepReport`, `scoreSavedReplay`, `judgeEndEvents`, `rescoreLinkStep` and `refusedReport`, importing `linkReplayStories` and `END_EVENT_SCHEMA` from `link.ts`. Then `link.ts` would import `scoreSavedReplay` from it, an import cycle unless `END_EVENT_SCHEMA` and `linkReplayStories` move first. Gain: each half changes for one reason only.
 - **`--limit` runs mislabel cut stories.** A must entry beyond `--limit` shows "not replayed: not published in this database", which is wrong (this predates this change). The new `absent` map could carry "after the --limit" for those slugs.
-- **A cache-only rerun checks the folder's spend.** In a folder whose ledger already exceeds `--budget`, the replay's budget stop ends it at once, though it makes no call (this predates this change). Passing the folder's running total as `--budget` avoids it.
 
 ## Landing Queue
 

@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  keepsSavedReplay,
   readSavedReplay,
   replayDrift,
+  replayNotSaved,
   SAVED_LINK_REPLAY_VERSION,
   savedReplayName,
   writeSavedReplay,
@@ -64,10 +64,12 @@ describe('the saved linking replay', () => {
     expect(replayDrift(saved, ['b', 'a', 'd', 'gone'])).toEqual({ added: ['d'], removed: ['c'] })
   })
 
-  it('is kept from every run but a cache-only rerun that left a call unanswered, which drifted from the run it reruns', () => {
-    expect(keepsSavedReplay(saved, { cacheOnly: false })).toBe(true)
-    expect(keepsSavedReplay({ ...saved, unanswered: 4 }, { cacheOnly: false })).toBe(true)
-    expect(keepsSavedReplay(saved, { cacheOnly: true })).toBe(true)
-    expect(keepsSavedReplay({ ...saved, unanswered: 4 }, { cacheOnly: true })).toBe(false)
+  it('is kept from every run but a cache-only rerun that is not the run it reruns: one that left a call unanswered, or whose run stopped before its last story', () => {
+    const unanswered = { ...saved, unanswered: 4 }
+    const stopped = { ...saved, runs: [{ ...saved.runs[0]!, stopped: true }] }
+    for (const replay of [saved, unanswered, stopped]) expect(replayNotSaved(replay, { cacheOnly: false })).toBeNull()
+    expect(replayNotSaved(saved, { cacheOnly: true })).toBeNull()
+    expect(replayNotSaved(unanswered, { cacheOnly: true })).toMatch(/\b4 calls\b/)
+    expect(replayNotSaved(stopped, { cacheOnly: true })).toMatch(/\brun 1\b/)
   })
 })
