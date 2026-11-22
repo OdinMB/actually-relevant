@@ -5,6 +5,7 @@ const mockAxiosPost = vi.hoisted(() => vi.fn())
 const mockReadabilityParse = vi.hoisted(() => vi.fn())
 const mockWindowClose = vi.hoisted(() => vi.fn())
 const mockJsdomOptions = vi.hoisted(() => vi.fn())
+const mockJsdomHtml = vi.hoisted(() => vi.fn())
 
 vi.mock('axios', () => ({
   default: {
@@ -16,7 +17,8 @@ vi.mock('axios', () => ({
 vi.mock('jsdom', () => ({
   JSDOM: class MockJSDOM {
     window = { document: {}, close: mockWindowClose }
-    constructor(_html: string, options: unknown) {
+    constructor(html: string, options: unknown) {
+      mockJsdomHtml(html)
       mockJsdomOptions(options)
     }
   },
@@ -376,6 +378,15 @@ describe('JSDOM cleanup', () => {
 
     await extractContent('https://example.com/article')
     expect(mockWindowClose).toHaveBeenCalled()
+  })
+
+  it('builds the DOM without the scripts and styles Readability would remove', async () => {
+    const html = `<html><head><style>p{}</style><script>track()</script></head><body><p>Content</p></body></html>`
+    mockAxiosGet.mockResolvedValue({ data: html })
+    mockReadabilityParse.mockReturnValue({ title: 'Title', textContent: LONG_TEXT })
+
+    await extractContent('https://example.com/article')
+    expect(mockJsdomHtml).toHaveBeenCalledWith('<html><head></head><body><p>Content</p></body></html>')
   })
 })
 

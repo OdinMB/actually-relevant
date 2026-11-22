@@ -12,6 +12,7 @@ import { crawlVirtualConsole } from '../lib/crawlVirtualConsole.js'
 import { CRAWLER_USER_AGENT } from '../lib/crawlerIdentity.js'
 import { pageTdmReservation } from '../lib/tdmRep.js'
 import { classifyAccess, DEFAULT_PAYWALL_POLICY, type AccessTier, type PaywallPolicy } from '../lib/paywall.js'
+import { readableHtml } from '../lib/readableHtml.js'
 import { getFollowingCheckedRedirects } from './checkedRedirects.js'
 
 const log = createLogger('extractor')
@@ -232,7 +233,8 @@ function extractBySelector(html: string, selector: string): TierResult | null {
 function extractByReadability(html: string, url: string): TierResult | null {
   let dom: InstanceType<typeof JSDOM> | null = null
   try {
-    dom = new JSDOM(html, { url, virtualConsole: crawlVirtualConsole(url) })
+    // Only what Readability reads: the scripts and styles it would remove are never built as a DOM
+    dom = new JSDOM(readableHtml(html), { url, virtualConsole: crawlVirtualConsole(url) })
     const article = new Readability(dom.window.document).parse()
     if (!article || !article.textContent || article.textContent.trim().length < config.crawl.minContentLength) return null
 
