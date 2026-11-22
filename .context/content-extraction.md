@@ -149,7 +149,7 @@ The RSS fetch sends the feed's stored `lastEtag` as `If-None-Match` and `lastMod
 
 ### Story Fields from the RSS Fallback
 
-When the extractor returns no title or publish date, the story uses the RSS item's title and `isoDate`/`pubDate` instead (`crawlFeed()` in `server/src/services/crawler.ts`). Every new story is created in `fetched` status, or `rejected` when its access tier is `locked`, with `crawlMethod` set to the tier that succeeded and `accessTier` to the classification.
+When the extractor returns no title or publish date, the story uses the RSS item's title and `isoDate`/`pubDate` instead (`crawlFeed()` in `server/src/services/crawler.ts`). Creating the story reads that date with `parsePublishedDate()` (`server/src/lib/publishedDate.ts`): JavaScript's `Date` knows only the US zone names, so a trailing European or other unambiguous zone name (`CET`, `CEST`, `BST`, `AEST`, …, as in SIPRI's `19 Nov 2026 10:07:08 CET`) is swapped for its offset first. A date that still does not read is stored as null with a warning in the log, so an unreadable date never stops a story from being saved. Every new story is created in `fetched` status, or `rejected` when its access tier is `locked`, with `crawlMethod` set to the tier that succeeded and `accessTier` to the classification.
 
 ### Deduplication
 

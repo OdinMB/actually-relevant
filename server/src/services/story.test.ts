@@ -136,6 +136,18 @@ describe('createStory', () => {
 
     expect(mockPrisma.story.create.mock.calls[0][0].data).toMatchObject({ status: 'fetched', accessTier: accessTier ?? null })
   })
+
+  it("reads a feed date with a European zone name, as SIPRI's feed writes it", async () => {
+    await createStory({ ...base, sourceDatePublished: '19 Nov 2026 10:07:08 CET' })
+
+    expect(mockPrisma.story.create.mock.calls[0][0].data.sourceDatePublished).toEqual(new Date('2026-11-19T09:07:08Z'))
+  })
+
+  it('saves the story without a date when its date cannot be read', async () => {
+    await createStory({ ...base, sourceDatePublished: 'sometime last week' })
+
+    expect(mockPrisma.story.create.mock.calls[0][0].data.sourceDatePublished).toBeNull()
+  })
 })
 
 describe('updateStory on a researched story', () => {
