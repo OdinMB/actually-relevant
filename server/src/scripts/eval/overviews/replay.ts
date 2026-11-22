@@ -201,7 +201,8 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
           upkeep: { ...upkeep, ...calls },
         },
         { now: clock, today: day },
-        { concurrency: o.concurrency, keepGoing },
+        // Production's look-ahead at most, as the linking steps' replay (`link.ts`): --concurrency caps throughput, not what a night is
+        { concurrency: Math.min(o.concurrency, config.overviews.concurrency), keepGoing },
       )
       add(
         'link yeses refused by code',

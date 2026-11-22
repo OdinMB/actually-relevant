@@ -9,6 +9,7 @@ import {
   MAX_ASSESS_SIZE,
   MAX_BUDGET_USD,
   OVERVIEW_DEFAULT_ARMS,
+  OVERVIEW_DEFAULT_CONCURRENCY,
   OVERVIEW_DEFAULT_STEPS,
   OVERVIEW_MAX_SIZE,
   OVERVIEW_STEPS,
@@ -185,7 +186,8 @@ describe('parseOverviewOptions', () => {
       budget: 3,
       dryRun: false,
       cacheOnly: false,
-      concurrency: 4,
+      rescore: false,
+      concurrency: OVERVIEW_DEFAULT_CONCURRENCY,
       repeat: 1,
       size: 300,
       arms: [...OVERVIEW_DEFAULT_ARMS],
@@ -199,6 +201,21 @@ describe('parseOverviewOptions', () => {
   it('takes --cache-only, a rerun that makes no call, and refuses it with --dry-run', () => {
     expect(parseOverviewOptions(['--out', 'x', '--cache-only']).cacheOnly).toBe(true)
     expect(() => parseOverviewOptions(['--out', 'x', '--cache-only', '--dry-run'])).toThrow(/--cache-only/)
+  })
+
+  it('takes --rescore for the linking steps alone, and refuses it with --dry-run or --cache-only', () => {
+    const linking = ['--out', 'x', '--steps', 'link,found,role', '--half', 'judge']
+    expect(parseOverviewOptions([...linking, '--rescore']).rescore).toBe(true)
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'found', '--rescore']).rescore).toBe(true)
+    expect(() => parseOverviewOptions([...linking, '--rescore', '--dry-run'])).toThrow(/--rescore/)
+    expect(() => parseOverviewOptions([...linking, '--rescore', '--cache-only'])).toThrow(/--rescore/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'link,replay', '--rescore'])).toThrow(/--rescore/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--rescore'])).toThrow(/--rescore/)
+  })
+
+  it('runs more calls at once than the other evals by default, since three repeats of the linking replay go side by side', () => {
+    expect(parseOverviewOptions(['--out', 'x']).concurrency).toBeGreaterThan(parseOptions(['--out', 'x']).concurrency)
+    expect(parseOverviewOptions(['--out', 'x', '--concurrency', '2']).concurrency).toBe(2)
   })
 
   it("runs story context's steps only when named, in the order the run takes them", () => {

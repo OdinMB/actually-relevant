@@ -36,6 +36,12 @@ describe('overviewReportName', () => {
     )
   })
 
+  it('tags a rescore, so it never overwrites the report of the run it scores again', () => {
+    expect(name({ steps: ['link', 'found', 'role'], half: 'judge', repeat: 3, rescore: true })).toBe(
+      'overview-eval-steps-link-found-role-half-judge-repeat-3-rescore.md',
+    )
+  })
+
   it('names the gate run apart from the tuning runs', () => {
     expect(name({ steps: ['context', 'fact-check'], facts: 'context', half: 'judge', repeat: 3 })).toBe(
       'overview-eval-steps-context-fact-check-facts-context-half-judge-repeat-3.md',

@@ -3,7 +3,7 @@ import type { LinkResult } from '../../../services/overviewLink.js'
 import type { LinkAnswer } from '../../../schemas/overviews.js'
 import { LABEL_DEVELOPMENTS } from './developmentHalves.js'
 import type { AnswerKey } from './keySchema.js'
-import { diagnoseRun, missesByDevelopment, traceOf, type FoundedOverview, type StoryTrace } from './linkDiagnostics.js'
+import { diagnoseRun, missesByDevelopment, traceOf, type DiagnoseInput, type FoundedOverview, type StoryTrace } from './linkDiagnostics.js'
 import { linkLines } from './linkReport.js'
 import { scoreLinking } from './linkScore.js'
 
@@ -98,22 +98,22 @@ const TRACES = new Map<string, StoryTrace>([
   ],
 ])
 
-const diagnose = () =>
-  diagnoseRun({
-    keys: [EBOLA, CHOLERA],
-    others: [STRAIT],
-    run: 2,
-    overviews: OVERVIEWS,
-    traces: TRACES,
-    roles: new Map([
-      ['e1', { role: 'turning_point', roleKind: 'spread' }],
-      ['e2', { role: 'turning_point', roleKind: 'setback' }],
-      ['e4', { role: 'routine', roleKind: null }],
-      ['e6', { role: 'turning_point', roleKind: 'spread' }],
-    ]),
-    replayed: new Set([...TRACES.keys(), 'e1', 'e2', 'e4', 'e5', 'c1', 'c2']),
-    neighbourLimit: 40,
-  })
+const diagnoseInput = (): DiagnoseInput => ({
+  keys: [EBOLA, CHOLERA],
+  others: [STRAIT],
+  run: 2,
+  overviews: OVERVIEWS,
+  traces: TRACES,
+  roles: new Map([
+    ['e1', { role: 'turning_point', roleKind: 'spread' }],
+    ['e2', { role: 'turning_point', roleKind: 'setback' }],
+    ['e4', { role: 'routine', roleKind: null }],
+    ['e6', { role: 'turning_point', roleKind: 'spread' }],
+  ]),
+  replayed: new Set([...TRACES.keys(), 'e1', 'e2', 'e4', 'e5', 'c1', 'c2']),
+  neighbourLimit: 40,
+})
+const diagnose = () => diagnoseRun(diagnoseInput())
 
 describe('diagnoseRun', () => {
   it('says why each must entry was not found in its development, and skips those found', () => {
@@ -132,6 +132,13 @@ describe('diagnoseRun', () => {
     expect(by.get('e7')).toMatchObject({ cause: 'model unsure' })
     expect(by.get('e8')).toMatchObject({ cause: 'founding not agreed' })
     expect(by.get('e8')!.detail).toContain('A does not fit: a study')
+  })
+
+  it('gives a must entry not replayed the reason the replay was given for it, and with none, that it is not published', () => {
+    expect(diagnose().missed.find(m => m.slug === 'gone')!.detail).toBe('not published in this database')
+    const reason = 'not in the saved replay: the keys name it since the run'
+    const d = diagnoseRun({ ...diagnoseInput(), absent: new Map([['gone', reason]]) })
+    expect(d.missed.find(m => m.slug === 'gone')).toMatchObject({ cause: 'not replayed', detail: reason })
   })
 
   it('lists the roles of found must entries that disagree with the key, and judges only those', () => {
@@ -202,6 +209,7 @@ describe('diagnoseRun', () => {
       signals: [],
       diagnostics: [d],
       unanswered: 2,
+      errored: 0,
       costUsd: 0,
       perStoryUsd: 0,
     }
