@@ -8,6 +8,7 @@ import { config } from '../config.js'
 import { createLogger } from '../lib/logger.js'
 import { withRetry, isRetryableError, responseStatus } from '../lib/retry.js'
 import { crawlLimiter } from '../lib/crawlLimiter.js'
+import { crawlVirtualConsole } from '../lib/crawlVirtualConsole.js'
 import { CRAWLER_USER_AGENT } from '../lib/crawlerIdentity.js'
 import { pageTdmReservation } from '../lib/tdmRep.js'
 import { classifyAccess, DEFAULT_PAYWALL_POLICY, type AccessTier, type PaywallPolicy } from '../lib/paywall.js'
@@ -231,7 +232,7 @@ function extractBySelector(html: string, selector: string): TierResult | null {
 function extractByReadability(html: string, url: string): TierResult | null {
   let dom: InstanceType<typeof JSDOM> | null = null
   try {
-    dom = new JSDOM(html, { url })
+    dom = new JSDOM(html, { url, virtualConsole: crawlVirtualConsole(url) })
     const article = new Readability(dom.window.document).parse()
     if (!article || !article.textContent || article.textContent.trim().length < config.crawl.minContentLength) return null
 
