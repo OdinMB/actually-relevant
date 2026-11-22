@@ -36,3 +36,5 @@ pm/
 .claude/settings.json
 .claude/settings.local.json
 .claude/to-add-for-batches.txt
+# Nested git worktrees for parallel sessions
+.claude/worktrees/
