@@ -5,7 +5,7 @@ import type { OverviewState } from './overviewTypes.js'
 const DAY = 86_400_000
 const CLOCK = new Date('2026-09-01T12:00:00Z')
 const daysAgo = (days: number) => new Date(CLOCK.getTime() - days * DAY)
-const OPTIONS = { quietAfterDays: 21, fadeAfterDays: 120, closingDays: 7, burstLimit: 5, reviewAt: [3, 6, 12, 25, 50], reviewEveryDays: 30 }
+const OPTIONS = { quietAfterDays: 21, fadeAfterDays: 120, burstLimit: 5, reviewAt: [3, 6, 12, 25, 50], reviewEveryDays: 30, reportReviewEveryDays: 7 }
 
 const state = (over: Partial<OverviewState> = {}): OverviewState => ({
   id: 'o',
@@ -15,15 +15,12 @@ const state = (over: Partial<OverviewState> = {}): OverviewState => ({
   frozen: false,
   hidden: false,
   lastEntryAt: daysAgo(1),
-  closingSince: null,
-  closingStoryId: null,
   activeEntries: 4,
   unpublished: [],
   entriesAtLastReview: 4,
   reviewedAt: daysAgo(2),
   burstJoins: 0,
   burstAt: null,
-  closureReviewed: false,
   reopenedAt: null,
   reportAt: null,
   recenteredAt: null,
@@ -46,17 +43,8 @@ describe('nextState', () => {
     expect(statusOf(state({ status: 'closed', closedReason: 'faded', lastEntryAt: daysAgo(3) }))).toEqual([
       { kind: 'status', from: 'closed', to: 'open', reason: 'active' },
     ])
-    // A closure at the end event, or an editor's, never reopens on its own
-    expect(statusOf(state({ status: 'closed', closedReason: 'end_event', lastEntryAt: daysAgo(3) }))).toEqual([])
+    // An editor's closure never reopens on its own
     expect(statusOf(state({ status: 'closed', closedReason: 'editor', lastEntryAt: daysAgo(3) }))).toEqual([])
-  })
-
-  it('cancels a closing on an entry after the end-event story, and closes after 7 days only once its review ran', () => {
-    const closing = state({ status: 'closing', closingSince: daysAgo(8), lastEntryAt: daysAgo(8) })
-    expect(statusOf(closing)).toEqual([])
-    expect(statusOf({ ...closing, closureReviewed: true })).toEqual([{ kind: 'status', from: 'closing', to: 'closed', reason: 'end_event' }])
-    expect(statusOf({ ...closing, closingSince: daysAgo(6), closureReviewed: true })).toEqual([])
-    expect(statusOf({ ...closing, lastEntryAt: daysAgo(5) })).toEqual([{ kind: 'status', from: 'closing', to: 'open', reason: 'closing_cancelled' }])
   })
 
   it('counts quiet and fading from a person’s reopen when it is later than the last entry', () => {
@@ -82,29 +70,6 @@ describe('nextState', () => {
     ])
   })
 
-  it('cancels a closing whose end-event story is no longer published, frozen or not, instead of closing it', () => {
-    const closing = state({
-      status: 'closing',
-      closingSince: daysAgo(8),
-      closingStoryId: 's1',
-      lastEntryAt: daysAgo(8),
-      closureReviewed: true,
-      unpublished: [{ entryId: 'e1', storyId: 's1' }],
-      activeEntries: 3,
-    })
-    const cancel = [
-      { kind: 'detach', entryId: 'e1', storyId: 's1' },
-      { kind: 'cancel_closing', storyId: 's1' },
-    ]
-    expect(nextState(closing, CLOCK, OPTIONS)).toEqual(cancel)
-    expect(nextState({ ...closing, frozen: true }, CLOCK, OPTIONS)).toEqual(cancel)
-    // Another member's unpublishing leaves the closing as it was
-    expect(nextState({ ...closing, unpublished: [{ entryId: 'e2', storyId: 's2' }] }, CLOCK, OPTIONS)).toEqual([
-      { kind: 'detach', entryId: 'e2', storyId: 's2' },
-      { kind: 'status', from: 'closing', to: 'closed', reason: 'end_event' },
-    ])
-  })
-
   it('leaves an ongoing overview below 3 public until its review, makes one left with one entry single, and a single one grown to two forming', () => {
     expect(nextState(state({ activeEntries: 2 }), CLOCK, OPTIONS)).toEqual([])
     expect(nextState(state({ activeEntries: 0 }), CLOCK, OPTIONS)).toEqual([{ kind: 'scope', from: 'ongoing', to: 'single' }])
@@ -127,7 +92,7 @@ describe('anomalies', () => {
 })
 
 describe('reviewDue', () => {
-  const at = { clock: CLOCK, now: CLOCK }
+  const at = { now: CLOCK }
   const due = (over: Partial<OverviewState>) => reviewDue(state(over), at, OPTIONS)
 
   it('is due at 3, 6, 12, 25 and 50 entries, again when a forming overview cut back climbs to 3', () => {
@@ -146,13 +111,6 @@ describe('reviewDue', () => {
     expect(due({ reviewedAt: daysAgo(30), scope: 'forming' })).toBeNull()
   })
 
-  it('is due before a closure, once its closing period is over', () => {
-    const closing = { status: 'closing' as const, closingSince: daysAgo(7), lastEntryAt: daysAgo(7) }
-    expect(due({ ...closing, closingSince: daysAgo(6) })).toBeNull()
-    expect(due(closing)).toBe('closure')
-    expect(due({ ...closing, closureReviewed: true })).toBeNull()
-  })
-
   it('is due on a reader’s report that queued one, until a review runs after it; never while frozen or single', () => {
     expect(due({ reportAt: daysAgo(1) })).toBe('report')
     expect(due({ reportAt: daysAgo(3) })).toBeNull()
@@ -160,8 +118,6 @@ describe('reviewDue', () => {
     expect(due({ reportAt: daysAgo(1), status: 'closed', closedReason: 'faded' })).toBe('report')
     expect(due({ reportAt: daysAgo(1), frozen: true })).toBeNull()
     expect(due({ reportAt: daysAgo(1), scope: 'single', activeEntries: 1 })).toBeNull()
-    const closing = { status: 'closing' as const, closingSince: daysAgo(7), lastEntryAt: daysAgo(7), reportAt: daysAgo(1) }
-    expect(due(closing)).toBe('closure')
   })
 
   it("is due after an editor's re-center until a review runs after it, after a report and before the entry counts", () => {

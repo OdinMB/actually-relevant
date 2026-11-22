@@ -93,7 +93,6 @@ const keyFile: KeyFile = {
     id: 'floods',
     title: 'Valley floods',
     charter: { in: 'The valley floods.', out: [], endEvent: 'Waters recede.' },
-    closed: null,
     figures: [],
     entries: [
       {

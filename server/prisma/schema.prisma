@@ -127,7 +127,6 @@ model Story {
   passBoxes              PassBox[]
   overviewEntries        OverviewEntry[]
   overviewDecisions      OverviewDecision[]
-  closingOverviews       Overview[]             @relation("OverviewClosingStory")
   createdAt              DateTime     @default(now()) @map("created_at")
   updatedAt              DateTime     @updatedAt @map("updated_at")
 
@@ -916,8 +915,7 @@ model PassBox {
 // A development's record: its charter, its entries (our stories), the versions of "Where this stands"
 // and the log of every automated or editor decision. Overviews hold no fact of their own: the stands
 // cite the members' pool facts by id. The lifecycle (`services/overviewLifecycle.ts` and its folder)
-// is the only writer of the four tables (a fence test holds it). Nothing is added to `stories` but the
-// relation back from `overviews.closing_story_id`.
+// is the only writer of the four tables (a fence test holds it). Nothing is added to `stories`.
 
 /// `single`: one active entry or none, not public; `forming`: two or more, waiting for its review at 3; `ongoing`: public
 enum OverviewScope {
@@ -929,7 +927,6 @@ enum OverviewScope {
 enum OverviewStatus {
   open
   quiet
-  closing
   closed
 }
 
@@ -961,7 +958,6 @@ enum OverviewDecisionKind {
   role
   stands
   status
-  close
   review
   editor_attach
   editor_detach
@@ -988,9 +984,9 @@ model Overview {
   issue                Issue?             @relation(fields: [issueId], references: [id], onDelete: SetNull)
   scope                OverviewScope      @default(forming)
   status               OverviewStatus     @default(open)
-  /// { in, out: string[], endEvent: string | null }, the answer keys' shape; a null end event closes only by fading
+  /// { in, out: string[], endEvent: string | null }, the answer keys' shape; a story reporting a named end event becomes a turning point (ADR-0072)
   charter              Json
-  charterModel         String             @map("charter_model")
+  charterModel        String             @map("charter_model")
   charterPromptVersion String             @map("charter_prompt_version")
   /// Automation paused until a review or an editor clears it
   frozen               Boolean            @default(false)
@@ -1000,14 +996,8 @@ model Overview {
   foundedAt            DateTime           @map("founded_at")
   /// The newest active entry's publication date
   lastEntryAt          DateTime?          @map("last_entry_at")
-  closingSince         DateTime?          @map("closing_since")
-  /// While closing: the story whose end-event report began it (20261119041008_overview_state; services/overviewChanges.ts)
-  closingStoryId       String?            @map("closing_story_id")
-  closingStory         Story?             @relation("OverviewClosingStory", fields: [closingStoryId], references: [id], onDelete: SetNull)
-  /// While closing: when its closure review ran
-  closureReviewedAt    DateTime?          @map("closure_reviewed_at")
   closedAt             DateTime?          @map("closed_at")
-  /// end_event, faded or editor
+  /// faded or editor
   closedReason         String?            @map("closed_reason")
   /// While frozen: who froze it (burst, review: the detach brake, or editor) and when
   frozenBy             String?            @map("frozen_by")

@@ -1,19 +1,18 @@
 /**
  * The upkeep's reads and writes over the overview sandbox (`overviewSandbox.ts`), by production's
- * rules: the state each overview is judged on is production's (`overviewStateOf`), the review, closing
- * and re-center cases are built from the sandbox's rows by production's own case assembly
+ * rules: the state each overview is judged on is production's (`overviewStateOf`), the review and
+ * re-center cases are built from the sandbox's rows by production's own case assembly
  * (`overviewCases.ts`), and every write is production's plan (`overviewPlans.ts`) applied to memory. So
  * the `replay` step runs production's
- * upkeep (`runUpkeep`) day by day after each day's linking: the closing checks of the joins flagged as
- * reporting the end event, the status machine, bursts, reviews and the stands refreshes, each
- * overview's members' facts given by the step. Every story is published in a replay, so no member is
- * ever unpublished; the monthly audit does not run. Writes nothing to the database.
+ * upkeep (`runUpkeep`) day by day after each day's linking: the status machine, bursts, re-centers,
+ * reviews and the stands refreshes, each overview's members' facts given by the step. Every story is
+ * published in a replay, so no member is ever unpublished; the monthly audit does not run. Writes
+ * nothing to the database.
  */
-import type { CloseCase } from '../../../services/overviewClose.js'
-import { closeCasesOf, entryRole, recenterPartsOf, recenterStoryIds, reviewCaseOf, type CaseEntry } from '../../../services/overviewCases.js'
+import { entryRole, recenterPartsOf, recenterStoryIds, reviewCaseOf, type CaseEntry } from '../../../services/overviewCases.js'
 import { foundingEntries, linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import type { Neighbour } from '../../../services/overviewCandidates.js'
-import { STALE_RECENTER, STALE_REVIEW, planAudit, planBurst, planClosing, planRecenter, planReview, planStatus } from '../../../services/overviewPlans.js'
+import { STALE_RECENTER, STALE_REVIEW, planAudit, planBurst, planRecenter, planReview, planStatus } from '../../../services/overviewPlans.js'
 import { neighbourOverviews, neighbourStories, recenterCaseOf, type RecenterCase, type SignalRecord } from '../../../services/overviewRecenter.js'
 import type { ReviewCase } from '../../../services/overviewReview.js'
 import { overviewStateOf } from '../../../services/overviewState.js'
@@ -25,7 +24,7 @@ import { activeEntries, safeguardsOf, type Sandbox, type SandboxOverview } from 
 /** What the upkeep did that the replay reports: each safeguard's firings, by name. */
 export type Safeguards = Map<string, number>
 
-export type UpkeepSandbox = Omit<UpkeepDeps, 'close' | 'review' | 'stands' | 'recenter'> & {
+export type UpkeepSandbox = Omit<UpkeepDeps, 'review' | 'stands' | 'recenter'> & {
   /** The safeguards fired so far, counted from the sandbox's decisions (`safeguardsOf`). */
   safeguards(): Safeguards
 }
@@ -54,18 +53,6 @@ export function sandboxUpkeep(
   const reviewCase = async (id: string): Promise<ReviewCase | null> => {
     const o = get(id)
     return o ? reviewCaseOf(o, caseEntries(o)) : null
-  }
-
-  /** `pendingClosings` over memory: every decision and overview given to the same rule (`closeCasesOf`). */
-  const closings = async (): Promise<CloseCase[]> => {
-    const overviews = [...sandbox.overviews.values()]
-    return closeCasesOf({
-      joins: sandbox.decisions.filter(d => d.kind === 'link'),
-      closes: sandbox.decisions.filter(d => d.kind === 'close'),
-      overviews,
-      entries: overviews.flatMap(caseEntries),
-      stories: sandbox.stories,
-    })
   }
 
   /**
@@ -114,7 +101,6 @@ export function sandboxUpkeep(
 
   return {
     safeguards: () => safeguardsOf(sandbox.decisions),
-    closings,
     // No reader reports in a replay
     states: async () => [...sandbox.overviews.values()].filter(o => activeEntries(o).length > 0).map(o => overviewStateOf(o, activeEntries(o), null, now())),
     reviewCase,
@@ -122,10 +108,6 @@ export function sandboxUpkeep(
     standsCases: async today =>
       [...sandbox.overviews.values()].filter(o => o.scope === 'ongoing' && !o.hidden && o.slug !== null && !o.frozen).map(o => standsCase(o, today)),
     recenterCases,
-    applyClosing: async (c, result) => {
-      const rows = sandbox.rowsOf(c.overviewId)
-      sandbox.write(rows, planClosing(rows?.overview ?? null, c, result, ctx()))
-    },
     applyStatus: async (s, moves, clock) => {
       let rows = sandbox.rowsOf(s.id)
       if (!rows) return

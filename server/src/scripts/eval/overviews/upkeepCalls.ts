@@ -1,6 +1,6 @@
 /**
- * The overview upkeep's model calls as the evals make them (`stands`, `closure`, `review`, `recenter`,
- * `replay`): production's calls as `overviewSteps.ts` declares them (tier, effort, schema, prompt) on
+ * The overview upkeep's model calls as the evals make them (`stands`, `review`, `recenter`, `replay`):
+ * production's calls as `overviewSteps.ts` declares them (tier, effort, schema, prompt) on
  * the eval's cached calls (`evalCalls`), each step on its tier's arm, the monthly audit at high effort,
  * run k ≥ 2 under its own cache key.
  */
@@ -11,6 +11,6 @@ import { evalCalls } from './link.js'
 export type UpkeepCalls = Omit<OverviewCalls, 'link'>
 
 export function upkeepCalls(ctx: SuiteContext, run: number): UpkeepCalls {
-  const { close, review, stands, recenter } = evalCalls(ctx, run)
-  return { close, review, stands, recenter }
+  const { review, stands, recenter } = evalCalls(ctx, run)
+  return { review, stands, recenter }
 }

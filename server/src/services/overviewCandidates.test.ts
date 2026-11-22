@@ -46,13 +46,13 @@ describe('groupCandidates', () => {
     ])
   })
 
-  it('leaves out an overview closed at its end event, and one whose newest entry is past the lookback, but keeps a faded one', () => {
+  it('leaves out an overview closed by an editor, and one whose newest entry is past the lookback, but keeps a faded one', () => {
     const neighbours = [near('a', 0.1), near('b', 0.1), near('c', 0.1)]
     const got = groupCandidates(
       story,
       neighbours,
       memberships({
-        a: member('A', { status: 'closed', closedReason: 'end_event' }),
+        a: member('A', { status: 'closed', closedReason: 'editor' }),
         b: member('B', { lastEntryAt: daysBefore(181) }),
         c: member('C', { status: 'closed', closedReason: 'faded' }),
       }),

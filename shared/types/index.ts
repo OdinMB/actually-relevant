@@ -303,7 +303,7 @@ export interface PublicOverviewLink {
   title: string
 }
 
-export type PublicOverviewStatus = 'open' | 'quiet' | 'closing' | 'closed'
+export type PublicOverviewStatus = 'open' | 'quiet' | 'closed'
 
 /** An ongoing story as a list names it: the page's header, the index's row. */
 export interface PublicOverviewHead {
@@ -312,13 +312,13 @@ export interface PublicOverviewHead {
   /** Its issue, the area chip. */
   area: { name: string; slug: string } | null
   status: PublicOverviewStatus
-  /** `end_event`, `faded` or `editor`; null unless closed. */
+  /** `faded` or `editor`; null unless closed. A faded one reads as a quiet one ("No new reporting since"). */
   closedReason: string | null
   closedAt: string | null
   /** The founding story's publication date. */
   since: string
   lastEntryAt: string | null
-  /** The newest of its last story, its current "Where this stands" and its closing. */
+  /** The newest of its last story, its current "Where this stands" and an editor's Close (never a fade's day). */
   lastChange: string
   /** Its stories readers see. */
   stories: number
@@ -1717,7 +1717,7 @@ export interface TaskState {
 // --- Ongoing-story overviews, admin (a hand-written mirror of server/src/services/overviewViews.ts; .context/overviews.md, "Admin") ---
 
 export type OverviewScope = 'single' | 'forming' | 'ongoing'
-export type OverviewStatus = 'open' | 'quiet' | 'closing' | 'closed'
+export type OverviewStatus = 'open' | 'quiet' | 'closed'
 export type OverviewEntryRole = 'turning_point' | 'routine'
 /** A turning point's kind (server: `ROLE_KINDS`). */
 export type OverviewRoleKind = 'setback' | 'response' | 'spread' | 'decision' | 'escalation' | 'deescalation' | 'money' | 'science' | 'people' | 'milestone'
@@ -1735,7 +1735,7 @@ export interface AdminOverviewListItem {
   slug: string | null
   scope: OverviewScope
   status: OverviewStatus
-  /** end_event, faded or editor; null unless closed. */
+  /** faded or editor; null unless closed. */
   closedReason: string | null
   frozen: boolean
   hidden: boolean
@@ -1750,7 +1750,7 @@ export interface AdminOverviewListItem {
 export interface OverviewCharter {
   in: string
   out: string[]
-  /** Null: no end event, so the overview closes only by fading. */
+  /** Null: no end event. A named one marks the story that reports it as a turning point; no overview closes at it. */
   endEvent: string | null
 }
 
@@ -1878,7 +1878,7 @@ export interface AdminStandsVersion {
 /** One decision of an overview's log, newest first. */
 export interface AdminOverviewDecision {
   id: string
-  /** link, found, stands, status, close, review, recenter, editor_attach … editor_close, editor_recenter, undo. */
+  /** link, found, stands, status, review, recenter, editor_attach … editor_close, editor_recenter, undo. */
   kind: string
   outcome: string
   storyId: string | null
@@ -1912,7 +1912,6 @@ export interface OverviewDecisionMove {
 export interface AdminOverviewDetail extends AdminOverviewListItem {
   charter: OverviewCharter
   charterModel: string
-  closingSince: string | null
   closedAt: string | null
   entriesAtLastReview: number
   reviewedAt: string | null
@@ -1924,7 +1923,7 @@ export interface AdminOverviewDetail extends AdminOverviewListItem {
   /** The newest decisions, at most the server's log size, of `decisionsTotal`. */
   decisions: AdminOverviewDecision[]
   decisionsTotal: number
-  /** Every status move, end-event closing and editor's close or freeze, newest first, however long the log. */
+  /** Every status move and editor's close or freeze, newest first, however long the log. */
   statusHistory: AdminOverviewDecision[]
 }
 

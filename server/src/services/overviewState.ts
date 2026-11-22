@@ -21,9 +21,6 @@ export type StateRow = Pick<
   | 'frozenAt'
   | 'hidden'
   | 'lastEntryAt'
-  | 'closingSince'
-  | 'closingStoryId'
-  | 'closureReviewedAt'
   | 'entriesAtLastReview'
   | 'reviewedAt'
   | 'reopenedAt'
@@ -37,12 +34,11 @@ export type StateEntry = Pick<EntryRow, 'id' | 'storyId' | 'status' | 'joinedBy'
 const HOUR_MS = 3_600_000
 
 /**
- * The state (`.context/overviews.md`, "Status, closing and reviews"): its active entries of published
+ * The state (`.context/overviews.md`, "Status and reviews"): its active entries of published
  * stories counted and those of stories no longer published listed; the burst count, the stories
  * published in the last `nightHours` of `now` that the pipeline joined after `joinsCountedFrom` (the
  * last freeze, unfreeze, review or undo), so a backfill's old stories and the joins one freeze answered
- * never count; while frozen by a burst and not reviewed since, when; while closing, its end-event story
- * and whether its closure review ran; when a person last reopened it; the newest reader's report
+ * never count; while frozen by a burst and not reviewed since, when; when a person last reopened it; the newest reader's report
  * that queued a review (`reportAt`, from the feedback the caller reads); and its last re-center.
  */
 export function overviewStateOf(
@@ -58,7 +54,6 @@ export function overviewStateOf(
   const burstJoins = active.filter(
     e => e.joinedBy === 'pipeline' && e.published && e.datePublished !== null && e.datePublished.getTime() > nightStart && e.joinedAt.getTime() > countFrom,
   ).length
-  const closing = o.status === 'closing'
   return {
     id: o.id,
     title: o.title,
@@ -68,8 +63,6 @@ export function overviewStateOf(
     frozen: o.frozen,
     hidden: o.hidden,
     lastEntryAt: o.lastEntryAt,
-    closingSince: o.closingSince,
-    closingStoryId: closing ? o.closingStoryId : null,
     activeEntries: active.filter(e => e.published).length,
     unpublished: active.flatMap(e => (!e.published && e.storyId ? [{ entryId: e.id, storyId: e.storyId }] : [])),
     entriesAtLastReview: o.entriesAtLastReview,
@@ -77,7 +70,6 @@ export function overviewStateOf(
     burstJoins,
     // An editor's freeze and the detach brake's hold until an editor lifts them: no burst review clears them
     burstAt: o.frozen && o.frozenBy === 'burst' && o.frozenAt && (o.reviewedAt === null || o.reviewedAt.getTime() < o.frozenAt.getTime()) ? o.frozenAt : null,
-    closureReviewed: closing && o.closureReviewedAt !== null,
     reopenedAt: o.reopenedAt,
     reportAt,
     recenteredAt: o.recenteredAt,

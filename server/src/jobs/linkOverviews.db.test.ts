@@ -6,8 +6,8 @@
  * `runNight`, over the stories the sandbox owes by its own decisions) with the same calls and
  * production's neighbours; after every run both hold the same overviews, entries and decisions, each
  * decision with the same change set. The nights cover a founding, joins, the first review making it
- * public, an end-event closing, the closing story unpublished (its entry detached, the closing
- * cancelled, the last entry recomputed), a burst frozen and cleared by its review and not counted
+ * public, a story reporting the end event joined and then unpublished (its entry detached, the last
+ * entry recomputed), a burst frozen and cleared by its review and not counted
  * again an hour later, a review detaching the newest entry, a review whose overview is retitled
  * during its call, recorded stale and asked again, and an automated re-center fired by two stories
  * linked as wider than the charter, joining both and not tried again without a new signal.
@@ -90,15 +90,6 @@ const calls: OverviewCalls = {
     foundCheck: () =>
       call({ a: { fits: 'yes' as const, reason: 'It does.' }, b: { fits: 'yes' as const, reason: 'It does.' }, endEventConcrete: 'yes' as const }),
   },
-  close: {
-    close: ({ story }) =>
-      call(
-        story.title.includes('declares')
-          ? { happened: 'yes' as const, quote: 'declares the Ebola outbreak in Ituri over', reason: 'It says so.' }
-          : { happened: 'no' as const, quote: '', reason: 'It does not.' },
-      ),
-    closeCheck: ({ story }) => call({ happened: story.title.includes('declares') ? ('yes' as const) : ('no' as const), reason: 'Checked.' }),
-  },
   review: {
     review: async (input, { audit }) => {
       if (!audit) await duringReview.shift()?.()
@@ -156,9 +147,6 @@ const OVERVIEW_KEYS = [
   'status',
   'closedAt',
   'closedReason',
-  'closingSince',
-  'closingStoryId',
-  'closureReviewedAt',
   'frozen',
   'frozenBy',
   'frozenAt',
@@ -254,20 +242,18 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
       Object.fromEntries(entries.map(e => [name(e.storyId), pick(e, ENTRY_KEYS)]).sort(([a], [b]) => String(a).localeCompare(String(b))))
     const overviewView = (o: Record<string, unknown>, entries: (Record<string, unknown> & { storyId: string | null })[]) => ({
       ...pick(o, OVERVIEW_KEYS),
-      closingStoryId: name(o.closingStoryId as string | null),
       entries: entriesView(entries),
     })
     /**
      * A decision's change set as both keep it, its rows named rather than by id (an entry by its story,
-     * the one overview as `overview`, a closing's story by its name) and its dates as JSON writes them.
+     * the one overview as `overview`) and its dates as JSON writes them.
      */
     type StoredSet = { changes?: { table: string; id: string; before: View; after: View }[]; created?: { table: string; id: string }[] }
     const changeSetView = (inputs: unknown, storyOf: ReadonlyMap<string, string | null>) => {
       const { changes = [], created = [] } = JSON.parse(JSON.stringify(inputs ?? {})) as StoredSet
       const row = (table: string, id: string) => (table === 'entry' ? `entry:${name(storyOf.get(id) ?? null)}` : 'overview')
-      const fields = (f: View) => ('closingStoryId' in f ? { ...f, closingStoryId: name(f.closingStoryId as string | null) } : f)
       return {
-        changes: changes.map(c => ({ table: c.table, row: row(c.table, c.id), before: fields(c.before), after: fields(c.after) })),
+        changes: changes.map(c => ({ table: c.table, row: row(c.table, c.id), before: c.before, after: c.after })),
         created: created.map(c => row(c.table, c.id)),
       }
     }
@@ -329,16 +315,16 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
     expect(o).toMatchObject({ scope: 'ongoing', slug: 'ebola-in-ituri', entriesAtLastReview: 3, reviewedAt: at(3, 2) })
     expect(await prisma.overviewDecision.count({ where: { kind: 'review', outcome: 'audited' } })).toBe(1)
 
-    // Night 3: D reports the end event: the two calls agree and the closing begins, its story D
+    // Night 3: D, which reports the end event, joins
     const d = await story('D', 'The ministry declares the Ebola outbreak in Ituri over', at(3, 9))
     o = only(await run(at(4, 2)))
-    expect(o).toMatchObject({ status: 'closing', closingStoryId: 'D', closingSince: d.datePublished, lastEntryAt: d.datePublished })
+    expect(o).toMatchObject({ lastEntryAt: d.datePublished })
 
-    // Night 4: D is unpublished: its entry leaves, the closing is cancelled, the last entry is C's again
+    // Night 4: D is unpublished: its entry leaves, the last entry is C's again
     await prisma.story.update({ where: { id: d.id }, data: { status: 'rejected' } })
     for (const ov of sandbox.overviews.values()) for (const e of ov.entries) if (e.storyId === d.id) e.published = false
     o = only(await run(at(5, 2)))
-    expect(o).toMatchObject({ status: 'open', closingStoryId: null, closingSince: null, lastEntryAt: c.datePublished })
+    expect(o).toMatchObject({ status: 'open', lastEntryAt: c.datePublished })
     expect(o.entries.D).toMatchObject({ status: 'detached' })
     expect(active(o)).toEqual(['A', 'B', 'C'])
 

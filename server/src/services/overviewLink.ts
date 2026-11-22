@@ -21,6 +21,7 @@ import {
   type LinkOutcome,
   type LinkStory,
   type Memberships,
+  type QuotePair,
   type Role,
   type Shared,
 } from './overviewTypes.js'
@@ -95,9 +96,8 @@ export interface Acceptance {
   signals: Signal[]
 }
 
-const SIDES = ['cause', 'place', 'end'] as const
-/** An overview whose charter names no end event: the cause and the place decide, and the end is not asked. */
-const NO_END_SIDES = ['cause', 'place'] as const
+/** The shared fields a yes needs filled on both sides, for every candidate: the cause and the place decide. */
+const REQUIRED_SIDES = ['cause', 'place'] as const
 
 const sharedOf = (a: LinkCandidateAnswer): Shared => ({
   cause: { story: a.cause.story, other: a.cause.other },
@@ -110,24 +110,35 @@ export const storyTexts = (s: LinkStory) => [s.title, s.label, s.summary]
 /** An overview's side of a quote: its title, its charter's IN and its END_EVENT when it names one. Never its OUT list, which names what does not belong. */
 const overviewTexts = (o: CandidateOverview) => [o.title, o.charter.in, ...(o.charter.endEvent === null ? [] : [o.charter.endEvent])]
 
-/** Why a yes is refused: a shared field of `sides` left empty, or a quote not found on its side; null when it passes. */
-function refusalOf(answer: LinkCandidateAnswer, story: readonly string[], other: readonly string[], sides: readonly (typeof SIDES)[number][]): string | null {
-  for (const side of sides) {
-    const pair = answer[side]
-    if (!pair.story.trim() || !pair.other.trim()) return `no ${side} on both sides`
-    if (!quoteFound(pair.story, story)) return `${side}: the story's quote is not in its text`
-    if (!quoteFound(pair.other, other)) return `${side}: the candidate's quote is not in its text`
-  }
+/** A quote of `side` given but not found in its side's texts, as a refusal; an empty quote is not checked here. */
+function unfoundQuote(side: keyof Shared, pair: QuotePair, story: readonly string[], other: readonly string[]): string | null {
+  if (pair.story.trim() && !quoteFound(pair.story, story)) return `${side}: the story's quote is not in its text`
+  if (pair.other.trim() && !quoteFound(pair.other, other)) return `${side}: the candidate's quote is not in its text`
   return null
 }
 
 /**
+ * Why a yes is refused: the cause or the place left empty on a side, or a quote not found on its side,
+ * the end's included wherever it is given; null when it passes.
+ */
+function refusalOf(answer: LinkCandidateAnswer, story: readonly string[], other: readonly string[]): string | null {
+  for (const side of REQUIRED_SIDES) {
+    const pair = answer[side]
+    if (!pair.story.trim() || !pair.other.trim()) return `no ${side} on both sides`
+    const unfound = unfoundQuote(side, pair, story, other)
+    if (unfound) return unfound
+  }
+  return unfoundQuote('end', answer.end, story, other)
+}
+
+/**
  * Which candidate the story joins or may found with (`.context/overviews.md`, "How a story is linked",
- * step 2): a yes passes only with the shared fields filled on both sides and each quote found in its
- * side's text (the story's title, label or summary; the overview's title, IN or END_EVENT; the
- * partner's title, label or summary): all three, but for an overview whose charter names no end event,
- * where the cause and the place decide. `unsure` is no. The nearest passing overview wins (a story joins one at
- * most); a founding partner is considered only when no overview passed, the nearest passing first.
+ * step 2), by one rule for every candidate, overview or founding partner: a yes passes only with the
+ * cause and the place filled on both sides and each quote found in its side's text (the story's title,
+ * label or summary; the overview's title, IN or END_EVENT; the partner's title, label or summary). The
+ * end may be left empty, on either side, but each end quote given must be found in its side's text.
+ * `unsure` is no. The nearest passing overview wins (a story joins one at most); a founding partner is
+ * considered only when no overview passed, the nearest passing first.
  * Also the re-center flags for each overview shown, `wider` and `centerMoved`, each kept only with its
  * quote found in the story's text.
  */
@@ -135,24 +146,20 @@ export function acceptLink(story: LinkStory, overviews: readonly ShownOverview[]
   const byRef = new Map(answer.candidates.map(c => [c.id.trim(), c]))
   const refusals: Refusal[] = []
   let proposed = 0
-  const pick = <C extends { ref: string }>(
-    candidates: readonly C[],
-    texts: (c: C) => string[],
-    sides: (c: C) => readonly (typeof SIDES)[number][],
-  ): Accepted<C> | null => {
+  const pick = <C extends { ref: string }>(candidates: readonly C[], texts: (c: C) => string[]): Accepted<C> | null => {
     let chosen: Accepted<C> | null = null
     for (const candidate of candidates) {
       const a = byRef.get(candidate.ref)
       if (a?.belongs !== 'yes') continue
       proposed++
-      const reason = refusalOf(a, storyTexts(story), texts(candidate), sides(candidate))
+      const reason = refusalOf(a, storyTexts(story), texts(candidate))
       if (reason) refusals.push({ id: candidate.ref, reason })
       else chosen ??= { candidate, answer: a, shared: sharedOf(a) }
     }
     return chosen
   }
-  const join = pick(overviews, overviewTexts, o => (o.charter.endEvent === null ? NO_END_SIDES : SIDES))
-  const partner = pick(partners, storyTexts, () => SIDES)
+  const join = pick(overviews, overviewTexts)
+  const partner = pick(partners, storyTexts)
   return { join, partner: join ? null : partner, proposed, refusals, signals: signalsOf(story, overviews, byRef) }
 }
 
@@ -223,8 +230,15 @@ export interface LinkResult {
   story: LinkStory
   /** joined, founded, none, rejected, held or failed; the writer turns a stale or refused write into `conflict`. */
   outcome: Exclude<LinkOutcome, 'conflict'>
-  /** The story's role, from the link answer (a join, or alone) or the founding draft. */
+  /**
+   * The story's role, from the link answer (a join, or alone) or the founding draft; for a join that
+   * reports the end event (`join.reportsEndEvent`) a routine answer becomes a turning point, a milestone.
+   */
   role: Role | null
+  /**
+   * The overview joined; `reportsEndEvent` settled here: the answer's flag, counted only when the
+   * charter the call was shown names an end event.
+   */
   join: (Accepted<ShownOverview> & { reportsEndEvent: boolean }) | null
   /** For a `held` story, the frozen overview that passed first: its decision names it, so the story waits on that freeze. */
   heldBy: string | null
@@ -247,6 +261,9 @@ export interface LinkResult {
 
 /** A role as a model answered it: a routine entry has no kind. */
 export const roleOf = (r: { role: Role['role']; roleKind: Role['roleKind'] }): Role => ({ role: r.role, roleKind: r.role === 'routine' ? null : r.roleKind })
+
+/** A joined story's role once code reads its end-event flag: a routine story that reports the end event is a turning point, a milestone; a turning point keeps its kind. */
+const endEventRole = (role: Role, reports: boolean): Role => (reports && role.role === 'routine' ? { role: 'turning_point', roleKind: 'milestone' } : role)
 
 const blank = (story: LinkStory, outcome: LinkResult['outcome']): LinkResult => ({
   story,
@@ -292,7 +309,10 @@ async function found(story: LinkStory, partner: Accepted<ShownPartner>, deps: Li
  * Links one story: its candidates from its neighbours as they stand now, the link call (none with no
  * candidate), the acceptance rules, and a founding when no overview passed and a partner did. A frozen
  * overview that passes first holds the story for the next run, so a story never settles elsewhere
- * while an editor's freeze stands.
+ * while an editor's freeze stands. A joined story that reports the end event of an overview whose
+ * charter names one becomes a turning point (`endEventRole`); the flag follows the charter the call
+ * was shown, so an editor's re-center between the call and the write that changes the END_EVENT
+ * leaves the turning point the old one marked (accepted: an editor sets the role in one click).
  */
 export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkResult> {
   const neighbours = await deps.neighbours(story)
@@ -335,7 +355,9 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
   const alone = accepted.refusals.length > 0 ? 'rejected' : 'none'
   if (accepted.join) {
     if (accepted.join.candidate.frozen) return { ...settled, outcome: 'held', heldBy: accepted.join.candidate.id }
-    return { ...settled, outcome: 'joined', join: { ...accepted.join, reportsEndEvent: accepted.join.answer.reportsEndEvent } }
+    // The flag counts only for a charter that names an end event, the charter the call was shown
+    const reportsEndEvent = accepted.join.answer.reportsEndEvent && accepted.join.candidate.charter.endEvent !== null
+    return { ...settled, outcome: 'joined', role: endEventRole(role, reportsEndEvent), join: { ...accepted.join, reportsEndEvent } }
   }
   if (!accepted.partner) return { ...settled, outcome: alone }
   const founding = await found(story, accepted.partner, deps)

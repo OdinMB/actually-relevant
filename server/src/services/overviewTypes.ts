@@ -8,7 +8,7 @@
 export const OVERVIEW_SCOPES = ['single', 'forming', 'ongoing'] as const
 export type OverviewScope = (typeof OVERVIEW_SCOPES)[number]
 
-export const OVERVIEW_STATUSES = ['open', 'quiet', 'closing', 'closed'] as const
+export const OVERVIEW_STATUSES = ['open', 'quiet', 'closed'] as const
 export type OverviewStatus = (typeof OVERVIEW_STATUSES)[number]
 
 export const ENTRY_ROLES = ['turning_point', 'routine'] as const
@@ -26,18 +26,14 @@ export interface Role {
 
 /**
  * The answer keys' charter: what the development is, what stays separate, and the event that ends it.
- * Most developments have no end event a report could date (`null`): they close only by fading.
+ * Most developments have no end event a report could date (`null`). A named one is a marker, never a
+ * way to close: a joined story that reports it becomes a turning point (ADR-0072).
  */
 export interface Charter {
   in: string
   out: string[]
   endEvent: string | null
 }
-
-/** A charter that names its end event: the only kind an end-event closing is judged against. */
-export type ClosingCharter = Charter & { endEvent: string }
-
-export const namesEndEvent = (c: Charter): c is ClosingCharter => c.endEvent !== null
 
 /** An end event as a model answers it (an empty string for none) or an editor types it, as stored: trimmed, or null for none. */
 export const endEventOf = (text: string | null): string | null => (text?.trim() ? text.trim() : null)
@@ -59,7 +55,7 @@ export interface Membership {
   overviewId: string
   scope: OverviewScope
   status: OverviewStatus
-  /** end_event, faded or editor; null unless closed. */
+  /** faded or editor; null unless closed. */
   closedReason: string | null
   frozen: boolean
   /** The newest active entry's publication date. */
@@ -110,11 +106,11 @@ export interface StandsLine {
 }
 
 /**
- * Why a review runs: an entry count reached, its 30 days, a closure waiting on it, a burst of joins, a
- * reader's "Report an error" from the overview page, an editor's new charter (`recenter`, so every
- * entry is read under it); the monthly audit reviews and never acts.
+ * Why a review runs: an entry count reached, its 30 days, a burst of joins, a reader's "Report an
+ * error" from the overview page, an editor's new charter (`recenter`, so every entry is read under
+ * it); the monthly audit reviews and never acts.
  */
-export const REVIEW_TRIGGERS = ['entries', 'periodic', 'closure', 'burst', 'report', 'recenter', 'audit'] as const
+export const REVIEW_TRIGGERS = ['entries', 'periodic', 'burst', 'report', 'recenter', 'audit'] as const
 export type ReviewTrigger = (typeof REVIEW_TRIGGERS)[number]
 
 /**
@@ -137,10 +133,6 @@ export interface OverviewState {
   hidden: boolean
   /** The newest active entry's publication date. */
   lastEntryAt: Date | null
-  /** The publication date of the story that reported the end event, while closing. */
-  closingSince: Date | null
-  /** While closing, the story whose end-event report began it (the newest live `closing` decision's); null otherwise. */
-  closingStoryId: string | null
   /** Active entries whose story is published. */
   activeEntries: number
   /** Active entries whose story is no longer published: the job detaches them, frozen or not. */
@@ -156,8 +148,6 @@ export interface OverviewState {
   burstJoins: number
   /** When a burst froze it, while no review has run since. */
   burstAt: Date | null
-  /** Its closure review ran for its current closing. */
-  closureReviewed: boolean
   /**
    * When a person last reopened it (an editor's reopen, or an undone closure), while that decision
    * stands: quiet and fading count from then when it is later than the last entry, so a reopen is not

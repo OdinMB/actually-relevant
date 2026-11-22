@@ -121,7 +121,6 @@ const key: AnswerKey = {
   id: 'floods',
   title: 'Valley floods',
   charter: { in: 'The valley floods.', out: [], endEvent: 'Waters recede.' },
-  closed: null,
   figures: [{ key: 'displaced', name: 'Displaced', unit: 'people', definition: 'people displaced in the valley', cumulative: true, variants: [] }],
   entries: [
     entry('floods-a', '2026-10-01', { values: [value(4000, '2026-10-01', 'displaced 4,000 people')] }),

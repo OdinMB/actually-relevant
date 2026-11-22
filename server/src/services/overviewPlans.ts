@@ -1,9 +1,8 @@
 /**
  * The automated writes as change sets (`overviewChanges.ts`; `.context/overviews.md`, "How a story is
- * linked" and "Status, closing and reviews"), each planned from the rows as they stand when it is
- * written: one story's linking (a join, a founding, the story left alone), an end-event closing begun,
- * the status machine's moves, a burst's freeze, a review's actions, an automated re-center and the
- * monthly audit's findings.
+ * linked" and "Status and reviews"), each planned from the rows as they stand when it is written: one
+ * story's linking (a join, a founding, the story left alone), the status machine's moves, a burst's
+ * freeze, a review's actions, an automated re-center and the monthly audit's findings.
  * The lifecycle applies them in one transaction over the rows it locked; the eval sandbox applies the
  * same plans to its memory, so both write by one set of rules. Each applier settles a plan
  * (`settle`) before applying it; the status machine's moves are settled here, one after the other,
@@ -12,13 +11,11 @@
 import { OVERVIEW_PROMPT_VERSIONS } from '../prompts/overviews.js'
 import {
   ACTIVE,
-  CLOSING_CANCELLED,
   OPEN,
   UNFROZEN,
   applied,
   draft,
   entryChange,
-  leaving,
   overviewChange,
   plan,
   publicBefore,
@@ -33,8 +30,7 @@ import {
   type Plan,
   type Rows,
 } from './overviewChanges.js'
-import type { CloseCase, CloseResult } from './overviewClose.js'
-import type { AuditInputs, CloseInputs, FoundInputs, LinkInputs, RecenterInputs, ReviewInputs, StatusInputs } from './overviewDecisions.js'
+import type { AuditInputs, FoundInputs, LinkInputs, RecenterInputs, ReviewInputs, StatusInputs } from './overviewDecisions.js'
 import type { LinkResult } from './overviewLink.js'
 import { RECENTERER, type RecenterCase, type RecenterResult } from './overviewRecenter.js'
 import type { AuditResult, ReviewCase, ReviewResult } from './overviewReview.js'
@@ -87,31 +83,24 @@ export function countedSignals(result: LinkResult, outcome: LinkOutcome, overvie
   return []
 }
 
-/** A link decision's record; `endEventNamed` false (the overview joined names none) drops the end-event flag, so it never starts a closing. */
-const linkRecord = (result: LinkResult, outcome: LinkOutcome, overviewId: string | null, endEventNamed: boolean, ctx: PlanContext): LinkInputs => ({
+/** A link decision's record; its end-event flag arrives settled from `linkStory` (false with no join). */
+const linkRecord = (result: LinkResult, outcome: LinkOutcome, overviewId: string | null, ctx: PlanContext): LinkInputs => ({
   shown: result.shown,
   proposed: result.proposed,
   refusals: result.refusals,
-  reportsEndEvent: endEventNamed && (result.join?.reportsEndEvent ?? false),
+  reportsEndEvent: result.join?.reportsEndEvent ?? false,
   signals: countedSignals(result, outcome, overviewId),
   linkedAt: ctx.now,
 })
 
-const linkDecision = (
-  result: LinkResult,
-  outcome: LinkOutcome,
-  overviewId: string | null,
-  ctx: PlanContext,
-  confidence: number | null = null,
-  endEventNamed = true,
-): DecisionDraft =>
+const linkDecision = (result: LinkResult, outcome: LinkOutcome, overviewId: string | null, ctx: PlanContext, confidence: number | null = null): DecisionDraft =>
   draft({
     id: ctx.newId(),
     kind: 'link',
     outcome,
     overviewId,
     storyId: result.story.id,
-    inputs: linkRecord(result, outcome, overviewId, endEventNamed, ctx),
+    inputs: linkRecord(result, outcome, overviewId, ctx),
     answer: result.answer,
     model: result.model,
     promptVersion: result.promptVersion,
@@ -157,15 +146,14 @@ export const planConflict = (result: LinkResult, ctx: PlanContext): LinkPlan => 
  * state and made active, and its `joined` link decision; a `conflict` when the overview is gone or
  * closed (but faded) since, `held` when frozen since. The last entry and the scope follow the entries;
  * a quiet or faded overview opens again at the same run's status machine. A join never changes a
- * charter or a title; its end-event flag counts only on an overview that names an end event, as its
- * row holds it at the write.
+ * charter or a title; its end-event flag and its role arrive settled from `linkStory`.
  */
 export function planJoin(o: OverviewRow | null, result: LinkResult, ctx: PlanContext): LinkPlan {
   const j = result.join!
   if (!o || (o.status === 'closed' && o.closedReason !== 'faded'))
     return { plan: plan(linkDecision(result, 'conflict', j.candidate.id, ctx)), outcome: 'conflict' }
   if (o.frozen) return { plan: plan(linkDecision(result, 'held', o.id, ctx)), outcome: 'held' }
-  const decision = linkDecision(result, 'joined', o.id, ctx, j.answer.confidence, o.charter.endEvent !== null)
+  const decision = linkDecision(result, 'joined', o.id, ctx, j.answer.confidence)
   const entry: NewEntry = {
     id: ctx.newId(),
     overviewId: o.id,
@@ -271,47 +259,12 @@ const statusDecision = (overviewId: string, storyId: string | null, outcome: str
   draft({ id: ctx.newId(), kind: 'status', outcome, overviewId, storyId, inputs, actor: PIPELINE })
 
 /**
- * An end-event check's result as its `close` decision on the story, which settles the pair unless it
- * `failed`. On agreement an open or quiet, unfrozen overview whose end event is still the one the calls
- * judged starts closing from the story's publication date, on that story, its closure review still to
- * run; otherwise `stale` (asked again on the overview as it stands, or passed by once it names none).
- */
-export function planClosing(o: OverviewRow | null, c: CloseCase, result: CloseResult, ctx: PlanContext): Plan {
-  let outcome: string = result.outcome
-  let changes: Change[] = []
-  if (result.outcome === 'closing') {
-    // The calls judged the end event the case was read with: one an editor's re-center changed since is no longer this overview's
-    if (o && (o.status === 'open' || o.status === 'quiet') && !o.frozen && sameValue(o.charter.endEvent, c.charter.endEvent))
-      changes = overviewChange(o, { status: 'closing', closingSince: c.story.datePublished, closingStoryId: c.story.id, closureReviewedAt: null })
-    else outcome = 'stale'
-  }
-  const inputs: CloseInputs = { endEvent: c.charter.endEvent }
-  return plan(
-    draft({
-      id: ctx.newId(),
-      kind: 'close',
-      outcome,
-      overviewId: c.overviewId,
-      storyId: c.story.id,
-      inputs,
-      answer: result.answers,
-      model: result.model,
-      promptVersion: result.promptVersion,
-      costUsd: result.costUsd,
-      actor: PIPELINE,
-    }),
-    { changes },
-  )
-}
-
-/**
  * The status machine's moves (`nextState`), each its own `status` decision, applied in order and only
  * from the state it was computed on (a move whose `from` no longer holds is dropped):
  * - an entry whose story is no longer published detached (`unpublished`, by the pipeline, not locked),
  *   and the story's link decisions undone, so a story published again is linked afresh;
- * - a scope or status moved; closing records the day in development time (`clock`); an overview that
- *   opens again loses its closing and closure; a closing whose end-event story was unpublished is
- *   cancelled, frozen or not.
+ * - a scope or status moved; a closure records the day in development time (`clock`); an overview
+ *   that opens again loses its closure.
  */
 export function planStatus(rows: Rows, moves: readonly StatusMove[], clock: Date, ctx: PlanContext): Plan[] {
   let at = rows
@@ -332,10 +285,6 @@ export function planStatus(rows: Rows, moves: readonly StatusMove[], clock: Date
       // Moved already when an entry leaving settled it: the move is still logged, with nothing left to change
       if (row.scope !== m.from && row.scope !== m.to) continue
       push(plan(statusDecision(row.id, null, m.to, { from: m.from, to: m.to }, ctx), { changes: overviewChange(row, { scope: m.to }) }))
-    } else if (m.kind === 'cancel_closing') {
-      if (row.status !== 'closing') continue
-      const inputs: StatusInputs = { from: 'closing', to: 'open', reason: 'closing_cancelled', by: 'unpublished' }
-      push(plan(statusDecision(row.id, m.storyId, 'open', inputs, ctx), { changes: overviewChange(row, CLOSING_CANCELLED) }))
     } else {
       if (row.status !== m.from || row.frozen) continue
       const to: Partial<OverviewFields> =
@@ -373,22 +322,20 @@ function changedSinceCase(c: ReviewCase, { overview: o, entries }: Rows): boolea
 
 /**
  * A review's result (`.context/overviews.md`, "Reviews") as its `review` decision with its trigger,
- * actions, refusals and brake (and for a closure's, the closing it was for). A failed review changes
+ * actions, refusals and brake. A failed review changes
  * nothing, and so does one whose overview changed while its call ran (`changedSinceCase`): it is
  * recorded `stale`, so the review stays due and the next run asks again, and a change made meanwhile
  * is never overwritten. Otherwise: each detach of an active, unlocked entry (`review`; its story's link
  * decision stays live, so it is not linked again), each relabel of one, the narrowed charter, the title,
  * a freeze cleared, or, when the detach brake tripped, the overview frozen by the review for an editor;
- * the scope it leaves, the entries kept and the review's time; for a closure's, the closure reviewed;
- * a closing whose end-event story it detached cancelled (`leaving`, with a `status` record of it); and
- * the slug the first time it makes the overview public.
+ * the scope it leaves, the entries kept and the review's time; and the slug the first time it makes
+ * the overview public.
  */
 export function planReview(rows: Rows, c: ReviewCase, result: ReviewResult, ctx: PlanContext): Plan {
   const { overview: o, entries } = rows
   const stale = result.outcome === 'reviewed' && changedSinceCase(c, rows)
   const inputs: ReviewInputs = {
     trigger: result.trigger,
-    closingSince: result.trigger === 'closure' ? o.closingSince : null,
     actions: result.actions,
     refusals: result.refusals,
     kept: result.kept,
@@ -411,27 +358,18 @@ export function planReview(rows: Rows, c: ReviewCase, result: ReviewResult, ctx:
   if (result.outcome !== 'reviewed' || stale) return plan(decision)
   const byId = new Map(entries.map(e => [e.id, e]))
   const changes: Change[] = []
-  const left: (string | null)[] = []
   const fields: Partial<OverviewFields> = { scope: result.scope, entriesAtLastReview: result.kept, reviewedAt: ctx.now, joinsCountedFrom: ctx.now }
-  if (result.trigger === 'closure' && o.status === 'closing') fields.closureReviewedAt = ctx.now
   for (const a of result.actions) {
     const e = 'entryId' in a ? byId.get(a.entryId) : undefined
     const open = e !== undefined && e.status === 'active' && !e.locked
-    if (a.kind === 'detach' && open) {
-      changes.push(...entryChange(e, { status: 'detached', detachedBy: REVIEWER, detachReason: 'review', detachedAt: ctx.now }))
-      left.push(e.storyId)
-    } else if (a.kind === 'relabel' && open) changes.push(...entryChange(e, { role: a.to.role, roleKind: a.to.roleKind }))
+    if (a.kind === 'detach' && open) changes.push(...entryChange(e, { status: 'detached', detachedBy: REVIEWER, detachReason: 'review', detachedAt: ctx.now }))
+    else if (a.kind === 'relabel' && open) changes.push(...entryChange(e, { role: a.to.role, roleKind: a.to.roleKind }))
     else if (a.kind === 'narrow') fields.charter = a.charter
     else if (a.kind === 'retitle') fields.title = a.to
     else if (a.kind === 'unfreeze') Object.assign(fields, UNFROZEN)
   }
   if (result.brake) Object.assign(fields, { frozen: true, frozenBy: 'review', frozenAt: ctx.now })
-  const cancels = leaving(o, left)
-  Object.assign(fields, cancels)
-  const also =
-    'status' in cancels ? [statusDecision(o.id, o.closingStoryId, 'open', { from: 'closing', to: 'open', reason: 'closing_cancelled', by: 'review' }, ctx)] : []
   return plan(decision, {
-    also,
     changes: [...changes, ...overviewChange(o, fields)],
     wasPublic: publicBefore(o),
     needsSlug: result.scope === 'ongoing' && o.slug === null,
@@ -471,8 +409,8 @@ export function recenterStale(c: RecenterCase, rows: Rows, result: RecenterResul
  * re-center's own (`recentered_by` `recenter`), one more automated re-center, the attempt; detaches the
  * entries both calls rejected (`recenter`; their link decisions stay live); and joins the stories both
  * accepted, a review-detached row reused, any other a new entry (`joined_by` `recenter`), each with the
- * draft's role and unlocked. A re-center join never starts a closing, and `joins_counted_from` stays,
- * as the burst count counts only the pipeline's joins. `rows` is null for an overview gone.
+ * draft's role and unlocked. `joins_counted_from` stays, as the burst count counts only the
+ * pipeline's joins. `rows` is null for an overview gone.
  */
 export function planRecenter(rows: Rows | null, c: RecenterCase, result: RecenterResult, storiesNow: RecenterStoriesNow, ctx: PlanContext): Plan {
   const stale = rows === null || (result.outcome !== 'failed' && recenterStale(c, rows, result, storiesNow))
@@ -504,12 +442,10 @@ export function planRecenter(rows: Rows | null, c: RecenterCase, result: Recente
   const o = rows.overview
   if (result.outcome !== 'recentered') return plan(decision, { changes: overviewChange(o, { recenterTriedAt: ctx.now }) })
   const changes: Change[] = []
-  const left: (string | null)[] = []
   for (const d of result.detaches) {
     const e = rows.entries.find(x => x.id === d.entryId)
     if (!e || e.status !== 'active' || e.locked) continue
     changes.push(...entryChange(e, { status: 'detached', detachedBy: RECENTERER, detachReason: 'recenter', detachedAt: ctx.now }))
-    left.push(e.storyId)
   }
   const newEntries: NewEntry[] = []
   for (const j of result.joins) {
@@ -545,7 +481,6 @@ export function planRecenter(rows: Rows | null, c: RecenterCase, result: Recente
     recenteredBy: RECENTERER,
     recenterTriedAt: ctx.now,
     automatedRecenters: o.automatedRecenters + 1,
-    ...leaving(o, left),
   }
   return plan(decision, { newEntries, changes: [...changes, ...overviewChange(o, fields)], wasPublic: publicBefore(o) })
 }

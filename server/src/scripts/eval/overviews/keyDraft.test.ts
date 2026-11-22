@@ -33,13 +33,12 @@ const entry = (slug: string, date: string, join: 'must' | 'optional' = 'must') =
   why: 'Belongs.',
 })
 
-/** A version 1 key as committed: no responses, open. */
+/** A version 1 key as committed: no responses. */
 const rawKey = (id = ID): Record<string, unknown> => ({
   schemaVersion: 1,
   id,
   title: id === ID ? 'Ebola in eastern DR Congo' : `Development ${id}`,
   charter: { in: 'The outbreak.', out: ['Uganda'], endEvent: 'DR Congo declares the outbreak over.' },
-  closed: null,
   figures: [],
   entries: [entry('a', '2026-05-01'), entry('b', '2026-05-03', 'optional'), entry('c', '2026-05-05'), entry('d', '2026-05-07')],
   nearMisses: [],
@@ -88,7 +87,6 @@ const ANSWER: KeyDraftAnswer = {
     { story: 'S1', what: 'WHO ring vaccination in Bunia', quote: 'began ring vaccination in Bunia' },
     { story: 'S3', what: 'Treatment centres in Beni', quote: 'Treatment centres opened in Beni.' },
   ],
-  end: { happened: 'yes', story: 'S4', date: '2026-05-06', quote: "Congo's health ministry declared the outbreak over", why: 'The ministry declared it.' },
 }
 
 describe('draftableKeys', () => {
@@ -115,7 +113,7 @@ describe('draftableKeys', () => {
 })
 
 describe('the prompt', () => {
-  it("shows every entry published here with its id, join, day and named published fields, and the charter's end and notes", () => {
+  it("shows every entry published here with its id, join, day and named published fields, and the key's notes", () => {
     const { shown, missing } = draftStories(keyOf(), new Map([...STORIES].filter(([slug]) => slug !== 'd')))
     expect(shown.map(s => [s.id, s.slug, s.join, s.date])).toEqual([
       ['S1', 'a', 'must', '2026-05-01'],
@@ -127,7 +125,6 @@ describe('the prompt', () => {
     expect(prompt).toContain('<STORY id="S3" join="must" date="2026-05-05">\n<TITLE>Title c</TITLE>\n<SUMMARY>Treatment centres opened in Beni.')
     expect(prompt).toContain('<WHY_IT_MATTERS>- Ring vaccination continues.</WHY_IT_MATTERS>')
     expect(prompt).not.toContain('<CAVEATS>')
-    expect(prompt).toContain('<END_EVENT>DR Congo declares the outbreak over.</END_EVENT>')
     expect(prompt).toContain('Uganda declaring its own outbreak over does not end it.')
     expect(prompt).toContain(`marked join="must", at most ${MAX_RESPONSES_PER_STORY} a story`)
   })
@@ -137,14 +134,13 @@ describe('checkedDraft', () => {
   const { shown } = draftStories(keyOf(), STORIES)
   const check = (answer: KeyDraftAnswer) => checkedDraft(shown, answer)
 
-  it("keeps each must story's response its text states, dated by its story and marked a draft, and the end with its quote", () => {
+  it("keeps each must story's response its text states, dated by its story and marked a draft", () => {
     const d = check(ANSWER)
     expect(d.responses).toEqual([
       { date: '2026-05-01', what: 'WHO ring vaccination in Bunia', slug: 'a', quote: 'began ring vaccination in Bunia', reviewed: false },
       { date: '2026-05-05', what: 'Treatment centres in Beni', slug: 'c', quote: 'Treatment centres opened in Beni.', reviewed: false },
     ])
-    expect(d.closed).toEqual({ slug: 'd', date: '2026-05-06', quote: "Congo's health ministry declared the outbreak over", reviewed: false })
-    expect([d.noEnd, d.left]).toEqual([null, []])
+    expect(d.left).toEqual([])
   })
 
   it('leaves out what it cannot check, and says why', () => {
@@ -156,7 +152,6 @@ describe('checkedDraft', () => {
         { story: 'S1', what: ' ', quote: 'ring vaccination' },
         ...Array.from({ length: MAX_RESPONSES_PER_STORY + 1 }, (_, i) => ({ story: 'S3', what: `Response ${i + 1}`, quote: 'trace contacts' })),
       ],
-      end: { happened: 'yes', story: 'S2', date: '2026-05-03', quote: 'Uganda declared its outbreak over and ended it', why: 'Over.' },
     })
     expect(d.responses.map(r => r.what)).toEqual(Array.from({ length: MAX_RESPONSES_PER_STORY }, (_, i) => `Response ${i + 1}`))
     expect(d.left).toEqual([
@@ -165,16 +160,7 @@ describe('checkedDraft', () => {
       'response "Mass vaccination": quote not found in a: "began mass vaccination"',
       'response on a: no text for what is being done',
       `response "Response ${MAX_RESPONSES_PER_STORY + 1}": more than ${MAX_RESPONSES_PER_STORY} for c`,
-      'end: quote not found in b: "Uganda declared its outbreak over and ended it"',
     ])
-    expect(d.closed).toBeNull()
-  })
-
-  it("dates the end by its story when the date given is not a day on or before it, and keeps the drafter's reason when it found none", () => {
-    expect(check({ ...ANSWER, end: { ...ANSWER.end, date: '2026-05-20' } }).closed?.date).toBe('2026-05-07')
-    expect(check({ ...ANSWER, end: { ...ANSWER.end, date: 'May 6' } }).closed?.date).toBe('2026-05-07')
-    const open = check({ responses: [], end: { happened: 'no', story: '', date: '', quote: '', why: 'Cases still rise in the last story.' } })
-    expect([open.closed, open.noEnd, open.left]).toEqual([null, 'Cases still rise in the last story.', []])
   })
 })
 
@@ -182,9 +168,8 @@ describe('draftedJson', () => {
   it('raises the key to version 2 and adds the drafts before the notes, every other field as it was', () => {
     const d = checkedDraft(draftStories(keyOf(), STORIES).shown, ANSWER)
     const out = draftedJson(rawKey(), d)
-    expect(Object.keys(out)).toEqual(['schemaVersion', 'id', 'title', 'charter', 'closed', 'figures', 'entries', 'nearMisses', 'responses', 'notes'])
-    expect(out).toMatchObject({ schemaVersion: 2, closed: d.closed, responses: d.responses, entries: rawKey().entries })
-    expect(draftedJson(rawKey(), { responses: [], closed: null }).closed).toBeNull()
+    expect(Object.keys(out)).toEqual(['schemaVersion', 'id', 'title', 'charter', 'figures', 'entries', 'nearMisses', 'responses', 'notes'])
+    expect(out).toMatchObject({ schemaVersion: 2, responses: d.responses, entries: rawKey().entries })
   })
 })
 
@@ -199,9 +184,7 @@ describe('the step', () => {
     dir ||= mkdtempSync(join(tmpdir(), 'key-draft-'))
     for (const raw of [rawKey(), rawKey('el-nino-2026')]) writeFileSync(join(dir, `${String(raw.id)}.json`), `${JSON.stringify(raw, null, 2)}\n`)
     return {
-      ctx: fakeEvalContext((_schema, prompt) =>
-        prompt.includes('Ebola in eastern DR Congo') ? ANSWER : { responses: [], end: { happened: 'no', story: '', date: '', quote: '', why: 'Open.' } },
-      ),
+      ctx: fakeEvalContext((_schema, prompt) => (prompt.includes('Ebola in eastern DR Congo') ? ANSWER : { responses: [] })),
       files: [readKeyFile(join(dir, `${ID}.json`)), readKeyFile(join(dir, 'el-nino-2026.json'))],
       half: 'judge',
       stories: async slugs => new Map(slugs.flatMap(s => (STORIES.has(s) ? [[s, STORIES.get(s)!] as const] : []))),
@@ -219,17 +202,16 @@ describe('the step', () => {
     expect((o.ctx as ReturnType<typeof fakeEvalContext>).calls.map(c => c.arm)).toEqual([KEY_DRAFT_ARM, KEY_DRAFT_ARM])
     expect(report.estimate).toMatchObject({ calls: 2, uncached: 2 })
     expect(report.written).toEqual([join(dir, `${ID}.json`)])
-    expect(report.drafts.map(d => [d.id, d.outcome, d.responses.length, d.closed?.date ?? null, d.noEnd, d.written])).toEqual([
-      [ID, 'ok', 2, '2026-05-06', null, true],
-      ['el-nino-2026', 'ok', 0, null, 'Open.', false],
+    expect(report.drafts.map(d => [d.id, d.outcome, d.responses.length, d.written])).toEqual([
+      [ID, 'ok', 2, true],
+      ['el-nino-2026', 'ok', 0, false],
     ])
     expect(readFileSync(join(dir, 'el-nino-2026.json'), 'utf8')).toBe(before)
     // The drafted key keeps the format, and the steps that read it refuse it until it is reviewed
     const written = readKeyFile(join(dir, `${ID}.json`))
     expect(written.errors).toEqual([])
-    expect(written.key).toMatchObject({ schemaVersion: 2, closed: { slug: 'd', reviewed: false } })
+    expect(written.key).toMatchObject({ schemaVersion: 2 })
     expect(awaitingReview([written.key!], 'responses')).toMatch(/^refused: 2 drafted responses/)
-    expect(awaitingReview([written.key!], 'closed')).toMatch(/^refused: 1 drafted end/)
     expect(readFileSync(join(dir, `${ID}.json`), 'utf8').endsWith('\n')).toBe(true)
   })
 

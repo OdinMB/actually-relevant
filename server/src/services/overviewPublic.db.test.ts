@@ -390,12 +390,12 @@ describeDb('public overviews (PostgreSQL)', () => {
     expect(await overviewReport(o.id)).toEqual({ queuesReview: false })
     await report(false)
     const [state] = await overviewStates(prisma, new Date())
-    expect(reviewDue(state!, { clock: new Date(), now: new Date() })).toBe('report')
+    expect(reviewDue(state!, { now: new Date() })).toBe('report')
 
     // A review after it answers it; 7 days after the queued one, a report queues again
     await prisma.overview.update({ where: { id: o.id }, data: { reviewedAt: new Date() } })
     const [reviewed] = await overviewStates(prisma, new Date())
-    expect(reviewDue(reviewed!, { clock: new Date(), now: new Date() })).toBeNull()
+    expect(reviewDue(reviewed!, { now: new Date() })).toBeNull()
     await prisma.feedback.updateMany({ where: { overviewId: o.id }, data: { createdAt: new Date(Date.now() - 8 * DAY) } })
     expect(await overviewReport(o.id)).toEqual({ queuesReview: true })
 

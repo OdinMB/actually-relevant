@@ -19,7 +19,6 @@
     ],
     "endEvent": "Forecasting agencies (NOAA, WMO, JMA or the Australian Bureau of Meteorology) declare the El Niño over: ENSO-neutral or La Niña conditions have returned."
   },
-  "closed": null,
   "figures": [
     {
       "key": "elnino_odds",

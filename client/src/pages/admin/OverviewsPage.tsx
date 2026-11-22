@@ -29,7 +29,7 @@ const flag = (value: string | null): boolean | undefined => (value === 'true' ? 
 function readOverviewFilters(params: URLSearchParams): OverviewFilters {
   return {
     scope: oneOf<OverviewScope>(['single', 'forming', 'ongoing'], params.get('scope')),
-    status: oneOf<OverviewStatus>(['open', 'quiet', 'closing', 'closed'], params.get('status')),
+    status: oneOf<OverviewStatus>(Object.keys(STATUS_LABELS) as OverviewStatus[], params.get('status')),
     frozen: flag(params.get('frozen')),
     hidden: flag(params.get('hidden')),
   }

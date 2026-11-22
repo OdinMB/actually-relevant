@@ -114,23 +114,48 @@ describe('acceptLink', () => {
     expect(got.refusals).toEqual([{ id: 'O1', reason: "place: the candidate's quote is not in its text" }])
   })
 
-  it('lets the cause and the place decide for an overview whose charter names no end event: its end quotes are left empty, or ignored', () => {
-    const none = { ...shownOverview('A', 'O1', 0.1), charter: { in: 'The Ebola outbreak in Ituri province.', out: [], endEvent: null } }
-    const emptyEnd = yes('O1', { end: { story: '', other: '' } })
-    expect(acceptLink(s, [none], [], answer([emptyEnd]))).toMatchObject({ join: { candidate: { id: 'A' } }, refusals: [] })
-    // An end quoted anyway, even from nowhere, neither helps nor hurts
-    expect(acceptLink(s, [none], [], answer([yes('O1', { end: { story: 'declares it over', other: 'reporting stops' } })])).join).not.toBeNull()
-    // The cause and the place are still checked
-    expect(acceptLink(s, [none], [], answer([{ ...emptyEnd, place: { story: 'Ituri', other: '' } }])).refusals).toEqual([
-      { id: 'O1', reason: 'no place on both sides' },
+  it('passes a yes with an empty end on the cause and the place, for an overview naming an end event and for a founding partner', () => {
+    const emptyEnd = { end: { story: '', other: '' } }
+    expect(acceptLink(s, [shownOverview('A', 'O1', 0.1)], [], answer([yes('O1', emptyEnd)]))).toMatchObject({ join: { candidate: { id: 'A' } }, refusals: [] })
+    const partner = shownPartner(story('p', 5), 'F1', 0.2)
+    expect(acceptLink(s, [], [partner], answer([yes('F1', emptyEnd)]))).toMatchObject({ partner: { candidate: { id: 'p' } }, refusals: [] })
+  })
+
+  it('refuses a yes whose end quote is not found on its side, each side on its own', () => {
+    const shown = [shownOverview('A', 'O1', 0.1)]
+    const storySide = yes('O1', { end: { story: 'the WHO lifts the emergency', other: 'declares the outbreak over' } })
+    expect(acceptLink(s, shown, [], answer([storySide]))).toMatchObject({
+      join: null,
+      refusals: [{ id: 'O1', reason: "end: the story's quote is not in its text" }],
+    })
+    const otherSide = yes('O1', { end: { story: 'declares it over', other: 'the WHO lifts the emergency' } })
+    expect(acceptLink(s, shown, [], answer([otherSide]))).toMatchObject({
+      join: null,
+      refusals: [{ id: 'O1', reason: "end: the candidate's quote is not in its text" }],
+    })
+    const partner = shownPartner(story('p', 5), 'F1', 0.2)
+    expect(acceptLink(s, [], [partner], answer([yes('F1', { end: { story: '', other: 'reporting stops' } })])).refusals).toEqual([
+      { id: 'F1', reason: "end: the candidate's quote is not in its text" },
     ])
   })
 
-  it('still needs the end on both sides for an overview that names an end event, and for a founding partner', () => {
-    const emptyEnd = { end: { story: '', other: '' } }
-    expect(acceptLink(s, [shownOverview('A', 'O1', 0.1)], [], answer([yes('O1', emptyEnd)])).refusals).toEqual([{ id: 'O1', reason: 'no end on both sides' }])
-    const partner = shownPartner(story('p', 5), 'F1', 0.2)
-    expect(acceptLink(s, [], [partner], answer([yes('F1', emptyEnd)])).refusals).toEqual([{ id: 'F1', reason: 'no end on both sides' }])
+  it('passes a half-filled end whose filled side is found', () => {
+    const shown = [shownOverview('A', 'O1', 0.1)]
+    expect(acceptLink(s, shown, [], answer([yes('O1', { end: { story: 'declares it over', other: '' } })])).join).not.toBeNull()
+    expect(acceptLink(s, shown, [], answer([yes('O1', { end: { story: ' ', other: 'declares the outbreak over' } })])).join).not.toBeNull()
+  })
+
+  it('holds an overview naming no end event to the same rule: an empty end passes, an end quote found nowhere refuses', () => {
+    const none = { ...shownOverview('A', 'O1', 0.1), charter: { in: 'The Ebola outbreak in Ituri province.', out: [], endEvent: null } }
+    const emptyEnd = yes('O1', { end: { story: '', other: '' } })
+    expect(acceptLink(s, [none], [], answer([emptyEnd]))).toMatchObject({ join: { candidate: { id: 'A' } }, refusals: [] })
+    expect(acceptLink(s, [none], [], answer([yes('O1', { end: { story: 'declares it over', other: 'reporting stops' } })])).refusals).toEqual([
+      { id: 'O1', reason: "end: the candidate's quote is not in its text" },
+    ])
+    // The cause and the place are still required
+    expect(acceptLink(s, [none], [], answer([{ ...emptyEnd, place: { story: 'Ituri', other: '' } }])).refusals).toEqual([
+      { id: 'O1', reason: 'no place on both sides' },
+    ])
   })
 })
 
@@ -274,6 +299,35 @@ describe('linkStory', () => {
     expect(got.promptVersion).toMatch(/\S/)
   })
 
+  /** A world where `s` is linked against overview A, `charter` its charter, the model's answer given. */
+  const joining = (link: LinkAnswer, charter = overview('A').charter) => {
+    const s = story('s', 10)
+    const w = world({
+      stories: [s, story('m', 8)],
+      neighbours: { s: [{ id: 'm', distance: 0.2 }] },
+      members: { m: membership('A') },
+      overviews: [overview('A', { charter })],
+      link: () => link,
+    })
+    return linkStory(s, w.deps)
+  }
+
+  it("makes a routine story that reports the overview's end event a turning point, a milestone, and records the flag", async () => {
+    const got = await joining(answer([yes('O1', { reportsEndEvent: true })]))
+    expect(got).toMatchObject({ outcome: 'joined', role: { role: 'turning_point', roleKind: 'milestone' }, join: { reportsEndEvent: true } })
+  })
+
+  it('keeps the kind of a turning point that reports the end event', async () => {
+    const got = await joining({ ...answer([yes('O1', { reportsEndEvent: true })]), role: 'turning_point', roleKind: 'deescalation' })
+    expect(got).toMatchObject({ outcome: 'joined', role: { role: 'turning_point', roleKind: 'deescalation' }, join: { reportsEndEvent: true } })
+  })
+
+  it('drops the flag on an overview naming no end event, as the call was shown it, and leaves the role as answered', async () => {
+    const none = { in: 'The Ebola outbreak in Ituri province.', out: [], endEvent: null }
+    const got = await joining(answer([yes('O1', { reportsEndEvent: true, end: { story: '', other: '' } })]), none)
+    expect(got).toMatchObject({ outcome: 'joined', role: { role: 'routine', roleKind: null }, join: { reportsEndEvent: false } })
+  })
+
   it('holds a story whose nearest passing overview is frozen, by that overview, with no join', async () => {
     const s = story('s', 10)
     const w = world({
@@ -286,7 +340,7 @@ describe('linkStory', () => {
     expect(await linkStory(s, w.deps)).toMatchObject({ outcome: 'held', heldBy: 'A', join: null })
   })
 
-  it('never joins an overview closed at its end event, nor one an editor detached the story from', async () => {
+  it('never joins an overview closed by an editor, nor one an editor detached the story from', async () => {
     const s = story('s', 10)
     const w = world({
       stories: [s, story('m', 8), story('n', 9)],
@@ -296,7 +350,7 @@ describe('linkStory', () => {
           { id: 'n', distance: 0.3 },
         ],
       },
-      members: { m: membership('A', { status: 'closed', closedReason: 'end_event' }), n: membership('B') },
+      members: { m: membership('A', { status: 'closed', closedReason: 'editor' }), n: membership('B') },
       lockedOut: { s: ['B'] },
       overviews: [overview('A'), overview('B')],
       link: () => answer([yes('O1'), yes('O2')]),

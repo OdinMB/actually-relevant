@@ -87,7 +87,6 @@ export function plantedCase(
       scope: 'forming',
       frozen: false,
       entries,
-      closingStoryId: null,
       lockedOut: [],
     },
   }

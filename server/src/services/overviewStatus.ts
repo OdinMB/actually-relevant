@@ -1,10 +1,10 @@
 /**
  * The overview scope and status machine, the anomaly check and the review triggers
- * (`.context/overviews.md`, "Status, closing and reviews"). Code only: the one model step of closing,
- * the end-event agreement, is `overviewClose.ts`'s; this module turns an overview's state into the
- * moves the lifecycle applies. Development time: `clock` is the day linking has reached (today, or
- * while a backfill drains the newest story it linked), so quiet, closing and fading count in the
- * development's own time; `now` is the wall clock reviews are spaced by. Pure.
+ * (`.context/overviews.md`, "Status and reviews"). Code only: this module turns an overview's state
+ * into the moves the lifecycle applies. An overview closes only by fading or by an editor's Close
+ * (ADR-0072). Development time: `clock` is the day linking has reached (today, or while a backfill
+ * drains the newest story it linked), so quiet and fading count in the development's own time; `now`
+ * is the wall clock reviews are spaced by. Pure.
  */
 import { config } from '../config.js'
 import type { OverviewScope, OverviewState, OverviewStatus, ReviewTrigger } from './overviewTypes.js'
@@ -14,21 +14,16 @@ const daysBetween = (from: Date, to: Date) => (to.getTime() - from.getTime()) / 
 
 export type StatusOptions = Pick<
   typeof config.overviews,
-  'quietAfterDays' | 'fadeAfterDays' | 'closingDays' | 'burstLimit' | 'reviewAt' | 'reviewEveryDays' | 'reportReviewEveryDays'
+  'quietAfterDays' | 'fadeAfterDays' | 'burstLimit' | 'reviewAt' | 'reviewEveryDays' | 'reportReviewEveryDays'
 >
 
 /** Why a status moved. */
-export type StatusReason = 'quiet' | 'active' | 'faded' | 'end_event' | 'closing_cancelled'
+export type StatusReason = 'quiet' | 'active' | 'faded'
 
-/**
- * One move the lifecycle applies (`applyStatus`), each logged as a `status` decision. `cancel_closing`:
- * the story whose end-event report began the closing is no longer published, so the closing ends and
- * the overview is open again (part of the unpublished-member rule, so frozen or not).
- */
+/** One move the lifecycle applies (`applyStatus`), each logged as a `status` decision. */
 export type StatusMove =
   | { kind: 'detach'; entryId: string; storyId: string }
   | { kind: 'scope'; from: OverviewScope; to: OverviewScope }
-  | { kind: 'cancel_closing'; storyId: string }
   | { kind: 'status'; from: OverviewStatus; to: OverviewStatus; reason: StatusReason }
 
 /**
@@ -44,19 +39,7 @@ export function scopeAfter(scope: OverviewScope, activeEntries: number): Overvie
 /** The scope a review leaves: at least 3 entries kept make it ongoing (public), 2 forming, 1 or none single. */
 export const scopeAfterReview = (kept: number): OverviewScope => (kept >= 3 ? 'ongoing' : kept === 2 ? 'forming' : 'single')
 
-/** A new entry after the end-event story: the closing is cancelled. */
-const newerThanClosing = (s: OverviewState) => s.closingSince !== null && s.lastEntryAt !== null && s.lastEntryAt.getTime() > s.closingSince.getTime()
-
-/** The closing period is over: `closingDays` since the end-event story, in development time. */
-const closingOver = (s: OverviewState, clock: Date, options: StatusOptions) =>
-  s.closingSince !== null && daysBetween(s.closingSince, clock) >= options.closingDays
-
 function statusAfter(s: OverviewState, clock: Date, options: StatusOptions): { to: OverviewStatus; reason: StatusReason } | null {
-  if (s.status === 'closing') {
-    if (newerThanClosing(s)) return { to: 'open', reason: 'closing_cancelled' }
-    // Closed only after the review the design requires before any closure
-    return closingOver(s, clock, options) && s.closureReviewed ? { to: 'closed', reason: 'end_event' } : null
-  }
   if (s.lastEntryAt === null) return null
   // A person's reopen counts as activity: the next run does not close it again
   const since = s.reopenedAt && s.reopenedAt.getTime() > s.lastEntryAt.getTime() ? s.reopenedAt : s.lastEntryAt
@@ -68,26 +51,16 @@ function statusAfter(s: OverviewState, clock: Date, options: StatusOptions): { t
 }
 
 /**
- * The moves an overview is due (`.context/overviews.md`, "Status, closing and reviews"): its active
- * entries whose story is no longer published detached, and its scope recomputed, frozen or not; then,
- * unless frozen, its status: open to quiet after `quietAfterDays` without a new entry (or since a
- * person reopened it, when later) and back on one,
- * closed as faded after `fadeAfterDays` and a faded one reopened by a new entry, a closing cancelled by
- * an entry after the end-event story, or closed at its end event once `closingDays` have passed and
- * its review has run. A closing whose end-event story is no longer published is cancelled instead,
- * frozen or not, since what began it is gone (the closure review cannot see that story to detach it).
- * An end-event closure itself begins only on the two calls' agreement (`overviewClose.ts`), never
- * here; an editor's closure never moves.
+ * The moves an overview is due (`.context/overviews.md`, "Status and reviews"): its active entries
+ * whose story is no longer published detached, and its scope recomputed, frozen or not; then, unless
+ * frozen, its status: open to quiet after `quietAfterDays` without a new entry (or since a person
+ * reopened it, when later) and back on one, closed as faded after `fadeAfterDays` and a faded one
+ * reopened by a new entry. An editor's closure never moves.
  */
 export function nextState(state: OverviewState, clock: Date, options: StatusOptions = config.overviews): StatusMove[] {
   const moves: StatusMove[] = state.unpublished.map(u => ({ kind: 'detach', entryId: u.entryId, storyId: u.storyId }))
   const scope = scopeAfter(state.scope, state.activeEntries)
   if (scope !== state.scope) moves.push({ kind: 'scope', from: state.scope, to: scope })
-  const closingStory = state.status === 'closing' ? state.closingStoryId : null
-  if (closingStory !== null && state.unpublished.some(u => u.storyId === closingStory)) {
-    moves.push({ kind: 'cancel_closing', storyId: closingStory })
-    return moves
-  }
   if (state.frozen) return moves
   const status = statusAfter(state, clock, options)
   if (status) moves.push({ kind: 'status', from: state.status, ...status })
@@ -103,22 +76,17 @@ export function anomalies(state: OverviewState, options: Pick<StatusOptions, 'bu
 
 /**
  * The review an overview is due, if any, the most pressing first: a burst's (the only one a frozen
- * overview gets, and the one that may clear its freeze); the review before an end-event closure once
- * its closing period is over; a reader's report that queued one, while no review has run since; an
- * editor's re-center, likewise (it reads every entry under the new charter; an Undo's queues none); each
- * time the active entries reach a count of `reviewAt` since the last review kept fewer (so a forming
- * overview cut back by one is reviewed again when it climbs back to 3); and every `reviewEveryDays` of
- * wall-clock time while public and not closed. A single overview is never reviewed.
+ * overview gets, and the one that may clear its freeze); a reader's report that queued one, while no
+ * review has run since; an editor's re-center, likewise (it reads every entry under the new charter;
+ * an Undo's queues none); each time the active entries reach a count of `reviewAt` since the last
+ * review kept fewer (so a forming overview cut back by one is reviewed again when it climbs back to 3);
+ * and every `reviewEveryDays` of wall-clock time (`now`) while public and not closed. A single overview
+ * is never reviewed.
  */
-export function reviewDue(
-  state: OverviewState,
-  at: { clock: Date; now: Date },
-  options: StatusOptions = config.overviews,
-): Exclude<ReviewTrigger, 'audit'> | null {
+export function reviewDue(state: OverviewState, at: { now: Date }, options: StatusOptions = config.overviews): Exclude<ReviewTrigger, 'audit'> | null {
   if (state.scope === 'single') return null
   if (state.burstAt !== null) return 'burst'
   if (state.frozen) return null
-  if (state.status === 'closing' && !state.closureReviewed && !newerThanClosing(state) && closingOver(state, at.clock, options)) return 'closure'
   const sinceReview = (at: Date | null) => at !== null && (state.reviewedAt === null || at.getTime() > state.reviewedAt.getTime())
   if (sinceReview(state.reportAt)) return 'report'
   if (state.recenteredBy === 'editor' && sinceReview(state.recenteredAt)) return 'recenter'

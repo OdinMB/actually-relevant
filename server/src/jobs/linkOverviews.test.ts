@@ -47,7 +47,6 @@ vi.mock('../services/overviewLifecycle.js', () => ({
   applyLink: mocks.applyLink,
   applyStatus: mocks.applyStatus,
   applyStands: mocks.applyStands,
-  applyClosing: vi.fn(),
   applyBurst: mocks.applyBurst,
   applyReview: vi.fn(),
   applyRecenter: mocks.applyRecenter,
@@ -55,7 +54,6 @@ vi.mock('../services/overviewLifecycle.js', () => ({
 }))
 vi.mock('../services/overviewRecenterInput.js', () => ({ recenterCases: mocks.recenterCases }))
 vi.mock('../services/overviewUpkeepInput.js', () => ({
-  pendingClosings: async () => [],
   overviewStates: mocks.overviewStates,
   reviewCase: async () => null,
   auditPicks: async () => [],
@@ -207,23 +205,23 @@ describe('runLinkOverviewsJob', () => {
     mocks.linkStories.mockResolvedValue([])
     const quiet: OverviewState = {
       id: 'o1',
+      title: 'Story',
       scope: 'ongoing',
       status: 'open',
       closedReason: null,
       frozen: false,
       hidden: false,
       lastEntryAt: new Date('2026-05-01T00:00:00Z'),
-      closingSince: null,
-      closingStoryId: null,
       activeEntries: 3,
       unpublished: [],
       entriesAtLastReview: 3,
       reviewedAt: new Date('2026-06-01T00:00:00Z'),
       burstJoins: 0,
       burstAt: null,
-      closureReviewed: false,
       reopenedAt: null,
       reportAt: null,
+      recenteredAt: null,
+      recenteredBy: null,
     }
     mocks.overviewStates.mockResolvedValue([quiet])
     await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
@@ -246,17 +244,16 @@ describe('runLinkOverviewsJob', () => {
       hidden: false,
       // Quiet by now: each overview's status moves
       lastEntryAt: new Date('2026-05-01T00:00:00Z'),
-      closingSince: null,
-      closingStoryId: null,
       activeEntries: 9,
       unpublished: [],
       entriesAtLastReview: 9,
       reviewedAt: new Date('2026-06-09T00:00:00Z'),
       burstJoins: 0,
       burstAt: null,
-      closureReviewed: false,
       reopenedAt: null,
       reportAt: null,
+      recenteredAt: null,
+      recenteredBy: null,
     }
     const states: OverviewState[] = Array.from({ length: 6 }, (_, i) => ({ ...base, id: `o${i}`, title: `Story ${i}` }))
     states[0] = { ...states[0]!, burstJoins: 20 }
@@ -284,12 +281,11 @@ describe('the upkeep summary, notices and deps', () => {
 
   it('names refreshes and reviews always, and the rest when they happened', () => {
     const tally = {
-      closingsChecked: 1,
-      closingsBegun: 1,
       moves: 2,
       detached: 0,
       bursts: 1,
       reviews: 2,
+      reviewsStale: 0,
       reviewActions: 3,
       reviewRefusals: 0,
       recenterAttempts: 2,
@@ -301,15 +297,15 @@ describe('the upkeep summary, notices and deps', () => {
       standsWritten: 3,
       standsChecked: 10,
       standsDropped: 1,
+      items: 5,
       failed: 1,
+      freezes: [],
       costUsd: 0.4,
       errors: [],
       stopped: false,
     }
-    expect(upkeepSummary(tally)).toBe('3 overviews refreshed, 2 reviewed, 1 re-centered, 1 closing, 1 frozen by a burst, 5 audited, 1 upkeep item failed')
-    expect(upkeepSummary({ ...tally, closingsBegun: 0, bursts: 0, audits: 0, failed: 0, standsWritten: 1, reviews: 0, recenters: [] })).toBe(
-      '1 overview refreshed, 0 reviewed',
-    )
+    expect(upkeepSummary(tally)).toBe('3 overviews refreshed, 2 reviewed, 1 re-centered, 1 frozen by a burst, 5 audited, 1 upkeep item failed')
+    expect(upkeepSummary({ ...tally, bursts: 0, audits: 0, failed: 0, standsWritten: 1, reviews: 0, recenters: [] })).toBe('1 overview refreshed, 0 reviewed')
   })
 
   it('tells the owner of an automated re-center, with the old and new title and where the limit stands', async () => {
@@ -333,7 +329,6 @@ describe('the upkeep summary, notices and deps', () => {
     mocks.overviewStates.mockResolvedValue([])
     mocks.standsCases.mockResolvedValue([])
     const deps = productionUpkeepDeps(now)
-    expect(await deps.closings()).toEqual([])
     expect(await deps.states()).toEqual([])
     expect(mocks.overviewStates).toHaveBeenCalledWith(expect.anything(), now)
     expect(await deps.reviewCase('o1')).toBeNull()
@@ -342,8 +337,6 @@ describe('the upkeep summary, notices and deps', () => {
 
     const charter = { in: 'In.', out: [], endEvent: 'Declared over.' }
     const entries = [{ ref: 'E1', title: 'T', label: 'L', summary: 'S.', date: '2026-06-01', role: { role: 'routine' as const, roleKind: null } }]
-    await deps.close.close({ charter, story: story('a', 1), entries: [] })
-    await deps.close.closeCheck({ endEvent: charter.endEvent, story: story('a', 1) })
     await deps.review.review({ title: 'T', charter, frozen: false, entries }, { audit: false })
     await deps.review.review({ title: 'T', charter, frozen: false, entries }, { audit: true })
     await deps.stands.write({ title: 'T', entries: [], facts: [], today: '2026-06-02', maxSentences: 4, maxDoing: 2 })
@@ -352,8 +345,6 @@ describe('the upkeep summary, notices and deps', () => {
     await deps.recenter.check({ charter, entries: [], stories: [], neighbours: [] })
     const { tiers } = (await import('../config.js')).config.overviews
     expect(mocks.structuredCall.mock.calls.map(c => [c[0], c[3]])).toEqual([
-      [tiers.close, {}],
-      [tiers.closeCheck, {}],
       [tiers.review, {}],
       [tiers.review, { effort: 'high' }],
       [tiers.stands, {}],
@@ -365,7 +356,6 @@ describe('the upkeep summary, notices and deps', () => {
     expect(mocks.recenterCases).toHaveBeenCalledWith(expect.anything(), { clock: now, now })
 
     const state = {} as Parameters<typeof deps.applyBurst>[0]
-    await deps.applyClosing({} as never, {} as never)
     await deps.applyStatus(state, [], now)
     await deps.applyBurst(state)
     await deps.applyReview({} as never, {} as never, now)
@@ -373,7 +363,6 @@ describe('the upkeep summary, notices and deps', () => {
     await deps.applyAudit({} as never, {} as never)
     await deps.applyStands({} as never, {} as never, 'sig', '2026-06-02')
     for (const write of [
-      lifecycle.applyClosing,
       lifecycle.applyStatus,
       lifecycle.applyBurst,
       lifecycle.applyRecenter,

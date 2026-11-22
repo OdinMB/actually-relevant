@@ -4,7 +4,7 @@ import { createFeed, createIssue, createStory, describeDb, useTestDatabase } fro
 import { ConflictError } from '../utils/errors.js'
 import { membershipsOf } from './overviewCandidates.js'
 import { foundResult, joinResult, linkStory } from '../test/db/overviewFixtures.js'
-import { applyBurst, applyClosing, applyLink, applyReview, editorAction, undoDecision } from './overviewLifecycle.js'
+import { applyBurst, applyLink, applyReview, editorAction, undoDecision } from './overviewLifecycle.js'
 import { owedStories } from './overviewQueue.js'
 import { reviewDue } from './overviewStatus.js'
 import { overviewStates, reviewCase } from './overviewUpkeepInput.js'
@@ -221,7 +221,6 @@ describeDb("an editor's actions and undo", () => {
       refusals: [],
       kept: 3,
       scope: 'ongoing',
-      cancelsClosing: false,
       brake: null,
       answer: null,
       costUsd: 0.2,
@@ -236,7 +235,7 @@ describeDb("an editor's actions and undo", () => {
     // What the review ran stays run: an ongoing overview counts as reviewed at the entries the undo leaves
     expect(await row(o.id)).toMatchObject({ charter, entriesAtLastReview: 4 })
     const state = (await overviewStates(prisma, new Date()))[0]!
-    expect(reviewDue(state, { clock: new Date(), now: new Date() })).toBeNull()
+    expect(reviewDue(state, { now: new Date() })).toBeNull()
     expect((await reviewCase(prisma, o.id))!.lockedOut).toEqual(['cholera'])
 
     // Undone in turn, the lock goes with it; the count is one-way and stays
@@ -277,7 +276,6 @@ describeDb("an editor's actions and undo", () => {
       refusals: [],
       kept: 3,
       scope: 'ongoing',
-      cancelsClosing: false,
       brake: null,
       answer: null,
       costUsd: 0.2,
@@ -292,21 +290,7 @@ describeDb("an editor's actions and undo", () => {
     expect((await prisma.overviewDecision.findUniqueOrThrow({ where: { id: review.id } })).undoneAt).toBeNull()
   })
 
-  it('refuses to undo a closing an entry cancelled once a later story began another', async () => {
-    const [a, b, c] = await stories(3)
-    const o = await overview([a!.id, b!.id, c!.id], { scope: 'ongoing' })
-    const closeCase = (story: { id: string; datePublished: Date | null }) => ({ overviewId: o.id, charter, story: linkStory(story), entries: [] })
-    const agreed = { outcome: 'closing' as const, answers: { close: null, check: null }, costUsd: 0.1, model: 'large', promptVersion: 'v' }
-    await applyClosing(closeCase(a!), agreed)
-    const old = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'close', storyId: a!.id } })
-    // A new entry cancelled it, and a later story began another closing
-    await prisma.overview.update({ where: { id: o.id }, data: { status: 'open', closingSince: null, closingStoryId: null } })
-    await applyClosing(closeCase(c!), agreed)
-    await expect(undoDecision(old.id, EDITOR)).rejects.toThrow('its closing changed after it')
-    expect(await row(o.id)).toMatchObject({ status: 'closing', closingStoryId: c!.id })
-  })
-
-  it("re-centers on an editor's charter with no end event: the closing cancelled, a review queued until it runs, and Undo lifting both", async () => {
+  it("re-centers on an editor's charter with no end event: a review queued until it runs, and Undo lifting it", async () => {
     const members = await stories(4)
     const o = await overview(
       members.map(s => s.id),
@@ -315,15 +299,12 @@ describeDb("an editor's actions and undo", () => {
     await prisma.overview.update({
       where: { id: o.id },
       data: {
-        status: 'closing',
-        closingSince: members[3]!.datePublished,
-        closingStoryId: members[3]!.id,
         reviewedAt: new Date(Date.now() - DAY),
         entriesAtLastReview: 4,
       },
     })
     const wider = { in: 'The Ebola outbreak in eastern Congo.', out: [], endEvent: null }
-    const at = () => ({ clock: new Date(), now: new Date() })
+    const at = () => ({ now: new Date() })
     const recenter = (basedOn: { title: string; charter: typeof charter }) =>
       editorAction({ kind: 'recenter', overviewId: o.id, title: 'Ebola in eastern Congo', charter: wider, anchorConfirmed: true, basedOn }, EDITOR)
     // A form opened before a review added an OUT entry is refused, and nothing is written
@@ -334,7 +315,6 @@ describeDb("an editor's actions and undo", () => {
       title: 'Ebola in eastern Congo',
       charter: wider,
       status: 'open',
-      closingStoryId: null,
       recenteredBy: 'editor',
       charterModel: 'm',
       automatedRecenters: 0,
@@ -345,11 +325,6 @@ describeDb("an editor's actions and undo", () => {
       actor: EDITOR,
       inputs: expect.objectContaining({ anchorConfirmed: true }),
     })
-    expect(await prisma.overviewDecision.findFirstOrThrow({ where: { overviewId: o.id, kind: 'status' } })).toMatchObject({
-      outcome: 'open',
-      storyId: members[3]!.id,
-      inputs: expect.objectContaining({ from: 'closing', to: 'open', reason: 'recentered', by: 'editor' }),
-    })
     const state = (await overviewStates(prisma, new Date()))[0]!
     expect(reviewDue(state, at())).toBe('recenter')
     // Its review reads the entries under the new charter
@@ -359,8 +334,7 @@ describeDb("an editor's actions and undo", () => {
     expect(await row(o.id)).toMatchObject({
       title: 'Ebola in Ituri',
       charter,
-      status: 'closing',
-      closingStoryId: members[3]!.id,
+      status: 'open',
       recenteredBy: null,
       recenteredAt: null,
     })

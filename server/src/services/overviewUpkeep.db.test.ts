@@ -1,13 +1,12 @@
 import { expect, it } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
-import type { CloseResult } from './overviewClose.js'
-import { applyAudit, applyBurst, applyClosing, applyReview, applyStands, applyStatus, editorAction } from './overviewLifecycle.js'
+import { applyAudit, applyBurst, applyReview, applyStands, applyStatus, editorAction } from './overviewLifecycle.js'
 import type { AuditResult, ReviewResult } from './overviewReview.js'
 import type { StandsResult } from './overviewStands.js'
 import { owedStories } from './overviewQueue.js'
 import { nextState } from './overviewStatus.js'
-import { auditPicks, overviewStates, pendingClosings, reviewCase, standsCases } from './overviewUpkeepInput.js'
+import { auditPicks, overviewStates, reviewCase, standsCases } from './overviewUpkeepInput.js'
 
 const DAY = 86_400_000
 const NOW = new Date('2026-11-18T03:00:00Z')
@@ -39,12 +38,10 @@ describeDb('the overview upkeep records', () => {
     storyIds: string[],
     over: Partial<{
       scope: 'single' | 'forming' | 'ongoing'
-      status: 'open' | 'quiet' | 'closing' | 'closed'
+      status: 'open' | 'quiet' | 'closed'
       frozen: boolean
       hidden: boolean
       slug: string
-      closingSince: Date
-      closingStoryId: string
     }> = {},
   ) {
     const o = await prisma.overview.create({
@@ -66,37 +63,6 @@ describeDb('the overview upkeep records', () => {
   const linkDecision = (storyId: string, overviewId: string, reportsEndEvent: boolean) =>
     prisma.overviewDecision.create({ data: { kind: 'link', storyId, overviewId, outcome: 'joined', inputs: { reportsEndEvent }, actor: 'pipeline' } })
 
-  const closeResult = (outcome: CloseResult['outcome']): CloseResult => ({
-    outcome,
-    answers: { close: null, check: null },
-    costUsd: 0.1,
-    model: 'large',
-    promptVersion: 'v+v',
-  })
-
-  it('finds a join flagged as reporting the end event until a check settles it, and begins the closing on agreement', async () => {
-    const [a, b, end] = await stories([-10, -5, -2])
-    const o = await overview([a!.id, b!.id, end!.id])
-    await linkDecision(b!.id, o.id, false)
-    await linkDecision(end!.id, o.id, true)
-
-    const [pending, ...rest] = await pendingClosings(prisma)
-    expect(rest).toEqual([])
-    expect(pending).toMatchObject({ overviewId: o.id, charter, story: { id: end!.id } })
-    expect(pending!.entries.map(e => e.title)).toEqual(['Story -5', 'Story -10'])
-
-    await applyClosing(pending!, closeResult('failed'))
-    expect(await pendingClosings(prisma)).toHaveLength(1)
-    await applyClosing(pending!, closeResult('closing'))
-    expect(await pendingClosings(prisma)).toEqual([])
-    expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ status: 'closing', closingSince: end!.datePublished })
-    const decisions = await prisma.overviewDecision.findMany({ where: { kind: 'close' }, orderBy: { createdAt: 'asc' } })
-    expect(decisions.map(d => [d.outcome, d.storyId, d.costUsd])).toEqual([
-      ['failed', end!.id, 0.1],
-      ['closing', end!.id, 0.1],
-    ])
-  })
-
   it('detaches an unpublished member, undoes its link so it is linked afresh, and moves scope and status from the state read', async () => {
     const [a, b] = await stories([-40, -30])
     const o = await overview([a!.id, b!.id], { scope: 'forming' })
@@ -104,7 +70,7 @@ describeDb('the overview upkeep records', () => {
     await prisma.story.update({ where: { id: b!.id }, data: { status: 'rejected' } })
 
     const [state] = await overviewStates(prisma, NOW)
-    expect(state).toMatchObject({ activeEntries: 1, unpublished: [{ storyId: b!.id }], burstAt: null, closureReviewed: false })
+    expect(state).toMatchObject({ activeEntries: 1, unpublished: [{ storyId: b!.id }], burstAt: null })
     const moves = nextState({ ...state!, lastEntryAt: a!.datePublished }, NOW)
     expect(moves.map(m => m.kind)).toEqual(['detach', 'scope', 'status'])
     await applyStatus(state!, moves, NOW)
@@ -157,29 +123,6 @@ describeDb('the overview upkeep records', () => {
     expect(cleared.burstJoins).toBe(0)
   })
 
-  it('cancels a closing when its end-event story is unpublished, frozen or not', async () => {
-    const [a, b, end] = await stories([-12, -11, -10])
-    const o = await overview([a!.id, b!.id, end!.id], {
-      scope: 'ongoing',
-      status: 'closing',
-      closingSince: end!.datePublished!,
-      closingStoryId: end!.id,
-      frozen: true,
-    })
-    expect((await overviewStates(prisma, NOW))[0]!.closingStoryId).toBe(end!.id)
-    await prisma.story.update({ where: { id: end!.id }, data: { status: 'rejected' } })
-
-    const [state] = await overviewStates(prisma, NOW)
-    const moves = nextState(state!, NOW)
-    expect(moves.map(m => m.kind)).toEqual(['detach', 'cancel_closing'])
-    await applyStatus(state!, moves, NOW)
-    expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ status: 'open', closingSince: null, closedAt: null })
-    const cancelled = await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'status', outcome: 'open' } })
-    expect(cancelled).toMatchObject({ storyId: end!.id, inputs: { from: 'closing', to: 'open', reason: 'closing_cancelled', by: 'unpublished' } })
-    // Nothing left to close at the next run
-    expect(nextState((await overviewStates(prisma, NOW))[0]!, NOW).filter(m => m.kind === 'status')).toEqual([])
-  })
-
   it("applies a review's actions, makes the overview public with its slug, and leaves an editor's entry alone", async () => {
     const [a, b, c, d] = await stories([-4, -3, -2, -1])
     const o = await overview([a!.id, b!.id, c!.id, d!.id])
@@ -224,42 +167,6 @@ describeDb('the overview upkeep records', () => {
     expect((await prisma.overview.findUniqueOrThrow({ where: { id: twin.id } })).slug).toBe('ebola-in-ituri-province-2')
     await applyReview((await reviewCase(prisma, o.id))!, review({ scope: 'ongoing', kept: 3, actions: [{ kind: 'retitle', from: 'x', to: 'Ebola' }] }), NOW)
     expect((await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).slug).toBe('ebola-in-ituri-province')
-  })
-
-  it('a closure review is recorded for its closing, and one that detaches the end-event story cancels it', async () => {
-    const [a, b, end] = await stories([-12, -11, -10])
-    const o = await overview([a!.id, b!.id, end!.id], { scope: 'ongoing', status: 'closing', closingSince: end!.datePublished!, closingStoryId: end!.id })
-    const c = (await reviewCase(prisma, o.id))!
-    expect(c.closingStoryId).toBe(end!.id)
-
-    await applyReview(c, review({ trigger: 'closure', scope: 'ongoing', kept: 3 }), NOW)
-    expect((await overviewStates(prisma, NOW))[0]!.closureReviewed).toBe(true)
-
-    const endEntry = c.entries.find(e => e.storyId === end!.id)!
-    await applyReview(
-      c,
-      review({
-        trigger: 'closure',
-        scope: 'forming',
-        kept: 2,
-        cancelsClosing: true,
-        actions: [{ kind: 'detach', entryId: endEntry.entryId, storyId: end!.id, reason: 'Uganda.' }],
-      }),
-      NOW,
-    )
-    expect(await prisma.overview.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({
-      status: 'open',
-      closingSince: null,
-      closingStoryId: null,
-      scope: 'forming',
-      lastEntryAt: b!.datePublished,
-    })
-    expect((await overviewStates(prisma, NOW))[0]!.closureReviewed).toBe(false)
-    // The cancellation is its own status record, by the review
-    expect(await prisma.overviewDecision.findFirstOrThrow({ where: { kind: 'status', outcome: 'open' } })).toMatchObject({
-      storyId: end!.id,
-      inputs: { reason: 'closing_cancelled', by: 'review' },
-    })
   })
 
   it('applies no detach of a review that asks for more than half the unlocked entries, and freezes the overview for an editor', async () => {
@@ -393,7 +300,6 @@ function review(over: Partial<ReviewResult> = {}): ReviewResult {
     refusals: [],
     kept: 3,
     scope: 'forming',
-    cancelsClosing: false,
     answer: null,
     costUsd: 0.2,
     model: 'large',

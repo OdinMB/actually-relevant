@@ -12,7 +12,6 @@ const key = (id: string, entries: [string, 'must' | 'optional', 'turning_point' 
   id,
   title: id,
   charter: { in: 'In.', out: [], endEvent: 'End.' },
-  closed: null,
   figures: [],
   entries: entries.map(
     ([slug, join, role]) => ({ slug, date: '2026-05-01', title: slug, join, role, kind: null, values: [], status: null }) as AnswerKey['entries'][number],
@@ -35,7 +34,6 @@ const centered = (k: AnswerKey, entries: string[], nearMisses: string[] = []): A
       entries: entries.map(slug => ({ ...k.entries[0]!, slug, join: 'must' })),
       nearMisses: nearMisses.map(slug => ({ slug, date: '2026-05-03', title: slug, why: 'elsewhere' })),
       responses: [],
-      closed: null,
       reviewed: true,
     },
   ],

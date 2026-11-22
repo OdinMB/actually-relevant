@@ -10,7 +10,6 @@ import { BadRequestError, ConflictError } from '../utils/errors.js'
 import { amendCharter, EDITOR_RIGHTS } from './overviewCharterRules.js'
 import {
   ACTIVE,
-  CLOSING_CANCELLED,
   OPEN,
   UNFROZEN,
   applied,
@@ -18,7 +17,6 @@ import {
   draft,
   entryChange,
   inverted,
-  leaving,
   notHolding,
   overviewChange,
   plan,
@@ -26,7 +24,6 @@ import {
   sameValue,
   type Change,
   type ChainMark,
-  type DecisionDraft,
   type EntryFields,
   type EntryRow,
   type NewEntry,
@@ -35,8 +32,8 @@ import {
   type Plan,
   type Rows,
 } from './overviewChanges.js'
-import { readInputs, recenterInputs, reviewInputs, storedChanges, type EditorRecenterInputs, type StatusInputs } from './overviewDecisions.js'
-import { endEventOf, type Charter, type Role } from './overviewTypes.js'
+import { readInputs, recenterInputs, reviewInputs, storedChanges, type EditorRecenterInputs } from './overviewDecisions.js'
+import type { Charter, Role } from './overviewTypes.js'
 
 /** An editor's action on an overview (For Odin 8: the full set, each logged and undoable). */
 export type EditorAction =
@@ -105,8 +102,7 @@ const roleFields = (r: Role) => ({ role: r.role, roleKind: r.role === 'routine' 
  * - freeze (the editor's, which only an editor lifts) or unfreeze (the burst check counting from now);
  * - close (`editor`, which automation never moves) or reopen (open again, quiet counted from now);
  * - re-center (`recentered`): see `editorRecenter`.
- * A closing whose end-event story leaves is cancelled (`leaving`); the scope and the last entry follow
- * the entries. An action that would change nothing is refused.
+ * The scope and the last entry follow the entries. An action that would change nothing is refused.
  */
 export function planEdit(action: EditorAction, rows: Rows, attach: AttachStory | null, entryId: string | null, ctx: EditContext): Plan {
   const o = rows.overview
@@ -152,11 +148,11 @@ export function planEdit(action: EditorAction, rows: Rows, attach: AttachStory |
     }
     case 'detach': {
       const e = activeEntry()
-      const changes = [
-        ...entryChange(e, { status: 'detached', detachedBy: ctx.editorId, detachReason: 'editor', detachedAt: ctx.now, locked: true }),
-        ...overviewChange(o, leaving(o, [e.storyId])),
-      ]
-      return decide('detached', e.storyId, changes)
+      return decide(
+        'detached',
+        e.storyId,
+        entryChange(e, { status: 'detached', detachedBy: ctx.editorId, detachReason: 'editor', detachedAt: ctx.now, locked: true }),
+      )
     }
     case 'role': {
       const e = activeEntry()
@@ -188,14 +184,12 @@ export function planEdit(action: EditorAction, rows: Rows, attach: AttachStory |
     case 'close':
       if (action.closed) {
         if (o.status === 'closed') throw new ConflictError('The overview is already closed')
-        return decide('closed', null, overviewChange(o, { ...OPEN, status: 'closed', closedAt: ctx.now, closedReason: 'editor' }))
+        return decide('closed', null, overviewChange(o, { status: 'closed', closedAt: ctx.now, closedReason: 'editor' }))
       }
       if (o.status !== 'closed') throw new ConflictError('The overview is not closed')
       return decide('reopened', null, overviewChange(o, { ...OPEN, reopenedAt: ctx.now }))
-    case 'recenter': {
-      const { changes, also } = editorRecenter(o, action, ctx)
-      return decide('recentered', null, changes, { also })
-    }
+    case 'recenter':
+      return decide('recentered', null, editorRecenter(o, action, ctx))
   }
 }
 
@@ -204,7 +198,7 @@ export const CHARTER_CHANGED =
   'The title or charter changed after you opened the form (a review or another editor changed it): reload the page and make your edit again, so nothing it added is lost'
 
 /**
- * An editor's re-center (`.context/overviews.md`, "Re-centering"; D-RC7, D-RC10, D-RC11, D-RC14): the
+ * An editor's re-center (`.context/overviews.md`, "Re-centering"; D-RC7, D-RC11, D-RC14): the
  * title and the whole charter as given, so an editor may also drop OUT entries, name no end event and
  * re-admit an OUT entry a review's undo locked out (which leaves `lockedOut`), within the limits every
  * writer is held to (`amendCharter`, `EDITOR_RIGHTS`; the route's schema refuses them first); on any overview not
@@ -213,11 +207,10 @@ export const CHARTER_CHANGED =
  * the whole charter, so a review's OUT addition or a retitle made meanwhile would otherwise be
  * overwritten unseen. It needs the editor's confirmation that the charter still covers the anchor
  * (recorded, never judged) and is the editor's (`recenteredBy`), which keeps automation from re-centering it for
- * `editorRecenterLockDays` and queues a review (`reviewDue`). A changed END_EVENT, to none too, cancels
- * a closing, logged as an `open` status decision (`recentered`): the closing was begun on the old one.
- * The AI marker's model fields stay, as a retitle leaves them.
+ * `editorRecenterLockDays` and queues a review (`reviewDue`). The AI marker's model fields stay, as a
+ * retitle leaves them.
  */
-function editorRecenter(o: OverviewRow, action: Extract<EditorAction, { kind: 'recenter' }>, ctx: EditContext): { changes: Change[]; also: DecisionDraft[] } {
+function editorRecenter(o: OverviewRow, action: Extract<EditorAction, { kind: 'recenter' }>, ctx: EditContext): Change[] {
   if (o.status === 'closed') throw new ConflictError('The overview is closed: reopen it first')
   if (action.basedOn.title !== o.title || !sameValue(action.basedOn.charter, o.charter)) throw new ConflictError(CHARTER_CHANGED)
   if (!action.anchorConfirmed) throw new ConflictError('Confirm the anchor first')
@@ -233,13 +226,7 @@ function editorRecenter(o: OverviewRow, action: Extract<EditorAction, { kind: 'r
     recenteredAt: ctx.now,
     recenteredBy: 'editor',
   }
-  const cancels = o.status === 'closing' && endEventOf(action.charter.endEvent) !== endEventOf(o.charter.endEvent)
-  if (!cancels) return { changes: overviewChange(o, fields), also: [] }
-  const move: StatusInputs = { from: 'closing', to: 'open', reason: 'recentered', by: 'editor' }
-  return {
-    changes: overviewChange(o, { ...fields, ...CLOSING_CANCELLED }),
-    also: [draft({ id: ctx.newId(), kind: 'status', outcome: 'open', overviewId: o.id, storyId: o.closingStoryId, inputs: move, actor: ctx.editorId })],
-  }
+  return overviewChange(o, fields)
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +250,6 @@ const AUTOMATED: Record<string, readonly string[]> = {
   link: ['joined'],
   found: ['founded'],
   status: ['closed', 'frozen'],
-  close: ['closing'],
   review: ['reviewed'],
   recenter: ['recentered'],
 }
@@ -288,8 +274,6 @@ function what(change: Change, field: string): string {
     status: 'its status',
     closedAt: 'its closure',
     closedReason: 'its closure',
-    closingSince: 'its closing',
-    closingStoryId: 'its closing',
     frozen: 'its freeze',
     frozenBy: 'its freeze',
     frozenAt: 'its freeze',
@@ -373,7 +357,7 @@ export function undoChain(d: UndoLink, undos: readonly UndoLink[]): ChainMark[] 
  * left; otherwise refused whole, naming what changed after it, so a later change is undone first. An
  * undo of an undo makes the decision it had undone live again, and the chain below it consistent
  * (`undoChain`, read from the overview's `undos`). Undoing an automated decision (a join, a founding, a
- * closure or a closing begun, a burst's freeze, a review, a re-center) also makes what it restores the
+ * closure, a burst's freeze, a review, a re-center) also makes what it restores the
  * editor's (`stamped`). An Undo of a re-center, an editor's or automation's, puts back its count of
  * automated re-centers and the last re-center before it, so an editor's lock is lifted with it (an
  * earlier Undo's lock, in its own field, stays). The

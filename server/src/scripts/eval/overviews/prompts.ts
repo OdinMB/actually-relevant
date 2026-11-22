@@ -1,6 +1,6 @@
 /**
  * The overview evals' own prompts and output schemas, never production's: drafting a gap key
- * (`gapDraft.ts`) and an answer key's responses and end (`keyDraft.ts`), the strong judge's three
+ * (`gapDraft.ts`) and an answer key's responses (`keyDraft.ts`), the strong judge's three
  * questions on story context (`contextJudge.ts`):
  * which key needs the kept cards meet, whether a figure fact's structured fields are right, and
  * whether a note beside a paragraph or point adds to it; and its question on a later pass's Update
@@ -120,7 +120,7 @@ ${facts}
 }
 
 // ---------------------------------------------------------------------------
-// Drafting an answer key's responses and end
+// Drafting an answer key's responses
 // ---------------------------------------------------------------------------
 
 export const keyDraftSchema = z.object({
@@ -139,17 +139,6 @@ export const keyDraftSchema = z.object({
     .describe(
       'The responses under way that stories marked join="must" report, as <REQUIREMENTS> asks, in the order of <STORIES>. Empty when none reports one.',
     ),
-  end: z.object({
-    happened: z.enum(['yes', 'no']).describe('yes: a story in <STORIES> reports <END_EVENT> as having happened. no: none does.'),
-    story: z.string().describe('yes: the id of the first story that reports it, e.g. "S31". no: empty.'),
-    date: z.string().describe("yes: the day it happened as that story gives it, written YYYY-MM-DD, else that story's date. no: empty."),
-    quote: z.string().describe('yes: the words of that story that report it, copied exactly from one of its fields. no: empty.'),
-    why: z
-      .string()
-      .describe(
-        'One or two sentences. yes: why this is the end event itself and not a step toward it. no: the latest state the stories report, and why it is not the end event.',
-      ),
-  }),
 })
 
 export type KeyDraftAnswer = z.infer<typeof keyDraftSchema>
@@ -164,7 +153,7 @@ export interface KeyDraftStory {
 
 export interface KeyDraftInput {
   title: string
-  charter: { in: string; out: string[]; endEvent: string }
+  charter: { in: string; out: string[] }
   notes: string
   stories: KeyDraftStory[]
   /** Responses a story may give. */
@@ -181,7 +170,7 @@ You are a senior news editor. You keep the answer keys our system for ongoing de
 </ROLE>
 
 <GOAL>
-For the development in <DEVELOPMENT>, read <STORIES>, our published stories on it in date order, and write down two things: what each story marked join="must" reports as being done about the development, and whether any story reports <END_EVENT> as having happened.
+For the development in <DEVELOPMENT>, read <STORIES>, our published stories on it in date order, and write down what each story marked join="must" reports as being done about the development.
 </GOAL>
 
 <DEVELOPMENT>
@@ -190,7 +179,6 @@ ${tag('IN', input.charter.in)}
 <OUT>
 ${input.charter.out.map(o => tag('ITEM', o)).join('\n')}
 </OUT>
-${tag('END_EVENT', input.charter.endEvent)}
 <NOTES>
 Written by the editors who drafted this key with every story in view.
 ${escapeXml(input.notes)}
@@ -207,7 +195,6 @@ ${stories.join('\n')}
 - Not a response: a call or appeal for action, a warning, a forecast, a plan or proposal not yet acted on, a meeting only scheduled, a study or report, or the development's own events (a case count, a strike, a vote).
 - Responses come only from stories marked join="must", ${perStory}. A response that several stories report under way is listed for each of them, once a story.
 - Each quote is copied exactly from one field of its story and shows the response under way; never joined across fields or shortened.
-- The end is <END_EVENT> itself. A step toward it, a provisional or partial end, an end in one place or country of a wider development, a truce our later stories show broken, or an end only expected is not the end; <NOTES> names this development's traps. When no story reports the end event, happened is "no": never infer an end the stories do not report.
 </REQUIREMENTS>`
 }
 

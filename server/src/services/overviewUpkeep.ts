@@ -1,14 +1,12 @@
 /**
- * The overview step's upkeep after linking (`.context/overviews.md`, "The job", parts 2 to 5), over
- * injected reads, calls and writes, the same in production and in the eval's sandbox: the end-event
- * closing checks; the status machine with the unpublished-member rule and the burst check; the
- * automated re-centers the link signals fired; the reviews due and the monthly audit; and the stands
- * refreshes due. Each overview is its own item: one
- * that fails is logged and the rest go on, and the step stops starting items once it is switched off.
- * Pure: nothing here reads or writes the database.
+ * The overview step's upkeep after linking (`.context/overviews.md`, "The job", parts 2 to 4), over
+ * injected reads, calls and writes, the same in production and in the eval's sandbox: the status
+ * machine with the unpublished-member rule and the burst check; the automated re-centers the link
+ * signals fired, the reviews due and the monthly audit; and the stands refreshes due. Each overview is
+ * its own item: one that fails is logged and the rest go on, and the step stops starting items once it
+ * is switched off. Pure: nothing here reads or writes the database.
  */
 import { config } from '../config.js'
-import { checkClosing, type CloseCase, type CloseDeps, type CloseResult } from './overviewClose.js'
 import { auditOverview, reviewOverview, type AuditResult, type ReviewCase, type ReviewDeps, type ReviewOptions, type ReviewResult } from './overviewReview.js'
 import {
   refreshStands,
@@ -61,8 +59,6 @@ export interface UpkeepRecenter {
 }
 
 export interface UpkeepDeps {
-  /** Joined stories flagged as reporting their overview's end event, not yet judged. */
-  closings(): Promise<CloseCase[]>
   /** Every overview with an active entry, as the status machine reads it. */
   states(): Promise<OverviewState[]>
   reviewCase(overviewId: string): Promise<ReviewCase | null>
@@ -72,11 +68,9 @@ export interface UpkeepDeps {
   standsCases(today: string): Promise<StandsCase[]>
   /** The overviews an automated re-center is due on (`recenterCaseOf`), with their neighbors. */
   recenterCases(at: Pick<UpkeepTimes, 'clock' | 'now'>): Promise<RecenterCase[]>
-  close: CloseDeps
   review: ReviewDeps
   stands: StandsDeps
   recenter: RecenterDeps
-  applyClosing(c: CloseCase, result: CloseResult): Promise<void>
   applyStatus(state: OverviewState, moves: StatusMove[], clock: Date): Promise<void>
   applyBurst(state: OverviewState): Promise<void>
   applyReview(c: ReviewCase, result: ReviewResult): Promise<ReviewWrite>
@@ -95,7 +89,7 @@ export interface UpkeepDeps {
 
 /**
  * `clock`: the development time linking has reached (today, or while a backfill drains the newest
- * story this run linked), which quiet, closing and fading count in; `now`: the wall clock reviews are
+ * story this run linked), which quiet and fading count in; `now`: the wall clock reviews are
  * spaced by; `today`: the day the stands judge facts current on (D-OV5).
  */
 export interface UpkeepTimes {
@@ -105,9 +99,6 @@ export interface UpkeepTimes {
 }
 
 export interface UpkeepTally {
-  /** End-event stories judged, and the closings they began. */
-  closingsChecked: number
-  closingsBegun: number
   /** Status and scope moves, entries of unpublished stories detached among them. */
   moves: number
   detached: number
@@ -130,7 +121,7 @@ export interface UpkeepTally {
   /** Stands lines written (within the limits), and those of them any check dropped: never more than the lines written. */
   standsChecked: number
   standsDropped: number
-  /** Items started (an end-event check, an overview's status, a re-center, a review, an audit, a stands refresh due), and those whose call gave nothing or that threw, each counted once: the next run tries them again. */
+  /** Items started (an overview's status, a re-center, a review, an audit, a stands refresh due), and those whose call gave nothing or that threw, each counted once: the next run tries them again. */
   items: number
   failed: number
   /** Overviews frozen this run, each with its title, for the owner's notice. */
@@ -141,11 +132,9 @@ export interface UpkeepTally {
   stopped: boolean
 }
 
-export type UpkeepPart = 'closing' | 'status' | 'recenter' | 'review' | 'audit' | 'stands'
+export type UpkeepPart = 'status' | 'recenter' | 'review' | 'audit' | 'stands'
 
 const emptyTally = (): UpkeepTally => ({
-  closingsChecked: 0,
-  closingsBegun: 0,
   moves: 0,
   detached: 0,
   bursts: 0,
@@ -185,17 +174,7 @@ interface UpkeepRun {
  */
 type PartWork<T> = (run: UpkeepRun, item: T) => Promise<boolean>
 
-/** Part 2: one end-event story's closing check and its write. */
-const closeOne: PartWork<CloseCase> = async ({ deps, tally }, c) => {
-  const result = await checkClosing(c, deps.close)
-  tally.costUsd += result.costUsd
-  tally.closingsChecked++
-  if (result.outcome === 'closing') tally.closingsBegun++
-  await deps.applyClosing(c, result)
-  return result.outcome === 'failed'
-}
-
-/** Part 3: one overview's status moves, then the burst check that freezes it. */
+/** Part 2: one overview's status moves, then the burst check that freezes it. */
 const statusOne: PartWork<OverviewState> = async ({ deps, at, options, tally }, state) => {
   const moves = nextState(state, at.clock, options)
   if (moves.length > 0) {
@@ -211,7 +190,7 @@ const statusOne: PartWork<OverviewState> = async ({ deps, at, options, tally }, 
   return false
 }
 
-/** Part 4: one automated re-center attempt and its write; an applied one keeps its overview's review for the next run. */
+/** Part 3: one automated re-center attempt and its write; an applied one keeps its overview's review for the next run. */
 const recenterOne: PartWork<RecenterCase> = async ({ deps, options, tally, recentered }, c) => {
   const result = await recenterOverview(c, deps.recenter, options)
   tally.costUsd += result.costUsd
@@ -229,7 +208,7 @@ const recenterOne: PartWork<RecenterCase> = async ({ deps, options, tally, recen
   return failed
 }
 
-/** Part 4: one review due and its write. */
+/** Part 3: one review due and its write. */
 const reviewOne: PartWork<{ id: string; trigger: Exclude<ReviewTrigger, 'audit'> }> = async ({ deps, options, tally }, { id, trigger }) => {
   const c = await deps.reviewCase(id)
   if (!c || c.entries.length === 0) return false
@@ -245,7 +224,7 @@ const reviewOne: PartWork<{ id: string; trigger: Exclude<ReviewTrigger, 'audit'>
   return result.outcome === 'failed'
 }
 
-/** Part 4: one overview of the monthly audit, logged only. */
+/** Part 3: one overview of the monthly audit, logged only. */
 const auditOne: PartWork<string> = async ({ deps, tally }, id) => {
   const c = await deps.reviewCase(id)
   if (!c || c.entries.length === 0) return false
@@ -256,7 +235,7 @@ const auditOne: PartWork<string> = async ({ deps, tally }, id) => {
   return result.outcome === 'failed'
 }
 
-/** Part 5: one overview's stands refresh, when its signature changed, and its write (a failed one records no signature, so the next run tries again). */
+/** Part 4: one overview's stands refresh, when its signature changed, and its write (a failed one records no signature, so the next run tries again). */
 const standsOne: PartWork<StandsCase> = async ({ deps, at, options, tally }, c) => {
   const offered = standsFacts(c.members, at.today, options)
   const signature = standsSignature(c.title, offered, c.entries)
@@ -273,8 +252,8 @@ const standsOne: PartWork<StandsCase> = async ({ deps, at, options, tally }, c) 
 }
 
 /**
- * Runs parts 2 to 5 in order (`.context/overviews.md`, "The job"): closing checks, then the status
- * machine (each overview's moves, then the burst check that freezes it), then the automated re-centers
+ * Runs parts 2 to 4 in order (`.context/overviews.md`, "The job"): the status machine (each
+ * overview's moves, then the burst check that freezes it), then the automated re-centers
  * due, then the reviews due on the states as they stand after them (none for an overview re-centered
  * this run) and the monthly audit, then the stands refreshes whose signature changed. `keepGoing` is
  * asked before each item; once it says no, nothing else starts. An item fails once, whether its call
@@ -301,8 +280,6 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
     }
   }
 
-  await each('closing', await deps.closings(), c => c.overviewId, closeOne)
-  if (tally.stopped) return tally
   await each('status', await deps.states(), s => s.id, statusOne)
   if (tally.stopped) return tally
   // Re-centers before reviews: one applied this run judged every entry under its new charter by two calls, so its overview's review waits for the next run

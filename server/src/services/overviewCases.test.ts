@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  closeCasesOf,
-  entryRole,
-  recenterPartsOf,
-  recenterStoryIds,
-  reviewCaseOf,
-  type CaseDecision,
-  type CaseEntry,
-  type RecenterRows,
-} from './overviewCases.js'
+import { entryRole, recenterPartsOf, recenterStoryIds, reviewCaseOf, type CaseEntry, type RecenterRows } from './overviewCases.js'
 import type { Charter, LinkStory } from './overviewTypes.js'
 
 const day = (d: number) => new Date(Date.UTC(2026, 9, d, 8))
@@ -21,7 +12,6 @@ const overview = (over: Partial<RecenterRows['overview']> = {}): RecenterRows['o
   scope: 'ongoing',
   status: 'open',
   frozen: false,
-  closingStoryId: null,
   lockedOut: [],
   automatedRecenters: 0,
   recenteredAt: null,
@@ -63,16 +53,6 @@ const story = (i: number): LinkStory => ({
   facts: [],
 })
 
-const join = (i: number, over: Partial<CaseDecision> = {}): CaseDecision => ({
-  kind: 'link',
-  outcome: 'joined',
-  overviewId: 'o1',
-  storyId: `s${i}`,
-  undone: false,
-  inputs: { reportsEndEvent: true, signals: [], linkedAt: day(i).toISOString() },
-  ...over,
-})
-
 describe('entryRole', () => {
   it('gives a routine entry, or a turning point without a kind, no kind, and holds a kind to the list', () => {
     expect(entryRole({ role: 'routine', roleKind: 'spread' })).toEqual({ role: 'routine', roleKind: null })
@@ -108,61 +88,9 @@ describe('reviewCaseOf', () => {
     })
   })
 
-  it('names the end-event story only while closing, and carries the locked-out OUT entries', () => {
-    expect(reviewCaseOf(overview({ closingStoryId: 's1' }), []).closingStoryId).toBeNull()
-    const closing = reviewCaseOf(overview({ status: 'closing', closingStoryId: 's1', lockedOut: ['cholera in Chad'] }), [])
-    expect(closing).toMatchObject({ closingStoryId: 's1', lockedOut: ['cholera in Chad'], title: 'Cholera in Sudan', scope: 'ongoing', frozen: false })
-  })
-})
-
-describe('closeCasesOf', () => {
-  const rows = (over: Partial<Parameters<typeof closeCasesOf>[0]> = {}) => ({
-    joins: [join(4)],
-    closes: [],
-    overviews: [overview()],
-    entries: [1, 2, 3, 4, 5].map(i => entry(i)),
-    stories: new Map([1, 2, 3, 4, 5].map(i => [`s${i}`, story(i)])),
-    ...over,
-  })
-
-  it("asks of a live flagged join, with the overview's newest other entries on or before the story's day, at most candidateEntries", () => {
-    const [c, ...rest] = closeCasesOf(rows(), { candidateEntries: 2 })
-    expect(rest).toEqual([])
-    expect(c).toMatchObject({ overviewId: 'o1', charter: CHARTER, story: { id: 's4' } })
-    expect(c!.entries).toEqual([
-      { title: 'Story 3', date: '2026-10-03' },
-      { title: 'Story 2', date: '2026-10-02' },
-    ])
-  })
-
-  it('leaves out a join undone, not joined, not flagged, or a decision of another kind', () => {
-    const joins = [
-      join(1, { undone: true }),
-      join(2, { outcome: 'alone' }),
-      join(3, { inputs: { reportsEndEvent: false, signals: [], linkedAt: null } }),
-      join(5, { kind: 'found' }),
-    ]
-    expect(closeCasesOf(rows({ joins }))).toEqual([])
-  })
-
-  it('leaves out a pair judged, but asks again after a failed or stale check, and asks a pair once', () => {
-    const close = (i: number, outcome: string): CaseDecision => ({ ...join(i), kind: 'close', outcome })
-    const joins = [join(1), join(2), join(2), join(3), join(4)]
-    const closes = [close(1, 'not_happened'), close(2, 'failed'), close(3, 'stale'), close(4, 'closing')]
-    expect(closeCasesOf(rows({ joins, closes })).map(c => c.story.id)).toEqual(['s2', 's3'])
-  })
-
-  it('leaves out an overview not open or quiet, frozen or naming no end event, and a story no longer an active published member', () => {
-    for (const o of [overview({ status: 'closing' }), overview({ frozen: true }), overview({ charter: { ...CHARTER, endEvent: null } })])
-      expect(closeCasesOf(rows({ overviews: [o] }))).toEqual([])
-    expect(closeCasesOf(rows({ overviews: [overview({ status: 'quiet' })] }))).toHaveLength(1)
-    expect(closeCasesOf(rows({ entries: [entry(4, { status: 'detached' })] }))).toEqual([])
-    expect(closeCasesOf(rows({ entries: [entry(4, { published: false })] }))).toEqual([])
-    expect(closeCasesOf(rows({ stories: new Map() }))).toEqual([])
-  })
-
-  it('gives the checks oldest story first', () => {
-    expect(closeCasesOf(rows({ joins: [join(5), join(2), join(4)] })).map(c => c.story.id)).toEqual(['s2', 's4', 's5'])
+  it('carries the locked-out OUT entries', () => {
+    const c = reviewCaseOf(overview({ lockedOut: ['cholera in Chad'] }), [])
+    expect(c).toMatchObject({ lockedOut: ['cholera in Chad'], title: 'Cholera in Sudan', scope: 'ongoing', frozen: false })
   })
 })
 

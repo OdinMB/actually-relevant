@@ -27,7 +27,6 @@ const key: AnswerKey = {
   id: 'ebola-drc-2026',
   title: 'Ebola',
   charter: { in: 'In.', out: [], endEvent: null },
-  closed: null,
   figures: [],
   entries: (['a', 'b', 'c'] as const).map(slug => ({
     slug,

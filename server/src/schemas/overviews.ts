@@ -1,9 +1,9 @@
 /**
  * Structured outputs of the overview prompts (`prompts/overviews.ts`; `.context/overviews.md`): the
- * link confirmation per candidate, with the shared cause, place and end quoting both sides and the
- * story's role; the founding draft (charter, title, both stories' roles); the founding check, blind
- * to the draft's reasons; "Where this stands" and "What's being done", each sentence citing facts;
- * the two closing calls; and a review's verdict per entry with the charter it may only narrow. Format
+ * link confirmation per candidate, with the shared cause and place (and the end, when both state one)
+ * quoting both sides and the story's role; the founding draft (charter, title, both stories' roles);
+ * the founding check, blind to the draft's reasons; "Where this stands" and "What's being done", each
+ * sentence citing facts; and a review's verdict per entry with the charter it may only narrow. Format
  * guidance lives in the `.describe()`s
  * (`.context/prompting.md`, "Schema carries format guidance"); each schema is part of its prompt's
  * version (`OVERVIEW_PROMPT_VERSIONS`).
@@ -40,8 +40,8 @@ export const linkSchema = z.object({
         cause: quotePair('the same cause: the event, outbreak, conflict, decision or process both are about'),
         place: quotePair('the same place or the same parties'),
         end: quotePair(
-          'what would end both: the outcome whose arrival closes the development',
-          ' Always empty for an overview whose END_EVENT is none: there the cause and the place decide.',
+          'how both would end: the same outcome would end the one and the other',
+          ' Optional: fill both sides only when both state it, else leave both empty, and always for an overview whose END_EVENT is none. An empty end never stands in the way of yes.',
         ),
         reportsEndEvent: z
           .boolean()
@@ -129,28 +129,6 @@ export const standsSchema = z.object({
 })
 
 export type StandsAnswer = z.infer<typeof standsSchema>
-
-const happened = (what: string) =>
-  z
-    .enum(['yes', 'no'])
-    .describe(
-      `yes: ${what} reports that the event has happened (declared, signed, ruled, published). no: it does not, or only that it may, is expected or was called for.`,
-    )
-
-export const closeSchema = z.object({
-  happened: happened('the newest story'),
-  quote: z.string().describe('The words of the newest story that report the END_EVENT, copied exactly from its title, label or summary. Empty for no.'),
-  reason: z.string().describe('One sentence: why.'),
-})
-
-export type CloseAnswer = z.infer<typeof closeSchema>
-
-export const closeCheckSchema = z.object({
-  happened: happened('the story'),
-  reason: z.string().describe('One sentence: why.'),
-})
-
-export type CloseCheckAnswer = z.infer<typeof closeCheckSchema>
 
 export const reviewSchema = z.object({
   entries: z

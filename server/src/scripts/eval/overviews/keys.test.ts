@@ -39,7 +39,6 @@ function key(): Record<string, unknown> & { entries: Record<string, unknown>[]; 
     id: 'ebola-drc-2026',
     title: 'Ebola outbreak in eastern DR Congo',
     charter: { in: 'The outbreak declared in May 2026.', out: ['cholera in Congo'], endEvent: 'Declared over by the health ministry' },
-    closed: null,
     figures: [{ key: 'deaths', name: 'Deaths', unit: 'people', definition: 'Confirmed and probable deaths, all countries', cumulative: true, variants: [] }],
     entries: [
       {
@@ -136,17 +135,6 @@ describe('validateKey', () => {
     expect(rule(k => (k.nearMisses[0]!.slug = 'a'))).toEqual(['a is both an entry and a near miss'])
   })
 
-  it('wants the closing story, when named, to be an entry', () => {
-    expect(rule(k => (k.closed = { slug: 'x', date: '2026-07-01' }))).toEqual(['closed.slug x is not an entry'])
-    expect(rule(k => (k.closed = { slug: 'c', date: '2026-07-01' }))).toEqual([])
-    expect(rule(k => (k.closed = { slug: null, date: '2026-07-01' }))).toEqual([])
-  })
-
-  it("wants the end's quote only beside the story it quotes", () => {
-    expect(rule(k => (k.closed = { slug: 'c', date: '2026-07-01', quote: 'declared over' }))).toEqual([])
-    expect(rule(k => (k.closed = { slug: null, date: '2026-07-01', quote: 'declared over' }))).toEqual(['closed.quote is set without closed.slug'])
-  })
-
   describe('responses (version 2)', () => {
     const response = (extra: Record<string, unknown> = {}) => ({
       date: '2026-06-02',
@@ -191,39 +179,19 @@ describe('validateKey', () => {
       ...(reviewed === undefined ? {} : { reviewed }),
     })
 
-    it('counts a response or an end as reviewed only where it says so', () => {
-      const k = drafted(k =>
-        Object.assign(k, { schemaVersion: 2, responses: [response(), response(false), response(true)], closed: { slug: 'c', date: '2026-07-01' } }),
-      )
+    it('counts a response as reviewed only where it says so', () => {
+      const k = drafted(k => Object.assign(k, { schemaVersion: 2, responses: [response(), response(false), response(true)] }))
       expect(k.responses.map(r => r.reviewed)).toEqual([false, false, true])
       expect(unreviewed(k, 'responses')).toBe(2)
-      expect(unreviewed(k, 'closed')).toBe(1)
-      expect(
-        unreviewed(
-          drafted(k => (k.closed = { slug: 'c', date: '2026-07-01', reviewed: true })),
-          'closed',
-        ),
-      ).toBe(0)
-      expect(
-        unreviewed(
-          drafted(() => undefined),
-          'closed',
-        ),
-      ).toBe(0)
     })
 
     it('refuses a step while a key it reads holds a draft of its field, naming the keys', () => {
-      const open = drafted(k =>
-        Object.assign(k, { schemaVersion: 2, responses: [response(), response()], closed: { slug: 'c', date: '2026-07-01', reviewed: true } }),
-      )
+      const open = drafted(k => Object.assign(k, { schemaVersion: 2, responses: [response(), response()] }))
       const done = { ...open, id: 'el-nino-2026', responses: open.responses.map(r => ({ ...r, reviewed: true })) }
       expect(awaitingReview([open, done], 'responses')).toBe(
         'refused: 2 drafted responses are not reviewed yet (ebola-drc-2026: 2): in each key, mark every one "reviewed": true or delete it, then run again',
       )
-      expect(awaitingReview([open, done], 'closed')).toBeNull()
-      expect(awaitingReview([done, { ...done, closed: { slug: 'c', date: '2026-07-01', quote: null, reviewed: false } }], 'closed')).toMatch(
-        /^refused: 1 drafted end is not reviewed yet \(el-nino-2026: 1\)/,
-      )
+      expect(awaitingReview([open, done], 'centers')).toBeNull()
     })
   })
 
@@ -276,12 +244,11 @@ describe('validateKey', () => {
       expect(rule(k => withCenters(k, center({ entries: [entry('x', '2026-06-10')] })))).toEqual([])
     })
 
-    it('wants its responses sourced by a base or center entry, and its end slug an entry', () => {
+    it('wants its responses sourced by a base or center entry', () => {
       const at = 'center "Ebola in the Great Lakes region"'
       const response = (slug: string | null) => ({ date: '2026-06-12', what: 'Border screening', slug, quote: slug ? 'screening' : null })
       expect(rule(k => withCenters(k, center({ responses: [response('e'), response('a'), response(null)] })))).toEqual([])
       expect(rule(k => withCenters(k, center({ responses: [response('y')] })))).toEqual([`${at}: response "Border screening": slug y is not an entry`])
-      expect(rule(k => withCenters(k, center({ closed: { slug: 'y', date: '2026-07-01' } })))).toEqual([`${at}: closed.slug y is not an entry`])
     })
 
     it('counts a center as a draft until it is reviewed, and refuses the steps that read it', () => {

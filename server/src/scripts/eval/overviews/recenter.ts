@@ -168,7 +168,6 @@ export function buildCase(
       scope: 'ongoing',
       frozen: false,
       entries,
-      closingStoryId: null,
       lockedOut: [],
       status: 'open',
       automatedRecenters: 0,

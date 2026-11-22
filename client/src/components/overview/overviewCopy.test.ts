@@ -1,17 +1,20 @@
 import { describe, it, expect } from 'vitest'
 import { countLine, overviewHead, OVERVIEW_LABEL_TEXT, roleLine, statusLine } from './overviewCopy'
 
-const head = { status: 'open' as const, since: '2026-03-04T08:00:00.000Z', closedAt: null, lastEntryAt: '2026-11-18T08:00:00.000Z' }
+const head = { status: 'open' as const, since: '2026-03-04T08:00:00.000Z', closedAt: null, closedReason: null, lastEntryAt: '2026-11-18T08:00:00.000Z' }
 
 describe('statusLine', () => {
-  it('says since when an open or closing ongoing story was founded', () => {
+  it('says since when an open ongoing story was founded', () => {
     expect(statusLine(head)).toBe('Ongoing story · since March 2026')
-    expect(statusLine({ ...head, status: 'closing' })).toBe('Ongoing story · since March 2026')
   })
 
-  it('says when a quiet one last had a story, and when a closed one ended', () => {
+  it('says when a quiet one last had a story, and when one an editor closed ended', () => {
     expect(statusLine({ ...head, status: 'quiet' })).toBe('No new reporting since Nov 18, 2026')
-    expect(statusLine({ ...head, status: 'closed', closedAt: '2026-11-19T10:00:00.000Z' })).toBe('Ended Nov 19, 2026')
+    expect(statusLine({ ...head, status: 'closed', closedReason: 'editor', closedAt: '2026-11-19T10:00:00.000Z' })).toBe('Ended Nov 19, 2026')
+  })
+
+  it('reads a faded one as a quiet one, by its last story, not the day it faded', () => {
+    expect(statusLine({ ...head, status: 'closed', closedReason: 'faded', closedAt: '2027-03-18T03:00:00.000Z' })).toBe('No new reporting since Nov 18, 2026')
   })
 })
 

@@ -38,8 +38,6 @@ export interface ReviewCase {
   frozen: boolean
   /** Oldest first. */
   entries: ReviewEntry[]
-  /** While closing: the story whose end-event report began it. */
-  closingStoryId: string | null
   /** OUT entries an editor's live undo of a review took back out: no review adds them again. */
   lockedOut: string[]
 }
@@ -145,8 +143,6 @@ export interface ReviewResult {
   kept: number
   /** The scope the review leaves (`scopeAfterReview`); never raised while the overview stays frozen. */
   scope: OverviewScope
-  /** The review detached the story whose end-event report began a closing: the closing is cancelled. */
-  cancelsClosing: boolean
   /** The detach brake tripped (`braked`): none of its detaches applied, and the overview is frozen for an editor. */
   brake: Brake | null
   answer: ReviewAnswer | null
@@ -211,8 +207,7 @@ export async function reviewOverview(
 ): Promise<ReviewResult> {
   const call = await deps.review(reviewInput(c), { audit: false })
   const base = { trigger, costUsd: call.costUsd, model: call.model, promptVersion: OVERVIEW_PROMPT_VERSIONS.review }
-  if (!call.parsed)
-    return { ...base, outcome: 'failed', actions: [], refusals: [], kept: c.entries.length, scope: c.scope, cancelsClosing: false, brake: null, answer: null }
+  if (!call.parsed) return { ...base, outcome: 'failed', actions: [], refusals: [], kept: c.entries.length, scope: c.scope, brake: null, answer: null }
   const answer = unescapeXmlDeep(call.parsed)
   const allowed = allowedActions(c, answer, options)
   const { actions, refusals, brake } = braked(c, allowed.actions)
@@ -220,8 +215,7 @@ export async function reviewOverview(
   const stillFrozen = brake !== null || (c.frozen && !actions.some(a => a.kind === 'unfreeze'))
   const next = scopeAfterReview(kept)
   const scope = stillFrozen && SCOPE_RANK[next] > SCOPE_RANK[c.scope] ? c.scope : next
-  const cancelsClosing = c.closingStoryId !== null && actions.some(a => a.kind === 'detach' && a.storyId === c.closingStoryId)
-  return { ...base, outcome: 'reviewed', actions, refusals: [...allowed.refusals, ...refusals], kept, scope, cancelsClosing, brake, answer }
+  return { ...base, outcome: 'reviewed', actions, refusals: [...allowed.refusals, ...refusals], kept, scope, brake, answer }
 }
 
 export interface AuditResult {

@@ -236,9 +236,8 @@ export function owedOf(sandbox: Sandbox, candidates: readonly { id: string; date
 
 /**
  * The safeguards that fired, by name, counted from the decisions written (what the replay reports):
- * end-event checks that did not begin a closing, closings cancelled (by a new entry, by a review, by an
- * unpublished member), bursts, the review brake, what reviews did and what code refused of them, and
- * the automated re-center's attempts by outcome, by the rule that refused one and by what fired it.
+ * bursts, the review brake, what reviews did and what code refused of them, and the automated
+ * re-center's attempts by outcome, by the rule that refused one and by what fired it.
  */
 export function safeguardsOf(decisions: readonly SandboxDecision[]): Map<string, number> {
   const fired = new Map<string, number>()
@@ -247,22 +246,11 @@ export function safeguardsOf(decisions: readonly SandboxDecision[]): Map<string,
   }
   for (const d of decisions) {
     const inputs = d.inputs as {
-      reason?: string | null
-      by?: string | null
       actions?: { kind: string }[]
       refusals?: unknown[]
       brake?: unknown
       changes?: { table: string; after: { detachReason?: string } }[]
     }
-    if (d.kind === 'close' && d.outcome !== 'closing' && d.outcome !== 'failed') add(`closing refused (${d.outcome})`)
-    if (d.kind === 'status' && inputs.reason === 'closing_cancelled')
-      add(
-        inputs.by === 'review'
-          ? 'closing cancelled by its review'
-          : inputs.by === 'unpublished'
-            ? 'closing cancelled: its story unpublished'
-            : 'closing cancelled by a new entry',
-      )
     if (d.kind === 'status' && d.outcome === 'frozen') add('burst froze an overview')
     if (d.kind === 'review' && d.outcome === 'reviewed') {
       add('review detached an entry', (inputs.changes ?? []).filter(c => c.table === 'entry' && c.after.detachReason === 'review').length)

@@ -1,26 +1,14 @@
 /**
- * The upkeep's writes after linking (`.context/overviews.md`, "Status, closing and reviews"): each the
+ * The upkeep's writes after linking (`.context/overviews.md`, "Status and reviews"): each the
  * plan `overviewPlans.ts` makes from the overview's rows, read and locked in the same transaction, and
  * the stands refreshes, which change no overview row.
  */
 import { randomUUID } from 'node:crypto'
 import prisma from '../../lib/prisma.js'
 import { applied, type Rows } from '../overviewChanges.js'
-import type { CloseCase, CloseResult } from '../overviewClose.js'
 import type { StandsInputs } from '../overviewDecisions.js'
 import { membershipsOf } from '../overviewCandidates.js'
-import {
-  PIPELINE,
-  STALE_RECENTER,
-  STALE_REVIEW,
-  planAudit,
-  planBurst,
-  planClosing,
-  planRecenter,
-  planReview,
-  planStatus,
-  type PlanContext,
-} from '../overviewPlans.js'
+import { PIPELINE, STALE_RECENTER, STALE_REVIEW, planAudit, planBurst, planRecenter, planReview, planStatus, type PlanContext } from '../overviewPlans.js'
 import type { RecenterCase, RecenterResult } from '../overviewRecenter.js'
 import type { AuditResult, ReviewCase, ReviewResult } from '../overviewReview.js'
 import type { StandsResult } from '../overviewStands.js'
@@ -31,14 +19,6 @@ import { forgetOverviewLinks } from '../overviewCaches.js'
 import { applyPlan, json, readRows, refusedByIndex } from './apply.js'
 
 const context = (now: Date): PlanContext => ({ now, newId: randomUUID })
-
-/** An end-event check's result (`planClosing`): the story's `close` decision, and on agreement the closing begun. */
-export async function applyClosing(c: CloseCase, result: CloseResult, now: Date = new Date(), db: typeof prisma = prisma): Promise<void> {
-  await db.$transaction(async tx => {
-    const rows = await readRows(tx, c.overviewId)
-    await applyPlan(tx, rows, planClosing(rows?.overview ?? null, c, result, context(now)), now)
-  })
-}
 
 /** The status machine's moves for one overview (`planStatus`), each its own `status` decision, planned on the rows the one before left. */
 export async function applyStatus(

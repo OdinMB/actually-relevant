@@ -13,7 +13,7 @@ import { ENTRY_ROLES, OVERVIEW_SCOPES, REVIEW_TRIGGERS, ROLE_KINDS } from './ove
 const storedDate = z.preprocess(v => (typeof v === 'string' || v instanceof Date ? new Date(v) : v), z.date())
 
 const roleSchema = z.object({ role: z.enum(ENTRY_ROLES), roleKind: z.enum(ROLE_KINDS).nullable() })
-/** A charter as stored: a null end event is none (the development closes only by fading); older rows keep their strings. */
+/** A charter as stored: a null end event is none; older rows keep their strings. */
 export const charterSchema = z.object({ in: z.string(), out: z.array(z.string()), endEvent: z.string().nullable() })
 
 /** One row change as a write stored it: the fields it changed, before and after (dates as strings). */
@@ -37,7 +37,8 @@ export const signalSchema = z.object({ overviewId: z.string(), kind: z.enum(['wi
 
 /**
  * `link`: the candidates shown, the yeses code refused, whether a join reports its overview's end event
- * (what `pendingClosings` reads), and the re-center signals that count (`countedSignals`) with the run
+ * (the flag that made it a turning point, `linkStory`; nothing reads it in SQL), and the re-center
+ * signals that count (`countedSignals`) with the run
  * time the story was linked at, which a re-center attempt compares with its overview's last attempt
  * (`recenter_tried_at`, the run's time too).
  */
@@ -53,8 +54,7 @@ export const linkInputs = z.object({
   ...changeSet,
 })
 
-/** The keys `pendingClosings` and `recenterCases` read in SQL, held to the schema's names. */
-export const REPORTS_END_EVENT = 'reportsEndEvent' satisfies keyof z.infer<typeof linkInputs>
+/** The keys `recenterCases` reads in SQL, held to the schema's names. */
 export const SIGNALS = 'signals' satisfies keyof z.infer<typeof linkInputs>
 export const LINKED_AT = 'linkedAt' satisfies keyof z.infer<typeof linkInputs>
 
@@ -66,18 +66,13 @@ export const statusInputs = z.object({
   from: z.string().nullable().default(null),
   to: z.string().nullable().default(null),
   reason: z.string().nullable().default(null),
-  /** The development time a closure is recorded at. */
+  /** The development time a move, a fade's closure among them, is recorded at. */
   clock: storedDate.nullable().default(null),
-  /** Who cancelled a closing: the unpublished-member rule, a review, or an editor's re-center (reason `recentered`). */
-  by: z.string().nullable().default(null),
   /** A burst's freeze: the joins it counted. */
   joins: z.number().nullable().default(null),
   entryId: z.string().nullable().default(null),
   ...changeSet,
 })
-
-/** `close`: the end event judged (a closing is only ever judged against a named one). */
-export const closeInputs = z.object({ endEvent: z.string(), ...changeSet })
 
 const reviewActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('detach'), entryId: z.string(), storyId: z.string(), reason: z.string() }),
@@ -90,10 +85,9 @@ const reviewActionSchema = z.discriminatedUnion('kind', [
 /** The detach brake: the review asked for more detaches than half of the unlocked entries, so none was applied and the overview froze. */
 const brakeSchema = z.object({ asked: z.number(), unlocked: z.number() })
 
-/** `review` (any trigger but the audit): its actions and refusals, the entries kept and the scope left, and for a closure's the closing it was for. */
+/** `review` (any trigger but the audit): its actions and refusals, the entries kept and the scope left. */
 export const reviewInputs = z.object({
   trigger: z.enum(REVIEW_TRIGGERS),
-  closingSince: storedDate.nullable().default(null),
   actions: z.array(reviewActionSchema).default([]),
   refusals: z.array(z.object({ what: z.string(), reason: z.string() })).default([]),
   kept: z.number().default(0),
@@ -164,7 +158,6 @@ export const editorRecenterInputs = editInputs.extend({ anchorConfirmed: z.boole
 export type LinkInputs = z.input<typeof linkInputs>
 export type FoundInputs = z.input<typeof foundInputs>
 export type StatusInputs = z.input<typeof statusInputs>
-export type CloseInputs = z.input<typeof closeInputs>
 export type ReviewInputs = z.input<typeof reviewInputs>
 export type AuditInputs = z.input<typeof auditInputs>
 export type StandsInputs = z.input<typeof standsInputs>
@@ -178,7 +171,6 @@ export function inputsSchema(kind: string, outcome: string) {
   if (kind === 'link') return linkInputs
   if (kind === 'found') return foundInputs
   if (kind === 'status') return statusInputs
-  if (kind === 'close') return closeInputs
   if (kind === 'review') return outcome === 'audited' || outcome === 'audit_failed' ? auditInputs : reviewInputs
   if (kind === 'stands') return standsInputs
   if (kind === 'recenter') return recenterInputs

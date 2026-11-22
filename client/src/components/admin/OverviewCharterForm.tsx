@@ -134,7 +134,6 @@ function CharterForm({ overview: o, onClose }: { overview: AdminOverviewDetail; 
             />
             {NO_END_EVENT}
           </label>
-          {o.status === 'closing' && <p className="text-xs text-neutral-500">It is closing: a changed end event, or none, cancels the closing.</p>}
         </div>
 
         <section aria-labelledby="charter-anchor" className="space-y-2 border-t border-neutral-200 pt-4">

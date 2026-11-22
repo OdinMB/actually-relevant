@@ -81,8 +81,8 @@ describe('renderOverviewReport', () => {
     expect(md).toContain('entries.0.date: must be a date written YYYY-MM-DD')
   })
 
-  it("lists each key's drafts for the review: its rows, its end or the drafter's reason there is none, and what code left out", () => {
-    const base = { outcome: 'ok' as const, titles: { a: 'Vaccines reach Bunia', d: 'Outbreak declared over' }, missing: ['z'], left: [] }
+  it("lists each key's drafts for the review: its rows and what code left out", () => {
+    const base = { outcome: 'ok' as const, titles: { a: 'Vaccines reach Bunia' }, missing: ['z'], left: [] }
     const keyDraft: KeyDraftReport = {
       half: 'judge',
       keys: ['ebola', 'el-nino'],
@@ -96,8 +96,6 @@ describe('renderOverviewReport', () => {
           file: 'ebola.json',
           title: 'Ebola',
           responses: [{ date: '2026-05-01', what: 'WHO ring vaccination', slug: 'a', quote: 'ring vaccination began', reviewed: false }],
-          closed: { slug: 'd', date: '2026-05-06', quote: 'declared over', reviewed: false },
-          noEnd: null,
           left: ['response "Aid": quote not found in a: "aid flown in"'],
           written: true,
         },
@@ -107,8 +105,6 @@ describe('renderOverviewReport', () => {
           file: 'el-nino.json',
           title: 'El Niño',
           responses: [],
-          closed: null,
-          noEnd: 'Still forecast to peak.',
           missing: [],
           written: false,
         },
@@ -116,14 +112,12 @@ describe('renderOverviewReport', () => {
       written: ['/keys/ebola.json'],
     }
     const md = renderOverviewReport(input({ steps: ['key-draft'], keyDraft }))
-    expect(headings(md)).toEqual(["## Answer-key drafts: responses and ends for the owner's review", '## Spend'])
-    expect(md).toContain('**Drafts:** 1 of 2 version 1 keys of half judge written: 1 responses and 1 ends')
+    expect(headings(md)).toEqual(["## Answer-key drafts: responses for the owner's review", '## Spend'])
+    expect(md).toContain('**Drafts:** 1 of 2 version 1 keys of half judge written: 1 responses')
     expect(md).toContain('- Left alone: lebanon.json: already version 2')
-    expect(md).toContain('**End (a draft):** 2026-05-06, reported by "Outbreak declared over" (d): "declared over".')
     expect(md).toContain('| 2026-05-01 | Vaccines reach Bunia | WHO ring vaccination | "ring vaccination began" |')
     expect(md).toContain('- response "Aid": quote not found in a: "aid flown in"')
     expect(md).toContain('Not published in this database, so not shown to the drafter: z.')
-    expect(md).toContain('**End:** none of our stories reports it, as the drafter reads them: Still forecast to peak.')
     expect(renderOverviewReport(input({ keyDraft: { ...keyDraft, stopped: 'OPENAI_API_KEY is missing', drafts: [], written: [] } }))).toContain(
       '**Drafts:** none; the calls did not run: OPENAI_API_KEY is missing',
     )
@@ -242,7 +236,6 @@ describe('renderOverviewReport', () => {
               figures: 1,
               values: 4,
               responses: 2,
-              closed: null,
               withResearchRun: 2,
               toReview: 2,
             },
@@ -283,8 +276,8 @@ describe('renderOverviewReport', () => {
         ]),
       }),
     )
-    expect(md).toContain('| Ebola | ebola.json | 3 / 1 | 2 | 1 | 4 | 2 | open | 2 | 2 | 1 |')
-    expect(md).toContain('2 drafted responses and ends are not reviewed yet')
+    expect(md).toContain('| Ebola | ebola.json | 3 / 1 | 2 | 1 | 4 | 2 | 2 | 2 | 1 |')
+    expect(md).toContain('2 drafted responses and centers are not reviewed yet')
     expect(md).toContain('- entry a: quote not found: "x"')
     expect(md).toContain('1 story is a must entry of more than one development.')
     expect(md).toContain('- deal: ebola, strait')

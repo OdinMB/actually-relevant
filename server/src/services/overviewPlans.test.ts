@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { joinResult, linkResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
 import { applied, newOverviewRow, settle, type EntryRow, type OverviewRow, type Rows } from './overviewChanges.js'
-import { planAlone, planBurst, planClosing, planConflict, planJoin, planRecenter, planReview, planStatus } from './overviewPlans.js'
+import { planAlone, planBurst, planConflict, planJoin, planRecenter, planReview, planStatus } from './overviewPlans.js'
 import type { OfferedStory, RecenterCase, RecenterResult } from './overviewRecenter.js'
 import type { ReviewResult } from './overviewReview.js'
 
@@ -49,10 +49,10 @@ describe('planJoin', () => {
     expect(done.entries.at(-1)).toMatchObject({ storyId: 's9', status: 'active', joinedAt: NOW, locked: false })
   })
 
-  it('is a conflict for an overview gone or closed (but faded), and held by a frozen one, with no entry', () => {
+  it('is a conflict for an overview gone or closed by an editor (a faded one takes the story), and held by a frozen one, with no entry', () => {
     const result = joinResult(story, 'o1')
     expect(planJoin(null, result, ctx).outcome).toBe('conflict')
-    expect(planJoin(overview({ status: 'closed', closedReason: 'end_event' }), result, ctx).outcome).toBe('conflict')
+    expect(planJoin(overview({ status: 'closed', closedReason: 'editor' }), result, ctx).outcome).toBe('conflict')
     expect(planJoin(overview({ status: 'closed', closedReason: 'faded' }), result, ctx).outcome).toBe('joined')
     const held = planJoin(overview({ frozen: true, frozenBy: 'editor' }), result, ctx)
     expect(held.outcome).toBe('held')
@@ -65,10 +65,11 @@ describe('planJoin', () => {
     expect(planAlone(linkResult(story, { outcome: 'none' }), ctx).plan.decision.overviewId).toBeNull()
   })
 
-  it('keeps the end-event flag only for an overview that names an end event, so one with none never starts a closing', () => {
-    const flagged = joinResult(story, 'o1', true)
-    expect(planJoin(overview(), flagged, ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: true })
-    expect(planJoin(overview({ charter: { ...charter, endEvent: null } }), flagged, ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: false })
+  it("records the join's end-event flag as linking settled it, whatever the row's charter names at the write", () => {
+    // linkStory settles the flag on the charter the call was shown: an editor's re-center since changes nothing here
+    const recentered = overview({ charter: { ...charter, endEvent: null } })
+    expect(planJoin(recentered, joinResult(story, 'o1', true), ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: true })
+    expect(planJoin(overview(), joinResult(story, 'o1', false), ctx).plan.decision.inputs).toMatchObject({ reportsEndEvent: false })
   })
 })
 
@@ -190,24 +191,6 @@ describe('planRecenter', () => {
   })
 })
 
-describe('planClosing', () => {
-  const story = linkStory({ id: 's9', datePublished: day(9) })
-  const agreed = { outcome: 'closing' as const, answers: { close: null, check: null }, model: 'large', promptVersion: 'v', costUsd: 0.01 }
-  const check = (o: OverviewRow) => planClosing(o, { overviewId: 'o1', charter: { ...charter, endEvent: charter.endEvent }, story, entries: [] }, agreed, ctx)
-
-  it('begins the closing on the end event the calls judged', () => {
-    expect(check(overview()).decision.outcome).toBe('closing')
-    expect(check(overview()).changes[0]!.after).toMatchObject({ status: 'closing', closingStoryId: 's9' })
-  })
-
-  it('is stale, beginning nothing, when the end event changed during the calls (an editor re-centered it)', () => {
-    for (const endEvent of ['The WHO declares it over', null]) {
-      const p = check(overview({ charter: { ...charter, endEvent } }))
-      expect([p.decision.outcome, p.changes]).toEqual(['stale', []])
-    }
-  })
-})
-
 describe('the link record: which re-center signals count', () => {
   const story = linkStory({ id: 's9', datePublished: day(9) })
   const signals = [
@@ -238,22 +221,11 @@ describe('the link record: which re-center signals count', () => {
 })
 
 describe('planStatus', () => {
-  it('detaches an unpublished member, undoes its links, settles the last entry and cancels the closing it began', () => {
-    const r = rows({ status: 'closing', closingSince: day(3), closingStoryId: 's3' }, [entry(1), entry(2), entry(3, { published: false })])
-    const plans = planStatus(
-      r,
-      [
-        { kind: 'detach', entryId: 'e3', storyId: 's3' },
-        { kind: 'cancel_closing', storyId: 's3' },
-      ],
-      day(10),
-      ctx,
-    )
-    expect(plans.map(p => [p.decision.outcome, p.undoesLinksOf])).toEqual([
-      ['detached', 's3'],
-      ['open', null],
-    ])
-    expect(after(r, plans).overview).toMatchObject({ status: 'open', closingStoryId: null, closingSince: null, lastEntryAt: day(2) })
+  it('detaches an unpublished member, undoes its links and settles the last entry', () => {
+    const r = rows({}, [entry(1), entry(2), entry(3, { published: false })])
+    const plans = planStatus(r, [{ kind: 'detach', entryId: 'e3', storyId: 's3' }], day(10), ctx)
+    expect(plans.map(p => [p.decision.outcome, p.undoesLinksOf])).toEqual([['detached', 's3']])
+    expect(after(r, plans).overview).toMatchObject({ status: 'open', lastEntryAt: day(2) })
     expect(after(r, plans).entries[2]).toMatchObject({ status: 'detached', detachedBy: 'pipeline', detachReason: 'unpublished', detachedAt: NOW })
   })
 
@@ -302,7 +274,6 @@ describe('planReview', () => {
     refusals: [],
     kept: 3,
     scope: 'ongoing',
-    cancelsClosing: false,
     brake: null,
     answer: null,
     costUsd: 0.01,
@@ -319,17 +290,17 @@ describe('planReview', () => {
     expect(planReview(rows({ slug: 'ebola' }), reviewCaseOf(r), result(), ctx).needsSlug).toBe(false)
   })
 
-  it('cancels the closing whose story it detached, logging the cancellation, and settles the last entry', () => {
-    const r = rows({ scope: 'ongoing', slug: 'ebola', status: 'closing', closingSince: day(3), closingStoryId: 's3' })
+  it('detaches the entry it judged off topic and settles the last entry', () => {
+    const r = rows({ scope: 'ongoing', slug: 'ebola' })
     const p = planReview(
       r,
       reviewCaseOf(r),
       result({ actions: [{ kind: 'detach', entryId: 'e3', storyId: 's3', reason: 'Off topic.' }], kept: 2, scope: 'forming' }),
       ctx,
     )
-    expect(p.also.map(d => [d.kind, d.outcome, d.storyId])).toEqual([['status', 'open', 's3']])
+    expect(p.also).toEqual([])
     const done = applied(r, settle(r, p))
-    expect(done.overview).toMatchObject({ status: 'open', closingStoryId: null, scope: 'forming', lastEntryAt: day(2) })
+    expect(done.overview).toMatchObject({ status: 'open', scope: 'forming', lastEntryAt: day(2) })
     expect(done.entries[2]).toMatchObject({ status: 'detached', detachedBy: 'review', detachReason: 'review' })
   })
 

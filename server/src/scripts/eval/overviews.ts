@@ -6,12 +6,12 @@
  * check on its facts; and a later pass's article step replayed on the answer keys' researched
  * stories with the facts found since and planted corrections (`update`), its notes judged; and the
  * overview linking replayed on the answer keys' stories in an in-memory sandbox (`link`, `found`,
- * `role`), the founded end events judged; and the overview upkeep (`pass-pool`, `stands`, `closure`,
- * `review`, `recenter`, `replay`): production's first pass run in memory on the developments' must
+ * `role`), the founded end events judged; and the overview upkeep (`pass-pool`, `stands`, `review`,
+ * `recenter`, `replay`): production's first pass run in memory on the developments' must
  * entries for the facts the stands are written from, the stands at each development's checkpoints
  * judged, reviews under planted errors, the automated re-center on planted narrowed charters, the
  * anchor breach and the keys' reviewed centers, and the whole module replayed day by day for its
- * closures, checkpoints and re-centers.
+ * linking, checkpoints and re-centers.
  *
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline
@@ -23,7 +23,7 @@
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool --half judge --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,stands,fact-check --facts stands --half judge --budget 13
- *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,closure,replay --half judge --budget 18
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,replay --half judge --budget 18
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_review-eval --steps recenter --half judge --budget 6
  *
  * Reads the database through the read-only session and writes nothing to any database; its only
@@ -76,7 +76,7 @@ import type { MemberFact } from '../../services/overviewStands.js'
 import type { LinkStory } from '../../services/overviewTypes.js'
 import { loadMemberFacts } from '../../services/passRecords.js'
 import type { Db } from './readOnlyDb.js'
-import { LINKING_STEPS, REPLAY_STEPS } from './options.js'
+import { LINKING_STEPS } from './options.js'
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 const pct = (v: number | null) => (v === null ? 'n/a' : `${(v * 100).toFixed(1)}%`)
@@ -92,7 +92,6 @@ const CALLING_STEPS: OverviewStep[] = [
   'role',
   'pass-pool',
   'stands',
-  'closure',
   'review',
   'recenter',
   'replay',
@@ -247,8 +246,7 @@ async function main(): Promise<void> {
   }
   try {
     const linking = LINKING_STEPS.some(runs)
-    const replaying = REPLAY_STEPS.some(runs)
-    const upkeep = replaying || runs('pass-pool') || runs('stands') || runs('review') || runs('recenter')
+    const upkeep = runs('replay') || runs('pass-pool') || runs('stands') || runs('review') || runs('recenter')
     const keyFiles = runs('keys') || runs('key-draft') || runs('gap-draft') || runs('update') || linking || upkeep ? readKeyFiles() : []
     if (runs('keys')) for (const k of keyFiles) console.log(`${k.file}: ${k.errors.length === 0 ? 'format ok' : `${k.errors.length} format errors`}`)
     const gapKeyFiles = runs('gap-keys') || runs('context') ? readGapKeyFiles() : []
@@ -375,9 +373,7 @@ async function main(): Promise<void> {
         report.keyDraft = d
         if (d.stopped) skipped.push({ step: 'key-draft', reason: d.stopped })
         for (const k of d.drafts)
-          console.log(
-            `key-draft: ${k.file}: ${k.written ? `${k.responses.length} responses${k.closed ? ' and the end' : ''} drafted` : `nothing drafted (${k.outcome})`}`,
-          )
+          console.log(`key-draft: ${k.file}: ${k.written ? `${k.responses.length} responses drafted` : `nothing drafted (${k.outcome})`}`)
         if (d.written.length > 0) console.log('key-draft: run `npm run format --prefix server`, then review the drafts in the keys (the report lists them)')
       } catch (err) {
         failed('key-draft', err)
@@ -566,9 +562,8 @@ async function main(): Promise<void> {
         }
       }
     }
-    if (replaying) {
-      const steps = REPLAY_STEPS.filter(runs).join(', ')
-      if (!canCall) noKey(steps)
+    if (runs('replay')) {
+      if (!canCall) noKey('replay')
       else {
         try {
           report.replay = await runReplayStep({
@@ -583,10 +578,11 @@ async function main(): Promise<void> {
             concurrency: opts.concurrency,
             budgetUsd: opts.budget,
           })
-          if (report.replay.stopped) skipped.push({ step: steps, reason: report.replay.stopped })
-          for (const b of report.replay.score.closure) console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
+          if (report.replay.stopped) skipped.push({ step: 'replay', reason: report.replay.stopped })
+          const { link, found, role } = report.replay.score.link
+          for (const b of [...link, ...found, ...role]) console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
         } catch (err) {
-          failed(steps, err)
+          failed('replay', err)
         }
       }
     }

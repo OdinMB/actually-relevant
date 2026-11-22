@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AnswerKey } from './keySchema.js'
-import { checkpointsOf, scoreClosures, scoreReplay, splitsOf, type CheckpointState, type ReplayRunResult } from './replayScore.js'
+import { checkpointsOf, scoreReplay, splitsOf, type CheckpointState, type ReplayRunResult } from './replayScore.js'
 import { scoreReviewRun, scoreReviews, type ReviewCaseRun } from './reviewScore.js'
 import { latestValues, numbersIn, scoreStands, statesValue, type StandsCheckpointRun } from './standsScore.js'
 import { passPoolLines, replayLines, reviewLines, standsLines } from './upkeepReport.js'
@@ -36,7 +36,6 @@ const key = (id: string, entries: Entry[], over: Partial<AnswerKey> = {}): Answe
   id,
   title: id,
   charter: { in: 'In.', out: [], endEvent: 'End.' },
-  closed: null,
   figures: [],
   entries,
   nearMisses: [],
@@ -70,12 +69,11 @@ describe('checkpointsOf', () => {
   })
 })
 
-const replayRun = (closures: ReplayRunResult['closures'], over: Partial<ReplayRunResult> = {}): ReplayRunResult => ({
+const replayRun = (over: Partial<ReplayRunResult> = {}): ReplayRunResult => ({
   run: 1,
   overviews: [],
   roles: new Map(),
   checkpoints: [],
-  closures,
   recenters: [],
   splits: [],
   safeguards: {},
@@ -84,46 +82,8 @@ const replayRun = (closures: ReplayRunResult['closures'], over: Partial<ReplayRu
   ...over,
 })
 
-describe('the closure bars', () => {
-  const KEYS = [
-    key('ended', [entry('a', '2026-05-01')], { closed: { slug: 'a', date: '2026-05-10', quote: null, reviewed: true } }),
-    key('unreported', [entry('b', '2026-05-01')], { closed: { slug: null, date: '2026-05-10', quote: null, reviewed: true } }),
-    key('open', [entry('c', '2026-05-01')]),
-  ]
-
-  it('counts a closure at an end event before the end, or of a development still open, as premature', () => {
-    const s = scoreClosures(
-      KEYS,
-      replayRun([
-        { overviewId: 'o1', development: 'ended', reason: 'end_event', day: '2026-05-08' },
-        { overviewId: 'o2', development: 'open', reason: 'end_event', day: '2026-05-12' },
-        { overviewId: 'o3', development: 'open', reason: 'faded', day: '2026-09-12' },
-        { overviewId: 'o4', development: null, reason: 'end_event', day: '2026-05-12' },
-      ]),
-    )
-    expect(s.premature).toEqual(['ended closed on 2026-05-08, before its end on 2026-05-10', 'open closed on 2026-05-12, still open in the key'])
-    // Only a development whose end our stories report can be closed in time
-    expect(s).toMatchObject({ closable: 1, closedInTime: 0 })
-  })
-
-  it(`counts a development closed at its end event within 14 days of the end as in time, not one closed later or faded`, () => {
-    const at = (day: string, reason: 'end_event' | 'faded' = 'end_event') =>
-      scoreClosures(KEYS, replayRun([{ overviewId: 'o1', development: 'ended', reason, day }]))
-    expect(at('2026-05-24').closedInTime).toBe(1)
-    expect(at('2026-05-25').closedInTime).toBe(0)
-    expect(at('2026-05-12', 'faded').closedInTime).toBe(0)
-  })
-
-  it('owes a development with no end event no end-event closure, and counts one at an end event as premature', () => {
-    const fading = key('fading', [entry('d', '2026-05-01')], {
-      charter: { in: 'In.', out: [], endEvent: null },
-      closed: { slug: 'd', date: '2026-05-10', quote: null, reviewed: true },
-    })
-    const s = scoreClosures([fading], replayRun([{ overviewId: 'o1', development: 'fading', reason: 'end_event', day: '2026-05-12' }]))
-    expect(s).toMatchObject({ closable: 0, premature: ['fading closed at an end event on 2026-05-12, but it has none in the key: it ends by fading'] })
-  })
-
-  it('scores the replay: the closure bars, the evidence share, safeguards and cost as means over runs', () => {
+describe('the replay score', () => {
+  it('scores the replay: the evidence share, safeguards and cost as means over runs', () => {
     const point = (offerable: number): CheckpointState => ({
       key: 'ended',
       at: 'end',
@@ -136,26 +96,19 @@ describe('the closure bars', () => {
       stands: null,
     })
     const s = scoreReplay(
-      KEYS,
+      [key('ended', [entry('a', '2026-05-01')])],
       [
-        replayRun([{ overviewId: 'o1', development: 'ended', reason: 'end_event', day: '2026-05-11' }], {
+        replayRun({
           checkpoints: [point(5), point(1)],
           safeguards: { 'burst froze an overview': 2 },
           costUsd: 1,
           founded: 2,
         }),
-        replayRun([], { run: 2, checkpoints: [point(3), point(3)], costUsd: 3, founded: 2 }),
+        replayRun({ run: 2, checkpoints: [point(3), point(3)], costUsd: 3, founded: 2 }),
       ],
       3,
       4,
     )
-    // One closable development a run: two judgments are too few to decide, so the owner reads them
-    expect(s.closure.map(b => [b.name, b.value, b.met])).toEqual([
-      ['premature closures', 0, true],
-      ['closed within 14 days of the end', 0.5, null],
-    ])
-    expect(s.closure[1]!.forOwner).toMatch(/2 judgments/)
-    expect(s.closure[0]!.forOwner).toBeUndefined()
     expect(s.evidenceShare).toBe(0.75)
     expect(s.safeguards).toEqual({ 'burst froze an overview': 1 })
     expect(s.costPerStoryUsd).toBe(0.5)
@@ -172,7 +125,6 @@ describe("the replay's re-centers", () => {
     entries,
     nearMisses: [],
     responses: [],
-    closed: null,
     reviewed: true,
   })
   const KEYS = [
@@ -192,8 +144,8 @@ describe("the replay's re-centers", () => {
     const s = scoreReplay(
       KEYS,
       [
-        replayRun([], { recenters: [recenter('o1', 'moved', '2026-05-08'), recenter('o1', 'moved', '2026-05-20')], splits: ['o3'] }),
-        replayRun([], { run: 2, recenters: [recenter('o2', 'kept', '2026-05-09', ['n1'])] }),
+        replayRun({ recenters: [recenter('o1', 'moved', '2026-05-08'), recenter('o1', 'moved', '2026-05-20')], splits: ['o3'] }),
+        replayRun({ run: 2, recenters: [recenter('o2', 'kept', '2026-05-09', ['n1'])] }),
       ],
       3,
       4,
@@ -417,10 +369,9 @@ describe('the upkeep report sections', () => {
     expect(pool).toContain('Spend this run $4.50, $0.1500 a story')
     const review = reviewLines({ half: 'all', repeat: 1, keys: ['ebola'], cases: [], score: scoreReviews([]), costUsd: 0 }).join('\n')
     expect(review).toContain('| planted errors caught | at least 80% | n/a | no data |')
-    const replay = replayLines({ half: 'all', repeat: 1, keys: ['ebola'], stories: 0, runs: [], score: scoreReplay([], [], 3, 0), costUsd: 0, left: [] }, [
-      'closure',
-    ]).join('\n')
-    expect(replay).toContain('| premature closures | at most 0 |')
-    expect(replay).not.toContain('### Checkpoints')
+    const replay = replayLines({ half: 'all', repeat: 1, keys: ['ebola'], stories: 0, runs: [], score: scoreReplay([], [], 3, 0), costUsd: 0, left: [] }).join(
+      '\n',
+    )
+    expect(replay).toContain('| wrong foundings | at most 0 |')
   })
 })

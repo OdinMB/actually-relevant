@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LinkStory } from '../services/overviewTypes.js'
-import {
-  buildCloseCheckPrompt,
-  buildClosePrompt,
-  buildFoundCheckPrompt,
-  buildFoundPrompt,
-  buildLinkPrompt,
-  buildReviewPrompt,
-  OVERVIEW_PROMPT_VERSIONS,
-} from './overviews.js'
+import { buildFoundCheckPrompt, buildFoundPrompt, buildLinkPrompt, buildReviewPrompt, OVERVIEW_PROMPT_VERSIONS } from './overviews.js'
 
 const story = (id: string, title: string): LinkStory => ({
   id,
@@ -55,12 +47,7 @@ describe('the overview prompts', () => {
     expect(new Set(Object.values(OVERVIEW_PROMPT_VERSIONS)).size).toBe(Object.keys(OVERVIEW_PROMPT_VERSIONS).length)
   })
 
-  it('show the closing check the end event and the story alone, and the review its entries under their ids', () => {
-    const check = buildCloseCheckPrompt({ endEvent: 'The ministry declares it over', story: story('s', 'Ebola over') })
-    expect(check).toContain('<END_EVENT>\nThe ministry declares it over\n</END_EVENT>')
-    expect(check).not.toContain('<CHARTER>')
-    const close = buildClosePrompt({ charter: { in: 'In.', out: [], endEvent: 'End.' }, story: story('s', 'Ebola over'), entries: [] })
-    expect(close).not.toContain('<FACTS>')
+  it('show the review its entries under their ids', () => {
     const review = buildReviewPrompt({
       title: 'Ebola',
       charter: { in: 'In.', out: [], endEvent: 'End.' },

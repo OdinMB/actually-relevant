@@ -12,7 +12,7 @@ import { NO_END_EVENT, actorLabel } from './overviewLabels'
  * pointed past the charter, "Edit charter", and the charter history from the re-center decisions.
  */
 
-const CLOSED_REASONS: Record<string, string> = { end_event: 'its end event was reported', faded: 'it faded', editor: 'an editor closed it' }
+const CLOSED_REASONS: Record<string, string> = { faded: 'it faded', editor: 'an editor closed it' }
 
 const LOCKED_BY: Record<'editor' | 'undo', string> = { editor: "an editor's re-center", undo: "an Undo of automation's re-center" }
 
@@ -93,12 +93,6 @@ export function OverviewCharter({ overview: o }: { overview: AdminOverviewDetail
         </dd>
         <dt className="text-neutral-500">Last review</dt>
         <dd className="text-neutral-900">{o.reviewedAt ? `${formatShortDate(o.reviewedAt)}, at ${o.entriesAtLastReview} entries` : 'Not reviewed yet'}</dd>
-        {o.closingSince && (
-          <>
-            <dt className="text-neutral-500">Closing since</dt>
-            <dd className="text-neutral-900">{formatShortDate(o.closingSince)}</dd>
-          </>
-        )}
         {o.status === 'closed' && (
           <>
             <dt className="text-neutral-500">Closed</dt>

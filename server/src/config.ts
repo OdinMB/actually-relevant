@@ -506,7 +506,7 @@ export const config = {
     /**
      * Candidate overviews the link call sees at most, ranked by their nearest member, each with its
      * `candidateEntries` newest entries published by the story's date: the one count of an overview's
-     * newest entries a prompt shows, the link call's, an end-event check's and the sandbox's alike.
+     * newest entries a prompt shows, the link call's and the sandbox's alike.
      */
     candidateOverviews: 5,
     candidateEntries: 5,
@@ -536,8 +536,6 @@ export const config = {
     /** An open overview with no new entry for this many days is quiet; quiet this long, it closes as faded (owner, 2026-11-18), and reopens when a story belongs. */
     quietAfterDays: 21,
     fadeAfterDays: 120,
-    /** Days an end-event closure waits for a new entry, which cancels it, before the overview closes (after its review). */
-    closingDays: 7,
     /** More joins than this to one overview, in one night, of stories published within `nightHours`, freeze it and queue a review (a backfill's old stories never count). */
     burstLimit: 5,
     /** A review is due each time the active entries reach one of these counts, and every `reviewEveryDays` while public and not closed. */
@@ -605,8 +603,6 @@ export const config = {
       foundCheck: 'large' as const,
       stands: 'medium' as const,
       standsCheck: 'small' as const,
-      close: 'large' as const,
-      closeCheck: 'large' as const,
       review: 'large' as const,
       recenter: 'large' as const,
       recenterCheck: 'large' as const,

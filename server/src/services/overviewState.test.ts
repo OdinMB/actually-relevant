@@ -65,13 +65,6 @@ describe('overviewStateOf', () => {
     expect(overviewStateOf(overview({ ...frozen, frozenBy: 'editor' }), [], null, NOW, OPTIONS).burstAt).toBeNull()
     expect(overviewStateOf(overview({ ...frozen, frozenBy: 'review' }), [], null, NOW, OPTIONS).burstAt).toBeNull()
   })
-
-  it('names the closing story and whether the closure review ran only while closing', () => {
-    const closing = overview({ status: 'closing', closingSince: hoursAgo(50), closingStoryId: 's1', closureReviewedAt: hoursAgo(1) })
-    expect(overviewStateOf(closing, [], null, NOW, OPTIONS)).toMatchObject({ closingStoryId: 's1', closureReviewed: true })
-    const open = overview({ status: 'open', closingStoryId: 's1', closureReviewedAt: hoursAgo(1) })
-    expect(overviewStateOf(open, [], null, NOW, OPTIONS)).toMatchObject({ closingStoryId: null, closureReviewed: false })
-  })
 })
 
 describe('reportQueuesReview', () => {

@@ -7,7 +7,7 @@
  * decision with the change set Undo inverts:
  * - one story's linking (`applyLink`; plans in `overviewPlans.ts`): the join, the founding, the story
  *   left alone, or a conflict;
- * - the upkeep after linking (`applyClosing`, `applyStatus`, `applyBurst`, `applyRecenter`,
+ * - the upkeep after linking (`applyStatus`, `applyBurst`, `applyRecenter`,
  *   `applyReview`, `applyAudit`; the same planners), and the stands refreshes (`applyStands`), which
  *   change no overview row;
  * - an editor's action and Undo (`editorAction`, `undoDecision`; plans in `overviewEdits.ts`).
@@ -17,5 +17,5 @@
  */
 export { PIPELINE, REVIEWER } from './overviewPlans.js'
 export { applyLink } from './overviewLifecycle/linking.js'
-export { applyAudit, applyBurst, applyClosing, applyRecenter, applyReview, applyStands, applyStatus, type StandsRecord } from './overviewLifecycle/upkeep.js'
+export { applyAudit, applyBurst, applyRecenter, applyReview, applyStands, applyStatus, type StandsRecord } from './overviewLifecycle/upkeep.js'
 export { editorAction, undoDecision } from './overviewLifecycle/editor.js'

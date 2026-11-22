@@ -25,7 +25,6 @@ const base = (over: Partial<ReviewCase> = {}): ReviewCase => ({
   scope: 'forming',
   frozen: false,
   entries: [entry(1), entry(2), entry(3)],
-  closingStoryId: null,
   lockedOut: [],
   ...over,
 })
@@ -207,12 +206,6 @@ describe('a review', () => {
       deps(answer({ entries: [judged('E1'), judged('E2', 'no'), judged('E3')] })),
     )
     expect(lowered.scope).toBe('forming')
-  })
-
-  it('cancels a closing when it detaches the story that began it', async () => {
-    const wrong = answer({ entries: [judged('E1'), judged('E2'), judged('E3', 'no')] })
-    expect((await reviewOverview(base({ closingStoryId: 's3' }), 'closure', deps(wrong))).cancelsClosing).toBe(true)
-    expect((await reviewOverview(base({ closingStoryId: 's1' }), 'closure', deps(wrong))).cancelsClosing).toBe(false)
   })
 
   it('acts on nothing when the call fails', async () => {

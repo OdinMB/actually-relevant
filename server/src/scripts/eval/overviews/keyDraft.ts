@@ -1,9 +1,9 @@
 /**
- * Drafting the answer keys' responses and end (the `key-draft` step of `eval:overviews`;
+ * Drafting the answer keys' responses (the `key-draft` step of `eval:overviews`;
  * `.context/model-eval.md`, "key-draft"): for each development key of `--half` still at version 1,
  * one call to the strong model with the key's charter and notes and its entries' published text
  * (`loadKeyStories`, through the read-only session), asking what each must entry reports as being
- * done about the development and whether any entry reports the end event. Code keeps only what it
+ * done about the development. Code keeps only what it
  * can check: a story the prompt showed, a must entry for a response, at most
  * `MAX_RESPONSES_PER_STORY` a story, a quote found in that story's published text as the `keys`
  * step finds it; a response is dated by its story. What it keeps goes into the committed key file
@@ -36,7 +36,6 @@ const OUTPUT_TOKENS_BASE = 1500
 const OUTPUT_TOKENS_PER_STORY = 150
 
 type Response = AnswerKey['responses'][number]
-type Closed = NonNullable<AnswerKey['closed']>
 type Half = 'tune' | 'judge' | 'all'
 
 /** The keys the step drafts into, and the files it leaves alone with why (a key of another half is not listed). */
@@ -73,8 +72,7 @@ export function draftStories(key: AnswerKey, stories: ReadonlyMap<string, KeySto
 export const keyDraftPrompt = (key: AnswerKey, shown: KeyDraftStory[]): string =>
   buildKeyDraftPrompt({
     title: key.title,
-    // A key with no end event (it ends by fading) shows it as none, as the overview prompts do
-    charter: { ...key.charter, endEvent: key.charter.endEvent ?? 'none' },
+    charter: { in: key.charter.in, out: key.charter.out },
     notes: key.notes,
     stories: shown,
     perStory: MAX_RESPONSES_PER_STORY,
@@ -90,14 +88,8 @@ const plannedCall = (key: AnswerKey, shown: ShownStory[]): PlannedCall => ({
 /** What code kept of an answer, as drafts; and what it left out, with why. */
 export interface CheckedDraft {
   responses: Response[]
-  closed: Closed | null
-  /** The drafter's reason when it found no end; null when it found one. */
-  noEnd: string | null
   left: string[]
 }
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/
-const isDay = (d: string) => DAY.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d
 
 /** The answer checked against the stories the prompt showed: only what their published text states is kept. */
 export function checkedDraft(shown: ShownStory[], answer: KeyDraftAnswer): CheckedDraft {
@@ -119,27 +111,16 @@ export function checkedDraft(shown: ShownStory[], answer: KeyDraftAnswer): Check
     }
   }
   responses.sort((a, b) => a.date.localeCompare(b.date))
-  let closed: Closed | null = null
-  if (answer.end.happened === 'yes') {
-    const s = byId.get(answer.end.story.trim())
-    if (!s) left.push(`end: no story ${answer.end.story}`)
-    else if (!statesQuote(s.story, answer.end.quote)) left.push(`end: quote not found in ${s.slug}: "${answer.end.quote}"`)
-    else {
-      // A story reports an end on or before its own day; any other date given is the story's
-      const date = isDay(answer.end.date) && answer.end.date <= s.date ? answer.end.date : s.date
-      closed = { slug: s.slug, date, quote: answer.end.quote, reviewed: false }
-    }
-  }
-  return { responses, closed, noEnd: answer.end.happened === 'no' ? answer.end.why : null, left }
+  return { responses, left }
 }
 
-/** The committed key's JSON with the drafts: version 2, the end set when drafted, the responses before the notes; every other field as it was. */
-export function draftedJson(raw: Record<string, unknown>, drafts: Pick<CheckedDraft, 'responses' | 'closed'>): Record<string, unknown> {
+/** The committed key's JSON with the drafts: version 2, the responses before the notes; every other field as it was. */
+export function draftedJson(raw: Record<string, unknown>, drafts: Pick<CheckedDraft, 'responses'>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [field, value] of Object.entries(raw)) {
     if (field === 'responses') continue
     if (field === 'notes') out.responses = drafts.responses
-    out[field] = field === 'schemaVersion' ? 2 : field === 'closed' ? (drafts.closed ?? value) : value
+    out[field] = field === 'schemaVersion' ? 2 : value
   }
   if (!('responses' in out)) out.responses = drafts.responses
   return out
@@ -206,13 +187,11 @@ export async function runKeyDraftStep(o: KeyDraftStepOptions): Promise<KeyDraftR
       const call = plannedCall(c.key, c.shown)
       const rec = await o.ctx.call(call.arm, call.schemaName, keyDraftSchema, call.prompt)
       const base = { id: c.key.id, file: c.file, title: c.key.title, outcome: rec.outcome, titles: titlesOf(c.key), missing: c.missing }
-      if (rec.outcome !== 'ok' || !rec.parsed) return { ...base, responses: [], closed: null, noEnd: null, left: [`no draft: ${rec.outcome}`], written: false }
+      if (rec.outcome !== 'ok' || !rec.parsed) return { ...base, responses: [], left: [`no draft: ${rec.outcome}`], written: false }
       const checked = checkedDraft(c.shown, rec.parsed)
-      const drafted =
-        c.key.closed && checked.closed ? { ...checked, closed: null, left: [...checked.left, 'end: the key already has one, left as it is'] } : checked
-      const written = drafted.responses.length > 0 || drafted.closed !== null
-      if (written) writeDrafts(join(o.keysDir, c.file), drafted)
-      return { ...base, ...drafted, written }
+      const written = checked.responses.length > 0
+      if (written) writeDrafts(join(o.keysDir, c.file), checked)
+      return { ...base, ...checked, written }
     }),
   )
   return { ...report, drafts, written: drafts.filter(d => d.written).map(d => join(o.keysDir, d.file)) }
@@ -221,7 +200,7 @@ export async function runKeyDraftStep(o: KeyDraftStepOptions): Promise<KeyDraftR
 const titlesOf = (key: AnswerKey): Record<string, string> => Object.fromEntries(key.entries.map(e => [e.slug, e.title]))
 
 /** The drafts into the key file as it is on disk now, two-space JSON with a final newline (`npm run format` gives the committed layout). */
-function writeDrafts(path: string, drafts: Pick<CheckedDraft, 'responses' | 'closed'>): void {
+function writeDrafts(path: string, drafts: Pick<CheckedDraft, 'responses'>): void {
   const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
   writeFileSync(path, `${JSON.stringify(draftedJson(raw, drafts), null, 2)}\n`)
 }

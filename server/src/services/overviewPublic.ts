@@ -19,7 +19,7 @@ import { SOURCE_KINDS } from '../schemas/research.js'
 import { PUBLIC_OVERVIEW as PUBLIC, SHOWN_ENTRY } from './overviewPublicRule.js'
 import { overviewStepOn } from './overviewQueue.js'
 import { servedStands, type ServedFact } from './overviewStands.js'
-import type { StandsLine } from './overviewTypes.js'
+import type { OverviewStatus, StandsLine } from './overviewTypes.js'
 import { loadMemberFacts, publicVersionsOf } from './passRecords.js'
 import { publicUpdates } from './publicUpdates.js'
 import { hostOf, type CitedText, type ResearchedSource } from './researchedStory.js'
@@ -74,21 +74,29 @@ export interface PublicOverviewHead {
   title: string
   /** The overview's issue, its area chip. */
   area: { name: string; slug: string } | null
-  status: 'open' | 'quiet' | 'closing' | 'closed'
-  /** Why it closed: `end_event`, `faded` or `editor`; null unless closed. */
+  status: OverviewStatus
+  /** Why it closed: `faded` or `editor`; null unless closed. */
   closedReason: string | null
   closedAt: Date | null
   /** The founding story's publication date: "since". */
   since: Date
   /** The newest story's publication date. */
   lastEntryAt: Date | null
-  /** The newest of its last story, its current "Where this stands" and its closing. */
+  /** The newest of its last story, its current "Where this stands" and an editor's Close (`lastChangeOf`). */
   lastChange: Date
   /** Its stories readers see. */
   stories: number
 }
 
 const newestOf = (dates: (Date | null | undefined)[], fallback: Date): Date => dates.reduce<Date>((a, b) => (b && b.getTime() > a.getTime() ? b : a), fallback)
+
+/**
+ * An overview's last change: the newest of its last story, its current stands (`standsAt`) and an
+ * editor's Close. A faded overview's close does not count: it reads "No new reporting since" its
+ * last story, so the fade day is no change a reader could see.
+ */
+export const lastChangeOf = (o: Pick<HeadRow, 'status' | 'closedReason' | 'closedAt' | 'lastEntryAt' | 'foundedAt'>, standsAt: Date | null): Date =>
+  newestOf([o.lastEntryAt, standsAt, o.status === 'closed' && o.closedReason !== 'faded' ? o.closedAt : null], o.foundedAt)
 
 function head(o: HeadRow, stories: number, standsAt: Date | null): PublicOverviewHead {
   return {
@@ -100,7 +108,7 @@ function head(o: HeadRow, stories: number, standsAt: Date | null): PublicOvervie
     closedAt: o.status === 'closed' ? o.closedAt : null,
     since: o.foundedAt,
     lastEntryAt: o.lastEntryAt,
-    lastChange: newestOf([o.lastEntryAt, standsAt, o.status === 'closed' ? o.closedAt : null], o.foundedAt),
+    lastChange: lastChangeOf(o, standsAt),
     stories,
   }
 }

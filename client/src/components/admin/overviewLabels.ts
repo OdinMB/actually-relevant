@@ -5,11 +5,11 @@ import type { OverviewEntryRole, OverviewRoleKind, OverviewScope, OverviewStatus
  * fields, an entry's role and a decision's kind (`.context/overviews.md`, "Admin").
  */
 
-/** A charter that names no end event: the overview closes only when reporting stops. */
-export const NO_END_EVENT = 'No end event: it closes only by fading'
+/** A charter that names no end event (every overview closes only by fading or an editor's Close). */
+export const NO_END_EVENT = 'No end event'
 
 export const SCOPE_LABELS: Record<OverviewScope, string> = { single: 'Single', forming: 'Forming', ongoing: 'Ongoing' }
-export const STATUS_LABELS: Record<OverviewStatus, string> = { open: 'Open', quiet: 'Quiet', closing: 'Closing', closed: 'Closed' }
+export const STATUS_LABELS: Record<OverviewStatus, string> = { open: 'Open', quiet: 'Quiet', closed: 'Closed' }
 
 export const ROLE_KIND_LABELS: Record<OverviewRoleKind, string> = {
   setback: 'Setback',
@@ -60,7 +60,6 @@ const DECISION_KINDS: Record<string, string> = {
   role: 'Role',
   stands: 'Where this stands',
   status: 'Status',
-  close: 'End event',
   review: 'Review',
   recenter: 'Re-center',
   editor_attach: 'Editor attached a story',
@@ -76,8 +75,8 @@ const DECISION_KINDS: Record<string, string> = {
 
 export const decisionKindLabel = (kind: string): string => DECISION_KINDS[kind] ?? kind
 
-/** The decisions that make an overview's status history: its status moves, end-event checks, and an editor's close, reopen and freeze. */
-export const STATUS_KINDS = ['status', 'close', 'editor_close', 'editor_freeze']
+/** The decisions that make an overview's status history: its status moves, and an editor's close, reopen and freeze. */
+export const STATUS_KINDS = ['status', 'editor_close', 'editor_freeze']
 
 /** Who made a decision or an entry: the pipeline, a review, an automated re-center, or an editor (by name where the log has it). */
 export function actorLabel(actor: string, name: string | null = null): string {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decisionMove, inputsSchema, linkInputs, readInputs, REPORTS_END_EVENT, reviewInputs, storedChanges } from './overviewDecisions.js'
+import { decisionMove, inputsSchema, linkInputs, readInputs, reviewInputs, storedChanges } from './overviewDecisions.js'
 
 const change = { table: 'entry', id: 'e1', before: { status: 'active' }, after: { status: 'detached' } }
 
@@ -12,7 +12,7 @@ describe('the decision log schemas', () => {
   })
 
   it('fills what an older record lacks, and gives null for one that does not parse', () => {
-    expect(readInputs(linkInputs, {})).toMatchObject({ [REPORTS_END_EVENT]: false, changes: [], created: [] })
+    expect(readInputs(linkInputs, {})).toMatchObject({ reportsEndEvent: false, changes: [], created: [] })
     expect(readInputs(linkInputs, { shown: 'not a list' })).toBeNull()
   })
 

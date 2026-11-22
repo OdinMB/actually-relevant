@@ -38,12 +38,14 @@ export const monthYear = (iso: string): string => MONTH_YEAR.format(new Date(iso
 export const dayOf = (iso: string): string => DAY.format(new Date(iso))
 
 /**
- * The header's first line: "Ongoing story · since November 2026"; "Ended Nov 18, 2026" once closed;
- * "No new reporting since Nov 18, 2026" while quiet. One still `closing` is ongoing until it closes.
+ * The header's first line: "Ongoing story · since November 2026"; "No new reporting since Nov 18, 2026"
+ * while quiet, and once faded, which reads like a quiet one (its last story's day, not the fade's);
+ * "Ended Nov 18, 2026" once closed otherwise, by an editor's Close.
  */
-export function statusLine(o: Pick<PublicOverviewHead, 'status' | 'since' | 'closedAt' | 'lastEntryAt'>): string {
+export function statusLine(o: Pick<PublicOverviewHead, 'status' | 'since' | 'closedAt' | 'closedReason' | 'lastEntryAt'>): string {
+  const quietOrFaded = o.status === 'quiet' || (o.status === 'closed' && o.closedReason === 'faded')
+  if (quietOrFaded && o.lastEntryAt) return `No new reporting since ${dayOf(o.lastEntryAt)}`
   if (o.status === 'closed' && o.closedAt) return `Ended ${dayOf(o.closedAt)}`
-  if (o.status === 'quiet' && o.lastEntryAt) return `No new reporting since ${dayOf(o.lastEntryAt)}`
   return `Ongoing story · since ${monthYear(o.since)}`
 }
 

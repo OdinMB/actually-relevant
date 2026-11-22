@@ -8,9 +8,9 @@
  * one story at a time in that order (`linkInOrder`, `applyLink`). It runs only while its gate and
  * research passes' gate are open and its job is enabled, re-reading that before each write, so a run
  * by hand of the disabled job does nothing. A story is settled by its `link` decision, so a run a
- * restart cut off resumes where it stopped. Then the upkeep (`overviewUpkeep.ts`): the end-event
- * closing checks, the status machine in development time (`upkeepClock`), the reviews due and the
- * monthly audit, the stands refreshes due. Stories and overviews that fail go on to the next run; a
+ * restart cut off resumes where it stopped. Then the upkeep (`overviewUpkeep.ts`): the status machine
+ * in development time (`upkeepClock`), the automated re-centers and the reviews due and the monthly
+ * audit, the stands refreshes due. Stories and overviews that fail go on to the next run; a
  * failure of the job as a whole never stops its chain (`GOES_ON_PAST_FAILURE`). The item tally (joins
  * proposed and stands lines written; the yeses code refused and the lines dropped) goes into the run's
  * usage (`recordItems`) for the failure-share notice.
@@ -24,7 +24,7 @@ import { countOf, recordItems, reportRunResult } from '../lib/runUsage.js'
 import { utcDay } from '../lib/days.js'
 import { membershipsOf, nearestPublished } from '../services/overviewCandidates.js'
 import { candidateOverviews, linkStories } from '../services/overviewInput.js'
-import { applyAudit, applyBurst, applyClosing, applyLink, applyRecenter, applyReview, applyStands, applyStatus } from '../services/overviewLifecycle.js'
+import { applyAudit, applyBurst, applyLink, applyRecenter, applyReview, applyStands, applyStatus } from '../services/overviewLifecycle.js'
 import type { ApplyLink, LinkDeps } from '../services/overviewLink.js'
 import { runNight } from '../services/overviewNight.js'
 import { LINK_OVERVIEWS_JOB, overviewStepOn, overviewSwitchRefusal, owedStories } from '../services/overviewQueue.js'
@@ -32,7 +32,7 @@ import { overviewCalls, type OverviewCalls } from '../services/overviewSteps.js'
 import type { LinkOutcome } from '../services/overviewTypes.js'
 import { recenterCases } from '../services/overviewRecenterInput.js'
 import type { UpkeepDeps, UpkeepFreeze, UpkeepRecenter, UpkeepTally } from '../services/overviewUpkeep.js'
-import { auditPicks, overviewStates, pendingClosings, reviewCase, standsCases } from '../services/overviewUpkeepInput.js'
+import { auditPicks, overviewStates, reviewCase, standsCases } from '../services/overviewUpkeepInput.js'
 import { structuredCall } from '../services/structuredCall.js'
 import { jobDisplayName } from './jobDisplayName.js'
 
@@ -58,17 +58,14 @@ export const productionLinkDeps = (calls: OverviewCalls = productionCalls()): Li
 
 /** The upkeep as production runs it: the tables, the lifecycle's writes, and the step's calls (the audit at high effort). */
 export const productionUpkeepDeps = (now: Date, calls: OverviewCalls = productionCalls()): UpkeepDeps => ({
-  closings: () => pendingClosings(prisma),
   states: () => overviewStates(prisma, now),
   reviewCase: id => reviewCase(prisma, id),
   auditPicks: at => auditPicks(prisma, at),
   standsCases: today => standsCases(prisma, today),
   recenterCases: at => recenterCases(prisma, at),
-  close: calls.close,
   review: calls.review,
   stands: calls.stands,
   recenter: calls.recenter,
-  applyClosing: (c, result) => applyClosing(c, result, now),
   applyStatus: (state, moves, clock) => applyStatus(state, moves, clock, now),
   applyBurst: state => applyBurst(state, now),
   applyRecenter: (c, result) => applyRecenter(c, result, now),
@@ -81,7 +78,6 @@ export const productionUpkeepDeps = (now: Date, calls: OverviewCalls = productio
 export function upkeepSummary(t: UpkeepTally): string {
   const parts = [`${countOf(t.standsWritten, 'overview', 'overviews')} refreshed`, `${t.reviews.toLocaleString('en-US')} reviewed`]
   if (t.recenters.length > 0) parts.push(`${t.recenters.length.toLocaleString('en-US')} re-centered`)
-  if (t.closingsBegun > 0) parts.push(`${t.closingsBegun.toLocaleString('en-US')} closing`)
   if (t.bursts > 0) parts.push(`${t.bursts.toLocaleString('en-US')} frozen by a burst`)
   if (t.audits > 0) parts.push(`${t.audits.toLocaleString('en-US')} audited`)
   if (t.failed > 0) parts.push(`${t.failed.toLocaleString('en-US')} upkeep ${t.failed === 1 ? 'item' : 'items'} failed`)
@@ -136,7 +132,7 @@ async function notifyFailedUpkeep(items: number, failed: number): Promise<void> 
     severity: 'warning',
     title: `${jobDisplayName(LINK_OVERVIEWS_JOB)}: ${failed.toLocaleString('en-US')} of ${countOf(items, 'upkeep item', 'upkeep items')} failed in the last run`,
     message:
-      'A technical problem stopped end-event checks, status moves, automated re-center attempts, reviews, the monthly audit or "Where this stands" refreshes: the AI service did not answer, or an error of ours. ' +
+      'A technical problem stopped status moves, automated re-center attempts, reviews, the monthly audit or "Where this stands" refreshes: the AI service did not answer, or an error of ours. ' +
       'Nothing paused, and the overviews keep what they had. They are tried again at the next run. ' +
       'Switch the step off on the Jobs page if it keeps happening.',
     link: '/admin/jobs',
@@ -230,7 +226,7 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
     )
     return slices
   }
-  // Part 1, linking; then parts 2 to 5: closings, the status machine, re-centers, reviews and the audit, the stands (none once switched off)
+  // Part 1, linking; then parts 2 to 4: the status machine, re-centers, reviews and the audit, the stands (none once switched off)
   const night = await runNight(
     {
       owed,

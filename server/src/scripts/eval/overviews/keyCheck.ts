@@ -1,7 +1,7 @@
 /**
  * The answer keys against the database (the `keys` step of `eval:overviews`): every slug a key names
  * is a published story, each entry's date is its publication day (UTC), and every quote (a value's,
- * a response's, the end's) occurs in that story's published text. A miss is an error in the key, to
+ * a response's) occurs in that story's published text. A miss is an error in the key, to
  * fix there, never a pass or fail of anything in production. Also the per-development counts the
  * report shows, the drafts still to review among them, and the stories two keys both hold as must
  * (the linking eval counts either one's overview as right for them). The loader
@@ -100,11 +100,7 @@ export function checkKey(key: AnswerKey, stories: ReadonlyMap<string, KeyStory>)
   }
   for (const n of key.nearMisses) published('near miss', n.slug)
   for (const c of centers) for (const n of c.nearMisses) published(`${c.at}near miss`, n.slug)
-  const quoted = [
-    ...key.responses.map(r => ({ field: 'response', ...r })),
-    ...(key.closed ? [{ field: 'closed', ...key.closed }] : []),
-    ...centers.flatMap(c => [...c.responses.map(r => ({ field: `${c.at}response`, ...r })), ...(c.closed ? [{ field: `${c.at}closed`, ...c.closed }] : [])]),
-  ]
+  const quoted = [...key.responses.map(r => ({ field: 'response', ...r })), ...centers.flatMap(c => c.responses.map(r => ({ field: `${c.at}response`, ...r })))]
   for (const q of quoted) {
     const s = q.slug && q.quote ? stories.get(q.slug) : undefined
     if (!s || !q.quote) continue
@@ -128,11 +124,9 @@ export interface KeySummary {
   figures: number
   values: number
   responses: number
-  /** The day it ended, or null while open. */
-  closed: string | null
   /** Entry stories with a stored research run. */
   withResearchRun: number
-  /** Drafted responses, end and centers a person has not reviewed yet (`unreviewed`). */
+  /** Drafted responses and centers a person has not reviewed yet (`unreviewed`). */
   toReview: number
 }
 
@@ -146,9 +140,8 @@ export function summarizeKey(key: AnswerKey, stories: ReadonlyMap<string, KeySto
     figures: key.figures.length,
     values: key.entries.reduce((sum, e) => sum + e.values.length, 0),
     responses: key.responses.length,
-    closed: key.closed?.date ?? null,
     withResearchRun: key.entries.filter(e => stories.get(e.slug)?.hasResearchRun).length,
-    toReview: unreviewed(key, 'responses') + unreviewed(key, 'closed') + unreviewed(key, 'centers'),
+    toReview: unreviewed(key, 'responses') + unreviewed(key, 'centers'),
   }
 }
 

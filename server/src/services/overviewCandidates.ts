@@ -189,7 +189,8 @@ export interface Candidates {
 }
 
 /**
- * Whether an overview may take a story dated `asOf`: not closed (a faded one reopens), and with an
+ * Whether an overview may take a story dated `asOf`: not closed unless it faded (a faded one reopens;
+ * one an editor closed takes none until reopened, as any other closed reason), and with an
  * entry within the lookback before it. `lastEntryAt` is the last entry as of the story's own day
  * (`membershipsOf` with `asOf`, the sandbox's alike), so an entry published after the story never
  * keeps an overview alive for it.

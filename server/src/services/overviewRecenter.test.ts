@@ -101,9 +101,8 @@ describe('the fixed limits on an automated re-center', () => {
     expect(automatedRecenterBlocked(state({ status: 'quiet', automatedRecenters: 1 }), NOW, OPTIONS)).toBeNull()
   })
 
-  it('skips a frozen, closing, closed, forming or single overview', () => {
+  it('skips a frozen, closed, forming or single overview', () => {
     expect(automatedRecenterBlocked(state({ frozen: true }), NOW, OPTIONS)).toBe('frozen')
-    expect(automatedRecenterBlocked(state({ status: 'closing' }), NOW, OPTIONS)).toBe('status')
     expect(automatedRecenterBlocked(state({ status: 'closed' }), NOW, OPTIONS)).toBe('status')
     expect(automatedRecenterBlocked(state({ scope: 'forming' }), NOW, OPTIONS)).toBe('scope')
     expect(automatedRecenterBlocked(state({ scope: 'single' }), NOW, OPTIONS)).toBe('scope')
@@ -221,7 +220,6 @@ describe('recenterCaseOf', () => {
       scope: 'ongoing',
       frozen: false,
       entries: [reviewEntry(1), reviewEntry(2), reviewEntry(3, turningRole)],
-      closingStoryId: null,
       lockedOut: [],
     },
     state: {
@@ -295,7 +293,6 @@ describe('recenterOverview', () => {
     scope: 'ongoing',
     frozen: false,
     entries: [reviewEntry(1), reviewEntry(2), reviewEntry(3, turningRole), reviewEntry(4, routine, true)],
-    closingStoryId: null,
     lockedOut: ['Lake Mead tourism'],
     status: 'open',
     automatedRecenters: 0,

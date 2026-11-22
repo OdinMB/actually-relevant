@@ -1,9 +1,8 @@
 /**
  * The overview upkeep steps' report sections: the `pass-pool` step's research, the `stands` bars, the
  * `review` bars under planted errors, the `recenter` bars on planted and real cases, and the whole
- * module's replay (`closure`, `replay`) with its checkpoints, re-centers, safeguards and cost. Pure.
+ * module's replay (`replay`) with its linking bars, checkpoints, re-centers, safeguards and cost. Pure.
  */
-import type { OverviewStep } from '../options.js'
 import { rows } from './linkReport.js'
 import { MEMBERS_PER_CHECKPOINT, type PassPoolReport } from './passPool.js'
 import type { RecenterStepReport } from './recenter.js'
@@ -95,7 +94,7 @@ export function recenterLines(r: RecenterStepReport): string[] {
   ]
 }
 
-export function replayLines(r: ReplayStepReport, steps: readonly OverviewStep[]): string[] {
+export function replayLines(r: ReplayStepReport): string[] {
   const s = r.score
   return [
     `**Replay:** ${r.stories} stories of ${r.keys.length} answer keys (half ${r.half}${r.limit !== undefined ? `; the first ${r.limit} stories only, a smoke run, not evidence` : ''}), linked and kept day by day through production's upkeep, ${r.repeat} run${r.repeat === 1 ? '' : 's'}. Spend ${usd(r.costUsd)}${s.costPerStoryUsd !== null ? `, ${usd(s.costPerStoryUsd)} a story` : ''}${s.costPerOverviewUsd !== null ? `, ${usd(s.costPerOverviewUsd)} an overview` : ''}. Checkpoints with enough evidence for the stands: ${s.evidenceShare === null ? 'n/a' : `${(s.evidenceShare * 100).toFixed(0)}%`}.`,
@@ -103,30 +102,26 @@ export function replayLines(r: ReplayStepReport, steps: readonly OverviewStep[])
     ...r.left.map(x => `- Left out: ${x.what}: ${cell(x.reason)}`),
     '',
     ...table,
-    ...(steps.includes('replay') ? [...rows(s.link.link), ...rows(s.link.found), ...rows(s.link.role)] : []),
-    ...rows(s.closure),
+    ...rows(s.link.link),
+    ...rows(s.link.found),
+    ...rows(s.link.role),
     '',
-    ...s.closureRuns.flatMap(c => c.premature.map(p => `- Run ${c.run}: premature: ${cell(p)}`)),
-    ...(steps.includes('replay')
-      ? [
-          '### Checkpoints',
-          '',
-          '| Run | Development | At | Day | Status | Scope | Must found | Wrong members | Facts offerable | Stands (lines / doing) |',
-          '|---|---|---|---|---|---|---|---|---|---|',
-          ...r.runs.flatMap(run =>
-            run.checkpoints.map(
-              c =>
-                `| ${run.run} | ${c.key} | ${c.at} | ${c.day} | ${c.overview?.status ?? 'none'}${c.overview?.frozen ? ' (frozen)' : ''} | ${c.overview?.scope ?? ''} | ${c.mustFound} of ${c.mustByThen} | ${c.wrongMembers} | ${c.offerable} | ${c.stands ? `${c.stands.sentences} / ${c.stands.doing}` : 'none'} |`,
-            ),
-          ),
-          '',
-          '### Safeguards fired (per run)',
-          '',
-          ...(Object.keys(s.safeguards).length === 0 ? ['None fired.'] : Object.entries(s.safeguards).map(([name, n]) => `- ${name}: ${n.toFixed(1)}`)),
-          '',
-          ...replayRecenterLines(r),
-        ]
-      : []),
+    '### Checkpoints',
+    '',
+    '| Run | Development | At | Day | Status | Scope | Must found | Wrong members | Facts offerable | Stands (lines / doing) |',
+    '|---|---|---|---|---|---|---|---|---|---|',
+    ...r.runs.flatMap(run =>
+      run.checkpoints.map(
+        c =>
+          `| ${run.run} | ${c.key} | ${c.at} | ${c.day} | ${c.overview?.status ?? 'none'}${c.overview?.frozen ? ' (frozen)' : ''} | ${c.overview?.scope ?? ''} | ${c.mustFound} of ${c.mustByThen} | ${c.wrongMembers} | ${c.offerable} | ${c.stands ? `${c.stands.sentences} / ${c.stands.doing}` : 'none'} |`,
+      ),
+    ),
+    '',
+    '### Safeguards fired (per run)',
+    '',
+    ...(Object.keys(s.safeguards).length === 0 ? ['None fired.'] : Object.entries(s.safeguards).map(([name, n]) => `- ${name}: ${n.toFixed(1)}`)),
+    '',
+    ...replayRecenterLines(r),
   ]
 }
 

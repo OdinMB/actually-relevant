@@ -1,6 +1,6 @@
 /**
  * `overview-eval.md` for `eval:overviews`: a section per step that ran (the answer keys and their
- * drafted responses and ends, the gap keys and their drafts, story context against its bars, a later pass's updates against theirs, overview linking against its bars, the fact check under planted errors, research's
+ * drafted responses, the gap keys and their drafts, story context against its bars, a later pass's updates against theirs, overview linking against its bars, the fact check under planted errors, research's
  * cost baseline), what was skipped and why, then the spend and the fixtures' anchor. The name
  * carries a tag for every departure from the default run, so a trial never overwrites the report of
  * record. Pure.
@@ -91,7 +91,7 @@ export interface OverviewReportInput {
   stands?: StandsStepReport
   review?: ReviewStepReport
   recenter?: RecenterStepReport
-  /** The `closure` and `replay` steps' one replay. */
+  /** The `replay` step's replay. */
   replay?: ReplayStepReport
   factCheck?: FactCheckReport
   baseline?: Baseline
@@ -109,17 +109,17 @@ function keyLines(keys: KeyResult[]): string[] {
   if (keys.length === 0) return ['No answer keys committed yet (`server/src/scripts/eval/overviews/keys/`).']
   const row = (k: KeyResult) => {
     const s = k.summary
-    if (!s) return `| ${k.file} | (does not parse) | | | | | | | | | ${k.errors.length} |`
-    return `| ${cell(s.title)} | ${k.file} | ${s.must} / ${s.optional} | ${s.nearMisses} | ${s.figures} | ${s.values} | ${s.responses} | ${s.closed ?? 'open'} | ${s.withResearchRun} | ${s.toReview} | ${k.errors.length} |`
+    if (!s) return `| ${k.file} | (does not parse) | | | | | | | | ${k.errors.length} |`
+    return `| ${cell(s.title)} | ${k.file} | ${s.must} / ${s.optional} | ${s.nearMisses} | ${s.figures} | ${s.values} | ${s.responses} | ${s.withResearchRun} | ${s.toReview} | ${k.errors.length} |`
   }
   const withErrors = keys.filter(k => k.errors.length > 0)
   const toReview = keys.reduce((sum, k) => sum + (k.summary?.toReview ?? 0), 0)
   const shared = [...new Map(keys.flatMap(k => k.sharedMusts).map(s => [s.slug, s])).values()]
   return [
-    `${keys.length} keys. An error is a mistake in the key, to fix there; it passes or fails nothing in production.${toReview > 0 ? ` ${toReview} drafted responses and ends are not reviewed yet (\`"reviewed": false\`): \`stands\`, \`closure\` and \`replay\` refuse a half that holds one.` : ''}`,
+    `${keys.length} keys. An error is a mistake in the key, to fix there; it passes or fails nothing in production.${toReview > 0 ? ` ${toReview} drafted responses and centers are not reviewed yet (\`"reviewed": false\`): \`stands\` refuses a half that holds one, and \`link\`, \`recenter\` and \`replay\` a half that holds a center.` : ''}`,
     '',
-    '| Development | File | Entries (must / optional) | Near misses | Figures | Values | Responses | Closed | Entries with a research run | To review | Errors |',
-    '|---|---|---|---|---|---|---|---|---|---|---|',
+    '| Development | File | Entries (must / optional) | Near misses | Figures | Values | Responses | Entries with a research run | To review | Errors |',
+    '|---|---|---|---|---|---|---|---|---|---|',
     ...keys.map(row),
     ...(shared.length > 0
       ? [
@@ -276,7 +276,7 @@ export function renderOverviewReport(input: OverviewReportInput): string {
     `Generated ${input.generatedAt}. Steps: ${input.steps.join(', ')}.`,
     '',
     ...(input.keys ? ['## Answer keys', '', ...keyLines(input.keys), ''] : []),
-    ...(input.keyDraft ? ["## Answer-key drafts: responses and ends for the owner's review", '', ...keyDraftLines(input.keyDraft), ''] : []),
+    ...(input.keyDraft ? ["## Answer-key drafts: responses for the owner's review", '', ...keyDraftLines(input.keyDraft), ''] : []),
     ...(input.gapKeys ? ['## Gap keys', '', ...gapKeyLines(input.gapKeys), ''] : []),
     ...(input.gapDraft ? ['## Gap-key drafts', '', ...gapDraftLines(input.gapDraft), ''] : []),
     ...(input.context ? ['## Story context against the bars', '', ...contextLines(input.context), ''] : []),
@@ -286,7 +286,7 @@ export function renderOverviewReport(input: OverviewReportInput): string {
     ...(input.stands ? ['## Where this stands against the bars', '', ...standsLines(input.stands), ''] : []),
     ...(input.review ? ['## Reviews under planted errors', '', ...reviewLines(input.review), ''] : []),
     ...(input.recenter ? ['## Automated re-centers on planted and real cases', '', ...recenterLines(input.recenter), ''] : []),
-    ...(input.replay ? ['## The whole module replayed (closure, replay)', '', ...replayLines(input.replay, input.steps), ''] : []),
+    ...(input.replay ? ['## The whole module replayed', '', ...replayLines(input.replay), ''] : []),
     ...(input.factCheck ? ['## Fact check under planted errors', '', ...factCheckLines(input.factCheck), ''] : []),
     ...(input.baseline ? ["## Research's cost baseline", '', ...baselineLines(input.baseline), ''] : []),
     ...(input.skipped.length > 0 ? ['## Skipped', '', ...input.skipped.map(s => `- ${s.step}: ${s.reason}`), ''] : []),

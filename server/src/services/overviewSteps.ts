@@ -9,8 +9,6 @@ import type { z } from 'zod'
 import { config, type ReasoningEffort } from '../config.js'
 import type { Prompt } from '../lib/promptCache.js'
 import {
-  buildCloseCheckPrompt,
-  buildClosePrompt,
   buildFoundCheckPrompt,
   buildFoundPrompt,
   buildLinkPromptParts,
@@ -20,19 +18,8 @@ import {
   buildStandsPromptParts,
 } from '../prompts/overviews.js'
 import { buildFactCheckPromptParts } from '../prompts/research.js'
-import {
-  closeCheckSchema,
-  closeSchema,
-  foundCheckSchema,
-  foundSchema,
-  linkSchema,
-  recenterCheckSchema,
-  recenterSchema,
-  reviewSchema,
-  standsSchema,
-} from '../schemas/overviews.js'
+import { foundCheckSchema, foundSchema, linkSchema, recenterCheckSchema, recenterSchema, reviewSchema, standsSchema } from '../schemas/overviews.js'
 import { factCheckSchema } from '../schemas/research.js'
-import type { CloseDeps } from './overviewClose.js'
 import type { LinkDeps, ModelCall } from './overviewLink.js'
 import type { RecenterDeps } from './overviewRecenter.js'
 import type { ReviewDeps } from './overviewReview.js'
@@ -62,8 +49,6 @@ export const OVERVIEW_STEPS = {
   link: step('overview-link', tiers.link, linkSchema),
   found: step('overview-found', tiers.found, foundSchema),
   foundCheck: step('overview-found-check', tiers.foundCheck, foundCheckSchema),
-  close: step('overview-close', tiers.close, closeSchema),
-  closeCheck: step('overview-close-check', tiers.closeCheck, closeCheckSchema),
   review: step('overview-review', tiers.review, reviewSchema),
   /** The monthly audit: the review's call at high effort. */
   audit: step('overview-review', tiers.review, reviewSchema, 'high'),
@@ -78,7 +63,6 @@ export type StepCaller = <T>(step: OverviewStep<T>, prompt: Prompt) => Promise<M
 
 export interface OverviewCalls {
   link: Pick<LinkDeps, 'link' | 'found' | 'foundCheck'>
-  close: CloseDeps
   review: ReviewDeps
   stands: StandsDeps
   recenter: RecenterDeps
@@ -92,10 +76,6 @@ export function overviewCalls(call: StepCaller): OverviewCalls {
       link: input => call(s.link, buildLinkPromptParts(input)),
       found: input => call(s.found, buildFoundPrompt(input)),
       foundCheck: input => call(s.foundCheck, buildFoundCheckPrompt(input)),
-    },
-    close: {
-      close: input => call(s.close, buildClosePrompt(input)),
-      closeCheck: input => call(s.closeCheck, buildCloseCheckPrompt(input)),
     },
     review: { review: (input, { audit }) => call(audit ? s.audit : s.review, buildReviewPrompt(input)) },
     stands: {

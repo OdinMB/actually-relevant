@@ -11,7 +11,6 @@ const key = (id: string, entries: [string, 'must' | 'optional', 'turning_point' 
   id,
   title: id,
   charter: { in: 'In.', out: [], endEvent: 'End.' },
-  closed: null,
   figures: [],
   entries: entries.map(([slug, join, role, date]) => ({ slug, date, title: slug, join, role, kind: null, values: [], statuses: [], why: 'w' })),
   nearMisses: nearMisses.map(slug => ({ slug, date: '2026-05-01', title: slug, why: 'looks alike' })),

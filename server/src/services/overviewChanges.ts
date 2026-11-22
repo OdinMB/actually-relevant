@@ -5,9 +5,9 @@
  * before and after. One applier writes a plan (the lifecycle's; the eval sandbox's over memory), each
  * change only while its row still holds `before`, and logs it as its decision with the change set, so
  * Undo of any decision is that change set inverted. What entries joining or leaving does to their
- * overview is decided here once: a closing whose end-event story leaves is cancelled (`leaving`), and
- * the last entry and the scope follow the entries (`settled`), added to every plan before it is applied
- * (`settle`) and never put back by an Undo, which settles them again. Pure.
+ * overview is decided here once: the last entry and the scope follow the entries (`settled`), added to
+ * every plan before it is applied (`settle`) and never put back by an Undo, which settles them again.
+ * Pure.
  */
 import { scopeAfter } from './overviewStatus.js'
 import { isPublicOverview, type Charter, type EntryRole, type OverviewScope, type OverviewStatus } from './overviewTypes.js'
@@ -21,13 +21,8 @@ export interface OverviewFields {
   scope: OverviewScope
   status: OverviewStatus
   closedAt: Date | null
-  /** end_event, faded or editor; null unless closed. */
+  /** faded or editor; null unless closed. */
   closedReason: string | null
-  /** While closing: the end-event story's publication date and the story. */
-  closingSince: Date | null
-  closingStoryId: string | null
-  /** While closing: when its closure review ran. */
-  closureReviewedAt: Date | null
   frozen: boolean
   /** While frozen: `burst`, `review` (the detach brake) or `editor`, and when. */
   frozenBy: string | null
@@ -104,7 +99,6 @@ export const DECISION_KINDS = [
   'role',
   'stands',
   'status',
-  'close',
   'review',
   'editor_attach',
   'editor_detach',
@@ -241,26 +235,14 @@ export const entryChange = (e: EntryFields & { id: string }, to: Partial<EntryFi
   return Object.keys(c.after).length === 0 ? [] : [{ table: 'entry', id: e.id, ...c }]
 }
 
-/** Open again: no closure and no closing. */
-export const OPEN = { status: 'open', closedAt: null, closedReason: null, closingSince: null, closingStoryId: null, closureReviewedAt: null } as const
+/** Open again: no closure. */
+export const OPEN = { status: 'open', closedAt: null, closedReason: null } as const
 
 /** Not frozen, by anyone. */
 export const UNFROZEN = { frozen: false, frozenBy: null, frozenAt: null } as const
 
 /** An entry active again (its detach cleared). */
 export const ACTIVE = { status: 'active', detachedBy: null, detachReason: null, detachedAt: null } as const
-
-/** A closing ended without closing: open, its end-event story and its review forgotten. */
-export const CLOSING_CANCELLED = { status: 'open', closingSince: null, closingStoryId: null, closureReviewedAt: null } as const
-
-/**
- * What entries leaving does to their overview, the one rule every writer applies (the status machine's
- * unpublished detach, a review's, an editor's, an Undo's): a closing whose end-event story is among
- * them is cancelled. The scope and the last entry follow the entries (`settled`).
- */
-export function leaving(o: Pick<OverviewRow, 'status' | 'closingStoryId'>, storyIds: readonly (string | null)[]): Partial<OverviewFields> {
-  return o.status === 'closing' && o.closingStoryId !== null && storyIds.includes(o.closingStoryId) ? { ...CLOSING_CANCELLED } : {}
-}
 
 /**
  * The fields that follow the entries: the last entry, the newest active published entry's publication
@@ -294,9 +276,6 @@ export const newOverviewRow = (n: NewOverview): OverviewRow => ({
   status: 'open',
   closedAt: null,
   closedReason: null,
-  closingSince: null,
-  closingStoryId: null,
-  closureReviewedAt: null,
   frozen: false,
   frozenBy: null,
   frozenAt: null,
@@ -374,25 +353,14 @@ export const publicBefore = (o: Pick<OverviewRow, 'scope' | 'hidden' | 'slug'> |
 /**
  * Fields an Undo never puts back, nor checks: a slug once given stays reserved; the burst count never
  * counts again the joins a write answered; the scope and the last entry follow the entries, settled
- * again after the undo; a review that ran stays run (its time, the entries it kept, a closure's
- * review), so its triggers count from it; and an automated re-center attempt stays tried, so a later
- * attempt never blocks an Undo.
+ * again after the undo; a review that ran stays run (its time, the entries it kept), so its triggers
+ * count from it; and an automated re-center attempt stays tried, so a later attempt never blocks an
+ * Undo.
  */
-const ONE_WAY = new Set<string>([
-  'slug',
-  'joinsCountedFrom',
-  'scope',
-  'lastEntryAt',
-  'reviewedAt',
-  'entriesAtLastReview',
-  'closureReviewedAt',
-  'recenterTriedAt',
-])
+const ONE_WAY = new Set<string>(['slug', 'joinsCountedFrom', 'scope', 'lastEntryAt', 'reviewedAt', 'entriesAtLastReview', 'recenterTriedAt'])
 
 const DATE_FIELDS = new Set([
   'closedAt',
-  'closingSince',
-  'closureReviewedAt',
   'frozenAt',
   'reviewedAt',
   'reopenedAt',

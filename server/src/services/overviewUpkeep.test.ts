@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RecenterAnswer, RecenterCheckAnswer, ReviewAnswer, StandsAnswer } from '../schemas/overviews.js'
 import type { FactCheck } from '../schemas/research.js'
-import type { CloseCase } from './overviewClose.js'
 import type { ModelCall } from './overviewLink.js'
 import type { RecenterCase } from './overviewRecenter.js'
 import type { ReviewCase } from './overviewReview.js'
@@ -24,14 +23,12 @@ const state = (id: string, over: Partial<OverviewState> = {}): OverviewState => 
   frozen: false,
   hidden: false,
   lastEntryAt: new Date('2026-11-17T12:00:00Z'),
-  closingSince: null,
   activeEntries: 4,
   unpublished: [],
   entriesAtLastReview: 3,
   reviewedAt: new Date('2026-11-10T00:00:00Z'),
   burstJoins: 0,
   burstAt: null,
-  closureReviewed: false,
   reopenedAt: null,
   reportAt: null,
   ...over,
@@ -53,7 +50,6 @@ const reviewCase = (id: string): ReviewCase => ({
     role: routine,
     locked: false,
   })),
-  closingStoryId: null,
   lockedOut: [],
 })
 
@@ -180,15 +176,12 @@ function fakes(over: Partial<UpkeepDeps> = {}): UpkeepDeps & { writes: string[] 
   const stands: StandsAnswer = { sentences: [{ text: 'Cases rose to 120.', factIds: ['S1F1'] }], doing: [] }
   return {
     writes,
-    closings: async () => [],
     states: async () => [],
     reviewCase: async id => reviewCase(id),
     auditPicks: async () => [],
     standsCases: async () => [],
-    close: { close: async () => call(null), closeCheck: async () => call(null) },
     review: { review: async () => call(keepAll, 0.1) },
     stands: { write: async () => call(stands), check: async items => call(supported(items.length)) },
-    applyClosing: async (c, r) => void writes.push(`closing:${c.overviewId}:${r.outcome}`),
     applyStatus: async (s, moves) => void writes.push(`status:${s.id}:${moves.map(m => (m.kind === 'status' ? m.to : m.kind)).join(',')}`),
     applyBurst: async s => void writes.push(`burst:${s.id}`),
     recenterCases: async () => [],
@@ -208,24 +201,17 @@ function fakes(over: Partial<UpkeepDeps> = {}): UpkeepDeps & { writes: string[] 
 }
 
 describe('the upkeep after linking', () => {
-  it('runs the closing checks, the status machine, the reviews, the audit and the stands, in that order', async () => {
-    const closing: CloseCase = {
-      overviewId: 'o1',
-      charter: { in: 'In.', out: [], endEvent: 'End.' },
-      story: { id: 's', title: 'T', label: 'L', summary: 'S.', datePublished: NOW, date: '2026-11-18', issueId: null, facts: [] },
-      entries: [],
-    }
+  it('runs the status machine, the reviews, the audit and the stands, in that order', async () => {
     const quiet = state('o2', { lastEntryAt: new Date('2026-10-01T00:00:00Z') })
     const due = state('o3', { activeEntries: 6 })
     const deps = fakes({
-      closings: async () => [closing],
       states: async () => [quiet, due],
       auditPicks: async () => ['o4'],
       standsCases: async () => [standsCase()],
     })
     const tally = await runUpkeep(deps, AT)
-    expect(deps.writes).toEqual(['closing:o1:failed', 'status:o2:quiet', 'review:o3:entries:reviewed', 'audit:o4:reviewed', 'stands:o1:written:signed'])
-    expect(tally).toMatchObject({ closingsChecked: 1, moves: 1, reviews: 1, audits: 1, standsRefreshes: 1, standsWritten: 1, standsChecked: 1, failed: 1 })
+    expect(deps.writes).toEqual(['status:o2:quiet', 'review:o3:entries:reviewed', 'audit:o4:reviewed', 'stands:o1:written:signed'])
+    expect(tally).toMatchObject({ moves: 1, reviews: 1, audits: 1, standsRefreshes: 1, standsWritten: 1, standsChecked: 1, failed: 0 })
   })
 
   it('freezes on a burst and reviews it in the same run, from the states read again', async () => {
@@ -333,17 +319,10 @@ describe('the upkeep after linking', () => {
   })
 
   it('counts an item whose call gave nothing and whose write then threw as one failure, in every part with a call', async () => {
-    const closing: CloseCase = {
-      overviewId: 'o1',
-      charter: { in: 'In.', out: [], endEvent: 'End.' },
-      story: { id: 's', title: 'T', label: 'L', summary: 'S.', datePublished: NOW, date: '2026-11-18', issueId: null, facts: [] },
-      entries: [],
-    }
     const boom = async () => {
       throw new Error('write failed')
     }
     const deps = fakes({
-      closings: async () => [closing],
       states: async () => [state('o3', { activeEntries: 6 })],
       recenterCases: async () => [recenterCase('o2')],
       auditPicks: async () => ['o4'],
@@ -352,17 +331,19 @@ describe('the upkeep after linking', () => {
       review: { review: async () => call(null) },
       recenter: { draft: async () => call(null), check: async () => call(null) },
       stands: { write: async () => call(null), check: async () => call(null) },
-      applyClosing: boom,
       applyRecenter: boom,
       applyReview: boom,
       applyAudit: boom,
       applyStands: boom,
     })
     const tally = await runUpkeep(deps, AT)
-    expect(tally.errors.map(e => e.part)).toEqual(['closing', 'recenter', 'review', 'audit', 'stands'])
-    expect([tally.items, tally.failed]).toEqual([6, 5])
+    expect(tally.errors.map(e => e.part)).toEqual(['recenter', 'review', 'audit', 'stands'])
+    expect([tally.items, tally.failed]).toEqual([5, 4])
     // A failed call written without a throw is one failure too
-    const failedOnly = await runUpkeep(fakes({ closings: async () => [closing] }), AT)
+    const failedOnly = await runUpkeep(
+      fakes({ standsCases: async () => [standsCase()], stands: { write: async () => call<StandsAnswer>(null), check: async () => call<FactCheck>(null) } }),
+      AT,
+    )
     expect([failedOnly.items, failedOnly.failed, failedOnly.errors]).toEqual([1, 1, []])
   })
 

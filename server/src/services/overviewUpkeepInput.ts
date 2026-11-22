@@ -1,18 +1,16 @@
 /**
- * What the overview step's upkeep reads (`.context/overviews.md`, "The job", parts 2 to 5), SELECT only
- * through the client given: the raw rows of the closing checks due and of an overview's review, which
- * `overviewCases.ts` turns into cases as the eval's sandbox does, every overview's state for the status
+ * What the overview step's upkeep reads (`.context/overviews.md`, "The job", parts 2 to 4), SELECT only
+ * through the client given: the raw rows of an overview's review, which `overviewCases.ts` turns into
+ * a case as the eval's sandbox does, every overview's state for the status
  * machine (`overviewStateOf`, from its row and its active entries), the monthly audit's picks, and
  * each public overview's stands case (its members' usable facts, skipped when nothing they are made of
  * changed, and the last refresh's record).
  */
 import { config } from '../config.js'
 import { utcDay } from '../lib/days.js'
-import type { CloseCase } from './overviewClose.js'
 import type { OverviewDb } from './overviewCandidates.js'
-import { closeCasesOf, entryRole, reviewCaseOf, UNSETTLED_CLOSE_OUTCOMES, type CaseDecision } from './overviewCases.js'
-import { REPORTS_END_EVENT, STANDS_MARKER, STANDS_SIGNATURE, STANDS_UNTIL } from './overviewDecisions.js'
-import { linkStories } from './overviewInput.js'
+import { entryRole, reviewCaseOf } from './overviewCases.js'
+import { STANDS_MARKER, STANDS_SIGNATURE, STANDS_UNTIL } from './overviewDecisions.js'
 import { publicOverviewSql } from './overviewPublicRule.js'
 import type { ReviewCase } from './overviewReview.js'
 import { OVERVIEW_COLUMNS, readableOverviews, readCaseEntries, readOverviewRows, type RawOverview } from './overviewRow.js'
@@ -21,39 +19,6 @@ import { ENTRY_ROLES, type OverviewState } from './overviewTypes.js'
 import type { StandsCase } from './overviewUpkeep.js'
 import { loadMemberFacts } from './passRecords.js'
 import { oneOf } from './storyContextRecords.js'
-
-/**
- * The closing checks due (`closeCasesOf`), from the live link decisions flagged as reporting their
- * overview's end event, their overviews and those overviews' active entries. The SELECT leaves out
- * ahead what `closeCasesOf` would: a story no longer an active published member, an overview not open
- * or quiet, frozen or naming no end event, and a pair already judged.
- */
-export async function pendingClosings(db: OverviewDb, options: Pick<typeof config.overviews, 'candidateEntries'> = config.overviews): Promise<CloseCase[]> {
-  const joins = await db.$queryRaw<CaseDecision[]>`
-    SELECT d.kind::text AS kind, d.outcome, d.overview_id AS "overviewId", d.story_id AS "storyId", (d.undone_at IS NOT NULL) AS undone, d.inputs
-    FROM overview_decisions d
-    JOIN overview_entries e ON e.story_id = d.story_id AND e.overview_id = d.overview_id AND e.status = 'active'
-    JOIN overviews o ON o.id = d.overview_id
-    JOIN stories s ON s.id = d.story_id
-    WHERE d.kind = 'link' AND d.outcome = 'joined' AND d.undone_at IS NULL AND d.inputs->>${REPORTS_END_EVENT} = 'true'
-      AND s.status = 'published' AND o.status IN ('open', 'quiet') AND NOT o.frozen AND o.charter->>'endEvent' IS NOT NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM overview_decisions c
-        WHERE c.kind = 'close' AND c.story_id = d.story_id AND c.overview_id = d.overview_id AND c.outcome <> ALL(${[...UNSETTLED_CLOSE_OUTCOMES]}::text[])
-      )
-  `
-  if (joins.length === 0) return []
-  const overviewIds = [...new Set(joins.flatMap(j => j.overviewId ?? []))]
-  const [overviews, entries, stories] = await Promise.all([
-    readOverviewRows(db, overviewIds),
-    readCaseEntries(db, overviewIds, 'active'),
-    linkStories(
-      db,
-      joins.flatMap(j => j.storyId ?? []),
-    ),
-  ])
-  return closeCasesOf({ joins, closes: [], overviews, entries, stories: new Map(stories.map(s => [s.id, s])) }, options)
-}
 
 /**
  * Every overview with an active entry, oldest founding first, as the status machine reads it

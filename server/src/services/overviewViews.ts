@@ -19,10 +19,11 @@ import { overviewStepOn } from './overviewQueue.js'
 import { anchorOf, type AnchorEntry, recenterLock, signalsSince, type SignalRecord } from './overviewRecenter.js'
 import { signalRecords } from './overviewRecenterInput.js'
 import { lockedOutOf } from './overviewRow.js'
+import type { OverviewScope, OverviewStatus } from './overviewTypes.js'
 import { usable } from './researchPool.js'
 
-/** The decisions the status history lists: the status machine's, end-event closings, an editor's close and freeze. */
-const STATUS_KINDS = ['status', 'close', 'editor_close', 'editor_freeze'] as const
+/** The decisions the status history lists: the status machine's, an editor's close and freeze. */
+const STATUS_KINDS = ['status', 'editor_close', 'editor_freeze'] as const
 
 /** The decisions the re-centering reads: the founding (whose entries anchor the overview) and every applied re-center. */
 const CHARTER_KINDS = ['found', 'recenter', 'editor_recenter'] as const
@@ -128,8 +129,8 @@ export async function overviewsAdminState(): Promise<OverviewsAdminState> {
 }
 
 export interface OverviewListFilters {
-  scope?: 'single' | 'forming' | 'ongoing'
-  status?: 'open' | 'quiet' | 'closing' | 'closed'
+  scope?: OverviewScope
+  status?: OverviewStatus
   frozen?: boolean
   hidden?: boolean
 }
@@ -233,7 +234,6 @@ export async function adminOverview(id: string) {
       ...LIST_SELECT,
       charter: true,
       charterModel: true,
-      closingSince: true,
       closedAt: true,
       entriesAtLastReview: true,
       reviewedAt: true,

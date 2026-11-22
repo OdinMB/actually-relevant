@@ -31,7 +31,6 @@ function answerKey(edit: (k: Record<string, any>) => void = () => undefined): An
     id: 'ebola',
     title: 'Ebola',
     charter: { in: '', out: [], endEvent: '' },
-    closed: { slug: 'b', date: '2026-06-02' },
     figures: [{ key: 'deaths', name: 'Deaths', unit: 'people', definition: 'All', cumulative: true, variants: [] }],
     entries: [
       {
@@ -129,21 +128,6 @@ describe('checkKey', () => {
     expect(checkKey(responding('mass vaccination began'), stories)).toEqual(['response a: quote not found: "mass vaccination began"'])
   })
 
-  it("finds the end's quote in the story that reports it, and reports one it does not state", () => {
-    const ending = (q: string) =>
-      answerKey(k => {
-        k.entries[0].values[0].quote = '4,887 people'
-        k.closed = { slug: 'b', date: '2026-06-02', quote: q }
-      })
-    const stories = byslug(
-      story('a'),
-      story('b', { datePublished: new Date('2026-06-02T10:00:00Z'), summary: 'The outbreak was declared over on Tuesday.' }),
-      story('x'),
-    )
-    expect(checkKey(ending('declared over'), stories)).toEqual([])
-    expect(checkKey(ending('declared finished'), stories)).toEqual(['closed b: quote not found: "declared finished"'])
-  })
-
   it("checks a center's entries, near misses and response against the database, each error naming the center", () => {
     const centered = answerKey(k => {
       k.entries[0].values[0].quote = '4,887 people'
@@ -166,7 +150,7 @@ describe('checkKey', () => {
       'center "Regional Ebola" near miss y: no story with this slug',
       'center "Regional Ebola" response c: quote not found: "border screening"',
     ])
-    expect(summarizeKey(centered, byslug())).toMatchObject({ toReview: 2 })
+    expect(summarizeKey(centered, byslug())).toMatchObject({ toReview: 1 })
   })
 })
 
@@ -185,12 +169,10 @@ describe('keySlugs and summarizeKey', () => {
       figures: 1,
       values: 1,
       responses: 0,
-      closed: '2026-06-02',
       withResearchRun: 1,
-      toReview: 1,
+      toReview: 0,
     })
     const reviewed = answerKey(k => {
-      k.closed.reviewed = true
       Object.assign(k, { schemaVersion: 2, responses: [{ date: '2026-06-02', what: 'Vaccination', slug: 'a', quote: '4,887', reviewed: true }] })
     })
     expect(summarizeKey(reviewed, byslug())).toMatchObject({ responses: 1, toReview: 0 })

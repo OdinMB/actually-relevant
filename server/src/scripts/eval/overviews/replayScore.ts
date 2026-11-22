@@ -1,10 +1,7 @@
 /**
- * The `closure` and `replay` bars (`.context/model-eval.md`, "Overview evals"; plan "Evals and bars"),
- * scored on the sandbox's replay of the whole module per development (`replay.ts`): linking and the
- * upkeep day by day. `closure`: no premature closure at an end event (before the key's end, of a
- * development the key says is open: Uganda's end for Congo's Ebola, or of one whose key names no end
- * event, which ends by fading), and the developments whose end our stories report closed within 14 days of it (a rate over a handful of developments, so it is
- * reported for the owner below `MIN_RATE_SAMPLE` judgments). `replay`: the linking bars on the end state, the
+ * The `replay` bars (`.context/model-eval.md`, "Overview evals"; plan "Evals and bars"), scored on the
+ * sandbox's replay of the whole module per development (`replay.ts`): linking and the upkeep day by
+ * day. The linking bars on the end state, the
  * three checkpoints of each development (at a third, two thirds and the last of its must entries)
  * with its overview's status, scope, members and stands, the share of checkpoints with enough
  * offerable facts for the stands, how often each safeguard fired, and the cost per story and per
@@ -14,11 +11,7 @@
  */
 import type { OverviewScope, OverviewStatus } from '../../../services/overviewTypes.js'
 import type { AnswerKey } from './keySchema.js'
-import { bar, mean, rateBar, ratio, scoreLinking, type Bar, type LinkScore, type ReplayRun } from './linkScore.js'
-
-/** Days after the key's end within which the overview must have closed. */
-export const CLOSED_WITHIN_DAYS = 14
-export const CLOSED_BAR = 0.8
+import { bar, mean, ratio, scoreLinking, type Bar, type LinkScore, type ReplayRun } from './linkScore.js'
 
 export const CHECKPOINTS = ['third', 'two-thirds', 'end'] as const
 export type CheckpointName = (typeof CHECKPOINTS)[number]
@@ -56,15 +49,6 @@ export interface CheckpointState {
   stands: { sentences: number; doing: number } | null
 }
 
-/** An overview's closure in a replay. */
-export interface Closure {
-  overviewId: string
-  /** The development it stands for, or null. */
-  development: string | null
-  reason: 'end_event' | 'faded'
-  day: string
-}
-
 /** An applied automated re-center in a replay: its overview, its day and the development it stood for then, and the stories it joined, by slug. */
 export interface ReplayRecenter {
   overviewId: string
@@ -78,29 +62,18 @@ export interface ReplayRecenter {
 
 export interface ReplayRunResult extends ReplayRun {
   checkpoints: CheckpointState[]
-  closures: Closure[]
   recenters: ReplayRecenter[]
   /** Overviews founded by two center entries of one key (not two base entries): a split, for the owner, never a right founding. */
   splits: string[]
-  /** Each safeguard's firings: refused links and foundings, closings refused or cancelled, review actions, bursts. */
+  /** Each safeguard's firings: refused links and foundings, review actions, bursts, re-center attempts. */
   safeguards: Record<string, number>
   costUsd: number
   /** Overviews founded. */
   founded: number
 }
 
-export interface ClosureRunScore {
-  run: number
-  premature: string[]
-  /** Developments whose end our stories report, and those closed in time. */
-  closable: number
-  closedInTime: number
-}
-
 export interface ReplayScore {
   link: LinkScore
-  closure: Bar[]
-  closureRuns: ClosureRunScore[]
   /** Checkpoints with at least `minStandsFacts` offerable facts, of all checkpoints, per run mean. */
   evidenceShare: number | null
   /** Safeguard firings per run, averaged. */
@@ -157,28 +130,6 @@ export function scoreReplayRecenters(keys: readonly AnswerKey[], runs: readonly 
   }
 }
 
-const dayAfter = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
-
-export function scoreClosures(keys: readonly AnswerKey[], r: ReplayRunResult): ClosureRunScore {
-  const byKey = new Map(keys.map(k => [k.id, k]))
-  const premature: string[] = []
-  for (const c of r.closures) {
-    if (c.reason !== 'end_event' || !c.development) continue
-    const k = byKey.get(c.development)
-    if (k?.charter.endEvent === null) premature.push(`${c.development} closed at an end event on ${c.day}, but it has none in the key: it ends by fading`)
-    else if (!k?.closed) premature.push(`${c.development} closed on ${c.day}, still open in the key`)
-    else if (c.day < k.closed.date) premature.push(`${c.development} closed on ${c.day}, before its end on ${k.closed.date}`)
-  }
-  // A development with no end event ends by fading: no end-event closure is owed it
-  const closable = keys.filter(k => k.closed?.slug && k.charter.endEvent !== null)
-  const closedInTime = closable.filter(k =>
-    r.closures.some(
-      c => c.reason === 'end_event' && c.development === k.id && c.day >= k.closed!.date && c.day <= dayAfter(k.closed!.date, CLOSED_WITHIN_DAYS),
-    ),
-  ).length
-  return { run: r.run, premature, closable: closable.length, closedInTime }
-}
-
 /** The bars over every run, and the replay's figures; `others`, the other half's keys, only judge foundings (`scoreLinkRun`). */
 export function scoreReplay(
   keys: readonly AnswerKey[],
@@ -187,22 +138,11 @@ export function scoreReplay(
   stories: number,
   others: readonly AnswerKey[] = [],
 ): ReplayScore {
-  const closureRuns = runs.map(r => scoreClosures(keys, r))
   const names = [...new Set(runs.flatMap(r => Object.keys(r.safeguards)))].sort()
   const totalUsd = runs.reduce((s, r) => s + r.costUsd, 0)
   const founded = runs.reduce((s, r) => s + r.founded, 0)
   return {
     link: scoreLinking(keys, runs, new Map(), others),
-    closure: [
-      bar('premature closures', mean(closureRuns.map(c => c.premature.length)), 0, 'atMost'),
-      rateBar(
-        `closed within ${CLOSED_WITHIN_DAYS} days of the end`,
-        mean(closureRuns.map(c => ratio(c.closedInTime, c.closable))),
-        CLOSED_BAR,
-        closureRuns.reduce((s, c) => s + c.closable, 0),
-      ),
-    ],
-    closureRuns,
     evidenceShare: mean(runs.map(r => ratio(r.checkpoints.filter(c => c.offerable >= minStandsFacts).length, r.checkpoints.length))),
     safeguards: Object.fromEntries(names.map(n => [n, runs.reduce((s, r) => s + (r.safeguards[n] ?? 0), 0) / Math.max(1, runs.length)])),
     costPerStoryUsd: stories === 0 || runs.length === 0 ? null : totalUsd / (stories * runs.length),

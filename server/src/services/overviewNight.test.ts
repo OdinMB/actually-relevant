@@ -43,7 +43,6 @@ function deps(owed: OwedSlices) {
     foundCheck: vi.fn(),
   }
   const upkeep = {
-    closings: async () => [],
     states: async () => [],
     reviewCase: async () => null,
     auditPicks: async () => [],

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { CloseDeps } from '../../../services/overviewClose.js'
 import type { ReviewDeps } from '../../../services/overviewReview.js'
 import { standsFacts, type MemberFact, type StandsDeps } from '../../../services/overviewStands.js'
 import { newOverviewRow } from '../../../services/overviewChanges.js'
@@ -108,7 +107,6 @@ describe('plantedCase', () => {
     id: 'ebola',
     title: 'Ebola in eastern DR Congo',
     charter: { in: 'The outbreak.', out: ['Uganda'], endEvent: 'Declared over.' },
-    closed: null,
     figures: [],
     entries: [
       entry('e1', '2026-05-01', { role: 'turning_point', kind: 'milestone' }),
@@ -152,7 +150,6 @@ describe('checkpointStories', () => {
     id,
     title: id,
     charter: { in: 'In.', out: [], endEvent: 'End.' },
-    closed: null,
     figures: [],
     entries,
     nearMisses: [],
@@ -198,7 +195,6 @@ describe('checkpointStories', () => {
       entries: [entry('w1', '2026-05-05'), entry('w2', '2026-05-05')],
       nearMisses: [],
       responses: [],
-      closed: null,
       reviewed: true,
     }
     // Checkpoints on 2026-05-02, 05-04 and 05-06, as without the center; at the last the newest three are w1, w2 and e6
@@ -295,44 +291,17 @@ describe('the upkeep over the sandbox', () => {
     sandbox.overviews.set(id, o)
     return o
   }
-  /** A join's link decision flagging its story as reporting the end event. */
-  const flag = (sandbox: Sandbox, storyId: string) =>
-    sandbox.decisions.push({
-      id: `link-${storyId}`,
-      kind: 'link',
-      outcome: 'joined',
-      overviewId: 'o1',
-      storyId,
-      inputs: { reportsEndEvent: true },
-      answer: null,
-      model: null,
-      promptVersion: null,
-      confidence: null,
-      costUsd: 0,
-      actor: 'pipeline',
-      undone: false,
-    })
 
-  it("runs production's upkeep on the sandbox: a closing begun, cancelled by the review that detaches its story, and a stands attempt recorded", async () => {
+  it("runs production's upkeep on the sandbox: a review that detaches a story, and a stands attempt recorded", async () => {
     const sandbox = createSandbox()
-    const members = [
-      story('a', '2026-05-01'),
-      story('b', '2026-05-03'),
-      story('c', '2026-05-05'),
-      story('d', '2026-05-07', { title: 'The outbreak is declared over' }),
-    ]
+    const members = [story('a', '2026-05-01'), story('b', '2026-05-03'), story('c', '2026-05-05'), story('d', '2026-05-07')]
     const overview = seed(sandbox, 'Ebola in eastern DR Congo', { in: 'The outbreak.', out: [], endEvent: 'Declared over.' }, members)
-    flag(sandbox, 'd')
     const now = new Date('2026-05-07T12:00:00Z')
     const io = sandboxUpkeep(
       sandbox,
       () => [] as MemberFact[],
       () => now,
     )
-    const close: CloseDeps = {
-      close: async () => ({ parsed: { happened: 'yes', quote: 'declared over', reason: 'It says so.' }, costUsd: 0.01, model: 'large' }),
-      closeCheck: async () => ({ parsed: { happened: 'yes', reason: 'It says so.' }, costUsd: 0.01, model: 'large' }),
-    }
     const review: ReviewDeps = {
       review: async input => ({
         parsed: {
@@ -353,14 +322,12 @@ describe('the upkeep over the sandbox', () => {
         throw new Error('no stands are checked from no facts')
       },
     }
-    const tally = await runUpkeep({ ...io, close, review, stands }, { clock: members[3]!.datePublished, now, today: '2026-05-07' })
+    const tally = await runUpkeep({ ...io, review, stands }, { clock: members[3]!.datePublished, now, today: '2026-05-07' })
     expect(tally.errors).toEqual([])
-    expect(tally).toMatchObject({ closingsChecked: 1, closingsBegun: 1, reviews: 1, standsRefreshes: 1, standsWritten: 0, failed: 0 })
+    expect(tally).toMatchObject({ reviews: 1, standsRefreshes: 1, standsWritten: 0, failed: 0 })
     expect(overview.entries.map(e => e.status)).toEqual(['active', 'active', 'active', 'detached'])
     expect(overview).toMatchObject({
       status: 'open',
-      closingSince: null,
-      closingStoryId: null,
       scope: 'ongoing',
       entriesAtLastReview: 3,
       reviewedAt: now,
@@ -369,8 +336,8 @@ describe('the upkeep over the sandbox', () => {
     // Public now, so given its slug, and its last entry follows the entries left
     expect([overview.slug, overview.lastEntryAt]).toEqual(['ebola-in-eastern-dr-congo', members[2]!.datePublished])
     expect(overview.lastSignature).not.toBeNull()
-    expect(Object.fromEntries(io.safeguards())).toEqual({ 'review detached an entry': 1, 'closing cancelled by its review': 1 })
-    expect(sandbox.decisions.map(d => `${d.kind}:${d.outcome}`)).toEqual(['link:joined', 'close:closing', 'review:reviewed', 'status:open'])
+    expect(Object.fromEntries(io.safeguards())).toEqual({ 'review detached an entry': 1 })
+    expect(sandbox.decisions.map(d => `${d.kind}:${d.outcome}`)).toEqual(['review:reviewed'])
   })
 
   it("applies each upkeep write by the lifecycle's rules and counts the safeguards that fired", async () => {
@@ -386,21 +353,8 @@ describe('the upkeep over the sandbox', () => {
     )
     const [state] = await io.states()
     // Only the joins of stories published within the night count toward a burst
-    expect(state).toMatchObject({ id: 'o1', activeEntries: 3, burstJoins: 2, burstAt: null, closureReviewed: false, unpublished: [] })
+    expect(state).toMatchObject({ id: 'o1', activeEntries: 3, burstJoins: 2, burstAt: null, unpublished: [] })
 
-    expect(await io.closings()).toEqual([])
-    flag(sandbox, 'c')
-    expect((await io.closings()).map(x => x.story.id)).toEqual(['c'])
-    const c = { overviewId: 'o1', charter: o.charter, story: members[2]!, entries: [] }
-    await io.applyClosing(c, { outcome: 'failed' } as never)
-    expect((await io.closings()).map(x => x.story.id)).toEqual(['c'])
-    await io.applyClosing(c, { outcome: 'disagreed' } as never)
-    expect(await io.closings()).toEqual([])
-    await io.applyClosing(c, { outcome: 'closing' } as never)
-    expect(o).toMatchObject({ status: 'closing', closingSince: members[2]!.datePublished, closingStoryId: 'c' })
-
-    await io.applyStatus(state!, [{ kind: 'status', from: 'closing', to: 'open', reason: 'closing_cancelled' }], now)
-    expect(o).toMatchObject({ status: 'open', closingSince: null })
     await io.applyStatus(state!, [{ kind: 'status', from: 'open', to: 'quiet', reason: 'quiet' }], now)
     expect(o.status).toBe('quiet')
     await io.applyStatus(state!, [{ kind: 'status', from: 'quiet', to: 'closed', reason: 'faded' }], now)
@@ -413,7 +367,7 @@ describe('the upkeep over the sandbox', () => {
     await io.applyBurst(state!)
     expect(o).toMatchObject({ frozen: true, frozenBy: 'burst', frozenAt: now, joinsCountedFrom: now })
     const review = await io.reviewCase('o1')
-    expect(review).toMatchObject({ frozen: true, closingStoryId: null })
+    expect(review).toMatchObject({ frozen: true })
     expect(review!.entries.map(e => [e.entryId, e.label, e.locked])).toEqual([
       ['entry-1', 'Label a', false],
       ['entry-2', 'Label b', false],
@@ -434,7 +388,6 @@ describe('the upkeep over the sandbox', () => {
       refusals: [{ what: 'charter', reason: 'rewrites IN' }],
       kept: 3,
       scope: 'ongoing',
-      cancelsClosing: false,
       brake: null,
     } as never)
     expect(o).toMatchObject({ title: 'New title', frozen: false, frozenBy: null, scope: 'ongoing', entriesAtLastReview: 3, reviewedAt: now, slug: 'new-title' })
@@ -458,8 +411,6 @@ describe('the upkeep over the sandbox', () => {
     await io.applyAudit(review!, {} as never)
 
     expect(Object.fromEntries(io.safeguards())).toEqual({
-      'closing refused (disagreed)': 1,
-      'closing cancelled by a new entry': 1,
       'burst froze an overview': 1,
       'review relabeled a role': 1,
       'review narrowed the charter': 1,

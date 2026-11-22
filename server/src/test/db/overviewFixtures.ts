@@ -76,7 +76,6 @@ export const reviewCaseOf = ({ overview: o, entries }: Rows): ReviewCase => ({
       role: { role: 'routine', roleKind: null },
       locked: e.locked,
     })),
-  closingStoryId: o.status === 'closing' ? o.closingStoryId : null,
   lockedOut: o.lockedOut,
 })
 

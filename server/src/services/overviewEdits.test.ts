@@ -20,7 +20,7 @@ import {
 } from './overviewChanges.js'
 import { planEdit, planUndo, undoable, type AttachStory, type UndoTarget } from './overviewEdits.js'
 import type { Charter } from './overviewTypes.js'
-import { planBurst, planClosing, planJoin, planReview, planStatus } from './overviewPlans.js'
+import { planBurst, planJoin, planReview, planStatus } from './overviewPlans.js'
 import type { ReviewResult } from './overviewReview.js'
 
 const NOW = new Date('2026-11-18T12:00:00Z')
@@ -94,7 +94,6 @@ const review = (over: Partial<ReviewResult> = {}): ReviewResult => ({
   refusals: [],
   kept: 3,
   scope: 'ongoing',
-  cancelsClosing: false,
   brake: null,
   answer: null,
   model: 'm',
@@ -137,12 +136,12 @@ describe('planEdit', () => {
     expect(refusal(attach(story(), rows({ status: 'closed', closedReason: 'editor' })))).toMatch(/closed: reopen it first/)
   })
 
-  it('detaches an entry as locked, settles the scope and cancels a closing its story began', () => {
-    const at = rows({ scope: 'forming', status: 'closing', closingSince: day(2), closingStoryId: 's2' }, [entry(1), entry(2)])
+  it('detaches an entry as locked and settles the scope and the last entry', () => {
+    const at = rows({ scope: 'forming' }, [entry(1), entry(2)])
     const p = planEdit({ kind: 'detach', overviewId: 'o1', entryId: 'e2' }, at, null, 'e2', ctx())
     const after = applied(at, settle(at, p))
     expect(after.entries[1]).toMatchObject({ status: 'detached', detachedBy: 'ed-1', detachReason: 'editor', detachedAt: NOW, locked: true })
-    expect(after.overview).toMatchObject({ scope: 'single', status: 'open', closingSince: null, closingStoryId: null, lastEntryAt: day(1) })
+    expect(after.overview).toMatchObject({ scope: 'single', status: 'open', lastEntryAt: day(1) })
     expect(refusal(() => planEdit({ kind: 'detach', overviewId: 'o1', entryId: 'e2' }, after, null, 'e2', ctx()))).toMatch(/already detached/)
     expect(refusal(() => planEdit({ kind: 'detach', overviewId: 'o1', entryId: 'x' }, after, null, 'x', ctx()))).toMatch(/not in this overview/)
   })
@@ -179,14 +178,10 @@ describe('planEdit', () => {
       joinsCountedFrom: NOW,
     })
     expect(edit({ kind: 'hide', overviewId: 'o1', hidden: true }).changes[0]!.after).toEqual({ hidden: true })
-    const closing = rows({ status: 'closing', closingSince: day(3), closingStoryId: 's3', closureReviewedAt: day(4) })
-    expect(edit({ kind: 'close', overviewId: 'o1', closed: true }, closing).changes[0]!.after).toEqual({
+    expect(edit({ kind: 'close', overviewId: 'o1', closed: true }).changes[0]!.after).toEqual({
       status: 'closed',
       closedAt: NOW,
       closedReason: 'editor',
-      closingSince: null,
-      closingStoryId: null,
-      closureReviewedAt: null,
     })
     const closed = rows({ status: 'closed', closedAt: day(5), closedReason: 'faded' })
     expect(edit({ kind: 'close', overviewId: 'o1', closed: false }, closed).changes[0]!.after).toEqual({
@@ -250,23 +245,8 @@ describe("planEdit: an editor's re-center", () => {
     expect(applied(at, p).overview).toMatchObject({ charterModel: 'm', charterPromptVersion: 'v', automatedRecenters: 2, frozen: true, status: 'quiet' })
   })
 
-  it('cancels a closing when the end event changes, to none too, logged as an open status decision; an IN-only change keeps it', () => {
-    const closing = rows({ status: 'closing', closingSince: day(3), closingStoryId: 's3', closureReviewedAt: day(4) })
-    const p = recenter(wider, closing)
-    expect(p.changes[0]!.after).toMatchObject({ status: 'open', closingSince: null, closingStoryId: null, closureReviewedAt: null })
-    expect(p.also).toEqual([
-      expect.objectContaining({
-        kind: 'status',
-        outcome: 'open',
-        overviewId: 'o1',
-        storyId: 's3',
-        inputs: { from: 'closing', to: 'open', reason: 'recentered', by: 'editor' },
-        actor: 'ed-1',
-      }),
-    ])
-    const renamed = recenter({ ...charter, endEvent: 'The WHO declares it over' }, closing)
-    expect(renamed.changes[0]!.after).toMatchObject({ status: 'open' })
-    const kept = recenter({ ...charter, in: wider.in }, closing, { title: 'Ebola in Ituri' })
+  it('changes only the charter when the title is kept, logging nothing else', () => {
+    const kept = recenter({ ...charter, in: wider.in }, rows(), { title: 'Ebola in Ituri' })
     expect(kept.changes[0]!.after).toEqual({ charter: { ...charter, in: wider.in }, recenteredAt: NOW, recenteredBy: 'editor' })
     expect(kept.also).toEqual([])
   })
@@ -398,14 +378,8 @@ describe('planUndo', () => {
     expect(refusal(() => planUndo(closed.decision, again, [], ctx(LATER)))).toMatch(/its closure changed after it\. Undo the later change first/)
   })
 
-  it('opens a closing again only while it is the closing the overview is in, and clears a burst freeze only while it stands', () => {
+  it('clears a burst freeze only while it stands', () => {
     const at = rows()
-    const c = { overviewId: 'o1', charter, story: { id: 's3', datePublished: day(3) }, entries: [] } as never
-    const closing = run(at, planClosing(at.overview, c, { outcome: 'closing', answers: {}, model: 'm', promptVersion: 'v', costUsd: 0 } as never, ctx()))
-    expect(closing.rows.overview).toMatchObject({ status: 'closing', closingStoryId: 's3', closingSince: day(3) })
-    const undone = run(closing.rows, planUndo(closing.decision, closing.rows, [], ctx(LATER)))
-    expect(undone.rows.overview).toMatchObject({ status: 'open', closingSince: null, closingStoryId: null })
-
     const burst = run(at, planBurst(at.overview, { burstJoins: 7 }, ctx())!)
     expect(burst.rows.overview).toMatchObject({ frozen: true, frozenBy: 'burst', frozenAt: NOW })
     const cleared = run(burst.rows, planUndo(burst.decision, burst.rows, [], ctx(LATER)))
@@ -454,8 +428,8 @@ describe('planUndo', () => {
     )
   })
 
-  it("undoes an editor's re-center whole, lifting its lock and its closing cancel; refused once its review narrowed or retitled", () => {
-    const at = rows({ status: 'closing', closingSince: day(3), closingStoryId: 's3' }, [entry(1), entry(2), entry(3), entry(4)])
+  it("undoes an editor's re-center whole, lifting its lock; refused once its review narrowed or retitled", () => {
+    const at = rows({}, [entry(1), entry(2), entry(3), entry(4)])
     const done = run(at, recenter(wider, at))
     expect(done.rows.overview).toMatchObject({ recenteredBy: 'editor', recenteredAt: NOW, status: 'open', charter: wider })
     const undo = run(done.rows, planUndo(done.decision, done.rows, [], ctx(LATER)))
@@ -464,9 +438,7 @@ describe('planUndo', () => {
       charter,
       recenteredAt: null,
       recenteredBy: null,
-      status: 'closing',
-      closingSince: day(3),
-      closingStoryId: 's3',
+      status: 'open',
     })
 
     // The queued review detaching an entry leaves it undoable; narrowing or retitling does not

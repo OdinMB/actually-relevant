@@ -130,7 +130,7 @@ export function buildPodcastEpisodeSchema(
 
 /**
  * An ongoing story's page: a collection of our stories on one development, newest first, last
- * changed when its last story, its "Where this stands" or its closing came.
+ * changed when its last story, its "Where this stands" or an editor's Close came.
  */
 export function buildOverviewSchema(
   overview: Pick<PublicOverview, 'slug' | 'title' | 'lastChange' | 'since'> & { entries: Pick<PublicOverviewEntry, 'slug' | 'title'>[] },

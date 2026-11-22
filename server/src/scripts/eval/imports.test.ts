@@ -108,16 +108,15 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   'services/overviewTypes.js': '*',
   'services/overviewCandidates.js': '*',
   'services/overviewInput.js': '*',
-  // Overview upkeep: the stands, closing, review and status steps and the night's order, pure (held below), so the
-  // `stands`, `closure`, `review` and `replay` steps run what the job runs.
+  // Overview upkeep: the stands, review and status steps and the night's order, pure (held below), so the
+  // `stands`, `review` and `replay` steps run what the job runs.
   'services/overviewStands.js': '*',
-  'services/overviewClose.js': '*',
   'services/overviewReview.js': '*',
   'services/overviewStatus.js': '*',
   'services/overviewUpkeep.js': '*',
   // The automated re-center's rules and attempt, pure (held below), so the `recenter` and `replay` steps run what the job runs.
   'services/overviewRecenter.js': '*',
-  // The review, closing and re-center cases from raw rows, the owed-story rule and the night, pure (held below), so the
+  // The review and re-center cases from raw rows, the owed-story rule and the night, pure (held below), so the
   // sandbox and the `replay` step build the cases, retry the stories and run the night as the job does.
   'services/overviewCases.js': '*',
   'services/overviewOwed.js': '*',
@@ -141,7 +140,6 @@ const OVERVIEW_SERVICE_MODULES = [
   'overviewCandidates.ts',
   'overviewInput.ts',
   'overviewStands.ts',
-  'overviewClose.ts',
   'overviewReview.ts',
   'overviewStatus.ts',
   'overviewUpkeep.ts',

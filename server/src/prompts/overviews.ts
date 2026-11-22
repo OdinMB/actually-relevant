@@ -1,29 +1,18 @@
 /**
  * The overview prompts (`.context/overviews.md`). Linking (`services/overviewLink.ts`): the link
  * confirmation, which asks of each candidate overview and each unlinked story near the one being
- * linked whether they are the same development, quoting both sides for the shared cause, place and
- * end, and gives the story's role; the founding draft, which writes a new development's charter and
- * title from two stories; and the founding check, which judges the charter against each story blind
- * to the draft's reasons. Upkeep: "Where this stands" and "What's being done" from the members' checked
- * facts (`overviewStands.ts`), the two calls that must agree an end event happened (`overviewClose.ts`),
- * the demote-only review (`overviewReview.ts`), and the automated re-center's draft and its blind check
+ * linked whether they are the same development, quoting both sides for the shared cause and place
+ * (and the end, when both state one), and gives the story's role; the founding draft, which writes a
+ * new development's charter and title from two stories; and the founding check, which judges the
+ * charter against each story blind to the draft's reasons. Upkeep: "Where this stands" and "What's
+ * being done" from the members' checked facts (`overviewStands.ts`), the demote-only review (`overviewReview.ts`), and the automated re-center's draft and its blind check
  * (`overviewRecenter.ts`). Written under `.context/prompting.md`: role, goal, XML
  * constraint blocks, declarative, format guidance in the schemas (`schemas/overviews.ts`), every stored
  * text escaped behind the untrusted-input line, the call's values last in `<REQUEST>`. Each prompt's
  * version is a hash of it on a fixed input and of its schema.
  */
 import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
-import {
-  closeCheckSchema,
-  closeSchema,
-  foundCheckSchema,
-  foundSchema,
-  linkSchema,
-  recenterCheckSchema,
-  recenterSchema,
-  reviewSchema,
-  standsSchema,
-} from '../schemas/overviews.js'
+import { foundCheckSchema, foundSchema, linkSchema, recenterCheckSchema, recenterSchema, reviewSchema, standsSchema } from '../schemas/overviews.js'
 import type { CandidateOverview, Charter, LinkStory, Role } from '../services/overviewTypes.js'
 import { promptVersionOf } from './promptVersion.js'
 import { escapeXml } from './shared.js'
@@ -43,7 +32,7 @@ const storyBlock = (name: string, s: LinkStory, id?: string) =>
     `</${name}>`,
   ].join('\n')
 
-/** How a charter that names no end event shows it: the development ends when reporting stops (it closes only by fading). */
+/** How a charter that names no end event shows it: the development ends when reporting stops. */
 export const NO_END_EVENT = 'none (this development ends when reporting stops)'
 
 const charterBlock = (c: Charter) =>
@@ -115,16 +104,15 @@ You are the editor who keeps a news site's timelines of ongoing developments. Yo
 </ROLE>
 
 <GOAL>
-For each candidate in <OVERVIEWS> and in <STORIES>, judge whether the story in <STORY> belongs to the same development, quoting for the shared cause, place and end the words of each side that state them; for each overview, say where the story stands against its charter; and give the story's role in the development it belongs to.
+For each candidate in <OVERVIEWS> and in <STORIES>, judge whether the story in <STORY> belongs to the same development, quoting for the shared cause and place the words of each side that state them, and for the shared end too when both sides state one; for each overview, say where the story stands against its charter; and give the story's role in the development it belongs to.
 </GOAL>
 
 <RULES>
 <SAME_DEVELOPMENT>
-Two texts are the same development when all three hold:
+Two texts are the same development when both hold:
 - the same cause: one event, outbreak, conflict, negotiation, disaster or decision process, not merely the same kind of thing;
-- the same place or the same parties, at the scale the development has: a province's outbreak is not the country's other outbreak;
-- the same end: the outcome that would close one would close the other.
-For an overview whose END_EVENT is none, the cause and the place decide: leave the end's quotes empty on both sides.
+- the same place or the same parties, at the scale the development has: a province's outbreak is not the country's other outbreak.
+The end does not decide: most developments have no end a report could date. When both sides state how the development would end, quote that shared end too; otherwise leave the end's quotes empty, and always for an overview whose END_EVENT is none.
 A development's stories may be months apart and report anything about it: a new count, a response, a setback, a decision, its effects elsewhere when the development itself causes them.
 </SAME_DEVELOPMENT>
 <SCOPE>
@@ -139,7 +127,7 @@ For wider or centerMoved, signalQuote is the shortest run of words of the story,
 - A story that mentions the development only as background to another subject is no.
 - An overview belongs only when its charter's IN covers the story; its newest stories show what it has taken so far, never widen it.
 - unsure is for a story the texts genuinely leave open; it is never a polite no.
-- Each quote is the shortest run of words, copied exactly, that states the shared cause, place or end on that side: from the story's title, label or summary; from an overview's TITLE, its charter's IN or its END_EVENT when it names one; from a candidate story's title, label or summary. Never from the facts, never from an OUT entry (OUT names what does not belong), never from an END_EVENT of none, never paraphrased. When a side states none, the quote is empty and the answer cannot be yes; for an overview whose END_EVENT is none, the end's quotes are empty and the cause and the place decide.
+- Each quote is the shortest run of words, copied exactly, that states the shared cause, place or end on that side: from the story's title, label or summary; from an overview's TITLE, its charter's IN or its END_EVENT when it names one; from a candidate story's title, label or summary. Never from the facts, never from an OUT entry (OUT names what does not belong), never from an END_EVENT of none, never paraphrased. When a side states no cause or no place, that quote is empty and the answer cannot be yes; an empty end never stands in the way of yes.
 - reportsEndEvent is true only when the story reports that the overview's END_EVENT has happened, not that it may, is expected or was called for. It is false for an overview whose END_EVENT is none.
 - The story's role is its role in the development it belongs to; when it belongs to none, its role as a story on its own.
 </RULES>
@@ -323,85 +311,6 @@ Cite each fact by its id, exactly as given ("S2F1"). A sentence that cites no fa
 </FORMAT>`
 
 // ---------------------------------------------------------------------------
-// Closing at the end event
-// ---------------------------------------------------------------------------
-
-export interface CloseInput {
-  charter: Charter
-  /** The story the link flagged as reporting the end event. */
-  story: LinkStory
-  /** The development's other newest stories, newest first: titles and days. */
-  entries: { title: string; date: string }[]
-}
-
-/**
- * Cache: off. A development ends rarely, a handful of calls a month. House order: the rules first, the
- * charter and the stories last.
- */
-export function buildClosePrompt(input: CloseInput): string {
-  return `<ROLE>
-You are the editor who decides when a news site's timeline of an ongoing development has reached its end.
-</ROLE>
-
-<GOAL>
-Judge whether the newest story in <STORIES> reports that the development's END_EVENT, in <CHARTER>, has happened.
-</GOAL>
-
-<RULES>
-- yes only when the newest story reports the END_EVENT as having happened: declared, signed, ruled, published. An expectation, a call for it, a step toward it, a forecast or a partial end is no.
-- The event must be this development's, as the charter's IN describes it: the same kind of event elsewhere, for other parties or for anything the OUT list names is no.
-- The other stories show where the development stood before; they never count as the report.
-- Judge the texts as written; what you know from elsewhere does not count.
-</RULES>
-
-<CHARTER>
-The development's charter. ${UNTRUSTED}
-${charterBlock(input.charter)}
-</CHARTER>
-
-<STORIES>
-The development's newest stories, newest first. ${UNTRUSTED}
-${storyBlock('NEWEST', { ...input.story, facts: [] })}
-${input.entries.map(e => `<STORY_TITLE date="${escapeXml(e.date)}">${escapeXml(e.title)}</STORY_TITLE>`).join('\n')}
-</STORIES>`
-}
-
-export interface CloseCheckInput {
-  endEvent: string
-  story: LinkStory
-}
-
-/**
- * Cache: off, as the closing call. A different framing: the end event against the story alone, with
- * neither the charter's other parts nor the timeline, so it judges what the story itself says. House
- * order: the rules first, the event and the story last.
- */
-export function buildCloseCheckPrompt(input: CloseCheckInput): string {
-  return `<ROLE>
-You are a second editor who checks one claim before a news site's timeline closes.
-</ROLE>
-
-<GOAL>
-Judge whether the story in <STORY> reports that the event in <END_EVENT> has happened.
-</GOAL>
-
-<RULES>
-- yes only when the story reports the event as having happened: declared, signed, ruled, published. That it may, is expected, was called for or partly happened is no.
-- A story about the same kind of event somewhere else or for other parties is no.
-- Judge the text as written; what you know from elsewhere does not count.
-</RULES>
-
-<END_EVENT>
-${escapeXml(input.endEvent)}
-</END_EVENT>
-
-<STORY>
-${UNTRUSTED}
-${storyBlock('TEXT', { ...input.story, facts: [] })}
-</STORY>`
-}
-
-// ---------------------------------------------------------------------------
 // Reviews
 // ---------------------------------------------------------------------------
 
@@ -414,7 +323,7 @@ export interface ReviewPromptInput {
 }
 
 /**
- * Cache: off. Reviews are rare (at entry counts, monthly, before a closure, on a burst) and each one's
+ * Cache: off. Reviews are rare (at entry counts, monthly, on a report, a re-center or a burst) and each one's
  * input is long and its own. House order: the rules first, the overview and its entries last.
  */
 export function buildReviewPrompt(input: ReviewPromptInput): string {
@@ -666,11 +575,6 @@ export const OVERVIEW_PROMPT_VERSIONS = {
     }),
     standsSchema,
   ),
-  close: promptVersionOf(
-    buildClosePrompt({ charter: CANONICAL_CHARTER, story: CANONICAL_STORY, entries: [{ title: 'Entry', date: '2026-01-01' }] }),
-    closeSchema,
-  ),
-  closeCheck: promptVersionOf(buildCloseCheckPrompt({ endEvent: 'End.', story: CANONICAL_STORY }), closeCheckSchema),
   review: promptVersionOf(
     buildReviewPrompt({
       title: 'Overview',

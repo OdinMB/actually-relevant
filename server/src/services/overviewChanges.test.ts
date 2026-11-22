@@ -4,7 +4,6 @@ import {
   changesFrom,
   entryChange,
   inverted,
-  leaving,
   merged,
   newOverviewRow,
   notHolding,
@@ -75,13 +74,6 @@ describe('the write model', () => {
     expect(() => applied(null, alone)).toThrow('A plan on no overview creates none')
   })
 
-  it('cancels a closing when its end-event story leaves, and only then', () => {
-    const closing = { status: 'closing' as const, closingStoryId: 's-e3' }
-    expect(leaving(closing, ['s-e3'])).toEqual({ status: 'open', closingSince: null, closingStoryId: null, closureReviewedAt: null })
-    expect(leaving(closing, ['s-e2'])).toEqual({})
-    expect(leaving({ status: 'open', closingStoryId: null }, ['s-e3'])).toEqual({})
-  })
-
   it('knows a write that takes a public link away: hidden, off ongoing, or an entry detached', () => {
     const r = rows()
     expect(removesLink(true, detach(r, 'e1'))).toBe(true)
@@ -93,8 +85,8 @@ describe('the write model', () => {
 
   it('merges the changes of one row: the first before, the last after', () => {
     const r = rows()
-    const first = overviewChange(r.overview, { status: 'closing' })
-    const second = overviewChange({ ...r.overview, status: 'closing' }, { status: 'open', frozen: true })
+    const first = overviewChange(r.overview, { status: 'quiet' })
+    const second = overviewChange({ ...r.overview, status: 'quiet' }, { status: 'open', frozen: true })
     expect(merged([...first, ...second])).toEqual([
       { table: 'overview', id: 'o1', before: { status: 'open', frozen: false }, after: { status: 'open', frozen: true } },
     ])

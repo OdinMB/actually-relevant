@@ -3,7 +3,7 @@
  * file per past development in `keys/`, saying what a perfect ongoing-story system would have done
  * with our published stories. The Zod schema holds the shape and the format rules (in its
  * `.describe()`s, from the drafting brief's "Field rules"); `validateKey` holds the rules across
- * fields. A drafted response or end carries `reviewed: false` until a person has checked it, and
+ * fields. A drafted response or center carries `reviewed: false` until a person has checked it, and
  * the steps that read it refuse while one is left (`awaitingReview`). Every later overview eval
  * scores against these keys. Pure.
  */
@@ -101,19 +101,6 @@ const nearMissSchema = z.object({
   why: text('One line: what makes it look related, and why it must not join.'),
 })
 
-const closedSchema = z
-  .object({
-    slug: z.string().nullable().default(null).describe('The story that reports the end event; null when our stories never report it.'),
-    date: date('When it ended'),
-    quote: z
-      .string()
-      .nullable()
-      .default(null)
-      .describe('The exact words from that story that report the end, so a checker can find them; null without a slug.'),
-    reviewed,
-  })
-  .nullable()
-
 const charterSchema = (endEvent: string) =>
   z.object({
     in: z.string().describe('One or two sentences: what this development is, where, since when, and what kinds of stories belong.'),
@@ -138,7 +125,6 @@ const centerSchema = z.object({
   entries: z.array(entrySchema).default([]).describe('Stories that belong only under this center, in date order; never a base entry.'),
   nearMisses: z.array(nearMissSchema).default([]).describe('Stories a careless re-center would take in but must not, e.g. drought outside the basin.'),
   responses: z.array(responseSchema).default([]).describe('Responses under way under this center, as the base `responses`, at any schemaVersion.'),
-  closed: closedSchema.default(null).describe("The center's end, as the base `closed`; null while open."),
   reviewed,
 })
 
@@ -149,9 +135,6 @@ export const answerKeySchema = z.object({
   id: text('The development\'s id, also the file name (`keys/<id>.json`), e.g. "ebola-drc-2026".'),
   title: text('The development in a few words, e.g. "Ebola outbreak in eastern DR Congo".'),
   charter: charterSchema('The event that would end it (for a closed development, the event that did); null when it has none.'),
-  closed: closedSchema.describe(
-    'Null while the development is still open on 16 November 2026. Only an end event that matches charter.endEvent closes it. When our stories never report the end but it clearly ended, the slug is null and the notes say so.',
-  ),
   figures: z
     .array(figureSchema)
     .default([])
@@ -212,8 +195,6 @@ export function validateKey(key: AnswerKey): string[] {
     if (count < MIN_VALUES_PER_FIGURE) errors.push(`figure ${f} has ${count} values, fewer than ${MIN_VALUES_PER_FIGURE}`)
   }
   for (const n of key.nearMisses) if (entrySlugs.has(n.slug)) errors.push(`${n.slug} is both an entry and a near miss`)
-  if (key.closed && hasText(key.closed.slug) && !entrySlugs.has(key.closed.slug)) errors.push(`closed.slug ${key.closed.slug} is not an entry`)
-  if (key.closed && hasText(key.closed.quote) && !hasText(key.closed.slug)) errors.push('closed.quote is set without closed.slug')
   errors.push(...responseErrors(key, entrySlugs))
   errors.push(...centerErrors(key, entrySlugs))
   return errors
@@ -225,7 +206,7 @@ const sameOut = (a: string, b: string) => a.trim().toLowerCase() === b.trim().to
  * The rules on `centers` (D-RC9): at most `MAX_CENTERS`, in date order, each from after the first base
  * entry; its entries in date order, never a base entry, another center's or its own near miss (a base
  * near miss may become a center entry); the base OUT kept; its responses sourced by a base or center
- * entry with their quotes; its end's slug an entry.
+ * entry with their quotes.
  */
 function centerErrors(key: AnswerKey, baseSlugs: ReadonlySet<string>): string[] {
   const errors: string[] = []
@@ -253,16 +234,14 @@ function centerErrors(key: AnswerKey, baseSlugs: ReadonlySet<string>): string[] 
     for (const n of c.nearMisses) if (own.has(n.slug) || baseSlugs.has(n.slug)) errors.push(`${at}: ${n.slug} is both an entry and a near miss`)
     const sources = new Set([...baseSlugs, ...own])
     errors.push(...sourcedErrors(c.responses, sources).map(e => `${at}: ${e}`))
-    if (c.closed && hasText(c.closed.slug) && !sources.has(c.closed.slug)) errors.push(`${at}: closed.slug ${c.closed.slug} is not an entry`)
   }
   return errors
 }
 
-/** The drafted items of one field a person has not reviewed yet: the responses, the end (0 or 1), or the centers. */
-export function unreviewed(key: AnswerKey, field: 'responses' | 'closed' | 'centers'): number {
+/** The drafted items of one field a person has not reviewed yet: the responses or the centers. */
+export function unreviewed(key: AnswerKey, field: 'responses' | 'centers'): number {
   if (field === 'responses') return key.responses.filter(r => !r.reviewed).length
-  if (field === 'centers') return key.centers.filter(c => !c.reviewed).length
-  return key.closed && !key.closed.reviewed ? 1 : 0
+  return key.centers.filter(c => !c.reviewed).length
 }
 
 /** Each development's center in force on `day`: the newest whose `from` is on or before it; null for the base charter. */
@@ -287,7 +266,7 @@ export const centerSlugs = (key: AnswerKey): string[] => key.centers.flatMap(c =
  * (`key-draft` writes them with `reviewed: false`), so a reading would rest on unchecked key data.
  * Null when nothing is left to review.
  */
-export function awaitingReview(keys: readonly AnswerKey[], field: 'responses' | 'closed' | 'centers'): string | null {
+export function awaitingReview(keys: readonly AnswerKey[], field: 'responses' | 'centers'): string | null {
   const open = keys.flatMap(k => {
     const n = unreviewed(k, field)
     return n > 0 ? [`${k.id}: ${n}`] : []
@@ -296,7 +275,6 @@ export function awaitingReview(keys: readonly AnswerKey[], field: 'responses' | 
   const total = keys.reduce((sum, k) => sum + unreviewed(k, field), 0)
   const names = {
     responses: ['drafted response is', 'drafted responses are'],
-    closed: ['drafted end is', 'drafted ends are'],
     centers: ['drafted center is', 'drafted centers are'],
   }
   const what = names[field][total === 1 ? 0 : 1]

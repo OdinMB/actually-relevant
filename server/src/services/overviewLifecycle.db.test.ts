@@ -9,7 +9,7 @@ import { applyLink, applyStatus } from './overviewLifecycle.js'
 import { linkInOrder, linkStory as linkOne, type LinkDeps, type LinkResult } from './overviewLink.js'
 import { owedStories } from './overviewQueue.js'
 import { nextState } from './overviewStatus.js'
-import { overviewStates, pendingClosings } from './overviewUpkeepInput.js'
+import { overviewStates } from './overviewUpkeepInput.js'
 import type { LinkStory, Shared } from './overviewTypes.js'
 
 const DAY = 86_400_000
@@ -58,7 +58,7 @@ const joinResult = (story: LinkStory, overviewId: string): LinkResult =>
     role: { role: 'turning_point', roleKind: 'spread' },
     join: {
       candidate: { id: overviewId, title: 'Ebola in Ituri', charter, entries: [], ref: 'O1', distance: 0.2, frozen: false },
-      answer: { id: 'O1', belongs: 'yes', ...shared, reportsEndEvent: false, confidence: 0.8 },
+      answer: { id: 'O1', belongs: 'yes', ...shared, reportsEndEvent: false, scope: 'inside', centerMoved: false, signalQuote: '', confidence: 0.8 },
       shared,
       reportsEndEvent: false,
     },
@@ -144,10 +144,12 @@ describeDb('the overview lifecycle', () => {
     expect(inputs.created).toEqual([{ table: 'entry', id: entry.id }])
   })
 
-  it("keeps a join's end-event flag on its link decision, where the closing checks find it", async () => {
+  it("keeps a join's end-event flag on its link decision as linking settled it, though the row's charter names none by the write", async () => {
     const [s, t] = await stories(2)
     const o = await overviewRow()
     await applyLink(joinResult(s!, o.id), false)
+    // An editor's re-center between t's link call and its write: the flag follows the charter the call was shown
+    await prisma.overview.update({ where: { id: o.id }, data: { charter: { ...charter, endEvent: null } } })
     const flagged = joinResult(t!, o.id)
     await applyLink({ ...flagged, join: { ...flagged.join!, reportsEndEvent: true } }, false)
     const decisions = await prisma.overviewDecision.findMany({ where: { kind: 'link' } })
@@ -155,7 +157,6 @@ describeDb('the overview lifecycle', () => {
       [s!.id]: false,
       [t!.id]: true,
     })
-    expect((await pendingClosings(prisma)).map(c => c.story.id)).toEqual([t!.id])
   })
 
   it('holds a story bound for an overview frozen since, and writes nothing for one linked meanwhile', async () => {

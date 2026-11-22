@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import type { AdminOverviewDecision, AdminOverviewDetail, AdminOverviewEntry } from '@shared/types'
 import charterLimits from '@shared/overviewCharterLimits.json'
+import { NO_END_EVENT } from '../../components/admin/overviewLabels'
 import { ApiError } from '../../lib/admin-api'
 import { renderAdminRoutes } from '../../test/admin'
 import OverviewDetailPage from './OverviewDetailPage'
@@ -94,7 +95,6 @@ function detail(over: Partial<AdminOverviewDetail> = {}): AdminOverviewDetail {
     issue: null,
     charter: { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda'], endEvent: 'The ministry declares it over' },
     charterModel: 'gpt-6.1-sol',
-    closingSince: null,
     closedAt: null,
     entriesAtLastReview: 0,
     reviewedAt: null,
@@ -307,7 +307,7 @@ describe('OverviewDetailPage', () => {
       }),
     )
     renderPage()
-    expect(await screen.findByText('No end event: it closes only by fading')).toBeInTheDocument()
+    expect(await screen.findByText(NO_END_EVENT)).toBeInTheDocument()
     expect(screen.getByText(/Automatic re-centers: 2 of 2: only an editor can re-center it now/)).toBeInTheDocument()
     expect(screen.getByText(/No automatic re-center until May 4, 2099, after an editor's re-center/)).toBeInTheDocument()
     // At the limit the signals are still shown, so the editor sees stories pointing past the charter
@@ -340,7 +340,7 @@ describe('OverviewDetailPage', () => {
     fireEvent.change(panel.getByLabelText(/^Out/), { target: { value: 'Ebola in Uganda\n\n Mpox ' } })
     fireEvent.change(panel.getByLabelText('Ends when'), { target: { value: ' ' } })
     expect(panel.getByText(/Name the end event, or tick/)).toBeInTheDocument()
-    fireEvent.click(panel.getByLabelText('No end event: it closes only by fading'))
+    fireEvent.click(panel.getByLabelText(NO_END_EVENT))
     expect(panel.getByLabelText('Ends when')).toBeDisabled()
     // Unconfirmed, it does not save, and says why
     expect(save).toBeDisabled()
