@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LinkResult } from '../../../services/overviewLink.js'
 import type { LinkAnswer } from '../../../schemas/overviews.js'
+import { LABEL_DEVELOPMENTS } from './developmentHalves.js'
 import type { AnswerKey } from './keySchema.js'
 import { diagnoseRun, missesByDevelopment, traceOf, type FoundedOverview, type StoryTrace } from './linkDiagnostics.js'
 import { linkLines } from './linkReport.js'
@@ -144,12 +145,40 @@ describe('diagnoseRun', () => {
 
   it("gives each founded charter with what the keys make of its pair and members, the other half's keys included", () => {
     const [ebola, , strait] = diagnose().charters
-    expect(ebola).toMatchObject({ development: 'ebola', members: { must: 3, optional: 0, nearMisses: 1, other: 0 } })
+    expect(ebola).toMatchObject({ development: 'ebola', members: { right: 3, wrong: 1, ignored: 0, unscored: 0 } })
     expect(strait!.foundedFrom).toEqual([
       { slug: 's1', as: 'entry of strait (other half)' },
       { slug: 'uganda', as: 'near miss of ebola' },
     ])
-    expect(strait!.development).toBeNull()
+    expect(strait).toMatchObject({ development: 'strait', members: { right: 0, wrong: 0, ignored: 0, unscored: 2 } })
+  })
+
+  it("reads an overview mostly of a label key's must entries as that key's, counts its members as the joins bar does, and names the label key", () => {
+    const [label] = LABEL_DEVELOPMENTS
+    const LABEL = key(label!, [
+      ['l1', 'must', 'turning_point', '2026-05-01'],
+      ['l2', 'must', 'routine', '2026-05-02'],
+    ])
+    const members = ['l1', 'l2', 'e1', 'uganda']
+    const d = diagnoseRun({
+      keys: [EBOLA],
+      others: [LABEL],
+      run: 1,
+      overviews: [{ id: 'o9', title: 'The declaration', charter, foundedFrom: ['l1', 'l2'], foundedOn: '2026-05-02', members }],
+      traces: new Map(),
+      roles: new Map(),
+      replayed: new Set(members),
+      neighbourLimit: 40,
+    })
+    expect(d.charters[0]).toMatchObject({
+      development: label,
+      members: { right: 0, wrong: 1, ignored: 0, unscored: 3 },
+      foundedFrom: [
+        { slug: 'l1', as: `entry of ${label} (label key)` },
+        { slug: 'l2', as: `entry of ${label} (label key)` },
+      ],
+    })
+    expect(d.missed.find(m => m.slug === 'e1')).toMatchObject({ cause: 'in another overview' })
   })
 
   it('sums the misses by development and cause over the runs', () => {
@@ -166,6 +195,7 @@ describe('diagnoseRun', () => {
       repeat: 1,
       keys: ['ebola', 'cholera'],
       stories: 9,
+      background: { keys: [], stories: 0 },
       left: [],
       score: scoreLinking([EBOLA, CHOLERA], []),
       endEvents: [],

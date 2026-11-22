@@ -4,12 +4,15 @@
  * development's overview, with why (not replayed, in another overview, no candidate, its development
  * not offered, refused by code with the rule, the founding not agreed, or the model's no or unsure with
  * its confidence and scope; the link answer gives no reason); the roles of found must entries that
- * disagree with the key; and every founded charter. No bars: the owner reads them. Pure.
+ * disagree with the key; and every founded charter. The keys are read as the bars read them
+ * (`linkKeys`): an overview stands for a development of any key, and a must entry is found in an
+ * overview whose key holds it as must. No bars: the owner reads them. Pure.
  */
 import type { LinkResult } from '../../../services/overviewLink.js'
 import type { Charter, FoundingOutcome, LinkOutcome, Role } from '../../../services/overviewTypes.js'
+import { isLabelDevelopment } from './developmentHalves.js'
 import type { AnswerKey } from './keySchema.js'
-import { developmentOf, entryKeysOf, keyIndex } from './linkScore.js'
+import { linkKeys } from './linkScore.js'
 
 /** A story's neighbours as the replay read them: production's (`read`, `near` of them within the distance) and those kept to the replayed stories. */
 export interface NeighbourCount {
@@ -136,13 +139,13 @@ export interface RoleMiss {
 export interface CharterLine {
   id: string
   title: string
-  /** The development it stands for (`developmentOf`), or null. */
+  /** The development, of any key, it stands for (`linkKeys`' `standsFor`), or null. */
   development: string | null
   foundedOn: string
   /** Each founding story with what the keys make of it. */
   foundedFrom: { slug: string; as: string }[]
-  /** Its members against its development: must and optional entries, near misses, and the rest. */
-  members: { must: number; optional: number; nearMisses: number; other: number }
+  /** Its members as the joins bar reads them (`linkKeys`' `verdict`): right, wrong, ignored (optional), and not scored. */
+  members: { right: number; wrong: number; ignored: number; unscored: number }
   charter: Charter
 }
 
@@ -157,7 +160,7 @@ export interface RunDiagnostics {
 
 export interface DiagnoseInput {
   keys: readonly AnswerKey[]
-  /** The other half's keys: they only say what a story outside the half is. */
+  /** Every other key (the other half's, the label keys): they only say what a story outside the half is. */
   others: readonly AnswerKey[]
   run: number
   overviews: readonly FoundedOverview[]
@@ -173,10 +176,12 @@ const pctOf = (v: number | null) => (v === null ? '?' : v.toFixed(2))
 
 /** One run's diagnostics. */
 export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
-  const { entry, nearMiss } = keyIndex(d.keys)
-  const anyEntry = entryKeysOf([...d.keys, ...d.others])
-  const otherIds = new Set(d.others.map(k => k.id))
-  const devOf = new Map(d.overviews.map(o => [o.id, developmentOf(o.members, entry)]))
+  const k = linkKeys(d.keys, d.others)
+  const { entry, nearMiss, entryKeys: anyEntry } = k
+  const otherIds = new Set(d.others.map(x => x.id))
+  const devOf = new Map(d.overviews.map(o => [o.id, k.standsFor(o.members)]))
+  /** Every key a must entry of the half is a must of, the outside keys included: an overview of any of them is its own. */
+  const mustKeys = (slug: string) => k.all.get(slug)?.musts ?? new Map<string, Role['role']>()
   const overviewOf = new Map<string, FoundedOverview>()
   for (const o of d.overviews) for (const m of o.members) overviewOf.set(m, o)
   const titled = (id: string) => {
@@ -187,8 +192,8 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
   const what = (slug: string): string => {
     const e = entry.get(slug)
     if (e) return `${e.join} entry of ${e.join === 'must' ? [...e.musts.keys()].join(' and ') : e.key}`
-    const outside = [...(anyEntry.get(slug) ?? [])].filter(k => otherIds.has(k))
-    if (outside.length > 0) return `entry of ${outside.join(', ')} (other half)`
+    const outside = [...(anyEntry.get(slug) ?? [])].filter(id => otherIds.has(id))
+    if (outside.length > 0) return `entry of ${outside.map(id => `${id} (${isLabelDevelopment(id) ? 'label key' : 'other half'})`).join(', ')}`
     const near = nearMiss.get(slug)
     return near ? `near miss of ${near.join(', ')}` : 'in no key'
   }
@@ -219,8 +224,8 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
     const t = d.traces.get(slug)
     const date = t?.date ?? dateOf.get(slug) ?? ''
     const miss = (cause: MissCause, detail: string) => missed.push({ slug, key: [...e.musts.keys()].join(' or '), date, cause, detail })
-    /** Whether an overview stands for one of the story's developments (a must of two keys has two). */
-    const isOurs = (overviewId: string) => e.musts.has(devOf.get(overviewId) ?? '')
+    /** Whether an overview stands for one of the story's developments (a must of two keys has two, an outside key's among them). */
+    const isOurs = (overviewId: string) => mustKeys(slug).has(devOf.get(overviewId) ?? '')
     const placedIn = overviewOf.get(slug)
     if (placedIn && isOurs(placedIn.id)) continue
     if (placedIn) {
@@ -250,7 +255,10 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
       miss('no candidate', `${neighbourText(t.neighbours) || 'no neighbour'}${when(e.key, t.date)}`)
       continue
     }
-    const ours = [...t.overviews.filter(c => isOurs(c.id)), ...t.partners.filter(c => [...e.musts.keys()].some(k => anyEntry.get(c.id)?.has(k) ?? false))]
+    const ours = [
+      ...t.overviews.filter(c => isOurs(c.id)),
+      ...t.partners.filter(c => [...mustKeys(slug).keys()].some(id => anyEntry.get(c.id)?.has(id) ?? false)),
+    ]
     const at = when(e.key, t.date)
     if (ours.length === 0) {
       miss('not offered', `offered ${offered(t) || 'nothing of it'}; ${neighbourText(t.neighbours)}${at}`)
@@ -274,10 +282,11 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
   const roleMisses: RoleMiss[] = []
   let rolesJudged = 0
   for (const [slug, e] of entry) {
+    if (e.join !== 'must') continue
     const placedIn = overviewOf.get(slug)
     const given = d.roles.get(slug)
     const dev = placedIn ? devOf.get(placedIn.id) : undefined
-    const expected = dev ? e.musts.get(dev) : undefined
+    const expected = dev ? mustKeys(slug).get(dev) : undefined
     if (!dev || !expected || !given) continue
     rolesJudged++
     if (given.role !== expected) roleMisses.push({ slug, key: dev, expected, given })
@@ -285,14 +294,8 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
 
   const charters = d.overviews.map((o): CharterLine => {
     const dev = devOf.get(o.id) ?? null
-    const members = { must: 0, optional: 0, nearMisses: 0, other: 0 }
-    for (const m of o.members) {
-      const e = entry.get(m)
-      if (dev && e?.musts.has(dev)) members.must++
-      else if (dev && e?.optionalIn.has(dev)) members.optional++
-      else if (dev && (nearMiss.get(m) ?? []).includes(dev)) members.nearMisses++
-      else members.other++
-    }
+    const members = { right: 0, wrong: 0, ignored: 0, unscored: 0 }
+    for (const m of o.members) members[k.verdict(m, dev) ?? 'unscored']++
     return {
       id: o.id,
       title: o.title,

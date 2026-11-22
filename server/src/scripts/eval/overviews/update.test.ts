@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildResearchedStory } from '../../../services/researchedStory.js'
 import { researchView, type Article, type ArticleVersionData, type PoolFact, type PoolSource } from '../../../services/researchPool.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
+import { LABEL_DEVELOPMENTS } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
 import { runUpdateStep, type UpdateStepOptions } from './update.js'
 import type { UpdateStory } from './updateFixtures.js'
@@ -162,6 +163,18 @@ describe('runUpdateStep', () => {
     expect(report.deskUsd).toBeCloseTo(2 * 2 * 0.12)
     expect(runs).toEqual([])
     expect(ctx.calls).toEqual([])
+  })
+
+  it('reads no label key: its stories are only there to say what a story is for the linking evals', async () => {
+    const [label] = LABEL_DEVELOPMENTS
+    const labelFile: KeyFile = {
+      file: `${label}.json`,
+      errors: [],
+      key: { ...keyFile.key!, id: label!, entries: keyFile.key!.entries.map(e => ({ ...e, slug: 'label-a' })) },
+    }
+    const { report } = await runUpdateStep(options({ files: [keyFile, labelFile], dryRun: true }))
+    expect(report).toMatchObject({ keys: 1, stories: 1 })
+    expect(report.left.map(l => l.what)).not.toContain('label-a')
   })
 
   it("runs production's article step on each case and judges each served note", async () => {

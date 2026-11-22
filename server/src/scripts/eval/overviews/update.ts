@@ -20,6 +20,7 @@ import type { PlannedCall, SuiteContext } from '../types.js'
 import { estimateCalls, refusal, type CallEstimate, type Ledger } from './callBudget.js'
 import { JUDGE_ARM } from './contextJudge.js'
 import type { Half } from './contextScore.js'
+import { isLabelDevelopment } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
 import { buildNoteJudgePrompt, noteJudgeSchema, type NoteJudgeInput } from './prompts.js'
 import { UPDATE_CASE_KINDS, updateFixtures, updateSlugs, type UpdateCaseKind, type UpdateStory } from './updateFixtures.js'
@@ -105,7 +106,8 @@ const planned = (input: NoteJudgeInput): PlannedCall => ({
 
 /** The step: the fixtures, production's article step on each, then the note judge when its calls fit. */
 export async function runUpdateStep(o: UpdateStepOptions): Promise<{ report: UpdateStepReport; runs: UpdateRun[] }> {
-  const keys = o.files.flatMap(f => (f.key && f.errors.length === 0 ? [f.key] : []))
+  // A label key only says what a story is for the linking evals (ADR-0073): its must entries are no development's here
+  const keys = o.files.flatMap(f => (f.key && f.errors.length === 0 && !isLabelDevelopment(f.key.id) ? [f.key] : []))
   const left: UpdateStepReport['left'] = o.files
     .filter(f => !f.key || f.errors.length > 0)
     .map(f => ({ what: f.file, reason: `${f.errors.length} format errors: fix the key` }))

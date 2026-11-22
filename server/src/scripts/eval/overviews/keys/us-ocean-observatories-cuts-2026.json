@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "us-ocean-observatories-cuts-2026",
+  "title": "US plan to defund and dismantle the Ocean Observatories Initiative",
+  "charter": {
+    "in": "The Trump administration's 2026 plan to defund and dismantle the US Ocean Observatories Initiative (OOI), an ocean-observing network, and what its loss would do to ocean data and to weather, climate and disaster forecasts and warnings.",
+    "out": [
+      "The 2026–27 El Niño itself",
+      "Other US cuts to weather and climate agencies' budgets and staff",
+      "Ocean warming and sea-surface temperature records"
+    ],
+    "endEvent": null
+  },
+  "figures": [],
+  "entries": [
+    {
+      "slug": "trump-plan-would-cut-key-sea-data-raise-forecast-errors",
+      "date": "2026-06-06",
+      "title": "Trump plan would cut key sea data, raise forecast errors",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [],
+      "why": "Reports the plan to dismantle the US ocean-observing network and the forecast errors its loss would bring; El Niño forecasting is one thing it would degrade."
+    },
+    {
+      "slug": "us-cuts-threaten-disaster-warnings-ahead-of-el-nino",
+      "date": "2026-06-24",
+      "title": "US cuts threaten disaster warnings ahead of El Niño",
+      "join": "must",
+      "role": "routine",
+      "kind": null,
+      "values": [],
+      "statuses": [],
+      "why": "An op-ed on the same ocean-observing cuts, framed by the coming El Niño: it repeats the known plan and warns what disaster warnings would lose."
+    }
+  ],
+  "nearMisses": [],
+  "notes": "A label key (ADR-0073): in neither half, never tuned on, replayed as a half or scored. It says only that these two stories are one development, so a founding from them is right and an overview mostly of them stands for this key rather than for the El Niño. Drafted by an AI session (claude-code) on 2026-11-22 from the stories' titles and dates and the lines the El Niño key gives them (its near miss of 6 Jun, its optional entry of 24 Jun, and its OUT entry 'US cuts to ocean observing networks'), not from the stories' texts. It lists only stories another key names: the 6 Jun story stays a near miss of the El Niño key and the 24 Jun story an optional entry of it. No end event: no story reports the plan carried out or dropped, and the development ends by fading. No figures, values or statuses: the 24 Jun story's 63% odds are the El Niño's figure."
+}

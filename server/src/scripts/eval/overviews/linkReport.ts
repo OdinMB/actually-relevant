@@ -84,7 +84,7 @@ function charterLines(r: LinkStepReport): string[] {
     '',
     ...r.diagnostics.flatMap(d =>
       d.charters.flatMap(c => [
-        `- Run ${d.run}: **${cell(c.title)}**, standing for ${c.development ?? 'no development'}; founded ${c.foundedOn} from ${c.foundedFrom.map(f => `${f.slug} (${f.as})`).join(' and ')}; members: ${c.members.must} must, ${c.members.optional} optional, ${c.members.nearMisses} near misses of its development, ${c.members.other} other`,
+        `- Run ${d.run}: **${cell(c.title)}**, standing for ${c.development ?? 'no development'}; founded ${c.foundedOn} from ${c.foundedFrom.map(f => `${f.slug} (${f.as})`).join(' and ')}; members as the joins bar reads them: ${c.members.right} right, ${c.members.wrong} wrong, ${c.members.ignored} optional (ignored), ${c.members.unscored} not scored`,
         `  - IN: ${cell(c.charter.in)}`,
         `  - OUT: ${c.charter.out.length === 0 ? 'none' : c.charter.out.map(cell).join(' · ')}`,
         `  - END_EVENT: ${c.charter.endEvent === null ? 'none (closes by fading)' : cell(c.charter.endEvent)}`,
@@ -94,10 +94,17 @@ function charterLines(r: LinkStepReport): string[] {
   ]
 }
 
+/** What was replayed: the half's stories and, in a judged run, the background stories beside them (`backgroundOf`). */
+function replayed(r: LinkStepReport): string {
+  const half = `${r.keys.length} answer keys (half ${r.half}: ${r.keys.join(', ') || 'none'}${r.limit !== undefined ? `; the first ${r.limit} stories only, a smoke run, not evidence` : ''})`
+  if (r.background.stories === 0) return `${r.stories} stories (entries and near misses) of ${half}`
+  return `${r.stories} stories: ${r.stories - r.background.stories} (entries and near misses) of ${half}, and ${r.background.stories} background stories of ${r.background.keys.join(', ')}, unscored unless they join a judged development's overview`
+}
+
 export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): string[] {
   const shown = (step: OverviewStep) => steps.includes(step)
   return [
-    `**Replay:** ${r.stories} stories (entries and near misses) of ${r.keys.length} answer keys (half ${r.half}: ${r.keys.join(', ') || 'none'}${r.limit !== undefined ? `; the first ${r.limit} stories only, a smoke run, not evidence` : ''}), ${r.repeat} run${r.repeat === 1 ? '' : 's'} through production's linking against the in-memory sandbox, oldest first. Model spend ${usd(r.costUsd)}${r.perStoryUsd !== null ? `, ${usd(r.perStoryUsd)} a story` : ''}.`,
+    `**Replay:** ${replayed(r)}, ${r.repeat} run${r.repeat === 1 ? '' : 's'} through production's linking against the in-memory sandbox, oldest first. Model spend ${usd(r.costUsd)}${r.perStoryUsd !== null ? `, ${usd(r.perStoryUsd)} a story` : ''}.`,
     ...(r.unanswered > 0
       ? [
           `- Calls not made: ${r.unanswered} (past the budget, or not in the cache with --cache-only); a story whose call got no answer is linked as failed, so this run is not the one cached.`,

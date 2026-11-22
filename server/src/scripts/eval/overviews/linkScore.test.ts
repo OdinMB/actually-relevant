@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseOverviewOptions } from '../options.js'
 import type { AnswerKey } from './keySchema.js'
 import { linkLines } from './linkReport.js'
-import { keyIndex, scoreLinking, scoreLinkRun, scoreSignals, sharedMusts, type EndEventVerdict, type ReplayRun } from './linkScore.js'
+import { keyIndex, linkKeys, scoreLinking, scoreLinkRun, scoreSignals, sharedMusts, type EndEventVerdict, type ReplayRun } from './linkScore.js'
 import { createSandbox, owedOf } from './overviewSandbox.js'
 import type { LinkResult } from '../../../services/overviewLink.js'
 import { owedStanding } from '../../../services/overviewOwed.js'
@@ -169,6 +169,51 @@ describe('scoreLinkRun', () => {
     })
   })
 
+  describe('with the keys outside the half (background, label keys)', () => {
+    const iran = key('iran', [
+      ['i1', 'must', 'routine'],
+      ['i2', 'must', 'routine'],
+      ['i3', 'must', 'routine'],
+      ['e3', 'must', 'turning_point'],
+    ])
+    const strait = key('strait', [['s1', 'must', 'routine']])
+
+    it('checks a founding only when one of its stories is a story of the half, so two background stories never found wrongly', () => {
+      const s = scoreLinkRun(
+        KEYS,
+        run([
+          { id: 'o1', members: ['i1', 's1'], foundedFrom: ['i1', 's1'], endEvent: null },
+          { id: 'o2', members: ['i2', 'c1'], foundedFrom: ['i2', 'c1'], endEvent: null },
+        ]),
+        [iran, strait],
+      )
+      expect(s).toMatchObject({ foundings: 2, wrongFoundings: 1 })
+      expect(s.mistakes).toContain('founded from i2 and c1, not two entries of one development')
+    })
+
+    it("counts a background story in a judged development's overview as a wrong join, and keeps the developments to the half's keys", () => {
+      const s = scoreLinkRun(
+        KEYS,
+        run([
+          { id: 'o1', members: ['e1', 'e2', 'i3'], foundedFrom: ['e1', 'e2'], endEvent: null },
+          { id: 'o2', members: ['i1', 'i2'], foundedFrom: ['i1', 'i2'], endEvent: null },
+        ]),
+        [iran],
+      )
+      expect(s).toMatchObject({ right: 2, wrong: 1 })
+      expect(s.mistakes).toEqual(['i3 (background: entry of iran) joined ebola'])
+      expect([...s.developments.keys()]).toEqual(['ebola'])
+    })
+
+    it("finds a must entry of the half in an outside key's overview that holds it as must too, its role judged against that key", () => {
+      const s = scoreLinkRun(KEYS, run([{ id: 'o1', members: ['i1', 'i2', 'e3'], foundedFrom: ['i1', 'i2'], endEvent: null }], [['e3', 'turning_point']]), [
+        iran,
+      ])
+      expect(s).toMatchObject({ right: 1, wrong: 0, found: 1, rolesJudged: 1, rolesAgreeing: 1 })
+      expect(s.developments.size).toBe(0)
+    })
+  })
+
   it("keeps a must over another key's optional, whichever loads last: right in the must's overview, neither right nor wrong in the optional's", () => {
     const war = key('war', [
       ['w1', 'must', 'routine'],
@@ -190,6 +235,64 @@ describe('scoreLinkRun', () => {
       const inStrait = scoreLinkRun(keys, run([{ id: 'o1', members: ['s1', 's2', 'deal'], foundedFrom: ['s1', 's2'], endEvent: null }]))
       expect(inStrait).toMatchObject({ right: 3, wrong: 0, found: 3 })
     }
+  })
+})
+
+describe('linkKeys', () => {
+  const ebola = centered(KEYS[0]!, ['w1'])
+  const cholera = centered(
+    key(
+      'cholera',
+      [
+        ['c1', 'must', 'routine'],
+        ['c2', 'must', 'routine'],
+        ['c3', 'optional', 'routine'],
+      ],
+      ['cnm'],
+    ),
+    ['cw'],
+  )
+  const iran = key('iran', [
+    ['i1', 'must', 'routine'],
+    ['i2', 'must', 'routine'],
+    ['e3', 'must', 'turning_point'],
+    ['e2', 'optional', 'routine'],
+  ])
+  const k = linkKeys([ebola, cholera], [iran])
+
+  it("in a judged development's overview, counts its must entry right, its optional and center entries as ignored, and every other member wrong", () => {
+    const table = ['e1', 'e4', 'w1', 'uganda', 'i1', 'c1', 'c3', 'cnm', 'cw'].map(slug => [slug, k.verdict(slug, 'ebola')])
+    expect(table).toEqual([
+      ['e1', 'right'],
+      ['e4', 'ignored'],
+      ['w1', 'ignored'],
+      ['uganda', 'wrong'],
+      ['i1', 'wrong'],
+      ['c1', 'wrong'],
+      ['c3', 'wrong'],
+      ['cnm', 'wrong'],
+      ['cw', 'wrong'],
+    ])
+  })
+
+  it("in any other overview, scores only the half's must entries: right where its key holds one as must too, ignored as optional, wrong otherwise", () => {
+    const table = ['e3', 'e2', 'e1', 'uganda', 'i1', 'e4'].map(slug => [slug, k.verdict(slug, 'iran')])
+    expect(table).toEqual([
+      ['e3', 'right'],
+      ['e2', 'ignored'],
+      ['e1', 'wrong'],
+      ['uganda', null],
+      ['i1', null],
+      ['e4', null],
+    ])
+    expect(k.verdict('e1', null)).toBe('wrong')
+    expect(k.verdict('i1', null)).toBeNull()
+  })
+
+  it("reads an overview as standing for the key of either half most of whose must entries it holds, and knows the half's stories", () => {
+    expect(k.standsFor(['e1', 'i1', 'i2', 'e3'])).toBe('iran')
+    expect(k.standsFor(['e1', 'e2', 'i1'])).toBe('ebola')
+    expect(['e1', 'e4', 'w1', 'uganda', 'cnm', 'i1'].map(k.judged)).toEqual([true, true, true, true, true, false])
   })
 })
 
@@ -263,6 +366,7 @@ describe('scoreLinking', () => {
       repeat: 1,
       keys: ['ebola'],
       stories: 3,
+      background: { keys: [], stories: 0 },
       left: [],
       score,
       endEvents: [],

@@ -63,7 +63,7 @@ import { KEYS_DIR, readGapKeyFiles, readKeyFiles } from './overviews/keyFiles.js
 import { overviewReportName, renderOverviewReport, type FactCheckReport, type FactSample, type OverviewReportInput } from './overviews/report.js'
 import { runUpdateStep, type UpdateStepOptions } from './overviews/update.js'
 import type { UpdateStory } from './overviews/updateFixtures.js'
-import { runLinkStep } from './overviews/link.js'
+import { LINK_DESK_USD_PER_STORY, linkReplayStories, runLinkStep } from './overviews/link.js'
 import { verdict } from './overviews/linkReport.js'
 import { MEMBERS_PER_CHECKPOINT, passPoolStories, runPassPool } from './overviews/passPool.js'
 import { runReplayStep } from './overviews/replay.js'
@@ -337,6 +337,16 @@ async function main(): Promise<void> {
         const cases = Object.values(report.cases).reduce((a, b) => a + b, 0)
         console.log(
           `update: ${cases} cases from ${report.stories} stories × ${report.repeat} run(s); desk estimate up to ${usd(report.deskUsd ?? 0)} (each case's reserve and the note judge)`,
+        )
+      }
+      if (linking) {
+        const r = linkReplayStories(keyFiles, opts.half)
+        const all = r.slugs.length + r.background.slugs.length
+        const stories = opts.limit !== undefined ? Math.min(opts.limit, all) : all
+        const background =
+          r.background.slugs.length > 0 ? ` and ${r.background.slugs.length} background stories of ${r.background.keys.map(k => k.id).join(', ')}` : ''
+        console.log(
+          `link: ${r.slugs.length} stories of the half's ${r.keys.length} keys${background}; ${stories} replayed × ${opts.repeat} run(s); desk estimate about ${usd(stories * opts.repeat * LINK_DESK_USD_PER_STORY)} at ${usd(LINK_DESK_USD_PER_STORY)} a story and run (the 2026-11-19 paid run's, foundings and the end-event judge included)`,
         )
       }
       if (runs('pass-pool')) {

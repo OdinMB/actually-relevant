@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "un-pandemic-declaration-2026",
+  "title": "UN political declaration on pandemic prevention, preparedness and response",
+  "charter": {
+    "in": "The UN General Assembly's political declaration on pandemic prevention, preparedness and response, a nonbinding UN instrument separate from the WHO Pandemic Agreement: the disputes over its text around the September 2026 high-level meeting, the US objection to it, and its adoption.",
+    "out": [
+      "The WHO Pandemic Agreement's PABS annex negotiations",
+      "The WHO Pandemic Agreement itself and its adoption",
+      "WHO preparedness and surveillance initiatives (24-hour detection target, Pandemic Fund, BioHub)",
+      "Outbreaks themselves and general warnings about outbreak risk"
+    ],
+    "endEvent": "The General Assembly adopts the declaration."
+  },
+  "figures": [],
+  "entries": [
+    {
+      "slug": "us-blocks-un-pledge-on-future-outbreak-response",
+      "date": "2026-09-29",
+      "title": "US blocks UN pledge on future outbreak response",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "setback",
+      "values": [],
+      "statuses": [],
+      "why": "The US blocks the UN political declaration on outbreak response, in disputes over sharing benefits and fair vaccine access: a setback for the declaration."
+    },
+    {
+      "slug": "un-members-renew-pledges-to-stop-future-outbreaks",
+      "date": "2026-10-13",
+      "title": "UN members renew pledges to stop future outbreaks",
+      "join": "must",
+      "role": "turning_point",
+      "kind": "decision",
+      "values": [],
+      "statuses": [],
+      "why": "The General Assembly adopts its declaration, which the story calls separate from the WHO Pandemic Agreement: the development's end event."
+    }
+  ],
+  "nearMisses": [],
+  "notes": "A label key (ADR-0073): in neither half, never tuned on, replayed as a half or scored. It says only that these two stories are one development, so a founding from them is right and an overview mostly of them stands for this key rather than for the PABS annex. Drafted by an AI session (claude-code) on 2026-11-22 from the stories' titles and dates and the lines the PABS key gives them (its near misses of 29 Sep and 13 Oct, and its OUT entry for this declaration), not from the stories' texts. It lists only stories another key names: both stay near misses of the PABS key. The 13 Oct story reports the General Assembly adopting the declaration. The PABS key's optional entries of 26 Sep ('Leaders renew global pledge to prevent future outbreaks') and 28 Sep (Tedros's speech at the UN high-level meeting) may report the same declaration; they are not listed here until a person has read them. No figures, values or statuses."
+}

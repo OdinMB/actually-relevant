@@ -8,9 +8,9 @@ import { versionedSchemaName } from '../models.js'
 import type { CallRecord } from '../types.js'
 import type { KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
-import { runLinkStep } from './link.js'
+import { backgroundOf, runLinkStep } from './link.js'
 
-const DAYS = { a: 1, b: 2, c: 3 } as const
+const DAYS = { a: 1, b: 2, c: 3, x: 2 } as const
 const story = (slug: keyof typeof DAYS): LinkStory => ({
   id: `id-${slug}`,
   title: `Story ${slug.toUpperCase()}`,
@@ -111,5 +111,49 @@ describe('runLinkStep', () => {
     const link = versionedSchemaName(OVERVIEW_STEPS.link.name, OVERVIEW_STEPS.link.schema)
     expect(new Set(names)).toEqual(new Set([link, `${link}~run2`]))
     expect(report.score.role[0]!.value).toBeNull()
+  })
+
+  it('replays, in a judged run, the background stories of the keys outside the half that share an entry with it, in date order, and in a tuning run none', async () => {
+    const iran: AnswerKey = { ...key, id: 'iran-war-2026', entries: (['c', 'x'] as const).map(slug => ({ ...key.entries[0]!, slug, date: story(slug).date })) }
+    const both: KeyFile[] = [...files, { file: 'iran-war-2026.json', key: iran, errors: [] }]
+    const order: string[] = []
+    const replay = (half: 'judge' | 'tune') =>
+      runLinkStep({
+        ctx: fakeCtx().ctx,
+        files: both,
+        half,
+        stories: async slugs => new Map(slugs.map(s => [s, s in DAYS ? story(s as keyof typeof DAYS) : null])),
+        neighbours: async s => {
+          order.push(s.id)
+          return []
+        },
+        repeat: 1,
+        concurrency: 1,
+        budgetUsd: 1,
+      })
+    const judged = await replay('judge')
+    expect(judged).toMatchObject({ stories: 4, background: { keys: ['iran-war-2026'], stories: 1 } })
+    expect(order).toEqual(['id-a', 'id-b', 'id-x', 'id-c'])
+    expect(await replay('tune')).toMatchObject({ stories: 2, background: { keys: [], stories: 0 } })
+  })
+})
+
+describe('backgroundOf', () => {
+  const withSlugs = (id: string, entries: string[], nearMisses: string[] = []): AnswerKey => ({
+    ...key,
+    id,
+    entries: entries.map(slug => ({ ...key.entries[0]!, slug })),
+    nearMisses: nearMisses.map(slug => ({ slug, date: '2026-05-01', title: slug, why: 'looks alike' })),
+  })
+  const judged = withSlugs('judged', ['a', 'b'], ['n'])
+
+  it('takes the entries, never the near misses, of each outside key whose own entry the replay holds, each slug once and none already replayed', () => {
+    const sharesItsEntry = withSlugs('war', ['n', 'w1', 'w2'], ['w3'])
+    const sharesANearMiss = withSlugs('lookalike', ['l1'], ['a'])
+    const overlaps = withSlugs('strait', ['a', 'w1', 's1'])
+    const label = withSlugs('label', ['a', 'b'])
+    const bg = backgroundOf([judged], [sharesItsEntry, sharesANearMiss, overlaps, label])
+    expect(bg.slugs).toEqual(['w1', 'w2', 's1'])
+    expect(bg.keys.map(k => k.id)).toEqual(['war', 'strait'])
   })
 })

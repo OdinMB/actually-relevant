@@ -3,14 +3,19 @@
  * plan "Evals and bars"): one replay serves all three. The answer keys of a half (`developmentHalves.ts`)
  * give their entries and near misses, replayed together in date order through production's pure
  * linking (`linkInOrder`, `linkStory`) against the in-memory sandbox (`overviewSandbox.ts`), with
- * production's prompts on the eval's cached calls at the step tiers. Neighbours come from production's
- * candidate query, read-only and as of each story's date, kept to the replayed stories; the stories as
- * linking reads them. Then the strong judge compares each development's founded end event with the
- * key's, and `linkScore.ts` scores the bars, and counts how often the link calls flagged the re-center
- * signals: on a key's center entries (replayed too; the bars skip them as optional), on base near
- * misses, and as false shifts; and `linkDiagnostics.ts` says why each missed must entry was missed,
- * which roles disagree and what each founding chartered. Each run k ≥ 2 has its own cache keys. It
- * refuses, before any read or call, while a key of its half holds a center no one has reviewed.
+ * production's prompts on the eval's cached calls at the step tiers. A judged run replays background
+ * beside them (`backgroundOf`, ADR-0073): the entries of each key outside the half that shares an entry
+ * with its replay, so a neighbouring development has its own stories, as in production, and its
+ * look-alikes among the judged stories found no overview it would not. Neighbours come from
+ * production's candidate query, read-only and as of each story's date, kept to the replayed stories;
+ * the stories as linking reads them. Then the strong judge compares each development's founded end
+ * event with the key's, and `linkScore.ts` scores the bars (a background story only where it joins a
+ * judged development's overview), and counts how often the link calls flagged the re-center signals:
+ * on a key's center entries (replayed too; the bars ignore them in their own key's overview), on base
+ * near misses, and as false shifts; and `linkDiagnostics.ts` says why each missed must entry was
+ * missed, which roles disagree and what each founding chartered. Each run k ≥ 2 has its own cache
+ * keys. It refuses, before any read or call, while a key of its half holds a center no one has
+ * reviewed.
  */
 import type { Neighbour } from '../../../services/overviewCandidates.js'
 import { linkInOrder, type LinkDeps, type ModelCall } from '../../../services/overviewLink.js'
@@ -63,9 +68,11 @@ export interface LinkStepReport {
   half: LinkStepOptions['half']
   repeat: number
   limit?: number
-  /** The keys replayed, and the stories (entries and near misses). */
+  /** The keys replayed, and the stories replayed in all (the half's entries and near misses, and the background). */
   keys: string[]
   stories: number
+  /** A judged run's background (`backgroundOf`): the keys outside the half it came from, and its stories among those replayed. */
+  background: { keys: string[]; stories: number }
   left: { what: string; reason: string }[]
   score: LinkScore
   endEvents: { key: string; run: number; verdict: EndEventVerdict; why: string }[]
@@ -96,6 +103,39 @@ export function replaySlugs(keys: readonly AnswerKey[]): string[] {
   return [...new Set(keys.flatMap(k => [...k.entries.map(e => e.slug), ...k.nearMisses.map(n => n.slug), ...centerSlugs(k)]))]
 }
 
+/**
+ * The background of the half's replay (ADR-0073): each key outside the half whose own base entry the
+ * replay holds adds its base entries (must and optional) that the replay does not hold yet, each slug
+ * once; `keys` are those that add one. One hop only, and never a key's near misses or centers: a key
+ * whose near miss is a judged story has none of its own stories there, and adding its entries, or a
+ * background key's near misses, would bring look-alikes in one step further out.
+ */
+export function backgroundOf(keys: readonly AnswerKey[], others: readonly AnswerKey[]): { keys: AnswerKey[]; slugs: string[] } {
+  const replay = new Set(replaySlugs(keys))
+  const slugs = new Set<string>()
+  const from: AnswerKey[] = []
+  for (const k of others) {
+    if (!k.entries.some(e => replay.has(e.slug))) continue
+    const added = k.entries.map(e => e.slug).filter(s => !replay.has(s))
+    if (added.length > 0) from.push(k)
+    for (const s of added) slugs.add(s)
+  }
+  return { keys: from, slugs: [...slugs] }
+}
+
+/** What a linking replay of the half loads: its keys and the others, the half's slugs (`replaySlugs`), and in a judged run its background (`backgroundOf`). */
+export function linkReplayStories(files: readonly KeyFile[], half: LinkStepOptions['half']) {
+  const { keys, others } = keysOfHalf(files, half)
+  const background = half === 'judge' ? backgroundOf(keys, others) : { keys: [], slugs: [] }
+  return { keys, others, slugs: replaySlugs(keys), background }
+}
+
+/**
+ * The linking replay's desk estimate per story and run: the 2026-11-19 paid run of the judged half
+ * spent $0.3047 on 3 runs of 209 stories, the link calls, the foundings and the end-event judge together.
+ */
+export const LINK_DESK_USD_PER_STORY = 0.0005
+
 /** The re-center signals the sandbox's live link decisions kept, by slug. */
 export function sandboxSignals(sandbox: Sandbox, slug: (id: string) => string): StorySignal[] {
   return sandbox.decisions.flatMap(d => {
@@ -105,7 +145,7 @@ export function sandboxSignals(sandbox: Sandbox, slug: (id: string) => string): 
 }
 
 export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
-  const { keys, others } = keysOfHalf(o.files, o.half)
+  const { keys, others, slugs, background } = linkReplayStories(o.files, o.half)
   const left: LinkStepReport['left'] = o.files
     .filter(f => !f.key || f.errors.length > 0)
     .map(f => ({ what: f.file, reason: `${f.errors.length} format errors: fix the key` }))
@@ -118,6 +158,7 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
       repeat: o.repeat,
       keys: keys.map(k => k.id),
       stories: 0,
+      background: { keys: [], stories: 0 },
       left,
       score,
       endEvents: [],
@@ -129,7 +170,8 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
       stopped: refused,
     }
   }
-  const loaded = await o.stories(replaySlugs(keys))
+  // The half's stories and the background together, in one date order: a background story is a neighbour as in production
+  const loaded = await o.stories([...slugs, ...background.slugs])
   const slugOf = new Map<string, string>()
   const stories: LinkStory[] = []
   for (const [slug, story] of loaded) {
@@ -247,6 +289,7 @@ export async function runLinkStep(o: LinkStepOptions): Promise<LinkStepReport> {
     ...(o.limit !== undefined ? { limit: o.limit } : {}),
     keys: keys.map(k => k.id),
     stories: replayed.length,
+    background: { keys: background.keys.map(k => k.id), stories: background.slugs.filter(s => replayedSlugs.has(s)).length },
     left,
     score: scoreLinking(keys, runs, verdicts, others),
     endEvents,

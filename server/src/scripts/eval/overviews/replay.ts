@@ -27,7 +27,7 @@ import { keysOfHalf } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
 import { awaitingReview, type AnswerKey } from './keySchema.js'
 import { evalCalls, replaySlugs } from './link.js'
-import { developmentOf, keyIndex } from './linkScore.js'
+import { linkKeys, type LinkKeys } from './linkScore.js'
 import { entryRole } from '../../../services/overviewCases.js'
 import { activeEntries, createSandbox, owedOf, type Sandbox } from './overviewSandbox.js'
 import { readInputs, recenterInputs } from '../../../services/overviewDecisions.js'
@@ -72,7 +72,7 @@ const nextDay = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) + DAY_M
 function checkpoint(
   sandbox: Sandbox,
   key: AnswerKey,
-  index: ReturnType<typeof keyIndex>,
+  index: LinkKeys,
   slugOf: (id: string) => string,
   at: { at: CheckpointState['at']; day: string },
   offerable: (storyIds: string[]) => number,
@@ -93,14 +93,7 @@ function checkpoint(
     overview: o ? { id: o.id, status: o.status, scope: o.scope, frozen: o.frozen } : null,
     mustByThen: must.size,
     mustFound: best?.found ?? 0,
-    wrongMembers:
-      o &&
-      developmentOf(
-        members.map(e => slugOf(e.storyId)),
-        index.entry,
-      ) === key.id
-        ? members.filter(e => !own.has(slugOf(e.storyId))).length
-        : 0,
+    wrongMembers: o && index.standsFor(members.map(e => slugOf(e.storyId))) === key.id ? members.filter(e => !own.has(slugOf(e.storyId))).length : 0,
     offerable: offerable(members.map(e => e.storyId)),
     stands: o?.stands ? { sentences: o.stands.sentences.length, doing: o.stands.doing.length } : null,
   }
@@ -146,7 +139,8 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
   const factsOf = new Map<string, MemberFact[]>()
   for (const f of await o.facts([...ids])) factsOf.set(f.storyId, [...(factsOf.get(f.storyId) ?? []), f])
   const facts = (storyIds: string[]) => storyIds.flatMap(id => factsOf.get(id) ?? [])
-  const index = keyIndex(keys)
+  // The keys read as the link bars read them (`linkKeys`): an overview stands for a development of any key
+  const index = linkKeys(keys, others)
   const lastDay = replayed
     .map(s => s.date)
     .sort()
@@ -219,10 +213,7 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
       for (const d of sandbox.decisions.slice(written)) {
         const ov = d.kind === 'recenter' && d.outcome === 'recentered' && d.overviewId ? sandbox.overviews.get(d.overviewId) : undefined
         if (!ov) continue
-        const development = developmentOf(
-          activeEntries(ov).map(e => slugOf(e.storyId)),
-          index.entry,
-        )
+        const development = index.standsFor(activeEntries(ov).map(e => slugOf(e.storyId)))
         const joined = (readInputs(recenterInputs, d.inputs)?.joined ?? []).map(slugOf)
         recenters.push({
           overviewId: ov.id,
