@@ -39,9 +39,9 @@ const charterBlock = (c: Charter) =>
   [`<CHARTER>`, tag('IN', c.in), ...c.out.map(o => tag('OUT', o)), tag('END_EVENT', c.endEvent ?? NO_END_EVENT), `</CHARTER>`].join('\n')
 
 const ROLES = `<ROLES>
-- turning_point: the story reports something that changes the development's course or a reader's understanding of what it is: a first, a new country or group affected, a declaration, a decision, a reversal, a deal, a breakdown, a response starting or ending, a trend that breaks or turns. The turn is judged against the development as a whole, not against the story's own news.
-- routine: the story adds to what is already known without changing it: a new figure on a known trend (a higher case count or death toll, another month of drought); a renewed warning, or a forecast restated or revised in degree; another round of the strikes, attacks, fighting, strain or need already under way, even on new targets, in another city or with more dead; a threat, demand, appeal or position restated; a vote, bid or round of talks that leaves things as they were; a turn an earlier story already reported, retold or followed up. A large or round number on a trend already under way is routine.
-A turning point's kind is the one that fits best: setback (things got worse for those affected in a new way, not by more of the same), response (something is being done about it: aid, a vaccine campaign, a ceasefire mission, a court case), spread (it reached a country or group it had not reached before), decision (a body decided something that shapes it), escalation (the conflict or dispute took a new form or drew in a new party: a war begun, a country attacked for the first time, a new kind of weapon), deescalation, money (funding pledged, cut or spent), science (a new finding that changes what is known about it), people (a person's role in it changed), milestone (a formal stage reached: an emergency declared, a deadline passed, an agreement adopted).
+- turning_point: the story changes what a reader should believe about where the development stands: a first, a new country or group affected, a declaration, a decision, a reversal, a marked jump or fall, a deal, a breakdown, a response starting or ending.
+- routine: the story mostly updates counts or repeats the known situation.
+A turning point's kind is the one that fits best: setback (things got worse for those affected), response (something is being done about it: aid, a vaccine campaign, a ceasefire mission, a court case), spread (it reached a new place or group), decision (a body decided something that shapes it), escalation, deescalation, money (funding pledged, cut or spent), science (a finding about it), people (a person's role in it changed), milestone (a threshold crossed or a formal stage reached).
 </ROLES>`
 
 // ---------------------------------------------------------------------------
@@ -153,13 +153,10 @@ You are the editor who starts a news site's timeline of an ongoing development.
 </ROLE>
 
 <GOAL>
-Two of our stories were judged to report on the same development. When they show an ongoing development, as <DEVELOPMENT> says, write its charter and title, so that later stories can be filed under it by the charter alone, and give each story's role in it. When they do not, leave the title and IN empty, and no timeline starts.
+Two of our stories report on the same development. Write the development's charter and title, so that later stories can be filed under it by the charter alone, and give each story's role in it.
 </GOAL>
 
 <REQUIREMENTS>
-<DEVELOPMENT>
-A development goes on over time. The two stories show one when they show it going on (fighting continuing, an outbreak spreading, talks or a dispute under way, a response unfolding, effects still building) or report more than one occurrence of it. Two reports of one event, one study or one announcement, with nothing in either going on after it, are no development: a study published and the reactions to it, a report released, a single speech. Two reports of an opening event that sets something going (a war's first strikes, an outbreak declared, talks launched) do show one.
-</DEVELOPMENT>
 <CHARTER>
 - IN: one or two sentences saying what the development is, where, since when, and what kinds of stories belong: as narrow as the two stories need, never a whole theme or region.
 - OUT: each neighboring development or theme a careless editor would file here, as a short phrase ('cholera in DR Congo', 'Ebola in Uganda').
@@ -203,13 +200,12 @@ You are a second editor who checks a new development's charter before its timeli
 </ROLE>
 
 <GOAL>
-Judge whether each story in <STORIES> belongs to the ongoing development <CHARTER> describes, and, when the charter names an END_EVENT, whether it is a concrete, observable event.
+Judge whether each story in <STORIES> belongs to the development <CHARTER> describes, and, when the charter names an END_EVENT, whether it is a concrete, observable event.
 </GOAL>
 
 <RULES>
 - A story fits when the charter's IN covers what it reports, and nothing in the charter's OUT list does.
 - A story that shares only a place, an agency or a theme with the charter does not fit.
-- A development goes on over time: the two stories show it going on, or report more than one occurrence of it. When both report one event, one study or one announcement and nothing in either goes on after it, neither fits, since two reports of one occurrence are no development. Two reports of an opening event that sets something going (a war's first strikes, an outbreak declared, talks launched) can fit.
 - END_EVENT is concrete when a news report could say it has happened on a given day: a declaration, a signature, a ruling, a publication. A trend, a hope or a state no report could date is not.
 - An END_EVENT of none is no fault: most developments end when reporting stops. Answer none for it.
 - Judge the texts as written; what you know from elsewhere does not count.

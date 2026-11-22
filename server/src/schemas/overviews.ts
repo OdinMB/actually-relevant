@@ -78,14 +78,10 @@ export const foundSchema = z.object({
   title: z
     .string()
     .describe(
-      'The development in a few words, as a reader would name it, e.g. "Ebola outbreak in eastern DR Congo": no date unless it names the development, no period at the end. Empty when the stories show no development, as <DEVELOPMENT> says.',
+      'The development in a few words, as a reader would name it, e.g. "Ebola outbreak in eastern DR Congo": no date unless it names the development, no period at the end.',
     ),
   charter: z.object({
-    in: z
-      .string()
-      .describe(
-        'One or two sentences: what the development is, where, since when, and what kinds of stories belong to it. Empty when the stories show no development, as <DEVELOPMENT> says.',
-      ),
+    in: z.string().describe('One or two sentences: what the development is, where, since when, and what kinds of stories belong to it.'),
     out: z.array(z.string()).describe('Each neighboring development or theme that must stay separate, as a short phrase.'),
     endEvent: z.string().describe('The one concrete, observable event that would end the development, as <END_EVENT> asks. Empty when it has none.'),
   }),
