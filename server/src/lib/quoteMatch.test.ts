@@ -21,16 +21,24 @@ describe('quoteFound', () => {
 describe('quoteNearlyFound', () => {
   const texts = ['The Bundibugyo strain spreads in Ituri, Uganda and Austria.', 'Iran says 100,000 people fled; talks in Doha—a "last chance"—stall.']
 
-  it('finds a quote with small misspellings in long words: up to one edit per 5 letters of the longer word', () => {
+  it('finds a quote with letters left out of long words: up to one per 5 letters of the text word, never the first', () => {
     expect(quoteNearlyFound('Bundibyo strain', texts)).toBe(true)
-    expect(quoteNearlyFound('the bundibugio strain spreads', texts)).toBe(true)
+    expect(quoteNearlyFound('the bundibgyo strain spreads', texts)).toBe(true)
+    expect(quoteNearlyFound('Bndibugyo strain', texts)).toBe(true)
+    expect(quoteNearlyFound('Bundgyo strain', texts)).toBe(false)
+    expect(quoteNearlyFound('undibugyo strain', ['The Bundibugyo; strain'])).toBe(false)
   })
 
-  it('never lets a short word, or a word holding a digit, differ', () => {
+  it('never lets a letter change or be added, nor a short word, or a word holding a digit, differ', () => {
+    expect(quoteNearlyFound('the bundibugio strain spreads', texts)).toBe(false)
+    expect(quoteNearlyFound('Bundibuggyo strain', texts)).toBe(false)
     expect(quoteNearlyFound('Iraq says', texts)).toBe(false)
     expect(quoteNearlyFound('Rwanda and Austria', texts)).toBe(false)
     expect(quoteNearlyFound('Uganda and Australia', texts)).toBe(false)
     expect(quoteNearlyFound('10,000 people fled', texts)).toBe(false)
+    expect(quoteNearlyFound('Zambia', ['Drought in The Gambia'])).toBe(false)
+    expect(quoteNearlyFound('Columbia', ['Floods in Colombia'])).toBe(false)
+    expect(quoteNearlyFound('Colombia', ['Floods in Columbia'])).toBe(false)
   })
 
   it('wants the words in order and next to each other, punctuation and spacing aside', () => {

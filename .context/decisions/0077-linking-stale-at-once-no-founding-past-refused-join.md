@@ -35,8 +35,9 @@ again, it is a conflict, as before. `acceptLink` drops an end whose quote is not
 the stored judgment, its end-event flag not counted) rather than refusing the yes. Cause, place, end
 and signal quotes are found by `quoteNearlyFound`: the exact match, or the quote's words matching a run
 of the text's words where a word holding a digit or under 5 letters matches exactly and a longer word
-may differ by one edit per 5 letters of the longer word; the answer keys and research keep the exact
-match. And when the model said yes to an overview and code refused that yes, no founding partner is
+may be the text's word with up to one letter per 5 left out (never the first; a changed or added letter
+never passes, since that is how Gambia and Zambia or Colombia and Columbia differ); the answer keys and
+research keep the exact match. And when the model said yes to an overview and code refused that yes, no founding partner is
 considered: the story settles `rejected`.
 
 ## Consequences
@@ -46,8 +47,9 @@ considered: the story settles `rejected`.
   the filing bars shows on the next paid run.
 - Production's backfill no longer lets a stale story wait for the rest of a night's slice.
 - Worse: a story that wrongly said yes to a neighbouring overview and was refused can no longer found
-  its own development; a near match could let a wrong join through where a misspelling hides a
-  different word of the same length class. Both are measured on the next paid run and dropped if either
+  its own development; a near match could let a wrong join through where two real words differ only
+  by letters dropped from the longer (Austrian and Australian), and a misspelling that changes a letter
+  still refuses the yes. Both are measured on the next paid run and dropped if either
   costs more than 2 points of its bar.
 - The serial path waits for one link call per stale story; the number of calls is unchanged.
 

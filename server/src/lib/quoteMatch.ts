@@ -36,34 +36,37 @@ const wordsOf = (text: string): string[][] =>
 /** The shortest a word may be and still differ: a shorter one must match exactly. */
 const NEAR_MIN_LETTERS = 5
 
-/** Edit distance between two words, as code points. */
-function editDistance(a: readonly string[], b: readonly string[]): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, j) => j)
-  for (let i = 1; i <= a.length; i++) {
-    const row = [i]
-    for (let j = 1; j <= b.length; j++) row[j] = Math.min(previous[j]! + 1, row[j - 1]! + 1, previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1))
-    previous = row
-  }
-  return previous[b.length]!
+/** Whether `q` is `t` with letters left out: every letter of `q` in `t`, in order. */
+function isSubsequence(q: readonly string[], t: readonly string[]): boolean {
+  let j = 0
+  for (const c of t) if (j < q.length && c === q[j]) j++
+  return j === q.length
 }
 
 /**
  * Whether a quote's word stands for a text's word: the same, or, when neither holds a digit and both
- * have at least 5 letters, within one edit per 5 letters of the longer (Bundibyo for Bundibugyo).
+ * have at least 5 letters, the text's word with letters left out, the first kept, at most one per 5
+ * letters of the text's word (Bundibyo for Bundibugyo). Only deletions: a changed or added letter
+ * never passes, since that is how two real place names differ (Gambia and Zambia, Colombia and Columbia).
  */
 function nearWord(q: readonly string[], t: readonly string[]): boolean {
   if (q.length === t.length && q.every((c, i) => c === t[i])) return true
   if (q.length < NEAR_MIN_LETTERS || t.length < NEAR_MIN_LETTERS || [...q, ...t].some(c => /\p{N}/u.test(c))) return false
-  return editDistance(q, t) <= Math.floor(Math.max(q.length, t.length) / NEAR_MIN_LETTERS)
+  const missing = t.length - q.length
+  return missing > 0 && missing <= Math.floor(t.length / NEAR_MIN_LETTERS) && q[0] === t[0] && isSubsequence(q, t)
 }
 
 /**
  * `quoteFound`, or a word-level near match (`.context/overviews.md`, "How a story is linked", step 3):
  * the quote's words match a run of one text's words one for one, in order, where a word holding a
- * digit and every word under 5 letters match exactly and a longer word may differ by one edit per 5
- * letters of the longer word. So every quote `quoteFound` finds is found, and a model's small
- * misspelling of a long name passes, while Iran and Iraq, Uganda and Rwanda, or 100,000 and 10,000 stay
- * apart. For the link step's quotes; the answer keys and research keep the exact `quoteFound`.
+ * digit and every word under 5 letters match exactly and a longer word may be the text's word with up
+ * to one letter per 5 left out (never the first, never a letter changed or added). So every quote
+ * `quoteFound` finds is found, and a model's dropped letters in a long name pass, while Iran and Iraq,
+ * Uganda and Rwanda, Gambia and Zambia, Colombia and Columbia, or 100,000 and 10,000 stay apart.
+ * Known gap: two real words that differ only by letters left out of the longer still match, such as
+ * Austrian for Australian (two of ten), though not Austria for Australia (two of nine). A misspelling
+ * that changes a letter (Bundibugio) is refused. For the link step's quotes; the answer keys and
+ * research keep the exact `quoteFound`.
  */
 export function quoteNearlyFound(quote: string, texts: readonly string[]): boolean {
   if (quoteFound(quote, texts)) return true
