@@ -278,7 +278,7 @@ npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-22_linking-eval 
   | Step | Bar |
   |---|---|
   | `link` | joins right ≥97%; true joins found ≥85% |
-  | `found` | no wrong founding; no wrong end event where a founding names one |
+  | `found` | wrong foundings at most 10% of those with a judged story, pooled over the runs (2026-11-23; until then none): a pair not of one development, or a repeat of a development whose overview is still open; no wrong end event where a founding names one |
   | `role` | roles agreeing ≥65% (85% until the owner lowered it on 2026-11-23), on the role readers get: the model's answer with code's end-event promotion (`linkStory`), so a wrong `reportsEndEvent` counts as a role miss; an entry the key marks `eitherRole` agrees with any answer, and the per-run table and the role disagreements count those entries, so the share they carry stays visible |
 
   Means over the runs; the report gives each run's counts, the end-event verdicts and every wrong join and founding, and the replay's cost per story. The gate is the judged half, means over 3 runs (plan phase 6).

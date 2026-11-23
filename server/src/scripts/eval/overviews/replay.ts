@@ -236,6 +236,7 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
       members: activeEntries(ov).map(e => slugOf(e.storyId)),
       foundedFrom: [slugOf(ov.foundedFrom[0]), slugOf(ov.foundedFrom[1])] as [string, string],
       endEvent: ov.charter.endEvent,
+      title: ov.title,
     }))
     runs.push({
       run,

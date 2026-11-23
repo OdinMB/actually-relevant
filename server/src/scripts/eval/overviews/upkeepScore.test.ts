@@ -379,6 +379,6 @@ describe('the upkeep report sections', () => {
     const replay = replayLines({ half: 'all', repeat: 1, keys: ['ebola'], stories: 0, runs: [], score: scoreReplay([], [], 3, 0), costUsd: 0, left: [] }).join(
       '\n',
     )
-    expect(replay).toContain('| wrong foundings | at most 0 |')
+    expect(replay).toContain('| wrong foundings (share) | at most 10% |')
   })
 })

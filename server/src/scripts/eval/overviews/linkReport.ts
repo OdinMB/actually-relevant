@@ -10,8 +10,10 @@ import type { LinkStepReport } from './link.js'
 import { MISS_CAUSES, missesByDevelopment } from './linkDiagnostics.js'
 import type { Bar } from './linkScore.js'
 
-const value = (b: Bar) => (b.value === null ? 'n/a' : b.direction === 'atMost' ? b.value.toFixed(2) : `${(b.value * 100).toFixed(1)}%`)
-const target = (b: Bar) => (b.direction === 'atMost' ? `at most ${b.target}` : `at least ${Math.round(b.target * 100)}%`)
+const pct = (v: number) => `${(v * 100).toFixed(1)}%`
+const value = (b: Bar) => (b.value === null ? 'n/a' : b.direction === 'atMost' && !b.share ? b.value.toFixed(2) : pct(b.value))
+const target = (b: Bar) =>
+  b.direction === 'atLeast' ? `at least ${Math.round(b.target * 100)}%` : `at most ${b.share ? `${Math.round(b.target * 100)}%` : b.target}`
 /** A bar's verdict in words: met, not met, for the owner to read (too few judgments), or no data. */
 export const verdict = (b: Bar) => (b.forOwner ? `for the owner: ${b.forOwner}` : b.met === null ? 'no data' : b.met ? 'met' : 'not met')
 /** One table row per bar: its name, target, mean and verdict. */
@@ -140,12 +142,14 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
     '',
     '### Per run',
     '',
-    '| Run | Joins right / wrong | Must entries found | Overviews founded / wrong | Roles agreeing (of them, the key accepting either) |',
-    '|---|---|---|---|---|',
+    '| Run | Joins right / wrong | Must entries found | Overviews founded (with a judged story) | Of those, not one development / repeat (wrong share) | Roles agreeing (of them, the key accepting either) |',
+    '|---|---|---|---|---|---|',
     ...r.score.runs.map(
       s =>
-        `| ${s.run} | ${s.right} / ${s.wrong} | ${s.found} of ${s.must} | ${s.foundings} / ${s.wrongFoundings} | ${s.rolesAgreeing} of ${s.rolesJudged} (${s.rolesEither}) |`,
+        `| ${s.run} | ${s.right} / ${s.wrong} | ${s.found} of ${s.must} | ${s.foundings} (${s.judgedFoundings}) | ${s.wrongFoundings} / ${s.repeatFoundings} (${s.judgedFoundings === 0 ? 'n/a' : pct(s.foundingsWrong / s.judgedFoundings)}) | ${s.rolesAgreeing} of ${s.rolesJudged} (${s.rolesEither}) |`,
     ),
+    '',
+    'A repeat founds a development that already has an open overview in the run (joining that one was the right move); a founding both not of one development and a repeat counts once in the share.',
     '',
     ...(shown('found') && r.endEvents.length > 0
       ? [
@@ -160,6 +164,16 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
     ...signalLines(r),
     ...(r.score.runs.some(s => s.mistakes.length > 0)
       ? ['### Wrong joins and foundings', '', ...r.score.runs.flatMap(s => s.mistakes.map(m => `- Run ${s.run}: ${cell(m)}`)), '']
+      : []),
+    ...(r.score.runs.some(s => s.backgroundRepeats.length > 0)
+      ? [
+          '### Background repeat foundings (unscored; diagnostics)',
+          '',
+          'Foundings of two background stories whose development already had an open overview in the run: no bar counts them.',
+          '',
+          ...r.score.runs.flatMap(s => s.backgroundRepeats.map(m => `- Run ${s.run}: ${cell(m)}`)),
+          '',
+        ]
       : []),
     ...(shown('link') ? missedLines(r) : []),
     ...(shown('role') ? roleLines(r) : []),

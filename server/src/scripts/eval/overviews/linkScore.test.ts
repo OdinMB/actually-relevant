@@ -412,6 +412,134 @@ describe('scoreLinking', () => {
     expect(scoreLinking(KEYS, [roles(2)]).role[0]).toMatchObject({ value: 0.6, target: 0.65, met: false })
   })
 
+  describe('wrong foundings (share)', () => {
+    // Developments d0…d39 of two must entries each, so a run can found many overviews with no repeat
+    const devs = Array.from({ length: 40 }, (_, i) =>
+      key(`d${i}`, [
+        [`d${i}a`, 'must', 'routine'],
+        [`d${i}b`, 'must', 'routine'],
+      ]),
+    )
+    /** `right` rightful foundings of distinct developments, then `wrong` ones from two developments' entries, none a repeat. */
+    const foundings = (right: number, wrong: number): ReplayRun => {
+      const overviews: ReplayRun['overviews'] = []
+      for (let i = 0; i < right; i++) overviews.push({ id: `o${i}`, members: [`d${i}a`, `d${i}b`], foundedFrom: [`d${i}a`, `d${i}b`], endEvent: null })
+      for (let j = 0; j < wrong; j++) {
+        const [a, b] = [`d${right + 2 * j}a`, `d${right + 2 * j + 1}a`]
+        overviews.push({ id: `w${j}`, members: [a, b], foundedFrom: [a, b], endEvent: null })
+      }
+      return run(overviews)
+    }
+    const share = (...runs: ReplayRun[]) => scoreLinking(devs, runs).found[0]!
+
+    it('holds the share to at most 10%, met at exactly 10% and not above', () => {
+      expect(share(foundings(9, 1))).toMatchObject({ name: 'wrong foundings (share)', value: 0.1, target: 0.1, direction: 'atMost', met: true })
+      expect(share(foundings(17, 2))).toMatchObject({ value: 2 / 19, met: false })
+      expect(share(foundings(10, 0))).toMatchObject({ value: 0, met: true })
+    })
+
+    it('pools the runs: every founding weighs the same, so a run with few foundings does not swing the bar', () => {
+      // run 1: 1 of 2 wrong (50%), run 2: 0 of 18: pooled 1 of 20 (5%), where a mean over runs would read 25%
+      expect(share(foundings(1, 1), foundings(18, 0))).toMatchObject({ value: 0.05, met: true })
+      expect(share(foundings(8, 2), foundings(10, 0))).toMatchObject({ value: 0.1, met: true })
+      expect(share(foundings(8, 2), foundings(9, 1))).toMatchObject({ value: 0.15, met: false })
+    })
+
+    it('has no verdict with no founding of a judged story, and leaves background foundings out of the share', () => {
+      expect(share()).toMatchObject({ value: null, met: null })
+      expect(share(run([]))).toMatchObject({ value: null, met: null })
+      const iran = key('iran', [
+        ['i1', 'must', 'routine'],
+        ['i2', 'must', 'routine'],
+      ])
+      const background = run([{ id: 'o1', members: ['i1', 'i2'], foundedFrom: ['i1', 'i2'], endEvent: null }])
+      expect(scoreLinking(KEYS, [background], new Map(), [iran]).found[0]).toMatchObject({ value: null, met: null })
+    })
+
+    it('counts a founding of a development that already has an open overview as a wrong repeat, naming the overview it repeats', () => {
+      const repeated: ReplayRun = run([
+        { id: 'o1', title: 'Ebola in DRC', foundedOn: '2026-05-23', members: ['e1', 'e2'], foundedFrom: ['e1', 'e2'], endEvent: null },
+        { id: 'o2', members: ['c1', 'c2'], foundedFrom: ['c1', 'c2'], endEvent: null },
+        { id: 'o3', title: 'Ebola again', foundedOn: '2026-07-16', members: ['e3', 'e4'], foundedFrom: ['e3', 'e4'], endEvent: null },
+      ])
+      const s = scoreLinkRun(KEYS, repeated)
+      expect(s).toMatchObject({ foundings: 3, judgedFoundings: 3, wrongFoundings: 0, repeatFoundings: 1, foundingsWrong: 1, backgroundRepeats: [] })
+      expect(s.mistakes).toEqual([
+        'founded ebola again from e3 and e4 on 2026-07-16 ("Ebola again", o3), repeating "Ebola in DRC" (o1, founded 2026-05-23 from e1 and e2)',
+      ])
+      expect(s.developments.get('ebola')).toBe('o1')
+      expect(scoreLinking(KEYS, [repeated]).found[0]).toMatchObject({ value: 1 / 3, met: false })
+      const text = linkLines(
+        {
+          half: 'judge',
+          repeat: 1,
+          keys: ['ebola', 'cholera'],
+          stories: 6,
+          background: { keys: [], stories: 0 },
+          left: [],
+          score: scoreLinking(KEYS, [repeated]),
+          endEvents: [],
+          signals: [],
+          diagnostics: [],
+          unanswered: 0,
+          errored: 0,
+          costUsd: 0,
+          perStoryUsd: 0,
+        },
+        ['found'],
+      ).join('\n')
+      expect(text).toContain('| wrong foundings (share) | at most 10% | 33.3% | not met |')
+      expect(text).toContain('| 1 | 5 / 0 | 5 of 5 | 3 (3) | 0 / 1 (33.3%) |')
+      expect(text).toContain('- Run 1: founded ebola again from e3 and e4')
+    })
+
+    it('counts a founding that is both not one development and a repeat once in the share', () => {
+      const both = run([
+        { id: 'o1', members: ['e1', 'e2'], foundedFrom: ['e1', 'e2'], endEvent: null },
+        { id: 'o2', members: ['e3', 'c1'], foundedFrom: ['e3', 'c1'], endEvent: null },
+      ])
+      expect(scoreLinkRun(KEYS, both)).toMatchObject({ judgedFoundings: 2, wrongFoundings: 1, repeatFoundings: 1, foundingsWrong: 1 })
+    })
+
+    it('leaves a repeat of two background stories unscored, listing it as a diagnostic', () => {
+      const iran = key('iran', [
+        ['i1', 'must', 'routine'],
+        ['i2', 'must', 'routine'],
+        ['i3', 'must', 'routine'],
+        ['i4', 'must', 'routine'],
+      ])
+      const twice = run([
+        { id: 'o1', members: ['i1', 'i2'], foundedFrom: ['i1', 'i2'], endEvent: null },
+        { id: 'o2', members: ['i3', 'i4'], foundedFrom: ['i3', 'i4'], endEvent: null },
+      ])
+      const s = scoreLinkRun(KEYS, twice, [iran])
+      expect(s).toMatchObject({ foundings: 2, judgedFoundings: 0, repeatFoundings: 0, foundingsWrong: 0, mistakes: [] })
+      expect(s.backgroundRepeats).toEqual(['founded iran again from i3 and i4 (o2), repeating o1 (founded from i1 and i2)'])
+      const text = linkLines(
+        {
+          half: 'judge',
+          repeat: 1,
+          keys: ['ebola', 'cholera'],
+          stories: 4,
+          background: { keys: ['iran'], stories: 4 },
+          left: [],
+          score: scoreLinking(KEYS, [twice], new Map(), [iran]),
+          endEvents: [],
+          signals: [],
+          diagnostics: [],
+          unanswered: 0,
+          errored: 0,
+          costUsd: 0,
+          perStoryUsd: 0,
+        },
+        ['found'],
+      ).join('\n')
+      expect(text).toContain('### Background repeat foundings (unscored; diagnostics)')
+      expect(text).toContain('- Run 1: founded iran again from i3 and i4 (o2), repeating o1 (founded from i1 and i2)')
+      expect(text).toContain('| wrong foundings (share) | at most 10% | n/a | no data |')
+    })
+  })
+
   it('has no data without runs', () => {
     expect(scoreLinking(KEYS, []).link.map(b => b.met)).toEqual([null, null])
   })

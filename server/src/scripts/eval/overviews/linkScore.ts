@@ -6,8 +6,9 @@
  * every member of a judged development's overview is scored (its own `must` entries right, its
  * `optional` and center entries ignored, every other member wrong: a near miss, another key's entry, a
  * background story) and, in any other overview, only the half's `must` entries (right where that
- * overview's key holds one as `must` too); and recall of the half's `must` entries. `found`: foundings
- * with a story of the half whose pair is not two entries of one development (of any key), and founded
+ * overview's key holds one as `must` too); and recall of the half's `must` entries. `found`: the share
+ * of foundings with a story of the half that are wrong, pooled over runs: a pair not two entries of one
+ * development (of any key), or a repeat of a development whose overview is still open; and founded
  * charters naming an end event other than the key's (the strong judge's verdicts, passed in; one naming
  * none is never wrong). `role`: turning point or routine against the key of the overview a `must` entry
  * was found in, any answer agreeing with an entry that accepts either (`eitherRole`), counted apart so
@@ -17,10 +18,14 @@
 import type { Role } from '../../../services/overviewTypes.js'
 import type { AnswerKey } from './keySchema.js'
 
-/** One replay's end state: each overview's members and founding pair, and each story's stored role. */
+/**
+ * One replay's end state: each overview's members and founding pair, in the order founded (the
+ * sandbox's), and each story's stored role. Its title and founding day, where known, only name it in
+ * the report.
+ */
 export interface ReplayRun {
   run: number
-  overviews: { id: string; members: string[]; foundedFrom: [string, string]; endEvent: string | null }[]
+  overviews: { id: string; members: string[]; foundedFrom: [string, string]; endEvent: string | null; title?: string; foundedOn?: string }[]
   /** Each replayed story's role (from its join, its founding, or the link answer for a story left alone), by slug. */
   roles: Map<string, Role>
 }
@@ -29,8 +34,10 @@ export interface Bar {
   name: string
   value: number | null
   target: number
-  /** `atMost`: the value may not exceed the target (a count of wrong ones). */
+  /** `atMost`: the value may not exceed the target (a count of wrong ones, or a share where `share` is set). */
   direction: 'atLeast' | 'atMost'
+  /** An `atMost` bar on a share rather than a count: the report shows it as a percentage. */
+  share?: boolean
   met: boolean | null
   /** Set when a rate rests on too few judgments to decide: the value is reported, `met` is null, and the owner reads the list and decides. */
   forOwner?: string
@@ -50,9 +57,17 @@ export interface LinkRunScore {
   /** The half's must entries found in an overview whose key holds them as must, of all of them. */
   found: number
   must: number
-  /** Every overview founded; the wrong ones only among those with a story of the half in their pair. */
+  /** Every overview founded, and those with a story of the half in their pair: only these are judged. */
   foundings: number
+  judgedFoundings: number
+  /** Judged foundings whose pair is not two entries of one development. */
   wrongFoundings: number
+  /** Judged foundings of a development that already had an open overview in the run (`scoreLinkRun`). */
+  repeatFoundings: number
+  /** Judged foundings wrong either way, each once: the share's numerator. */
+  foundingsWrong: number
+  /** Repeats founded from two background stories: unscored, listed for the owner. */
+  backgroundRepeats: string[]
   /** Roles agreeing with the key, of must entries found in an overview whose key holds them as must. */
   rolesAgreeing: number
   rolesJudged: number
@@ -267,29 +282,63 @@ function wrongJoin(k: LinkKeys, slug: string, dev: string | null): string {
   return `${slug} (${of.length > 0 ? `background: entry of ${of.join(', ')}` : 'in no key'}) joined ${where}`
 }
 
+/** An overview as the report names it: its title and id, when and from what it was founded. */
+const named = (o: ReplayRun['overviews'][number]): string => {
+  const founded = `founded ${o.foundedOn ? `${o.foundedOn} ` : ''}from ${o.foundedFrom[0]} and ${o.foundedFrom[1]}`
+  return o.title ? `"${o.title}" (${o.id}, ${founded})` : `${o.id} (${founded})`
+}
+
+/** A repeat founding in words: the development, the founding, and the earlier overviews of it it repeats. */
+function repeatLine(dev: string, o: ReplayRun['overviews'][number], earlier: readonly ReplayRun['overviews'][number][]): string {
+  const [a, b] = o.foundedFrom
+  const which = o.title ? `"${o.title}", ${o.id}` : o.id
+  return `founded ${dev} again from ${a} and ${b}${o.foundedOn ? ` on ${o.foundedOn}` : ''} (${which}), repeating ${earlier.map(named).join(' and ')}`
+}
+
 /**
- * One run against the keys (`linkKeys`). A founding is right when its pair are two entries of one
- * development, of any key: two entries of a development the half does not score (two of the strait's
- * stories in the judged half) still found it rightly. A founding of two background stories is not the
- * half's to judge, so only a pair with a story of the half is checked. Roles are judged only on must
- * entries found in an overview whose key holds them as must: a role is an entry's, so a story left
- * alone has none to judge.
+ * One run against the keys (`linkKeys`). A founding is judged only when its pair holds a story of the
+ * half: two background stories are not the half's to judge. A judged founding is wrong when its pair
+ * is not two entries of one development, of any key (two entries of a development the half does not
+ * score, two of the strait's stories in the judged half, still found it rightly), or when it is a
+ * **repeat**: the development it stands for (`standsFor`) already had an overview founded earlier in
+ * the run that is still open, where joining that one was the right move (the owner, 2026-11-23). No
+ * editor acts in a replay, so no overview is closed by one, and one that faded can still be joined
+ * again: every earlier overview of the development counts as open. A founding wrong both ways counts
+ * once; a repeat of two background stories is listed (`backgroundRepeats`), never scored. Roles are
+ * judged only on must entries found in an overview whose key holds them as must: a role is an
+ * entry's, so a story left alone has none to judge.
  */
 export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others: readonly AnswerKey[] = []): LinkRunScore {
   const k = linkKeys(keys, others)
   const placed = new Map<string, string | null>() // slug → its overview's development
   const developments = new Map<string, string>()
+  const opened = new Map<string, ReplayRun['overviews']>() // development → its overviews founded so far, all still open
   const mistakes: string[] = []
-  let wrongFoundings = 0
+  const backgroundRepeats: string[] = []
+  let [judgedFoundings, wrongFoundings, repeatFoundings, foundingsWrong] = [0, 0, 0, 0]
   for (const o of run.overviews) {
     const dev = k.standsFor(o.members)
     if (dev && k.scored.has(dev) && !developments.has(dev)) developments.set(dev, o.id)
     for (const m of o.members) placed.set(m, dev)
     const [a, b] = o.foundedFrom
-    if ((k.judged(a) || k.judged(b)) && !oneDevelopment(k.entryKeys, a, b)) {
+    const earlier = dev ? (opened.get(dev) ?? []) : []
+    if (dev) opened.set(dev, [...earlier, o])
+    const repeat = dev !== null && earlier.length > 0 ? repeatLine(dev, o, earlier) : null
+    if (!k.judged(a) && !k.judged(b)) {
+      if (repeat) backgroundRepeats.push(repeat)
+      continue
+    }
+    judgedFoundings++
+    const notOne = !oneDevelopment(k.entryKeys, a, b)
+    if (notOne) {
       wrongFoundings++
       mistakes.push(`founded from ${a} and ${b}, not two entries of one development`)
     }
+    if (repeat) {
+      repeatFoundings++
+      mistakes.push(repeat)
+    }
+    if (notOne || repeat) foundingsWrong++
   }
   let right = 0
   let wrong = 0
@@ -313,7 +362,11 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others:
     found: found.length,
     must: musts.length,
     foundings: run.overviews.length,
+    judgedFoundings,
     wrongFoundings,
+    repeatFoundings,
+    foundingsWrong,
+    backgroundRepeats,
     rolesAgreeing: judged.filter(slug => roleAgrees(roleWhere(slug)!, run.roles.get(slug)!.role)).length,
     rolesJudged: judged.length,
     rolesEither: judged.filter(slug => roleWhere(slug) === 'either').length,
@@ -338,10 +391,20 @@ export interface LinkScore {
 export type EndEventVerdict = 'right' | 'wrong' | 'none' | 'unjudged' | null
 
 /**
- * The bars over every run: joins right ≥97% and must entries found ≥85% (`link`); no wrong founding,
- * and no wrong end event, judged only where a founding names one (`found`, from `endEvents`:
- * development id → its verdict per run; no verdict while a named one is unjudged); roles agreeing ≥65%
- * (`role`; the owner lowered it from 85% on 2026-11-23: getting roles right matters less).
+ * The most of the judged foundings that may be wrong (not one development, or a repeat), pooled over
+ * the runs: the owner, 2026-11-23, "1 incorrect in 10 might be OK for now. 1 in 4 is not." Until then
+ * the bar was no wrong founding, a count, and repeats went uncounted.
+ */
+export const WRONG_FOUNDINGS_BAR = 0.1
+
+/**
+ * The bars over every run: joins right ≥97% and must entries found ≥85% (`link`); wrong foundings at
+ * most `WRONG_FOUNDINGS_BAR` of the judged ones, and no wrong end event, judged only where a founding
+ * names one (`found`, from `endEvents`: development id → its verdict per run; no verdict while a named
+ * one is unjudged); roles agreeing ≥65% (`role`; the owner lowered it from 85% on 2026-11-23: getting
+ * roles right matters less). Means over runs, but the foundings' share is pooled: a run founds about
+ * ten judged overviews, so one founding moves a run's share by about 10 points, and pooling weighs
+ * every founding the same, as the owner's "1 in 10" reads.
  */
 export function scoreLinking(
   keys: readonly AnswerKey[],
@@ -350,6 +413,7 @@ export function scoreLinking(
   others: readonly AnswerKey[] = [],
 ): LinkScore {
   const scored = runs.map(r => scoreLinkRun(keys, r, others))
+  const sum = (of: (s: LinkRunScore) => number) => scored.reduce((n, s) => n + of(s), 0)
   const verdicts = keys.map(k => endEvents.get(k.id) ?? [])
   const unjudged = verdicts.some(v => v.includes('unjudged'))
   const wrongEnds = runs.length === 0 || unjudged ? null : mean(runs.map((_, i) => verdicts.filter(v => v[i] === 'wrong').length))
@@ -359,7 +423,21 @@ export function scoreLinking(
       bar('joins right', mean(scored.map(s => ratio(s.right, s.right + s.wrong))), 0.97),
       bar('true joins found', mean(scored.map(s => ratio(s.found, s.must))), 0.85),
     ],
-    found: [bar('wrong foundings', mean(scored.map(s => s.wrongFoundings)), 0, 'atMost'), bar('wrong end events (where one is named)', wrongEnds, 0, 'atMost')],
+    found: [
+      {
+        ...bar(
+          'wrong foundings (share)',
+          ratio(
+            sum(s => s.foundingsWrong),
+            sum(s => s.judgedFoundings),
+          ),
+          WRONG_FOUNDINGS_BAR,
+          'atMost',
+        ),
+        share: true,
+      },
+      bar('wrong end events (where one is named)', wrongEnds, 0, 'atMost'),
+    ],
     role: [bar('roles agreeing', mean(scored.map(s => ratio(s.rolesAgreeing, s.rolesJudged))), 0.65)],
   }
 }

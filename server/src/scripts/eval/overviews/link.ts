@@ -387,7 +387,14 @@ export async function scoreSavedReplay(
   ]
   const runs: ReplayRun[] = saved.runs.map(r => ({
     run: r.run,
-    overviews: r.overviews.map(ov => ({ id: ov.id, members: ov.members, foundedFrom: ov.foundedFrom, endEvent: ov.charter.endEvent })),
+    overviews: r.overviews.map(ov => ({
+      id: ov.id,
+      members: ov.members,
+      foundedFrom: ov.foundedFrom,
+      endEvent: ov.charter.endEvent,
+      title: ov.title,
+      foundedOn: ov.foundedOn,
+    })),
     roles: new Map(r.roles),
   }))
   const replayed = new Set(saved.replayed)
