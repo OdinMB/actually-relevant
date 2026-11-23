@@ -65,9 +65,10 @@
       "slug": "us-forecast-raises-chance-of-deficient-indian-monsoon-this-summer",
       "date": "2026-03-13",
       "title": "US forecast raises chance of deficient Indian monsoon this summer",
-      "join": "must",
+      "join": "optional",
       "role": "turning_point",
       "kind": "science",
+      "roleReview": "AI (claude-code), 2026-11-23: was must; NOAA's forecast of a 62% chance of El Niño by June–August, before the development's second occurrence (11 Jun, JMA: El Niño has emerged; the first is 6 Jun, ECMWF: the threshold crossed), which under the owner's rule of 2026-11-23 founds no development and has none to join yet.",
       "values": [
         {
           "figure": "elnino_odds",
@@ -95,9 +96,10 @@
       "slug": "summer-pacific-warming-could-push-2027-to-record-heat",
       "date": "2026-04-14",
       "title": "Summer Pacific warming could push 2027 to record heat",
-      "join": "must",
+      "join": "optional",
       "role": "routine",
       "kind": null,
+      "roleReview": "AI (claude-code), 2026-11-23: was must; an explainer on a forecast 62% chance of El Niño this summer and what a super El Niño could bring, before the development's second occurrence (11 Jun, JMA: El Niño has emerged), which under the owner's rule of 2026-11-23 founds no development and has none to join yet.",
       "values": [
         {
           "figure": "elnino_odds",
@@ -116,9 +118,10 @@
       "slug": "strong-pacific-warming-could-lock-world-past-1-5-c",
       "date": "2026-04-26",
       "title": "Strong Pacific warming could lock world past 1.5°C",
-      "join": "must",
+      "join": "optional",
       "role": "routine",
       "kind": null,
+      "roleReview": "AI (claude-code), 2026-11-23: was must; scientists warning that a forecast strong El Niño could push the world past 1.5°C, before the development's second occurrence (11 Jun, JMA: El Niño has emerged), which under the owner's rule of 2026-11-23 founds no development and has none to join yet.",
       "values": [],
       "statuses": [],
       "why": "Scientists on the forecast strong El Niño pushing the global average past 1.5°C; also cites research on super El Niños in general."
@@ -127,9 +130,10 @@
       "slug": "el-nino-forecast-raises-heat-drought-risk-in-south-asia",
       "date": "2026-05-03",
       "title": "El Niño forecast raises heat, drought risk in South Asia",
-      "join": "must",
+      "join": "optional",
       "role": "routine",
       "kind": null,
+      "roleReview": "AI (claude-code), 2026-11-23: was must; South Asian forecasters expecting El Niño to form during the monsoon, before the development's second occurrence (11 Jun, JMA: El Niño has emerged), which under the owner's rule of 2026-11-23 founds no development and has none to join yet.",
       "values": [],
       "statuses": [],
       "why": "South Asian forecasters' consensus that El Niño will develop during the 2026 monsoon."
@@ -149,9 +153,10 @@
       "slug": "noaa-warns-82-chance-of-southern-africa-drought",
       "date": "2026-05-23",
       "title": "NOAA warns 82% chance of southern Africa drought",
-      "join": "must",
+      "join": "optional",
       "role": "turning_point",
       "kind": "escalation",
+      "roleReview": "AI (claude-code), 2026-11-23: was must; NOAA's forecast of an 82% chance of El Niño by July and the drought risk it brings southern Africa, before the development's second occurrence (11 Jun, JMA: El Niño has emerged), which under the owner's rule of 2026-11-23 founds no development and has none to join yet.",
       "values": [
         {
           "figure": "elnino_odds",
@@ -226,9 +231,10 @@
       "slug": "un-warns-of-hotter-months-crop-and-health-risks",
       "date": "2026-06-06",
       "title": "UN warns of hotter months, crop and health risks",
-      "join": "must",
+      "join": "optional",
       "role": "routine",
       "kind": null,
+      "roleReview": "AI (claude-code), 2026-11-23: was must; the WMO's update that El Niño is likely through November and what it will bring, a forecast in our text, before the development's second occurrence (11 Jun, JMA: El Niño has emerged), which under the owner's rule of 2026-11-23 founds no development and has none to join yet. A duplicate of wmo-warns-of-higher-global-heat-and-extreme-storms (duplicates.json), so it is merged into that story, made optional with it.",
       "values": [],
       "statuses": [
         {
@@ -243,9 +249,10 @@
       "slug": "wmo-warns-of-higher-global-heat-and-extreme-storms",
       "date": "2026-06-06",
       "title": "WMO warns of higher global heat and extreme storms",
-      "join": "must",
+      "join": "optional",
       "role": "routine",
       "kind": null,
+      "roleReview": "AI (claude-code), 2026-11-23: was must; the WMO's update that El Niño is now likely (80–90%) and will bring more heat, rain and drought, a forecast in our text (its source's headline says \"El Niño confirmed\"; ours does not), before the development's second occurrence (11 Jun, JMA: El Niño has emerged), which under the owner's rule of 2026-11-23 founds no development and has none to join yet. Restore must if you read it as the WMO's declaration.",
       "values": [
         {
           "figure": "elnino_odds",
@@ -1197,5 +1204,6 @@
       "reviewed": true
     }
   ],
+  "occurrences": { "first": "pacific-warming-set-to-weaken-india-s-monsoon", "second": "pacific-warming-raises-drought-risk-in-southern-africa" },
   "notes": "BOUNDARY RULE, applied the same way to every candidate. MUST: the 2026–27 El Niño is the story's subject, either the event itself (onset odds, the threshold crossing, agency declarations, strength readings, peak and duration forecasts) or impacts and responses the story presents as this El Niño's, with El Niño the subject of the title or the opening summary sentence (WFP and UN hunger projections, AfDB costs, Goldman Sachs food prices, Peru's anchovy ban, the Panama Canal caps, UNICEF, Papua New Guinea, California, Southeast Asia, the 451,000 heat-death projection). Impact stories that pass this test are must, not optional: an ongoing-story page about this El Niño would carry them. OPTIONAL: (a) the subject is an impact or response with a life of its own, the story names this El Niño as a main driver, but the cause is shared with land clearing or long-term warming (Indonesia's 2026 fire season, 6 stories; India's monsoon-shortfall plan; Brazil's wildfire budget; Indonesia's peat food estates; rice yields; a disaster-finance commentary); or (b) the story is about something else but carries a real update on the event (a science roundup, an ocean-monitoring op-ed with NOAA's confirmation and 63% odds, a global sea-surface outlook framed on the forming El Niño, a coral-trend feature that opens on this event, the WMO climate-state update titled on El Niño). OUT (near misses): El Niño named only as one factor or a future risk in stories about temperature, sea-surface or ocean-heat records, the energy imbalance, deforestation, heat, wildfires in general or war-driven food crises; research on El Niño in general; the 2023–24 El Niño; the 2025 La Niña. The 'El Niño' title label is not decisive: three labelled stories are near misses (general research) and two are optional. Same-day duplicates (6 Jun WMO, 1 Aug WMO, 6/7 Aug WFP) are all entries; at most one of each set is a turning point.\n\nVALUES. Taken only from title, summary, relevance reasons and antifactors, as the format lists (no entry with a value has research paragraphs). The pull quotes state four more numbers, left out for that reason: NOAA's 96% for December 2026–February 2027 (23 May), PAGASA's 81% chance of 'very strong' and 97% chance of persisting into the first half of 2027 (2 Sep), and WMO's near-100% persistence through February 2027 (9 Oct); an evaluator should not penalize a system that extracts them. Ranges are recorded as their lower bound with approx at_least (80–90% gives 80; BMKG's 50–60% gives 50). Forecast probabilities are dated to the story. The 1 Aug monthly Niño 3.4 values are dated to the month's last day (April 0.5°C on 2026-04-30, June 1.6°C on 2026-06-30). Only three entries state an observed Niño 3.4 anomaly (6 Jun about 1°C, 1 Aug 0.5 then 1.6°C, 22 Sep 3.05°C); forecast peaks and 'in places', 'parts of the Pacific' and subsurface readings are matches false. The 22 Sep 3.05°C is called 'the Pacific temperature anomaly' without naming the index, and its antifactors warn that raw and ONI baselines differ: kept as matching, but uncertain. Not values: Trenberth's 'above 2 degrees Celsius' (21 Jun) defines very strong, and the 9 Oct 'previous 2.6°C record' belongs to an earlier El Niño.\n\nSTATUS. Open on 16 Nov 2026 (closed null): the latest stories (9 Oct WMO, 22 Oct, 27 Oct) expect a peak around the end of 2026 and persistence at least through February 2027. Status rows record agency declarations and strength calls (ECMWF, WMO, JMA, NOAA, PAGASA, Hansen) and named El Niño-driven measures (Peru, Panama Canal, India, Brazil, California, UN).\n\nWHERE OUR STORIES DISAGREE. (1) Onset: JMA declared El Niño on 11 Jun, NOAA called it underway on 21 Jun and 'confirmed' on 24 Jun, and the 17 Jul story calls it 'June-formed'; yet the 4 Jul WMO story says strong conditions 'are expected to form' in July–September, and the 3 Jul Borneo story still cites BMKG's 50–60% chance of a moderate El Niño 'starting mid-year'. The 6 Jun WMO story calls El Niño 'confirmed' in its relevance summary while giving 80–90% odds. (2) Record: Hansen (27 Aug) says it is already the strongest in the modern record and 22 Sep says it has exceeded previous highs at 3.05°C, but 1 Oct ('may rank among the largest recorded'), 9 Oct ('a chance it will be one of the strongest since 1950'; a forecast 3.7°C would exceed 'the previous 2.6°C record') and 22 Oct ('could be unprecedented') still treat the record as ahead. (3) AfDB: 27 Jul gives $10–20 billion and 1–2% of GDP in the hardest-hit countries with $330 million in farm income lost; 24 Oct gives losses of up to 5% of the continent's GDP and $300 million in agricultural losses. (4) WFP's projection appears as 49 million (6 Aug, 7 Nov) and about 50 million (7 Aug, 22 Aug, 22 Sep, 22 Oct): one projection, rounded. (5) Panama: the 22 Aug canal-cap story blames El Niño; the 21 Oct Panama drought story never mentions it.\n\nCOVERAGE. Full text was read for all 86 archive stories that mention El Niño or La Niña in title, label or summary, 4 more found by API search, and about 20 impact stories chosen by keyword (Panama, Amazon fires, coral, hunger). A full-text scan of the other climate stories was cut short by the API limit (100 requests per 15 minutes); the stories it found that mention El Niño only in body text (UN 13 hunger hotspots, global CO2 record, Copernicus 21.1°C daily record, England heat deaths, 1.5°C by 2030) are all passing references.\n\nROLES. Entries with `eitherRole` accept either verdict; each says why in `roleReview` (an AI session's review of 2026-11-22, not yet checked by a person). Two classes are marked one way: the first projection of each kind of impact (food prices, Africa's economic cost, hunger, deaths, children) and responses starting (anticipatory aid, an appeal, money released, a rate rise, California's preparations). Forecasts and warnings that repeat what agencies already said (record strength after 8-10 Jul, the 1.5°C stories, the second AfDB and WFP stories) stay routine."
 }

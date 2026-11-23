@@ -77,7 +77,9 @@ const sidesOf = (k: AnswerKey) => ({
  * The groups' errors against the keys; empty when they hold: every slug named by a key; a keep never a
  * drop and no slug in two groups; the drops within production's window of their keep, by the keys'
  * dates; and in one key, never a keep and its drop on opposite sides (one an entry, the other a near
- * miss), which would say they are not one event. The `keys` step adds that every slug is published.
+ * miss), which would say they are not one event; and a key's `occurrences` naming no drop, nor two
+ * stories of one group (a second occurrence that duplicates the first is none). The `keys` step adds
+ * that every slug is published.
  */
 export function duplicateErrors(groups: readonly DuplicateGroup[], keys: readonly AnswerKey[]): string[] {
   const errors: string[] = []
@@ -98,7 +100,17 @@ export function duplicateErrors(groups: readonly DuplicateGroup[], keys: readonl
         errors.push(`duplicates: ${d} (${drop.date}) is more than ${DEDUP_WINDOW_DAYS} days from its keep ${g.keep} (${keep.date})`)
     }
   }
+  const groupOf = new Map(groups.flatMap(g => [g.keep, ...g.drop].map(s => [s, g] as const)))
   for (const k of keys) {
+    if (k.occurrences) {
+      const { first, second } = k.occurrences
+      for (const s of [first, second]) {
+        const g = groupOf.get(s)
+        if (g && g.keep !== s) errors.push(`duplicates: ${k.id}'s occurrences name ${s}, a drop of ${g.keep}: name the keep`)
+      }
+      if (groupOf.has(first) && groupOf.get(first) === groupOf.get(second))
+        errors.push(`duplicates: ${k.id}'s occurrences name ${first} and ${second}, two stories of one group: they are one occurrence`)
+    }
     const { entries, nearMisses } = sidesOf(k)
     for (const g of groups)
       for (const d of g.drop) {

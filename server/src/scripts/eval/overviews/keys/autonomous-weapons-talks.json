@@ -21,9 +21,10 @@
       "slug": "un-and-icrc-urge-ban-on-machines-that-target-people",
       "date": "2026-08-26",
       "title": "UN and ICRC urge ban on machines that target people",
-      "join": "must",
+      "join": "optional",
       "role": "routine",
       "kind": null,
+      "roleReview": "AI (claude-code), 2026-11-23: was must; the UN Secretary-General's and the ICRC's joint appeal for a ban, before the development's second occurrence (6 Sep: 128 states agree a definition), which under the owner's rule of 2026-11-23 founds no development and has none to join yet. Its neighbour of 3 Sep stays must: it reports governments meeting in Geneva to draft rules.",
       "values": [],
       "statuses": [
         {
@@ -211,5 +212,6 @@
       "why": "Asks whether safeguards for autonomous weapons apply, but it is about US decision-support targeting tools (Maven)."
     }
   ],
+  "occurrences": { "first": "un-and-red-cross-seek-binding-rules-after-ai-strike", "second": "128-states-agree-a-definition-and-insist-on-human-oversight" },
   "notes": "Not closed. On 16 Nov the Geneva review meeting is 'only deciding whether to begin negotiations', and the US-Russian opposition is reported as 'expected', a forecast, not a decision. So 16 Nov is neither the end nor a breakdown; the meeting's outcome (mandate adopted or blocked) will be the next turning point. Under this charter the development ends only with a binding instrument or the formal abandonment of the effort. The 6 Sep and 8 Sep stories report the same end of the expert-group session: 6 Sep (RFI) gives the 128-state consensus on a definition and human control and is the turning point; 8 Sep (HRW) adds that the report was 'watered-down' by US and Russian interventions and that 76 states back binding talks, so it is routine. Our 26 Aug and 6 Sep stories, from RFI's French, call the convention 'CCAC'. 26 Aug names the Convention on Certain Conventional Weapons in the same text, so it is the CCW. Figures are []: 76 states backing binding talks appears only on 8 Sep. '128' appears twice with different meanings (states in the expert-group consensus on 6 Sep; countries at the Geneva meeting on 16 Nov). The 13 Nov story's archive title is 'Rights groups urge treaty talks on autonomous weapons'; its slug still reads 'states-urged-to-negotiate-limits-on-weapons-that-choose-targets'. The 3 Sep story ties the appeal to the Russian drone strike: appeals that cite battlefield cases belong, and the battlefield stories themselves stay out. ROLES: the 8 Sep entry accepts either verdict (`eitherRole`, saying why in `roleReview`, an AI session's review of 2026-11-22 not yet checked by a person); the advocacy of 13 Nov and the meeting under way on 16 Nov stay routine."
 }

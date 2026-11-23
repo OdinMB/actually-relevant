@@ -79,7 +79,7 @@ const entrySchema = z.object({
     .nullable()
     .default(null)
     .describe(
-      'Set when an AI session changed `role`, `kind` or `eitherRole`, until a person has checked it: who and when, what was there before and why, e.g. "AI (claude-code), 2026-11-22: was routine; ...". The person deletes it to keep the change, or restores what it says was there. Null (or absent) otherwise. No step refuses on it; the keys check counts them.',
+      'Set when an AI session changed `join`, `role`, `kind` or `eitherRole`, until a person has checked it: who and when, what was there before and why, e.g. "AI (claude-code), 2026-11-22: was routine; ...". The person deletes it to keep the change, or restores what it says was there. Null (or absent) otherwise. No step refuses on it; the keys check counts them.',
     ),
   values: z.array(valueSchema).default([]).describe('Every number the story states for one of the figures, from our published text only.'),
   statuses: z
@@ -171,6 +171,15 @@ export const answerKeySchema = z.object({
     .array(centerSchema)
     .default([])
     .describe(`At most ${MAX_CENTERS} centers the development moved to, in date order; empty for one that kept its charter. Additive, at any schemaVersion.`),
+  occurrences: z
+    .object({
+      first: text('The slug of the first entry that reports an occurrence.'),
+      second: text('The slug of the second, counting two reports of one event (a duplicate group) once.'),
+    })
+    .optional()
+    .describe(
+      "Set on a key the owner's founding rule of 2026-11-23 was applied to: the first two entries that report something that happened (an occurrence). A development is founded only from such stories, so a must entry dated before the second that reports none can neither found nor join and is optional. The keys check holds both to the key's entries and to the duplicate groups. Absent on a key not checked.",
+    ),
   notes: z
     .string()
     .default('')
@@ -210,9 +219,22 @@ export function validateKey(key: AnswerKey): string[] {
     if (count < MIN_VALUES_PER_FIGURE) errors.push(`figure ${f} has ${count} values, fewer than ${MIN_VALUES_PER_FIGURE}`)
   }
   for (const n of key.nearMisses) if (entrySlugs.has(n.slug)) errors.push(`${n.slug} is both an entry and a near miss`)
+  errors.push(...occurrenceErrors(key))
   errors.push(...responseErrors(key, entrySlugs))
   errors.push(...centerErrors(key, entrySlugs))
   return errors
+}
+
+/** A key's `occurrences`: both entries, the first dated no later than the second (the duplicate groups' rules are `duplicateErrors`'). */
+function occurrenceErrors(key: AnswerKey): string[] {
+  if (!key.occurrences) return []
+  const dateOf = new Map(key.entries.map(e => [e.slug, e.date]))
+  const { first, second } = key.occurrences
+  const missing = (['first', 'second'] as const).filter(which => !dateOf.has(key.occurrences![which]))
+  if (missing.length > 0) return missing.map(which => `occurrences: ${which} ${key.occurrences![which]} is not an entry`)
+  return dateOf.get(first)! > dateOf.get(second)!
+    ? [`occurrences: first ${first} (${dateOf.get(first)}) is dated after second ${second} (${dateOf.get(second)})`]
+    : []
 }
 
 const sameOut = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()

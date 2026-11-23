@@ -57,13 +57,14 @@ const answer = (schemaName: string, prompt: string): unknown => {
 }
 
 describe('the planted cases', () => {
-  it("name must entries of their keys published by the two-thirds checkpoint, and the breach Colorado's near misses", () => {
+  // Entries of either join: a planted early charter's members may be the forecasts the owner's founding rule of 2026-11-23 made optional
+  it("name entries of their keys published by the two-thirds checkpoint, and the breach Colorado's near misses", () => {
     for (const p of NARROWED_PLANTS) {
       const k = byId.get(p.key)!
       const day = checkpointsOf(k).find(c => c.at === 'two-thirds')!.day
       for (const slug of p.members)
         expect(
-          k.entries.find(e => e.slug === slug && e.join === 'must' && e.date <= day),
+          k.entries.find(e => e.slug === slug && e.date <= day),
           `${p.key}: ${slug}`,
         ).toBeDefined()
       expect(p.members.length).toBeGreaterThanOrEqual(2)
@@ -119,15 +120,15 @@ describe('plannedCases', () => {
     const { planned, notRun } = plannedCases(judged, await stories([...STORIES.keys()]), KEYS)
     expect(planned.map(p => `${p.id} ${p.day} ${p.members}/${p.offered}`)).toEqual([
       'planted ebola-drc-2026 2026-10-11 5/10',
-      'planted el-nino-2026 2026-08-27 3/10',
+      'planted el-nino-2026 2026-09-04 3/10',
       'planted lebanon-war-2026 2026-03-24 3/10',
       'planted pandemic-agreement-pabs 2026-06-18 2/6',
-      'planted colorado-river-rules 2026-06-06 2/6',
-      'breach colorado-river-rules 2026-08-26 6/4',
+      'planted colorado-river-rules 2026-08-01 2/6',
+      'breach colorado-river-rules 2026-08-26 5/4',
       'neighbour lebanon-war-2026 2026-04-17 14/6',
-      'negative colorado-river-rules 2026-08-18 6/4',
+      'negative colorado-river-rules 2026-08-18 5/4',
       'negative ebola-drc-2026 2026-11-16 52/3',
-      'negative el-nino-2026 2026-11-07 43/8',
+      'negative el-nino-2026 2026-11-07 36/8',
       'negative lebanon-war-2026 2026-04-25 15/7',
     ])
     expect(notRun).toEqual([{ what: 'negative pandemic-agreement-pabs', reason: '0 stories to offer on 2026-09-12, fewer than the 2 a re-center takes in' }])
@@ -193,7 +194,7 @@ describe('plannedCases', () => {
     expect(three).toMatchObject({
       id: 'center colorado-river-rules "Colorado River water shortage"',
       day: '2026-09-04',
-      members: 6,
+      members: 5,
       offered: 3,
       expectedEndEvent: null,
     })

@@ -151,6 +151,12 @@ describe('validateKey', () => {
     expect(rule(k => (k.nearMisses[0]!.slug = 'a'))).toEqual(['a is both an entry and a near miss'])
   })
 
+  it("wants a key's occurrences to name two of its entries, the first dated no later than the second", () => {
+    expect(rule(k => (k.occurrences = { first: 'a', second: 'b' }))).toEqual([])
+    expect(rule(k => (k.occurrences = { first: 'b', second: 'a' }))).toEqual(['occurrences: first b (2026-06-03) is dated after second a (2026-06-01)'])
+    expect(rule(k => (k.occurrences = { first: 'a', second: 'zz' }))).toEqual(['occurrences: second zz is not an entry'])
+  })
+
   describe('responses (version 2)', () => {
     const response = (extra: Record<string, unknown> = {}) => ({
       date: '2026-06-02',

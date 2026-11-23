@@ -37,9 +37,10 @@
       "slug": "trump-must-decide-on-water-cuts-for-40-million",
       "date": "2026-02-28",
       "title": "Trump must decide on water cuts for 40 million",
-      "join": "must",
+      "join": "optional",
       "role": "routine",
       "kind": null,
+      "roleReview": "AI (claude-code), 2026-11-23: was must; an explainer on what the states must agree by September and what the federal government may impose, with nothing reported as having happened, before the development's second occurrence (11 May: the record-warm winter left tiny snowpacks and deadlines were missed), which under the owner's rule of 2026-11-23 founds no development and has none to join yet.",
       "values": [],
       "statuses": [
         {
@@ -179,5 +180,6 @@
       "reviewed": true
     }
   ],
+  "occurrences": { "first": "seven-states-face-water-cuts-and-lawsuits", "second": "summer-drought-threatens-water-and-power-for-40-million" },
   "notes": "Not closed. Neither federal plan is the end event. The June story describes a framework the government 'will issue' only 'if seven basin states fail to agree'; its caveats say the plan is 'not final and can be supplanted' and that a final environmental impact statement and decision come 'this summer'. The August story is a proposal ('Proposal not final'), with 'binding guidelines expected by October 1'. On 18 August the plan is still 'contested'. No story reports the final binding guidelines or a seven-state deal, so the development is open on 16 November. Figures are []: the only number in 3 or more entries is the roughly 40 million people who depend on the river (all six state it), which is a fixed description, not a figure to track. The proposed cut appears twice: 'up to 3 million acre-feet' a year on 1 Aug, and 'about 3.7 billion cubic metres per year' on 18 Aug, which is the same cut in metric units. Lake Mead's '17 feet above its record low' appears once. The stories differ on the river's flow decline ('roughly 20% over the last century' on 28 Feb, 'about a third over a century' on 6 Jun). The 11 May story says deadlines were missed without naming them. Six stories carry the 'Colorado River' label (the brief said five); all six belong. ROLES: the 11 May entry accepts either verdict (`eitherRole`, saying why in `roleReview`, an AI session's review of 2026-11-22 not yet checked by a person)."
 }

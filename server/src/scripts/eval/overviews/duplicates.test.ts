@@ -57,6 +57,14 @@ describe('duplicateErrors', () => {
   it('names a drop more than 14 days from its keep', () => {
     expect(duplicateErrors([group('k', 'late')], keys)).toEqual([expect.stringMatching(/late \(2026-06-01\) is more than 14 days/)])
   })
+  it("names a key's occurrences that name a drop, or two stories of one group", () => {
+    const withOccurrences = (first: string, second: string) => [{ ...keys[0]!, occurrences: { first, second } }]
+    expect(duplicateErrors([group('k', 'd')], withOccurrences('d', 'late'))).toEqual([expect.stringMatching(/a's occurrences name d, a drop of k/)])
+    expect(duplicateErrors([group('k', 'd')], withOccurrences('k', 'late'))).toEqual([])
+    expect(duplicateErrors([group('d', 'k')], withOccurrences('k', 'd'))).toEqual(
+      expect.arrayContaining([expect.stringMatching(/a's occurrences name k and d, two stories of one group/)]),
+    )
+  })
   it('names a keep and its drop on opposite sides of one key', () => {
     expect(duplicateErrors([group('k', 'n')], keys)).toEqual([expect.stringMatching(/in a, the keep k and its drop n are on opposite sides/)])
   })
