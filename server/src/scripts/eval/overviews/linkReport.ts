@@ -105,6 +105,21 @@ function replayed(r: LinkStepReport): string {
   return `${r.stories} stories: ${r.stories - r.background.stories} (entries and near misses) of ${half}, and ${r.background.stories} background stories of ${r.background.keys.join(', ')}, unscored unless they join a judged development's overview`
 }
 
+/** The duplicate groups merged into their keeps before the replay (ADR-0076): each keep, its drops with what the keys made of them, and why. */
+function mergedLines(r: LinkStepReport): string[] {
+  if (r.merged.length === 0) return []
+  return [
+    '### Duplicates merged before the replay',
+    '',
+    "Two reports of one event or study reach the replay as one story, its keep, as production's duplicate detection would have had them (`duplicates.json`). Where a key held a drop but not its keep, the keep took the drop's place with its label.",
+    '',
+    ...r.merged.map(g => `- **${g.keep}** (${g.confidence}): ${g.drops.map(d => `${d.slug} (${d.as.join('; ')})`).join(', ')}. ${cell(g.why)}`),
+    '',
+  ]
+}
+
+const mergedCount = (r: LinkStepReport) => r.merged.reduce((n, g) => n + g.drops.length, 0)
+
 /** A rescore's line: the saved replay it scored, and whether today's keys replay the stories it replayed. */
 function rescoredLine(r: LinkStepReport): string[] {
   if (!r.rescored) return []
@@ -119,7 +134,7 @@ function rescoredLine(r: LinkStepReport): string[] {
 export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): string[] {
   const shown = (step: OverviewStep) => steps.includes(step)
   return [
-    `**Replay:** ${replayed(r)}, ${r.repeat} run${r.repeat === 1 ? '' : 's'} through production's linking against the in-memory sandbox, oldest first. The replay's calls as made (cached ones at what they cost then) and the end-event judge's: ${usd(r.costUsd)}${r.perStoryUsd !== null ? `, ${usd(r.perStoryUsd)} a story` : ''}.`,
+    `**Replay:** ${replayed(r)}, ${r.repeat} run${r.repeat === 1 ? '' : 's'} through production's linking against the in-memory sandbox, oldest first${mergedCount(r) > 0 ? `, after ${mergedCount(r)} duplicate stor${mergedCount(r) === 1 ? 'y was' : 'ies were'} merged into ${r.merged.length === 1 ? 'its keep' : 'their keeps'} (below)` : ''}. The replay's calls as made (cached ones at what they cost then) and the end-event judge's: ${usd(r.costUsd)}${r.perStoryUsd !== null ? `, ${usd(r.perStoryUsd)} a story` : ''}.`,
     ...rescoredLine(r),
     ...(r.unanswered > 0
       ? [
@@ -162,6 +177,7 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
         ]
       : []),
     ...signalLines(r),
+    ...mergedLines(r),
     ...(r.score.runs.some(s => s.mistakes.length > 0)
       ? ['### Wrong joins and foundings', '', ...r.score.runs.flatMap(s => s.mistakes.map(m => `- Run ${s.run}: ${cell(m)}`)), '']
       : []),

@@ -18,7 +18,7 @@ import type { FactFixtures } from './factFixtures.js'
 import { CATCH_BAR, FALSE_REJECTION_BAR, MAX_LISTED, type ArmScore, type Listed } from './factCheckScore.js'
 import type { GapDraftReport } from './gapDraft.js'
 import type { GapKeyResult } from './gapKeyCheck.js'
-import type { KeyResult } from './keyCheck.js'
+import type { DuplicatesResult, KeyResult } from './keyCheck.js'
 import type { KeyDraftReport } from './keyDraft.js'
 import { keyDraftLines } from './keyDraftReport.js'
 import { expectedSupported, FIELD_KINDS, VARIANT_KINDS, type VariantKind } from './plant.js'
@@ -81,6 +81,8 @@ export interface OverviewReportInput {
   generatedAt: string
   steps: OverviewStep[]
   keys?: KeyResult[]
+  /** The duplicate groups' check, with the keys (`checkDuplicates`). */
+  duplicates?: DuplicatesResult
   keyDraft?: KeyDraftReport
   gapKeys?: GapKeyResult[]
   gapDraft?: GapDraftReport
@@ -134,6 +136,17 @@ function keyLines(keys: KeyResult[]): string[] {
         ]
       : []),
     ...(withErrors.length > 0 ? ['', '### Key errors', '', ...withErrors.flatMap(k => [`**${k.file}**`, '', ...k.errors.map(e => `- ${e}`), ''])] : []),
+  ]
+}
+
+/** The duplicate groups' line under the keys: how many, the stories merged away before the linking replays, and every error. */
+function duplicateLines(d: DuplicatesResult): string[] {
+  return [
+    '',
+    '### Duplicate groups',
+    '',
+    `\`duplicates.json\`: ${d.groups} groups, ${d.drops} stories merged into their keeps before the linking replays (two reports of one event or study, as production's duplicate detection would have had them); ${d.errors.length === 0 ? 'no errors' : `${d.errors.length} errors, to fix in the file`}.`,
+    ...(d.errors.length > 0 ? ['', ...d.errors.map(e => `- ${e}`)] : []),
   ]
 }
 
@@ -277,7 +290,7 @@ export function renderOverviewReport(input: OverviewReportInput): string {
     '',
     `Generated ${input.generatedAt}. Steps: ${input.steps.join(', ')}.`,
     '',
-    ...(input.keys ? ['## Answer keys', '', ...keyLines(input.keys), ''] : []),
+    ...(input.keys ? ['## Answer keys', '', ...keyLines(input.keys), ...(input.duplicates ? duplicateLines(input.duplicates) : []), ''] : []),
     ...(input.keyDraft ? ["## Answer-key drafts: responses for the owner's review", '', ...keyDraftLines(input.keyDraft), ''] : []),
     ...(input.gapKeys ? ['## Gap keys', '', ...gapKeyLines(input.gapKeys), ''] : []),
     ...(input.gapDraft ? ['## Gap-key drafts', '', ...gapDraftLines(input.gapDraft), ''] : []),

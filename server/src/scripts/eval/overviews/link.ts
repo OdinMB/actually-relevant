@@ -32,6 +32,7 @@ import type { Arm, SuiteContext } from '../types.js'
 import { JUDGE_ARM } from './contextJudge.js'
 import { config } from '../../../config.js'
 import { keysOfHalf } from './developmentHalves.js'
+import { keepOf, mergedGroups, runAsKeeps, type DuplicateGroup, type MergedGroup } from './duplicates.js'
 import { diagnoseRun, traceOf, type NeighbourCount, type RunDiagnostics } from './linkDiagnostics.js'
 import { linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import type { KeyFile } from './keyFiles.js'
@@ -69,6 +70,8 @@ export interface LinkStepOptions {
   cacheOnly?: boolean
   /** Replay only the first N stories in date order (a smoke run). */
   limit?: number
+  /** The duplicate groups (`duplicates.json`, ADR-0076), merged into the keys before anything reads them. */
+  groups?: readonly DuplicateGroup[]
 }
 
 /** A rescore (`--rescore`): the saved replay of the same half, repeat and limit, scored under today's keys. */
@@ -81,6 +84,8 @@ export interface RescoreOptions {
   limit?: number
   /** The saved replay's path (`savedReplayName`). */
   file: string
+  /** As `LinkStepOptions.groups`; a replay saved before a group existed is read as its keeps (`runAsKeeps`). */
+  groups?: readonly DuplicateGroup[]
 }
 
 export interface LinkStepReport {
@@ -92,6 +97,8 @@ export interface LinkStepReport {
   stories: number
   /** A judged run's background (`backgroundOf`): the keys outside the half it came from, and its stories among those replayed. */
   background: { keys: string[]; stories: number }
+  /** The duplicate groups with a story among the keys replayed, each merged into its keep before the replay (ADR-0076). */
+  merged: MergedGroup[]
   left: { what: string; reason: string }[]
   score: LinkScore
   endEvents: { key: string; run: number; verdict: EndEventVerdict; why: string }[]
@@ -151,11 +158,17 @@ export function backgroundOf(keys: readonly AnswerKey[], others: readonly Answer
   return { keys: from, slugs: [...slugs] }
 }
 
-/** What a linking replay of the half loads: its keys and the others, the half's slugs (`replaySlugs`), and in a judged run its background (`backgroundOf`). */
-export function linkReplayStories(files: readonly KeyFile[], half: LinkStepOptions['half']) {
-  const { keys, others } = keysOfHalf(files, half)
+/**
+ * What a linking replay of the half loads: its keys and the others with the duplicate groups merged
+ * (`keysOfHalf`), the half's slugs (`replaySlugs`), in a judged run its background (`backgroundOf`), and
+ * the groups merged among the keys it replays, as they were written (`mergedGroups`).
+ */
+export function linkReplayStories(files: readonly KeyFile[], half: LinkStepOptions['half'], groups: readonly DuplicateGroup[] = []) {
+  const { keys, others } = keysOfHalf(files, half, groups)
   const background = half === 'judge' ? backgroundOf(keys, others) : { keys: [], slugs: [] }
-  return { keys, others, slugs: replaySlugs(keys), background }
+  const replayedKeys = new Set([...keys, ...background.keys].map(k => k.id))
+  const written = files.flatMap(f => (f.key && f.errors.length === 0 && replayedKeys.has(f.key.id) ? [f.key] : []))
+  return { keys, others, slugs: replaySlugs(keys), background, merged: mergedGroups(groups, written) }
 }
 
 /**
@@ -184,6 +197,7 @@ function refusedReport(o: Pick<LinkStepOptions, 'files' | 'half' | 'repeat'>, ke
     keys: keys.map(k => k.id),
     stories: 0,
     background: { keys: [], stories: 0 },
+    merged: [],
     left: keyFileErrors(o.files),
     score: scoreLinking(keys, []),
     endEvents: [],
@@ -286,7 +300,7 @@ async function replayRun(run: number, r: ReplayInput): Promise<SavedLinkRun> {
  * `scoreSavedReplay` as a rescore scores it; `replay` is null when the step refused.
  */
 export async function runLinkStep(o: LinkStepOptions): Promise<{ report: LinkStepReport; replay: SavedLinkReplay | null }> {
-  const { keys, slugs, background } = linkReplayStories(o.files, o.half)
+  const { keys, slugs, background } = linkReplayStories(o.files, o.half, o.groups)
   // A center's stories are replayed and its entries scored: none may be a draft no one checked
   const refused = awaitingReview(keys, 'centers')
   if (refused) return { report: refusedReport(o, keys, refused), replay: null }
@@ -331,7 +345,7 @@ export async function runLinkStep(o: LinkStepOptions): Promise<{ report: LinkSte
     errored: meter.errored,
     costUsd: meter.costUsd,
   }
-  return { report: await scoreSavedReplay(replay, { ctx: o.ctx, files: o.files, half: o.half }), replay }
+  return { report: await scoreSavedReplay(replay, { ctx: o.ctx, files: o.files, half: o.half, groups: o.groups }), replay }
 }
 
 /** The strong judge on each development's founded end event, per run, only where the founding names one: every call at once, the verdicts in run and key order. */
@@ -370,13 +384,17 @@ function judgeEndEvents(
  * diagnostics. A story the keys name that the replay never asked for is left out and, as a must
  * entry, not replayed; a story it replayed that the keys no longer name is scored as it fell. The
  * calls not made are the replay's (a judge given no answer shows on its end event); the calls that
- * failed and the cost are the replay's and the judge's.
+ * failed and the cost are the replay's and the judge's. A replay saved before a duplicate group existed
+ * is read as its keeps (`runAsKeeps`), so it scores the stories the merged keys name; for a replay made
+ * after, that reading changes nothing.
  */
 export async function scoreSavedReplay(
-  saved: SavedLinkReplay,
-  o: { ctx: SuiteContext; files: readonly KeyFile[]; half: LinkStepOptions['half'] },
+  stored: SavedLinkReplay,
+  o: { ctx: SuiteContext; files: readonly KeyFile[]; half: LinkStepOptions['half']; groups?: readonly DuplicateGroup[] },
 ): Promise<LinkStepReport> {
-  const { keys, others, slugs, background } = linkReplayStories(o.files, o.half)
+  const { keys, others, slugs, background, merged } = linkReplayStories(o.files, o.half, o.groups)
+  const keep = keepOf(o.groups ?? [])
+  const saved: SavedLinkReplay = { ...stored, replayed: [...new Set(stored.replayed.map(keep))], runs: stored.runs.map(r => runAsKeeps(r, keep)) }
   const asked = [...slugs, ...background.slugs]
   const { added } = replayDrift(saved, asked)
   const stillAsked = new Set(asked)
@@ -412,6 +430,7 @@ export async function scoreSavedReplay(
     keys: keys.map(k => k.id),
     stories: saved.replayed.length,
     background: { keys: background.keys.map(k => k.id), stories: background.slugs.filter(s => replayed.has(s)).length },
+    merged,
     left,
     score: scoreLinking(keys, runs, verdicts, others),
     endEvents,
@@ -446,7 +465,7 @@ export async function scoreSavedReplay(
  * key of the half holds a center no one has reviewed, and for a file missing or of another version.
  */
 export async function rescoreLinkStep(o: RescoreOptions): Promise<LinkStepReport> {
-  const { keys, slugs, background } = linkReplayStories(o.files, o.half)
+  const { keys, slugs, background } = linkReplayStories(o.files, o.half, o.groups)
   const refused = awaitingReview(keys, 'centers')
   if (refused) return refusedReport(o, keys, refused)
   const read = readSavedReplay(o.file)
@@ -458,6 +477,6 @@ export async function rescoreLinkStep(o: RescoreOptions): Promise<LinkStepReport
       return rec.outcome === 'skipped' ? { ...rec, error: NOT_CACHED } : rec
     },
   }
-  const report = await scoreSavedReplay(read.replay, { ctx, files: o.files, half: o.half })
+  const report = await scoreSavedReplay(read.replay, { ctx, files: o.files, half: o.half, groups: o.groups })
   return { ...report, rescored: { file: basename(o.file), savedAt: read.replay.savedAt, ...replayDrift(read.replay, [...slugs, ...background.slugs]) } }
 }

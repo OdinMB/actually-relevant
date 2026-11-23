@@ -1,0 +1,83 @@
+{
+  "about": "Stories the answer keys name that are two reports of one event or one study, which production's duplicate detection would have merged: the linking replays feed each group as one story, its keep (ADR-0076; .context/model-eval.md, \"Deduplicated inputs\"). The keep is the earliest published, the earliest crawled breaking a tie. Only groups rated medium or better; the keys check holds every group to the keys (duplicates.ts).",
+  "groups": [
+    {
+      "keep": "us-and-israeli-strikes-kill-over-200-in-iran",
+      "drop": ["us-and-israel-launch-strikes-on-iran-missiles-fired-back", "us-and-israel-attack-iran-tehran-launches-missile-strikes"],
+      "why": "The first US and Israeli strikes on Iran of 28 February and Iran's missiles fired back, reported the next day by three outlets.",
+      "confidence": "medium-high"
+    },
+    {
+      "keep": "iran-strikes-shut-saudi-and-qatari-oil-and-gas-production",
+      "drop": ["iran-hits-arab-states-and-us-bases-damaging-energy-sites"],
+      "why": "Iran's strikes across the Gulf on energy sites and US bases in the war's first days, reported a day apart.",
+      "confidence": "medium"
+    },
+    {
+      "keep": "israel-hits-central-beirut-killing-hundreds-and-uprooting-800-000",
+      "drop": ["israel-strikes-beirut-after-hezbollah-rocket-barrage"],
+      "why": "Israel's strikes on Beirut of 12 March after Hezbollah's rockets, with the same toll and 800,000 displaced.",
+      "confidence": "medium-high"
+    },
+    {
+      "keep": "us-orders-total-blockade-of-key-oil-route",
+      "drop": ["trump-orders-blockade-warns-china-and-iran"],
+      "why": "Trump's order of 12 April for a US naval blockade of the Strait of Hormuz.",
+      "confidence": "high"
+    },
+    {
+      "keep": "wmo-warns-of-higher-global-heat-and-extreme-storms",
+      "drop": ["un-warns-of-hotter-months-crop-and-health-risks"],
+      "why": "The WMO's early-June El Niño update (80 to 90% likely, more heat, droughts and floods), from the UN's own news and from Rappler.",
+      "confidence": "high"
+    },
+    {
+      "keep": "us-and-iran-agree-to-end-war-and-reopen-hormuz",
+      "drop": ["us-iran-reach-provisional-deal-to-reopen-strait-of-hormuz"],
+      "why": "The US-Iran deal announced on 15 June to end the war and reopen the Strait of Hormuz, with its signing set in Switzerland.",
+      "confidence": "high"
+    },
+    {
+      "keep": "un-warns-of-severe-heatwaves-floods-and-droughts",
+      "drop": ["un-warns-fossil-fuels-intensify-global-heat-crisis"],
+      "why": "Guterres's and the WMO's warning of 31 July that the strengthening El Niño will drive heat, floods and droughts.",
+      "confidence": "high"
+    },
+    {
+      "keep": "wfp-warns-el-nino-could-push-49-million-into-hunger",
+      "drop": ["50-million-more-could-face-acute-hunger-by-2027"],
+      "why": "The WFP's analysis of 5 August that El Niño could push about 50 million more people into acute hunger.",
+      "confidence": "high"
+    },
+    {
+      "keep": "warming-linked-to-stronger-pacific-climate-swings",
+      "drop": ["human-warming-supercharges-pacific-climate-swings"],
+      "why": "The Science study of Galapagos coral records linking more variable El Niño cycles to fossil-fuel warming.",
+      "confidence": "high"
+    },
+    {
+      "keep": "us-and-iran-weigh-reopening-a-key-oil-route",
+      "drop": ["iran-offers-seven-day-plan-to-reopen-shipping"],
+      "why": "The phased deal under discussion in late September: Iran reopens the strait, the US lifts its blockade and frees assets.",
+      "confidence": "medium"
+    },
+    {
+      "keep": "leaders-renew-global-pledge-to-prevent-future-outbreaks",
+      "drop": ["who-urges-countries-to-complete-global-health-pact"],
+      "why": "The UN high-level meeting on pandemic prevention of 25 September, from WHO's news item and from Tedros's remarks there.",
+      "confidence": "medium"
+    },
+    {
+      "keep": "us-prepares-for-possible-strikes-after-midterms",
+      "drop": ["us-and-israel-prepare-for-renewed-strikes"],
+      "why": "The signs in late October that the US, with Israel, is preparing renewed strikes on Iran.",
+      "confidence": "medium"
+    },
+    {
+      "keep": "two-ebola-shots-join-congo-outbreak-trial",
+      "drop": ["who-advances-two-candidates-for-a-deadly-ebola-strain"],
+      "why": "WHO clearing two Bundibugyo vaccine candidates (Oxford's and Moderna's) for the trial in DR Congo.",
+      "confidence": "high"
+    }
+  ]
+}

@@ -4,13 +4,15 @@
  * a response's) occurs in that story's published text. A miss is an error in the key, to
  * fix there, never a pass or fail of anything in production. Also the per-development counts the
  * report shows, the drafts still to review among them, and the stories two keys both hold as must
- * (the linking eval counts either one's overview as right for them). The loader
+ * (the linking eval counts either one's overview as right for them). And the duplicate groups
+ * (`checkDuplicates`): their rules against the keys, every slug a published story. The loader
  * issues one SELECT through the read-only session; the rest is pure but for the loader it is given.
  */
 import { utcDay } from '../../../lib/days.js'
 import { normalizeQuote } from '../../../lib/quoteMatch.js'
 import { storedResearchText } from '../../../services/researchedStory.js'
 import type { SelectDb } from '../readOnlyDb.js'
+import { duplicateErrors, type DuplicateGroup } from './duplicates.js'
 import type { KeyFile } from './keyFiles.js'
 import { eitherRoles, rolesToReview, unreviewed, type AnswerKey } from './keySchema.js'
 import { sharedMusts } from './linkScore.js'
@@ -158,6 +160,37 @@ export interface KeyResult {
   errors: string[]
   /** Its must entries that another key holds as must too, with every key holding each (`sharedMusts`): not an error, listed so each one is a deliberate call. */
   sharedMusts: { slug: string; keys: string[] }[]
+}
+
+/** The duplicate groups' check (`duplicates.json`, ADR-0076): how many, how many stories they merge away, and every error. */
+export interface DuplicatesResult {
+  groups: number
+  drops: number
+  errors: string[]
+}
+
+/**
+ * The duplicate groups against the keys (`duplicateErrors`) and the database: every slug a group names
+ * is a published story. A miss is an error in the file, to fix there.
+ */
+export async function checkDuplicates(
+  read: { groups: readonly DuplicateGroup[]; errors: readonly string[] },
+  files: readonly KeyFile[],
+  loadStories: (slugs: string[]) => Promise<ReadonlyMap<string, KeyStory>>,
+): Promise<DuplicatesResult> {
+  const slugs = [...new Set(read.groups.flatMap(g => [g.keep, ...g.drop]))]
+  const stories = slugs.length === 0 ? new Map<string, KeyStory>() : await loadStories(slugs)
+  const unpublished = slugs.flatMap(s => {
+    const story = stories.get(s)
+    if (!story) return [`duplicates: ${s}: no story with this slug`]
+    return story.status !== 'published' || !story.datePublished ? [`duplicates: ${s}: not published (status ${story.status})`] : []
+  })
+  const keys = files.flatMap(f => (f.key ? [f.key] : []))
+  return {
+    groups: read.groups.length,
+    drops: read.groups.reduce((n, g) => n + g.drop.length, 0),
+    errors: [...read.errors, ...duplicateErrors(read.groups, keys), ...unpublished],
+  }
 }
 
 /** The `keys` step: every parsed key against the stories it names, loaded once for all of them. */

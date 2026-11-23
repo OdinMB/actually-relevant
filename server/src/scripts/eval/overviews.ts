@@ -59,7 +59,8 @@ import { scoreArm } from './overviews/factCheckScore.js'
 import { loadFactFixtures, reusableFixtures, type FactFixture, type FactFixtures } from './overviews/factFixtures.js'
 import { loadGapCandidates, runGapDraftStep, type GapDraftStepOptions } from './overviews/gapDraft.js'
 import { checkGapKeyFiles } from './overviews/gapKeyCheck.js'
-import { checkKeyFiles, loadKeyStories } from './overviews/keyCheck.js'
+import { checkDuplicates, checkKeyFiles, loadKeyStories } from './overviews/keyCheck.js'
+import { readDuplicateGroups } from './overviews/duplicates.js'
 import { runKeyDraftStep, type KeyDraftStepOptions } from './overviews/keyDraft.js'
 import { KEYS_DIR, readGapKeyFiles, readKeyFiles } from './overviews/keyFiles.js'
 import { overviewReportName, renderOverviewReport, type FactCheckReport, type FactSample, type OverviewReportInput } from './overviews/report.js'
@@ -252,6 +253,9 @@ async function main(): Promise<void> {
     const linking = LINKING_STEPS.some(runs)
     const upkeep = runs('replay') || runs('pass-pool') || runs('stands') || runs('review') || runs('recenter')
     const keyFiles = runs('keys') || runs('key-draft') || runs('gap-draft') || runs('update') || linking || upkeep ? readKeyFiles() : []
+    // The duplicate groups beside the keys, merged into them before the linking replays read them (ADR-0076)
+    const duplicates = readDuplicateGroups()
+    const groups = duplicates.groups
     if (runs('keys')) for (const k of keyFiles) console.log(`${k.file}: ${k.errors.length === 0 ? 'format ok' : `${k.errors.length} format errors`}`)
     const gapKeyFiles = runs('gap-keys') || runs('context') ? readGapKeyFiles() : []
     if (runs('gap-keys')) {
@@ -344,7 +348,7 @@ async function main(): Promise<void> {
         )
       }
       if (linking) {
-        const r = linkReplayStories(keyFiles, opts.half)
+        const r = linkReplayStories(keyFiles, opts.half, groups)
         const all = r.slugs.length + r.background.slugs.length
         const stories = opts.limit !== undefined ? Math.min(opts.limit, all) : all
         const background =
@@ -377,6 +381,8 @@ async function main(): Promise<void> {
       try {
         report.keys = await checkKeyFiles(keyFiles, async slugs => (await session.get()).read(q => loadKeyStories(q, slugs)))
         for (const k of report.keys) console.log(`keys: ${k.file}: ${k.errors.length === 0 ? 'ok' : `${k.errors.length} errors`}`)
+        report.duplicates = await checkDuplicates(duplicates, keyFiles, async slugs => (await session.get()).read(q => loadKeyStories(q, slugs)))
+        console.log(`keys: duplicates.json: ${report.duplicates.errors.length === 0 ? 'ok' : `${report.duplicates.errors.length} errors`}`)
       } catch (err) {
         failed('keys', err)
       }
@@ -464,11 +470,12 @@ async function main(): Promise<void> {
           // One replay serves the three steps: saved beside the report, and scored again from there by --rescore (ADR-0074)
           const savedFile = join(out, savedReplayName({ half: opts.half, repeat: opts.repeat, ...limit }))
           if (opts.rescore) {
-            report.link = await rescoreLinkStep({ ctx, files: keyFiles, half: opts.half, repeat: opts.repeat, ...limit, file: savedFile })
+            report.link = await rescoreLinkStep({ ctx, files: keyFiles, groups, half: opts.half, repeat: opts.repeat, ...limit, file: savedFile })
           } else {
             const linked = await runLinkStep({
               ctx,
               files: keyFiles,
+              groups,
               half: opts.half,
               ...limit,
               stories: async slugs => (await session.get()).read(q => linkStoriesBySlug(q, slugs)),
@@ -598,6 +605,7 @@ async function main(): Promise<void> {
           report.replay = await runReplayStep({
             ctx,
             files: keyFiles,
+            groups,
             half: opts.half,
             ...limit,
             stories: storiesBySlug,

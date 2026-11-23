@@ -7,6 +7,7 @@
  * lists in the change that commits it (`developmentHalves.test.ts` fails until it does). Pure.
  */
 import type { Half } from './contextScore.js'
+import { mergeDuplicates, type DuplicateGroup } from './duplicates.js'
 import type { KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
 
@@ -43,9 +44,14 @@ export const inDevelopmentHalf = (id: string, half: Half | 'all'): boolean => {
  * among them): the half's are replayed and scored. The others are never scored: they say whether a
  * founding pair are two entries of one development the half does not score, which development an
  * overview stands for (`linkKeys`), and, in a judged linking run, which stories are replayed as
- * background (`backgroundOf`).
+ * background (`backgroundOf`). Both with the duplicate groups merged (`mergeDuplicates`, ADR-0076), so
+ * every step that reads them sees the stories production would have had: a dropped story is never
+ * asked of the database, replayed or anyone's neighbour.
  */
-export function keysOfHalf(files: readonly KeyFile[], half: Half | 'all'): { keys: AnswerKey[]; others: AnswerKey[] } {
-  const valid = files.flatMap(f => (f.key && f.errors.length === 0 ? [f.key] : []))
+export function keysOfHalf(files: readonly KeyFile[], half: Half | 'all', groups: readonly DuplicateGroup[] = []): { keys: AnswerKey[]; others: AnswerKey[] } {
+  const valid = mergeDuplicates(
+    files.flatMap(f => (f.key && f.errors.length === 0 ? [f.key] : [])),
+    groups,
+  )
   return { keys: valid.filter(k => inDevelopmentHalf(k.id, half)), others: valid.filter(k => !inDevelopmentHalf(k.id, half)) }
 }

@@ -24,6 +24,7 @@ import type { LinkStory } from '../../../services/overviewTypes.js'
 import { runNumbers } from '../repeats.js'
 import type { SuiteContext } from '../types.js'
 import { keysOfHalf } from './developmentHalves.js'
+import type { DuplicateGroup } from './duplicates.js'
 import type { KeyFile } from './keyFiles.js'
 import { awaitingReview, type AnswerKey } from './keySchema.js'
 import { evalCalls, replaySlugs } from './link.js'
@@ -50,6 +51,8 @@ export interface ReplayStepOptions {
   concurrency: number
   budgetUsd: number
   limit?: number
+  /** The duplicate groups, merged into the keys before the replay reads them (`keysOfHalf`, ADR-0076). */
+  groups?: readonly DuplicateGroup[]
 }
 
 export interface ReplayStepReport {
@@ -100,7 +103,7 @@ function checkpoint(
 }
 
 export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepReport> {
-  const { keys, others } = keysOfHalf(o.files, o.half)
+  const { keys, others } = keysOfHalf(o.files, o.half, o.groups)
   const left: ReplayStepReport['left'] = o.files
     .filter(f => !f.key || f.errors.length > 0)
     .map(f => ({ what: f.file, reason: `${f.errors.length} format errors: fix the key` }))

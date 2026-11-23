@@ -8,7 +8,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { awaitingReview, centerOn, parseKey, unreviewed, validateKey, type AnswerKey } from './keySchema.js'
-import { KEYS_DIR, keyFileNames, readKeyFile } from './keyFiles.js'
+import { KEYS_DIR, keyFileNames, readKeyFile, readKeyFiles } from './keyFiles.js'
+import { duplicateErrors, readDuplicateGroups } from './duplicates.js'
 
 describe('the committed answer keys', () => {
   it('live in keys/, one JSON file per development', () => {
@@ -20,6 +21,12 @@ describe('the committed answer keys', () => {
       expect(readKeyFile(join(KEYS_DIR, name)).errors).toEqual([])
     })
   }
+
+  it('hold the committed duplicate groups (duplicates.json) to their rules', () => {
+    const { groups, errors } = readDuplicateGroups()
+    const keys = readKeyFiles().flatMap(f => (f.key ? [f.key] : []))
+    expect([...errors, ...duplicateErrors(groups, keys)]).toEqual([])
+  })
 })
 
 const value = (figure: string, n: number, extra: Partial<AnswerKey['entries'][number]['values'][number]> = {}) => ({
