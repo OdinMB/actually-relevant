@@ -361,4 +361,4 @@ describeDb('the overview lifecycle', () => {
 })
 
 const routine = { role: 'routine' as const, roleKind: null }
-const fits = { fits: 'yes' as const, reason: 'r' }
+const fits = { fits: 'yes' as const, reason: 'r', occurred: 'yes' as const }

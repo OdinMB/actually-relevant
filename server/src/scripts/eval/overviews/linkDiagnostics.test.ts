@@ -146,6 +146,22 @@ describe('diagnoseRun', () => {
     expect(d.missed.find(m => m.slug === 'e6')!.detail).toContain('a refused yes to "Cholera" (cholera)')
   })
 
+  it('names a founding refused only for the partner reporting no occurrence, the retries and the partners left out', () => {
+    const silent = trace('e8', '2026-05-08', {
+      partners: [candidate('F1', 'e3', 'yes')],
+      founding: { partner: 'e3', outcome: 'disagreed', why: 'A reports no occurrence', partnerSilent: true },
+      retried: [{ partner: 'uganda', why: 'A reports no occurrence' }],
+      excluded: ['e1', 'uganda'],
+    })
+    const d = diagnoseRun({ ...diagnoseInput(), traces: new Map([...TRACES, ['e8', silent]]) })
+    expect(d.missed.find(m => m.slug === 'e8')).toMatchObject({ cause: 'founding refused: partner reported no occurrence' })
+    expect(d.retries).toEqual([{ slug: 'e8', tried: ['uganda', 'e3'], founded: false }])
+    expect(d.excluded).toEqual([
+      { slug: 'e1', as: 'must entry of ebola' },
+      { slug: 'uganda', as: 'near miss of ebola' },
+    ])
+  })
+
   it("gives each run's first founding of each development, and the joins whose quotes passed only by the near match, right or wrong", () => {
     const near = new Map([
       ...TRACES,
@@ -311,6 +327,8 @@ describe('traceOf', () => {
       join: null,
       heldBy: null,
       foundingBlockedBy: null,
+      refusedFoundings: [],
+      excludedPartners: [],
       founding: {
         partner: story('id-e2'),
         outcome: 'disagreed',

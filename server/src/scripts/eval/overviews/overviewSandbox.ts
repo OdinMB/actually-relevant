@@ -22,7 +22,8 @@ import {
   type Rows,
 } from '../../../services/overviewChanges.js'
 import { entryRole } from '../../../services/overviewCases.js'
-import { linkInputs, readInputs } from '../../../services/overviewDecisions.js'
+import { noOccurrenceOf, type CheckedAttempt } from '../../../services/overviewCandidates.js'
+import { foundInputs, linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import { isStale, type ApplyLink } from '../../../services/overviewLink.js'
 import type { LinkAttempt, OwedStory } from '../../../services/overviewOwed.js'
 import { planAlone, planConflict, planFounding, planJoin, type LinkPlan, type PlanContext } from '../../../services/overviewPlans.js'
@@ -118,6 +119,14 @@ export function createSandbox(): Sandbox {
     ),
     // No editor acts in a replay, so no story is locked out of an overview
     lockedOut: new Map(),
+    noOccurrence: noOccurrenceOf(
+      decisions.flatMap(d => {
+        const partnerId = d.kind === 'found' && d.storyId ? readInputs(foundInputs, d.inputs)?.partnerId : undefined
+        const [story, partner] = [stories.get(d.storyId ?? ''), stories.get(partnerId ?? '')]
+        const check = (d.answer as { check?: CheckedAttempt['check'] } | null)?.check ?? null
+        return story && partner ? [{ storyId: story.id, partnerId: partner.id, storyDate: story.datePublished, partnerDate: partner.datePublished, check }] : []
+      }),
+    ),
   })
   const candidateOverviews = async (storyIds: string[], asOf: Date): Promise<CandidateOverview[]> =>
     storyIds.flatMap(id => {
@@ -169,7 +178,7 @@ export function createSandbox(): Sandbox {
 
   const apply: ApplyLink = async (result, lastTry) => {
     stories.set(result.story.id, result.story)
-    if (result.founding) stories.set(result.founding.partner.id, result.founding.partner)
+    for (const f of [...result.refusedFoundings, ...(result.founding ? [result.founding] : [])]) stories.set(f.partner.id, f.partner)
     const settled = results.get(result.story.id)
     if (activeIn(result.story.id) || (settled && SETTLES.has(settled.outcome))) return { kind: 'skipped' }
     const ctx = context()

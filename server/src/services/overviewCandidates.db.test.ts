@@ -80,6 +80,29 @@ describeDb('overview candidates', () => {
     expect(got.map(n => n.id)).toEqual([earlier.id])
   })
 
+  it('reads the stories whose latest founding check, as A or as B, judged that they report no occurrence', async () => {
+    const feed = await createFeed((await createIssue()).id)
+    const [warning, event, later, retried] = [
+      await published(feed.id, -5, null),
+      await published(feed.id, -3, null),
+      await published(feed.id, -1, null),
+      await published(feed.id, -4, null),
+    ]
+    const check = (a: string, b: string) => ({
+      draft: null,
+      check: { a: { fits: 'yes', reason: 'r', occurred: a }, b: { fits: 'yes', reason: 'r', occurred: b }, endEventConcrete: 'none' },
+    })
+    const found = (storyId: string, partnerId: string, answer: object, createdAt: Date) =>
+      prisma.overviewDecision.create({ data: { kind: 'found', outcome: 'disagreed', storyId, inputs: { partnerId }, answer, actor: 'pipeline', createdAt } })
+    // The warning is A (earlier) and reported none; the event is B and did
+    await found(event.id, warning.id, check('no', 'yes'), daysFrom(-3))
+    // The later story is B of its attempt with the earlier `retried`, which said none first, then yes
+    await found(later.id, retried.id, check('no', 'yes'), daysFrom(-2))
+    await found(event.id, retried.id, check('yes', 'yes'), daysFrom(-1))
+    const read = await membershipsOf(prisma, [warning.id, event.id, later.id, retried.id])
+    expect(read.noOccurrence).toEqual(new Set([warning.id]))
+  })
+
   it('groups the same candidates from memberships read from the tables as from the same map in memory', async () => {
     const issue = await createIssue()
     const feed = await createFeed(issue.id)
@@ -116,6 +139,7 @@ describeDb('overview candidates', () => {
         [detachedFrom.id, open(b.id, daysFrom(-4))],
       ]),
       lockedOut: new Map([[story.id, [b.id]]]),
+      noOccurrence: new Set<string>(),
     }
     expect(read).toEqual(inMemory)
     const options = { ...OPTIONS, foundingWindowDays: 30, candidateOverviews: 5, foundingCandidates: 3 }

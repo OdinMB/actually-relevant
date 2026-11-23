@@ -8,7 +8,7 @@
  * (`linkKeys`): an overview stands for a development of any key, and a must entry is found in an
  * overview whose key holds it as must. No bars: the owner reads them. Pure.
  */
-import type { LinkResult } from '../../../services/overviewLink.js'
+import { onlyPartnerSilent, type LinkResult } from '../../../services/overviewLink.js'
 import type { Charter, FoundingOutcome, LinkOutcome, Role } from '../../../services/overviewTypes.js'
 import { isLabelDevelopment } from './developmentHalves.js'
 import type { AnswerKey } from './keySchema.js'
@@ -47,8 +47,12 @@ export interface StoryTrace {
   neighbours: NeighbourCount | null
   overviews: CandidateTrace[]
   partners: CandidateTrace[]
-  /** A founding attempted from this story: the partner's slug, the outcome, and why it did not found. */
-  founding: { partner: string; outcome: FoundingOutcome; why: string | null } | null
+  /** A founding attempted from this story: the partner's slug, the outcome, why it did not found, and whether only the partner's lack of an occurrence refused it. */
+  founding: { partner: string; outcome: FoundingOutcome; why: string | null; partnerSilent?: boolean } | null
+  /** Earlier founding attempts refused only for their partner's lack of an occurrence, before the one above (ADR-0075); absent when none. */
+  retried?: { partner: string; why: string | null }[]
+  /** Neighbours left out as founding partners because a founding check judged them to report no occurrence; absent when none. */
+  excluded?: string[]
   /** The overview whose refused yes kept a passing partner from founding (`LinkResult.foundingBlockedBy`); absent when none did. */
   blockedBy?: string
 }
@@ -63,6 +67,8 @@ function foundingWhy(f: NonNullable<LinkResult['founding']>): string | null {
   const parts = [
     ...(c.a.fits === 'no' ? [`A does not fit: ${c.a.reason}`] : []),
     ...(c.b.fits === 'no' ? [`B does not fit: ${c.b.reason}`] : []),
+    ...(c.a.occurred === 'no' ? ['A reports no occurrence'] : []),
+    ...(c.b.occurred === 'no' ? ['B reports no occurrence'] : []),
     ...(c.endEventConcrete === 'no' ? ['the end event is not concrete'] : []),
   ]
   return parts.join('; ') || 'the check did not agree'
@@ -93,7 +99,16 @@ export function traceOf(result: LinkResult, stored: LinkOutcome | null, neighbou
     neighbours,
     overviews: result.shown.overviews.map(o => ({ ...candidate(o, o.id), ...(o.ref === nearJoin ? { nearMatch: true } : {}) })),
     partners: result.shown.partners.map(p => candidate(p, slug(p.id))),
-    founding: result.founding ? { partner: slug(result.founding.partner.id), outcome: result.founding.outcome, why: foundingWhy(result.founding) } : null,
+    founding: result.founding
+      ? {
+          partner: slug(result.founding.partner.id),
+          outcome: result.founding.outcome,
+          why: foundingWhy(result.founding),
+          ...(onlyPartnerSilent(result.founding, result.story) ? { partnerSilent: true } : {}),
+        }
+      : null,
+    ...(result.refusedFoundings.length > 0 ? { retried: result.refusedFoundings.map(f => ({ partner: slug(f.partner.id), why: foundingWhy(f) })) } : {}),
+    ...(result.excludedPartners.length > 0 ? { excluded: result.excludedPartners.map(slug) } : {}),
     ...(result.foundingBlockedBy ? { blockedBy: result.foundingBlockedBy } : {}),
   }
 }
@@ -118,6 +133,7 @@ export const MISS_CAUSES = [
   'not offered',
   'refused by code',
   'founding blocked',
+  'founding refused: partner reported no occurrence',
   'founding not agreed',
   'model yes, not taken',
   'model unsure',
@@ -168,6 +184,10 @@ export interface RunDiagnostics {
   firstFoundings: { key: string; foundedOn: string; title: string }[]
   /** The stories joined to an overview whose cause or place quote passed only by the near match, with the joins bar's verdict on each. */
   nearMatches: { slug: string; overview: string; verdict: 'right' | 'wrong' | 'ignored' | null }[]
+  /** The stories whose founding tried a further partner after one refused for reporting no occurrence: the partners tried in order, and whether the last founded (ADR-0075). */
+  retries: { slug: string; tried: string[]; founded: boolean }[]
+  /** The stories left out as founding partners because a founding check judged them to report no occurrence, with what the keys make of each (a must entry among them is a loss to read). */
+  excluded: { slug: string; as: string }[]
 }
 
 export interface DiagnoseInput {
@@ -286,6 +306,8 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
     if (blockedBy && ours.some(c => t.partners.includes(c) && c.belongs === 'yes' && !c.refusal))
       miss('founding blocked', `a refused yes to ${titled(blockedBy.id)} (${blockedBy.refusal ?? 'refused'}); ${detail}`)
     else if (refused) miss('refused by code', `${refused.ref}: ${refused.refusal}; ${detail}`)
+    else if (founding?.partnerSilent)
+      miss('founding refused: partner reported no occurrence', `with ${founding.partner} (${what(founding.partner)}): ${founding.why ?? ''}; ${detail}`)
     else if (founding) miss('founding not agreed', `with ${founding.partner}: ${founding.outcome}, ${founding.why ?? ''}; ${detail}`)
     else if (ours.some(c => c.belongs === 'yes'))
       miss(
@@ -334,7 +356,14 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
       .filter(c => c.nearMatch)
       .map(c => ({ slug: t.slug, overview: d.overviews.find(o => o.id === c.id)?.title ?? c.id, verdict: k.verdict(t.slug, devOf.get(c.id) ?? null) })),
   )
-  return { run: d.run, missed, rolesJudged, rolesEither, roleMisses, charters, firstFoundings, nearMatches }
+  const retries = [...d.traces.values()].flatMap(t =>
+    t.retried
+      ? [{ slug: t.slug, tried: [...t.retried.map(r => r.partner), ...(t.founding ? [t.founding.partner] : [])], founded: t.founding?.outcome === 'founded' }]
+      : [],
+  )
+  const excludedSlugs = [...new Set([...d.traces.values()].flatMap(t => t.excluded ?? []))].sort()
+  const excluded = excludedSlugs.map(slug => ({ slug, as: what(slug) }))
+  return { run: d.run, missed, rolesJudged, rolesEither, roleMisses, charters, firstFoundings, nearMatches, retries, excluded }
 }
 
 /** Each development's missed must entries by cause, summed over the runs, in `MISS_CAUSES` order. */

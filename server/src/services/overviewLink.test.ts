@@ -65,7 +65,7 @@ const draft: FoundAnswer = {
   charter: { in: 'The Ebola outbreak in Ituri province since May 2026.', out: ['Ebola in Uganda'], endEvent: 'The ministry declares the outbreak over' },
   roles: { a: { role: 'turning_point', roleKind: 'spread' }, b: { role: 'routine', roleKind: 'setback' } },
 }
-const agree: FoundCheckAnswer = { a: { fits: 'yes', reason: 'r' }, b: { fits: 'yes', reason: 'r' }, endEventConcrete: 'yes' }
+const agree: FoundCheckAnswer = { a: { fits: 'yes', reason: 'r', occurred: 'yes' }, b: { fits: 'yes', reason: 'r', occurred: 'yes' }, endEventConcrete: 'yes' }
 
 describe('acceptLink', () => {
   const s = story('s', 10)
@@ -100,6 +100,13 @@ describe('acceptLink', () => {
     const partner = shownPartner(story('p', 5), 'F1', 0.2)
     expect(acceptLink(s, [shownOverview('A', 'O1', 0.1)], [partner], answer([yes('O1'), yesPartner('F1')])).partner).toBeNull()
     expect(acceptLink(s, [shownOverview('A', 'O1', 0.1)], [partner], answer([no('O1'), yesPartner('F1')])).partner?.candidate.id).toBe('p')
+  })
+
+  it('gives every passing founding partner, nearest first', () => {
+    const [p, q, r] = [shownPartner(story('p', 5), 'F1', 0.1), shownPartner(story('q', 6), 'F2', 0.2), shownPartner(story('r', 7), 'F3', 0.3)]
+    const got = acceptLink(s, [], [p, q, r], answer([yesPartner('F3'), no('F2'), yesPartner('F1')]))
+    expect(got.partners.map(x => x.candidate.id)).toEqual(['p', 'r'])
+    expect(got.partner?.candidate.id).toBe('p')
   })
 
   it('matches quotes after the same normalization the answer keys use', () => {
@@ -232,6 +239,11 @@ describe('acceptFounding', () => {
     expect(acceptFounding(draft, { ...agree, b: { fits: 'no', reason: 'r' } })).toBe('disagreed')
     expect(acceptFounding(draft, { ...agree, endEventConcrete: 'no' })).toBe('disagreed')
     expect(acceptFounding(draft, { ...agree, endEventConcrete: 'none' })).toBe('disagreed')
+  })
+
+  it('founds only when the check judges both stories to report an occurrence', () => {
+    expect(acceptFounding(draft, { ...agree, a: { ...agree.a, occurred: 'no' } })).toBe('disagreed')
+    expect(acceptFounding(draft, { ...agree, b: { ...agree.b, occurred: 'no' } })).toBe('disagreed')
   })
 
   it('founds a charter that names no end event on the stories alone, and fails on a call that gave nothing', () => {
@@ -477,6 +489,59 @@ describe('linkStory', () => {
     expect(got).toMatchObject({ outcome: 'founded', founding: { outcome: 'founded' } })
     expect(got.founding?.draft?.charter.endEvent).toBeNull()
     expect(w.calls.foundCheck).toHaveBeenCalledWith(expect.objectContaining({ charter: expect.objectContaining({ endEvent: null }) }))
+  })
+
+  describe('a founding refused only because the partner reported no occurrence', () => {
+    /** The story s with three passing partners, nearest first; `checks` answers the founding checks in turn. */
+    const tried = (checks: FoundCheckAnswer[], foundingCandidates = 3) => {
+      const s = story('s', 10)
+      const partners = [story('w1', 7), story('w2', 8), story('e', 9)]
+      let n = 0
+      const w = world({
+        stories: [s, ...partners],
+        neighbours: { s: partners.map((p, i) => ({ id: p.id, distance: 0.1 * (i + 1) })) },
+        link: input => answer(input.partners.map(p => yesPartner(p.ref))),
+      })
+      const deps: LinkDeps = {
+        ...w.deps,
+        options: { ...config.overviews, foundingCandidates },
+        foundCheck: async input => {
+          w.calls.foundCheck(input)
+          return { parsed: checks[n++] ?? agree, costUsd: 0.02, model: 'large-model' }
+        },
+      }
+      return { got: linkStory(s, deps), calls: w.calls }
+    }
+    // The partner is the earlier story, so it is A
+    const partnerSilent = { ...agree, a: { ...agree.a, occurred: 'no' as const } }
+
+    it('tries the next passing partner, nearest first, and founds with it, the refused attempt kept', async () => {
+      const { got, calls } = tried([partnerSilent, partnerSilent, agree])
+      expect(await got).toMatchObject({ outcome: 'founded', founding: { partner: { id: 'e' }, outcome: 'founded' } })
+      expect((await got).refusedFoundings.map(f => [f.partner.id, f.outcome])).toEqual([
+        ['w1', 'disagreed'],
+        ['w2', 'disagreed'],
+      ])
+      expect(calls.found).toHaveBeenCalledTimes(3)
+    })
+
+    it('tries no other partner when the story itself reported none, a story did not fit, or a named end event was vague', async () => {
+      for (const check of [
+        { ...agree, b: { ...agree.b, occurred: 'no' as const } },
+        { ...partnerSilent, b: { ...agree.b, fits: 'no' as const } },
+        { ...partnerSilent, endEventConcrete: 'no' as const },
+      ]) {
+        const { got, calls } = tried([check])
+        expect(await got).toMatchObject({ outcome: 'none', founding: { partner: { id: 'w1' }, outcome: 'disagreed' }, refusedFoundings: [] })
+        expect(calls.found).toHaveBeenCalledTimes(1)
+      }
+    })
+
+    it('makes at most foundingCandidates attempts in all', async () => {
+      const { got, calls } = tried([partnerSilent, partnerSilent, agree], 2)
+      expect(await got).toMatchObject({ outcome: 'none', founding: { partner: { id: 'w2' } } })
+      expect(calls.found).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('refuses a draft without a title without asking the check', async () => {

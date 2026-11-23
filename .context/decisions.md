@@ -76,5 +76,6 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0072 · Overviews close only by fading or an editor's Close, and a story reporting the END_EVENT becomes a turning point](decisions/0072-overviews-close-only-by-fading-or-editor.md)
 - [ADR-0073 · The judged linking replay carries neighbouring developments as unscored background](decisions/0073-judged-linking-replay-background.md)
 - [ADR-0074 · Linking eval runs save their replay, and their bars are scored again from it](decisions/0074-linking-eval-saved-replay.md)
+- [ADR-0075 · Found an overview only from two stories that each report something that happened](decisions/0075-found-only-from-occurrences.md)
 - [ADR-0076 · The linking evals replay deduplicated inputs from a committed list of duplicate groups](decisions/0076-linking-evals-deduplicated-inputs.md)
 - [ADR-0077 · Linking asks a stale answer again at once and no longer founds past a trivially refused join](decisions/0077-linking-stale-at-once-no-founding-past-refused-join.md)

@@ -135,7 +135,9 @@ interface MembershipRow {
 }
 
 /**
- * The stories' active overviews, and the overviews an editor detached each from (`locked`). With
+ * The stories' active overviews, the overviews an editor detached each from (`locked`), and those whose
+ * latest founding check judged them to report no occurrence (`noOccurrence`, from the `found` decisions'
+ * stored answers, the newest first, as A or B; an Undo of a founding leaves its check's judgment standing). With
  * `asOf` (the story being linked's date), an overview's last entry is its newest active entry of a
  * story still published, published on or before it, as linking a story sees the development on its
  * own day (a member unpublished before the job detached it keeps nothing alive); without, the
@@ -171,7 +173,55 @@ export async function membershipsOf(db: OverviewDb, storyIds: readonly string[],
   )
   const lockedOut = new Map<string, string[]>()
   for (const r of locked) lockedOut.set(r.story_id, [...(lockedOut.get(r.story_id) ?? []), r.overview_id])
-  return { active, lockedOut }
+  // Each story's latest founding check, as A (the earlier story; the partner on a tie) or B: its `occurred`
+  const checked = await db.$queryRaw<{ story_id: string; occurred: string | null }[]>`
+    WITH attempts AS (
+      SELECT d.id, d.created_at, d.story_id AS linked, d.inputs->>'partnerId' AS partner, d.answer->'check' AS chk,
+             (p.date_published <= s.date_published) AS partner_is_a
+      FROM overview_decisions d
+      JOIN stories s ON s.id = d.story_id
+      JOIN stories p ON p.id = d.inputs->>'partnerId'
+      WHERE d.kind = 'found'
+        AND (d.story_id = ANY(${ids}::text[]) OR d.inputs->>'partnerId' = ANY(${ids}::text[]))
+    ), sides AS (
+      SELECT id, created_at, linked AS story_id, CASE WHEN partner_is_a THEN chk->'b'->>'occurred' ELSE chk->'a'->>'occurred' END AS occurred FROM attempts
+      UNION ALL
+      SELECT id, created_at, partner AS story_id, CASE WHEN partner_is_a THEN chk->'a'->>'occurred' ELSE chk->'b'->>'occurred' END AS occurred FROM attempts
+    )
+    SELECT DISTINCT ON (story_id) story_id, occurred
+    FROM sides
+    WHERE story_id = ANY(${ids}::text[]) AND occurred IS NOT NULL
+    ORDER BY story_id, created_at DESC, id DESC
+  `
+  return { active, lockedOut, noOccurrence: new Set(checked.filter(r => r.occurred === 'no').map(r => r.story_id)) }
+}
+
+/** A founding attempt as the occurrence rule reads it: the linked story, its partner, their days, and the check's per-story answers (A the earlier, the partner on a tie). */
+export interface CheckedAttempt {
+  storyId: string
+  partnerId: string
+  storyDate: Date
+  partnerDate: Date
+  check: { a: { occurred?: string }; b: { occurred?: string } } | null
+}
+
+/**
+ * The stories whose latest founding check, of the attempts given in the order made, judged that they
+ * report no occurrence: production reads the same from its `found` decisions (`membershipsOf`), the
+ * eval's sandbox from its own. A check with no `occurred` answer says nothing either way. Pure.
+ */
+export function noOccurrenceOf(attempts: readonly CheckedAttempt[]): Set<string> {
+  const latest = new Map<string, string>()
+  for (const t of attempts) {
+    if (!t.check) continue
+    const partnerIsA = t.partnerDate.getTime() <= t.storyDate.getTime()
+    const sides: [string, string | undefined][] = [
+      [t.storyId, (partnerIsA ? t.check.b : t.check.a).occurred],
+      [t.partnerId, (partnerIsA ? t.check.a : t.check.b).occurred],
+    ]
+    for (const [id, occurred] of sides) if (occurred) latest.set(id, occurred)
+  }
+  return new Set([...latest].filter(([, occurred]) => occurred === 'no').map(([id]) => id))
 }
 
 /** A candidate overview, ranked by its nearest member. */
@@ -186,6 +236,8 @@ export interface Candidates {
   overviews: RankedOverview[]
   /** Unlinked neighbours that may found a development with the story, nearest first, at most `foundingCandidates`. */
   partners: Neighbour[]
+  /** Unlinked neighbours within the distance and window left out as partners because a founding check judged them to report no occurrence. */
+  excludedPartners: string[]
 }
 
 /**
@@ -202,8 +254,10 @@ const takesStories = (m: Membership, asOf: Date, lookbackDays: number): boolean 
  * The story's candidates from its neighbours and their memberships: the overviews of neighbours that
  * are active members of an overview that still takes stories, minus those an editor detached the story
  * from, ranked by their nearest member; and the neighbours with no active entry, within the distance
- * and the founding window before the story, as founding partners. A frozen overview stays a candidate,
- * so a story that belongs there is held rather than settled elsewhere. Pure.
+ * and the founding window before the story, as founding partners, except those a founding check judged
+ * to report no occurrence (`noOccurrence`), left out before the cut so the slot goes to the next one. A
+ * frozen overview stays a candidate, so a story that belongs there is held rather than settled
+ * elsewhere. Pure.
  */
 export function groupCandidates(
   story: { id: string; datePublished: Date },
@@ -214,12 +268,15 @@ export function groupCandidates(
   const lockedOut = new Set(memberships.lockedOut.get(story.id) ?? [])
   const nearestOf = new Map<string, RankedOverview>()
   const partners: Neighbour[] = []
+  const excludedPartners: string[] = []
   const windowStart = story.datePublished.getTime() - options.foundingWindowDays * DAY_MS
   for (const n of neighbours) {
     if (n.id === story.id || n.datePublished.getTime() > story.datePublished.getTime()) continue
     const m = memberships.active.get(n.id)
     if (!m) {
-      if (n.distance <= options.maxDistance && n.datePublished.getTime() >= windowStart) partners.push(n)
+      if (n.distance > options.maxDistance || n.datePublished.getTime() < windowStart) continue
+      if (memberships.noOccurrence?.has(n.id)) excludedPartners.push(n.id)
+      else partners.push(n)
       continue
     }
     if (lockedOut.has(m.overviewId) || !takesStories(m, story.datePublished, options.memberLookbackDays)) continue
@@ -233,5 +290,6 @@ export function groupCandidates(
   return {
     overviews: [...nearestOf.values()].sort(byDistance(o => o.overviewId)).slice(0, options.candidateOverviews),
     partners: partners.sort(byDistance(p => p.id)).slice(0, options.foundingCandidates),
+    excludedPartners,
   }
 }

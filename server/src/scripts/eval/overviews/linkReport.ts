@@ -45,7 +45,7 @@ function missedLines(r: LinkStepReport): string[] {
   return [
     '### Missed must entries (diagnostics; no bar)',
     '',
-    `Summed over the ${r.diagnostics.length} run${r.diagnostics.length === 1 ? '' : 's'}. **no candidate**: the story was shown nothing and no call was made; **not offered**: its development's overview or a partner of its development was not among the candidates shown; **refused by code**: the model said yes and the quote checks refused it (the rule is given); **founding blocked**: a partner of its development passed, but the model's yes to another development's overview, refused by code, kept the story from founding; **founding not agreed**: a founding with a partner of its development was drafted and refused or not agreed by the check; **model no / unsure**: the model's answer for its development's candidates (confidence, and scope when not inside; the link answer gives no reason). "Before … was founded" marks a story linked before its development had an overview.`,
+    `Summed over the ${r.diagnostics.length} run${r.diagnostics.length === 1 ? '' : 's'}. **no candidate**: the story was shown nothing and no call was made; **not offered**: its development's overview or a partner of its development was not among the candidates shown; **refused by code**: the model said yes and the quote checks refused it (the rule is given); **founding blocked**: a partner of its development passed, but the model's yes to another development's overview, refused by code, kept the story from founding; **founding refused: partner reported no occurrence**: a founding with a partner of its development was refused only because the check judged the partner to report no occurrence, and no further partner founded; **founding not agreed**: a founding with a partner of its development was drafted and refused or not agreed by the check; **model no / unsure**: the model's answer for its development's candidates (confidence, and scope when not inside; the link answer gives no reason). "Before … was founded" marks a story linked before its development had an overview.`,
     '',
     `| Development | ${causes.join(' | ')} | All |`,
     `|---|${causes.map(() => '---|').join('')}---|`,
@@ -98,6 +98,22 @@ function foundingDateLines(r: LinkStepReport): string[] {
           '',
         ]
       : []),
+  ]
+}
+
+/** The occurrence rule's traces (ADR-0075): foundings that tried a further partner, and the stories left out as partners. */
+function occurrenceLines(r: LinkStepReport): string[] {
+  if (r.diagnostics.every(d => d.retries.length === 0 && d.excluded.length === 0)) return []
+  return [
+    '### Foundings and the occurrence rule (diagnostics; no bar)',
+    '',
+    'A founding refused only because the partner reported no occurrence tries the next passing partner; a story a founding check judged to report none takes no partner slot afterwards.',
+    '',
+    ...r.diagnostics.flatMap(d => [
+      ...d.retries.map(x => `- Run ${d.run}, ${x.slug}: tried ${x.tried.join(', ')}; ${x.founded ? 'founded with the last' : 'founded nothing'}`),
+      ...(d.excluded.length > 0 ? [`- Run ${d.run}, left out as partners: ${d.excluded.map(x => `${x.slug} (${x.as})`).join('; ')}`] : []),
+    ]),
+    '',
   ]
 }
 
@@ -215,6 +231,7 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
     ...(shown('link') ? missedLines(r) : []),
     ...(shown('role') ? roleLines(r) : []),
     ...(shown('found') || shown('link') ? foundingDateLines(r) : []),
+    ...(shown('found') || shown('link') ? occurrenceLines(r) : []),
     ...(shown('found') || shown('link') ? charterLines(r) : []),
   ]
 }

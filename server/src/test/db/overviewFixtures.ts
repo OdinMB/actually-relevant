@@ -31,6 +31,8 @@ export const linkResult = (story: LinkStory, over: Partial<LinkResult> = {}): Li
   role: { role: 'routine', roleKind: null },
   join: null,
   founding: null,
+  refusedFoundings: [],
+  excludedPartners: [],
   foundingBlockedBy: null,
   shown: { overviews: [], partners: [] },
   answer: null,

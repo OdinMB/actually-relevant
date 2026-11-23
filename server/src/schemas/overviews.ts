@@ -97,6 +97,11 @@ const fits = z.object({
     .enum(['yes', 'no'])
     .describe('yes: the story belongs to the development <CHARTER> describes, and to none of what its OUT list keeps separate. no: otherwise.'),
   reason: z.string().describe('One sentence: why.'),
+  occurred: z
+    .enum(['yes', 'no'])
+    .describe(
+      'yes: the story reports an occurrence, as <OCCURRED> defines it. no: it reports only what someone says may, should or will happen, or what someone makes of what happened.',
+    ),
 })
 
 export const foundCheckSchema = z.object({

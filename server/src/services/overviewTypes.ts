@@ -66,6 +66,12 @@ export interface Membership {
 export interface Memberships {
   active: ReadonlyMap<string, Membership>
   lockedOut: ReadonlyMap<string, readonly string[]>
+  /**
+   * The stories whose latest founding check (as either story) judged that they report no occurrence
+   * (`occurred: no`): a warning, a forecast, a reaction. They found nothing, so they take no founding
+   * partner's slot (`groupCandidates`). Absent where nothing reads founding checks.
+   */
+  noOccurrence?: ReadonlySet<string>
 }
 
 /** A candidate overview as the link prompt shows it: its title, charter and newest entries. */
@@ -96,7 +102,7 @@ export type LinkOutcome = (typeof LINK_OUTCOMES)[number]
 
 export const SETTLING_OUTCOMES: readonly LinkOutcome[] = ['joined', 'founded', 'none', 'rejected']
 
-/** A founding attempt's outcome: founded on agreement; disagreed (the check did not agree, or found a named end event vague), refused (no title or IN, or a title too long), failed (a call failed). */
+/** A founding attempt's outcome: founded on agreement; disagreed (the check did not agree, found a named end event vague, or judged a story to report no occurrence), refused (no title or IN, or a title too long), failed (a call failed). */
 export type FoundingOutcome = 'founded' | 'disagreed' | 'refused' | 'failed'
 
 /** A "Where this stands" sentence or a "What's being done" line as stored: its text and the pool facts it cites, by row id. */

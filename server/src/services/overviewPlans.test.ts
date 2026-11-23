@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { joinResult, linkResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
+import { foundResult, joinResult, linkResult, linkStory, reviewCaseOf } from '../test/db/overviewFixtures.js'
 import { applied, newOverviewRow, settle, type EntryRow, type OverviewRow, type Rows } from './overviewChanges.js'
-import { planAlone, planBurst, planConflict, planJoin, planRecenter, planReview, planStatus } from './overviewPlans.js'
+import { planAlone, planBurst, planConflict, planFounding, planJoin, planRecenter, planReview, planStatus } from './overviewPlans.js'
 import type { OfferedStory, RecenterCase, RecenterResult } from './overviewRecenter.js'
 import type { ReviewResult } from './overviewReview.js'
 
@@ -63,6 +63,26 @@ describe('planJoin', () => {
     const held = planAlone(linkResult(story, { outcome: 'held', heldBy: 'o1' }), ctx)
     expect(held).toMatchObject({ outcome: 'held', plan: { decision: { kind: 'link', outcome: 'held', overviewId: 'o1' }, newEntries: [] } })
     expect(planAlone(linkResult(story, { outcome: 'none' }), ctx).plan.decision.overviewId).toBeNull()
+  })
+
+  it('stores each founding attempt refused for its partner as its own found decision, beside the final attempt', () => {
+    const partner = (id: string) => linkStory({ id, datePublished: day(5) })
+    const attempt = (p: ReturnType<typeof linkStory>, outcome: 'disagreed' | 'founded') => ({
+      ...foundResult(story, p).founding!,
+      outcome,
+      draft: outcome === 'founded' ? foundResult(story, p).founding!.draft : null,
+    })
+    const refused = [attempt(partner('w1'), 'disagreed'), attempt(partner('w2'), 'disagreed')]
+    const found = (p: { plan: { decision: { kind: string; inputs: unknown }; also: { kind: string; inputs: unknown }[] } }) =>
+      [p.plan.decision, ...p.plan.also].filter(d => d.kind === 'found').map(d => (d.inputs as { partnerId: string }).partnerId)
+    expect(found(planFounding({ ...foundResult(story, partner('e')), refusedFoundings: refused }, ctx))).toEqual(['e', 'w1', 'w2'])
+    // In the order tried, so the final attempt's check is the latest
+    expect(found(planAlone(linkResult(story, { outcome: 'none', founding: attempt(partner('e'), 'disagreed'), refusedFoundings: refused }), ctx))).toEqual([
+      'w1',
+      'w2',
+      'e',
+    ])
+    expect(found(planConflict(linkResult(story, { refusedFoundings: refused }), ctx))).toEqual(['w1', 'w2'])
   })
 
   it("records the join's end-event flag as linking settled it, whatever the row's charter names at the write", () => {

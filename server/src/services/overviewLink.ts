@@ -94,6 +94,8 @@ export interface Acceptance {
   join: Accepted<ShownOverview> | null
   /** The nearest passing founding partner, considered only when no overview passed and no yes to an overview was refused. */
   partner: Accepted<ShownPartner> | null
+  /** Every passing founding partner, nearest first, under the same conditions: a founding the partner's lack of an occurrence refused tries the next (`linkStory`). */
+  partners: Accepted<ShownPartner>[]
   /** The nearest overview the model said yes to and code refused, when it kept a passing founding partner from founding (a confident claim that the story belongs to an open overview); null otherwise. */
   blockedBy: string | null
   /** Candidates the model said yes to (joins proposed). */
@@ -162,8 +164,9 @@ export function acceptLink(story: LinkStory, overviews: readonly ShownOverview[]
   const byRef = new Map(answer.candidates.map(c => [c.id.trim(), c]))
   const refusals: Refusal[] = []
   let proposed = 0
-  const pick = <C extends { ref: string; id: string }>(candidates: readonly C[], texts: (c: C) => string[]): { chosen: Accepted<C> | null; refused: C[] } => {
-    let chosen: Accepted<C> | null = null
+  /** The candidates that pass, in the order shown (nearest first), and those whose yes code refused. */
+  const pick = <C extends { ref: string; id: string }>(candidates: readonly C[], texts: (c: C) => string[]): { passed: Accepted<C>[]; refused: C[] } => {
+    const passed: Accepted<C>[] = []
     const refused: C[] = []
     for (const candidate of candidates) {
       const a = byRef.get(candidate.ref)
@@ -176,18 +179,20 @@ export function acceptLink(story: LinkStory, overviews: readonly ShownOverview[]
         continue
       }
       const shared = sharedOf(a)
-      chosen ??= { candidate, answer: a, shared: judged.endDropped ? { ...shared, end: { story: '', other: '' } } : shared, ...judged }
+      passed.push({ candidate, answer: a, shared: judged.endDropped ? { ...shared, end: { story: '', other: '' } } : shared, ...judged })
     }
-    return { chosen, refused }
+    return { passed, refused }
   }
   const overviewPick = pick(overviews, overviewTexts)
   const partnerPick = pick(partners, storyTexts)
-  const join = overviewPick.chosen
+  const join = overviewPick.passed[0] ?? null
   const refusedOverview = join ? null : (overviewPick.refused[0]?.id ?? null)
+  const passing = join || refusedOverview ? [] : partnerPick.passed
   return {
     join,
-    partner: join || refusedOverview ? null : partnerPick.chosen,
-    blockedBy: refusedOverview && partnerPick.chosen ? refusedOverview : null,
+    partner: passing[0] ?? null,
+    partners: passing,
+    blockedBy: refusedOverview && partnerPick.passed.length > 0 ? refusedOverview : null,
     proposed,
     refusals,
     signals: signalsOf(story, overviews, byRef),
@@ -231,16 +236,34 @@ export const draftRefused = (draft: FoundAnswer, options: CharterLimits = config
 
 /**
  * Whether the two founding calls agree (`.context/overviews.md`, "How a story is linked", step 4):
- * `refused` for a draft `draftRefused` refuses; `founded` only when the check finds both stories fit
- * and, when the draft names an end event, finds it concrete; `disagreed` otherwise; `failed` for a call
- * that gave no answer.
+ * `refused` for a draft `draftRefused` refuses; `founded` only when the check finds both stories fit,
+ * both report an occurrence (the owner's rule of 2026-11-23: a development is founded only from stories
+ * reporting something that happened, never from a warning, a forecast or a reaction, ADR-0075) and,
+ * when the draft names an end event, finds it concrete; `disagreed` otherwise; `failed` for a call that
+ * gave no answer.
  */
 export function acceptFounding(draft: FoundAnswer | null, check: FoundCheckAnswer | null): FoundingOutcome {
   if (!draft) return 'failed'
   if (draftRefused(draft)) return 'refused'
   if (!check) return 'failed'
   const endEventHolds = endEventOf(draft.charter.endEvent) === null || check.endEventConcrete === 'yes'
-  return check.a.fits === 'yes' && check.b.fits === 'yes' && endEventHolds ? 'founded' : 'disagreed'
+  const both = (side: FoundCheckAnswer['a']) => side.fits === 'yes' && side.occurred === 'yes'
+  return both(check.a) && both(check.b) && endEventHolds ? 'founded' : 'disagreed'
+}
+
+/**
+ * Whether a founding was refused only because the partner reported no occurrence: both stories fit, the
+ * story itself occurred and a named end event is concrete. Then the next passing partner is tried
+ * (`linkStory`); any other refusal ends the founding.
+ */
+export function onlyPartnerSilent(attempt: FoundingAttempt, story: Pick<LinkStory, 'datePublished'>): boolean {
+  const { draft, check } = attempt.answers
+  if (attempt.outcome !== 'disagreed' || !draft || !check) return false
+  // The earlier story is A; on a tie, the partner
+  const partnerIsA = attempt.partner.datePublished.getTime() <= story.datePublished.getTime()
+  const [partner, own] = partnerIsA ? [check.a, check.b] : [check.b, check.a]
+  const endEventHolds = endEventOf(draft.charter.endEvent) === null || check.endEventConcrete === 'yes'
+  return partner.fits === 'yes' && own.fits === 'yes' && own.occurred === 'yes' && partner.occurred === 'no' && endEventHolds
 }
 
 /** A founding attempt: the partner, both calls' answers, and on agreement the draft. */
@@ -274,6 +297,10 @@ export interface LinkResult {
   /** For a `held` story, the frozen overview that passed first: its decision names it, so the story waits on that freeze. */
   heldBy: string | null
   founding: FoundingAttempt | null
+  /** Earlier founding attempts refused only because their partner reported no occurrence, in the order tried; the writer stores each as its own `found` decision. */
+  refusedFoundings: FoundingAttempt[]
+  /** Unlinked neighbours left out as founding partners because a founding check judged them to report no occurrence (`groupCandidates`). */
+  excludedPartners: string[]
   /** The overview whose refused yes kept a passing founding partner from founding (`acceptLink`'s `blockedBy`), when one did. */
   foundingBlockedBy: string | null
   /** The candidates shown, by ref; the stale check reads the partners' memberships again. */
@@ -305,6 +332,8 @@ const blank = (story: LinkStory, outcome: LinkResult['outcome']): LinkResult => 
   join: null,
   heldBy: null,
   founding: null,
+  refusedFoundings: [],
+  excludedPartners: [],
   foundingBlockedBy: null,
   shown: { overviews: [], partners: [] },
   answer: null,
@@ -341,7 +370,10 @@ async function found(story: LinkStory, partner: Accepted<ShownPartner>, deps: Li
 
 /**
  * Links one story: its candidates from its neighbours as they stand now, the link call (none with no
- * candidate), the acceptance rules, and a founding when no overview passed and a partner did. A frozen
+ * candidate), the acceptance rules, and a founding when no overview passed and a partner did; a
+ * founding refused only because the partner reported no occurrence tries the next passing partner,
+ * nearest first, at most `foundingCandidates` attempts in all, the refused ones kept
+ * (`refusedFoundings`) so each is stored and its partner no longer takes a partner's slot. A frozen
  * overview that passes first holds the story for the next run, so a story never settles elsewhere
  * while an editor's freeze stands. A joined story that reports the end event of an overview whose
  * charter names one becomes a turning point (`endEventRole`); the flag follows the charter the call
@@ -377,10 +409,11 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
     overviews: overviews.map(o => ({ ref: o.ref, id: o.id, distance: o.distance })),
     partners: partners.map(p => ({ ref: p.ref, id: p.id, distance: p.distance })),
   }
-  if (overviews.length === 0 && partners.length === 0) return { ...blank(story, 'none'), shown }
+  const excludedPartners = grouped.excludedPartners
+  if (overviews.length === 0 && partners.length === 0) return { ...blank(story, 'none'), shown, excludedPartners }
 
   const call = await deps.link({ story, overviews, partners })
-  const base = { ...blank(story, 'failed'), shown, model: call.model, promptVersion: OVERVIEW_PROMPT_VERSIONS.link, costUsd: call.costUsd }
+  const base = { ...blank(story, 'failed'), shown, excludedPartners, model: call.model, promptVersion: OVERVIEW_PROMPT_VERSIONS.link, costUsd: call.costUsd }
   if (!call.parsed) return base
   const answer = unescapeXmlDeep(call.parsed)
   const accepted = acceptLink(story, overviews, partners, answer)
@@ -393,12 +426,21 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
     const reportsEndEvent = accepted.join.answer.reportsEndEvent && !accepted.join.endDropped && accepted.join.candidate.charter.endEvent !== null
     return { ...settled, outcome: 'joined', role: endEventRole(role, reportsEndEvent), join: { ...accepted.join, reportsEndEvent } }
   }
-  if (!accepted.partner) return { ...settled, outcome: alone, foundingBlockedBy: accepted.blockedBy }
-  const founding = await found(story, accepted.partner, deps)
-  if (founding.outcome === 'failed') return { ...settled, outcome: 'failed', founding }
-  if (founding.outcome !== 'founded' || !founding.draft) return { ...settled, outcome: alone, founding }
+  if (accepted.partners.length === 0) return { ...settled, outcome: alone, foundingBlockedBy: accepted.blockedBy }
+  // A founding refused only for the partner's lack of an occurrence tries the next passing partner, nearest first, at most foundingCandidates attempts
+  const limit = (deps.options ?? config.overviews).foundingCandidates
+  const refusedFoundings: FoundingAttempt[] = []
+  let founding = await found(story, accepted.partners[0]!, deps)
+  for (const next of accepted.partners.slice(1, limit)) {
+    if (!onlyPartnerSilent(founding, story)) break
+    refusedFoundings.push(founding)
+    founding = await found(story, next, deps)
+  }
+  const tried = { ...settled, refusedFoundings }
+  if (founding.outcome === 'failed') return { ...tried, outcome: 'failed', founding }
+  if (founding.outcome !== 'founded' || !founding.draft) return { ...tried, outcome: alone, founding }
   const storyIsA = founding.partner.datePublished.getTime() > story.datePublished.getTime()
-  return { ...settled, outcome: 'founded', founding, role: storyIsA ? founding.draft.roles.a : founding.draft.roles.b }
+  return { ...tried, outcome: 'founded', founding, role: storyIsA ? founding.draft.roles.a : founding.draft.roles.b }
 }
 
 /**

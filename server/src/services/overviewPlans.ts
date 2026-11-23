@@ -31,7 +31,7 @@ import {
   type Rows,
 } from './overviewChanges.js'
 import type { AuditInputs, FoundInputs, LinkInputs, RecenterInputs, ReviewInputs, StatusInputs } from './overviewDecisions.js'
-import type { LinkResult } from './overviewLink.js'
+import type { FoundingAttempt, LinkResult } from './overviewLink.js'
 import { RECENTERER, type RecenterCase, type RecenterResult } from './overviewRecenter.js'
 import type { AuditResult, ReviewCase, ReviewResult } from './overviewReview.js'
 import type { StatusMove } from './overviewStatus.js'
@@ -109,9 +109,12 @@ const linkDecision = (result: LinkResult, outcome: LinkOutcome, overviewId: stri
     actor: PIPELINE,
   })
 
-/** The founding attempt's own decision, whatever its outcome; the overview's id once founded. */
-const foundDecision = (result: LinkResult, overviewId: string | null, ctx: PlanContext): DecisionDraft => {
-  const f = result.founding!
+/**
+ * A founding attempt's own decision, whatever its outcome (the final attempt's by default, or one the
+ * partner's lack of an occurrence refused); the overview's id once founded. Its stored check answers say
+ * which story reported no occurrence, which `membershipsOf` reads to keep it out of the partners.
+ */
+const foundDecision = (result: LinkResult, overviewId: string | null, ctx: PlanContext, f: FoundingAttempt = result.founding!): DecisionDraft => {
   const inputs: FoundInputs = { partnerId: f.partner.id }
   return draft({
     id: ctx.newId(),
@@ -135,9 +138,13 @@ export interface LinkPlan {
   outcome: LinkOutcome
 }
 
+/** The founding attempts the partner's lack of an occurrence refused before the last one, each its own decision, in the order tried. */
+const refusedFoundingDecisions = (result: LinkResult, ctx: PlanContext): DecisionDraft[] =>
+  result.refusedFoundings.map(f => foundDecision(result, null, ctx, f))
+
 /** A story's result stored as a conflict: written stale on its last try, or refused by the one-active-entry index. */
 export const planConflict = (result: LinkResult, ctx: PlanContext): LinkPlan => ({
-  plan: plan(linkDecision(result, 'conflict', null, ctx)),
+  plan: plan(linkDecision(result, 'conflict', null, ctx), { also: refusedFoundingDecisions(result, ctx) }),
   outcome: 'conflict',
 })
 
@@ -220,7 +227,7 @@ export function planFounding(result: LinkResult, ctx: PlanContext): LinkPlan {
   ]
   return {
     plan: plan(found, {
-      also: [storyLink, partnerLink],
+      also: [storyLink, partnerLink, ...refusedFoundingDecisions(result, ctx)],
       newOverview: {
         id: overviewId,
         title: d.title,
@@ -246,7 +253,9 @@ export function planAlone(result: LinkResult, ctx: PlanContext): LinkPlan {
   const outcome = result.outcome === 'joined' || result.outcome === 'founded' ? 'conflict' : result.outcome
   const overviewId = result.join?.candidate.id ?? (outcome === 'held' ? result.heldBy : null)
   return {
-    plan: plan(linkDecision(result, outcome, overviewId, ctx), { also: result.founding ? [foundDecision(result, null, ctx)] : [] }),
+    plan: plan(linkDecision(result, outcome, overviewId, ctx), {
+      also: [...refusedFoundingDecisions(result, ctx), ...(result.founding ? [foundDecision(result, null, ctx)] : [])],
+    }),
     outcome,
   }
 }

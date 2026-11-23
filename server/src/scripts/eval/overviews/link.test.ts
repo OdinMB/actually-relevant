@@ -184,7 +184,7 @@ const FOUND: FoundAnswer = {
   charter: { in: 'The Ebola outbreak in the east.', out: [], endEvent: 'The outbreak is declared over' },
   roles: { a: routine, b: routine },
 }
-const CHECK: FoundCheckAnswer = { a: { fits: 'yes', reason: 'r' }, b: { fits: 'yes', reason: 'r' }, endEventConcrete: 'yes' }
+const CHECK: FoundCheckAnswer = { a: { fits: 'yes', reason: 'r', occurred: 'yes' }, b: { fits: 'yes', reason: 'r', occurred: 'yes' }, endEventConcrete: 'yes' }
 const isStep = (schemaName: string, name: string) => schemaName.startsWith(`${name}#`)
 
 /** A fixed model, a function of the step and the prompt alone: yes to every candidate, every founding agreed, the end events the same. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupCandidates, type CandidateOptions, type Neighbour } from './overviewCandidates.js'
+import { groupCandidates, noOccurrenceOf, type CandidateOptions, type Neighbour } from './overviewCandidates.js'
 import type { Membership, Memberships } from './overviewTypes.js'
 
 const DAY = 86_400_000
@@ -86,11 +86,37 @@ describe('groupCandidates', () => {
   it('ignores the story itself and any neighbour dated after it', () => {
     const later = { ...near('later', 0.1), datePublished: new Date(STORY_DATE.getTime() + DAY) }
     const got = groupCandidates(story, [near('story', 0), later], memberships({ later: member('A') }), OPTIONS)
-    expect(got).toEqual({ overviews: [], partners: [] })
+    expect(got).toEqual({ overviews: [], partners: [], excludedPartners: [] })
   })
 
   it('caps the partners at foundingCandidates', () => {
     const got = groupCandidates(story, [near('a', 0.1), near('b', 0.2), near('c', 0.3)], memberships({}), { ...OPTIONS, foundingCandidates: 2 })
     expect(got.partners.map(p => p.id)).toEqual(['a', 'b'])
+  })
+
+  it("reads each story's latest founding check as A (the earlier, the partner on a tie) or B", () => {
+    const check = (a: string, b: string) => ({ a: { occurred: a }, b: { occurred: b } })
+    const attempt = (storyId: string, partnerId: string, storyDay: number, partnerDay: number, c: ReturnType<typeof check> | null) => ({
+      storyId,
+      partnerId,
+      storyDate: daysBefore(-storyDay),
+      partnerDate: daysBefore(-partnerDay),
+      check: c,
+    })
+    expect(noOccurrenceOf([attempt('s', 'w', 2, 1, check('no', 'yes'))])).toEqual(new Set(['w']))
+    expect(noOccurrenceOf([attempt('s', 'w', 1, 1, check('no', 'yes'))])).toEqual(new Set(['w']))
+    expect(noOccurrenceOf([attempt('s', 'w', 1, 2, check('no', 'yes'))])).toEqual(new Set(['s']))
+    // The latest answer stands, a check with none says nothing
+    expect(noOccurrenceOf([attempt('s', 'w', 2, 1, check('no', 'yes')), attempt('t', 'w', 3, 1, check('yes', 'yes')), attempt('u', 'w', 4, 1, null)])).toEqual(
+      new Set(),
+    )
+  })
+
+  it('leaves out a partner whose latest founding check judged it to report no occurrence, before the cut, and never an overview', () => {
+    const neighbours = [near('warning', 0.05), near('a', 0.1), near('b', 0.2), near('c', 0.3), near('m', 0.1)]
+    const got = groupCandidates(story, neighbours, { ...memberships({ m: member('A') }), noOccurrence: new Set(['warning', 'm']) }, OPTIONS)
+    expect(got.partners.map(p => p.id)).toEqual(['a', 'b', 'c'])
+    expect(got.excludedPartners).toEqual(['warning'])
+    expect(got.overviews.map(o => o.overviewId)).toEqual(['A'])
   })
 })

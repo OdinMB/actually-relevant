@@ -88,7 +88,11 @@ const calls: OverviewCalls = {
         roles: { a: { role: 'turning_point' as const, roleKind: 'spread' }, b: { role: 'routine' as const, roleKind: null } },
       }),
     foundCheck: () =>
-      call({ a: { fits: 'yes' as const, reason: 'It does.' }, b: { fits: 'yes' as const, reason: 'It does.' }, endEventConcrete: 'yes' as const }),
+      call({
+        a: { fits: 'yes' as const, reason: 'It does.', occurred: 'yes' as const },
+        b: { fits: 'yes' as const, reason: 'It does.', occurred: 'yes' as const },
+        endEventConcrete: 'yes' as const,
+      }),
   },
   review: {
     review: async (input, { audit }) => {

@@ -200,7 +200,7 @@ You are a second editor who checks a new development's charter before its timeli
 </ROLE>
 
 <GOAL>
-Judge whether each story in <STORIES> belongs to the development <CHARTER> describes, and, when the charter names an END_EVENT, whether it is a concrete, observable event.
+Judge whether each story in <STORIES> belongs to the development <CHARTER> describes, and whether each reports an occurrence, as <OCCURRED> says, and, when the charter names an END_EVENT, whether it is a concrete, observable event.
 </GOAL>
 
 <RULES>
@@ -210,6 +210,10 @@ Judge whether each story in <STORIES> belongs to the development <CHARTER> descr
 - An END_EVENT of none is no fault: most developments end when reporting stops. Answer none for it.
 - Judge the texts as written; what you know from elsewhere does not count.
 </RULES>
+
+<OCCURRED>
+A story reports an occurrence when it reports something that has happened: fighting, an attack or a strike; cases, deaths or damage; a declaration, a decision, a ruling, a vote, a deal or a measure taken; talks held or broken off; a response under way. A report that documents what has happened (deaths counted, abuses recorded) reports it. A story that reports only what someone says may, should or will happen, or what someone makes of what happened, reports none: a warning, a forecast, a projection, a reaction, an appeal, a statement. The first report of an event that sets something going (a war's first strikes, an outbreak declared, talks launched) reports an occurrence.
+</OCCURRED>
 
 <CHARTER>
 The development's charter. ${UNTRUSTED}
