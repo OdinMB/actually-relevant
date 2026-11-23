@@ -45,7 +45,7 @@ function missedLines(r: LinkStepReport): string[] {
   return [
     '### Missed must entries (diagnostics; no bar)',
     '',
-    `Summed over the ${r.diagnostics.length} run${r.diagnostics.length === 1 ? '' : 's'}. **no candidate**: the story was shown nothing and no call was made; **not offered**: its development's overview or a partner of its development was not among the candidates shown; **refused by code**: the model said yes and the quote checks refused it (the rule is given); **founding not agreed**: a founding with a partner of its development was drafted and refused or not agreed by the check; **model no / unsure**: the model's answer for its development's candidates (confidence, and scope when not inside; the link answer gives no reason). "Before … was founded" marks a story linked before its development had an overview.`,
+    `Summed over the ${r.diagnostics.length} run${r.diagnostics.length === 1 ? '' : 's'}. **no candidate**: the story was shown nothing and no call was made; **not offered**: its development's overview or a partner of its development was not among the candidates shown; **refused by code**: the model said yes and the quote checks refused it (the rule is given); **founding blocked**: a partner of its development passed, but the model's yes to another development's overview, refused by code, kept the story from founding; **founding not agreed**: a founding with a partner of its development was drafted and refused or not agreed by the check; **model no / unsure**: the model's answer for its development's candidates (confidence, and scope when not inside; the link answer gives no reason). "Before … was founded" marks a story linked before its development had an overview.`,
     '',
     `| Development | ${causes.join(' | ')} | All |`,
     `|---|${causes.map(() => '---|').join('')}---|`,
@@ -77,6 +77,27 @@ function roleLines(r: LinkStepReport): string[] {
       ),
     ),
     '',
+  ]
+}
+
+/** When each development's first overview was founded, per run, and the joins whose quotes passed only by the near match. */
+function foundingDateLines(r: LinkStepReport): string[] {
+  if (r.diagnostics.every(d => d.firstFoundings.length === 0 && d.nearMatches.length === 0)) return []
+  return [
+    '### First founding of each development (diagnostics; no bar)',
+    '',
+    "The day each development's first overview was founded in each run, to read against its key's first two occurrences (`occurrences`): stories before it could join nothing.",
+    '',
+    ...r.diagnostics.map(d => `- Run ${d.run}: ${d.firstFoundings.map(f => `${f.key} ${f.foundedOn}`).join(', ') || 'none'}`),
+    '',
+    ...(r.diagnostics.some(d => d.nearMatches.length > 0)
+      ? [
+          'Joins whose cause or place quote passed only by the near match (small misspellings in long words), with the joins bar verdict:',
+          '',
+          ...r.diagnostics.flatMap(d => d.nearMatches.map(n => `- Run ${d.run}, ${n.slug} into "${cell(n.overview)}": ${n.verdict ?? 'not scored'}`)),
+          '',
+        ]
+      : []),
   ]
 }
 
@@ -193,6 +214,7 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
       : []),
     ...(shown('link') ? missedLines(r) : []),
     ...(shown('role') ? roleLines(r) : []),
+    ...(shown('found') || shown('link') ? foundingDateLines(r) : []),
     ...(shown('found') || shown('link') ? charterLines(r) : []),
   ]
 }

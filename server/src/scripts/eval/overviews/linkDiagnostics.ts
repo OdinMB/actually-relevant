@@ -32,6 +32,8 @@ export interface CandidateTrace {
   scope: 'inside' | 'wider' | 'unrelated' | null
   /** Why code refused a yes; null when it passed or was no yes. */
   refusal: string | null
+  /** Set on the overview joined when a cause or place quote passed only by the near match (`quoteNearlyFound`). */
+  nearMatch?: boolean
 }
 
 /** One story's last link attempt, by slug: what it was shown, what the model said, what code did, and what was stored. */
@@ -47,6 +49,8 @@ export interface StoryTrace {
   partners: CandidateTrace[]
   /** A founding attempted from this story: the partner's slug, the outcome, and why it did not found. */
   founding: { partner: string; outcome: FoundingOutcome; why: string | null } | null
+  /** The overview whose refused yes kept a passing partner from founding (`LinkResult.foundingBlockedBy`); absent when none did. */
+  blockedBy?: string
 }
 
 /** Why a founding attempt founded nothing, from its calls' answers. */
@@ -80,15 +84,17 @@ export function traceOf(result: LinkResult, stored: LinkOutcome | null, neighbou
       refusal: refusals.get(c.ref) ?? null,
     }
   }
+  const nearJoin = result.join?.nearMatch ? result.join.candidate.ref : null
   return {
     slug: slug(result.story.id),
     date: result.story.date,
     outcome: stored,
     called: result.answer !== null,
     neighbours,
-    overviews: result.shown.overviews.map(o => candidate(o, o.id)),
+    overviews: result.shown.overviews.map(o => ({ ...candidate(o, o.id), ...(o.ref === nearJoin ? { nearMatch: true } : {}) })),
     partners: result.shown.partners.map(p => candidate(p, slug(p.id))),
     founding: result.founding ? { partner: slug(result.founding.partner.id), outcome: result.founding.outcome, why: foundingWhy(result.founding) } : null,
+    ...(result.foundingBlockedBy ? { blockedBy: result.foundingBlockedBy } : {}),
   }
 }
 
@@ -111,6 +117,7 @@ export const MISS_CAUSES = [
   'no candidate',
   'not offered',
   'refused by code',
+  'founding blocked',
   'founding not agreed',
   'model yes, not taken',
   'model unsure',
@@ -157,6 +164,10 @@ export interface RunDiagnostics {
   rolesEither: number
   roleMisses: RoleMiss[]
   charters: CharterLine[]
+  /** The first overview of each development, of any key, by the day it was founded: when each development's overview began. */
+  firstFoundings: { key: string; foundedOn: string; title: string }[]
+  /** The stories joined to an overview whose cause or place quote passed only by the near match, with the joins bar's verdict on each. */
+  nearMatches: { slug: string; overview: string; verdict: 'right' | 'wrong' | 'ignored' | null }[]
 }
 
 export interface DiagnoseInput {
@@ -271,7 +282,10 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
     const refused = ours.find(c => c.refusal)
     const founding = t.founding && ours.some(c => c.id === t.founding!.partner) ? t.founding : null
     const detail = `${ours.map(answerText).join('; ')}${at}`
-    if (refused) miss('refused by code', `${refused.ref}: ${refused.refusal}; ${detail}`)
+    const blockedBy = t.blockedBy && !isOurs(t.blockedBy) ? t.overviews.find(c => c.id === t.blockedBy) : undefined
+    if (blockedBy && ours.some(c => t.partners.includes(c) && c.belongs === 'yes' && !c.refusal))
+      miss('founding blocked', `a refused yes to ${titled(blockedBy.id)} (${blockedBy.refusal ?? 'refused'}); ${detail}`)
+    else if (refused) miss('refused by code', `${refused.ref}: ${refused.refusal}; ${detail}`)
     else if (founding) miss('founding not agreed', `with ${founding.partner}: ${founding.outcome}, ${founding.why ?? ''}; ${detail}`)
     else if (ours.some(c => c.belongs === 'yes'))
       miss(
@@ -312,7 +326,15 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
       charter: o.charter,
     }
   })
-  return { run: d.run, missed, rolesJudged, rolesEither, roleMisses, charters }
+  const firstFoundings = [...firstOf]
+    .map(([key, o]) => ({ key, foundedOn: o.foundedOn, title: o.title }))
+    .sort((a, b) => a.foundedOn.localeCompare(b.foundedOn) || a.key.localeCompare(b.key))
+  const nearMatches = [...d.traces.values()].flatMap(t =>
+    t.overviews
+      .filter(c => c.nearMatch)
+      .map(c => ({ slug: t.slug, overview: d.overviews.find(o => o.id === c.id)?.title ?? c.id, verdict: k.verdict(t.slug, devOf.get(c.id) ?? null) })),
+  )
+  return { run: d.run, missed, rolesJudged, rolesEither, roleMisses, charters, firstFoundings, nearMatches }
 }
 
 /** Each development's missed must entries by cause, summed over the runs, in `MISS_CAUSES` order. */

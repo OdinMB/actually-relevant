@@ -4,10 +4,10 @@
  * link confirmation, the acceptance rules (`acceptLink`: cosine proposes, a model confirms, code
  * checks the quotes), and a founding (two large calls that must agree, `acceptFounding`). Then the
  * ordered run (`linkInOrder`): calls in flight at once, writes one story at a time in date order, a
- * stale answer asked again once. Pure: nothing here reads or writes the database.
+ * stale answer asked again at once. Pure: nothing here reads or writes the database.
  */
 import { config } from '../config.js'
-import { quoteFound } from '../lib/quoteMatch.js'
+import { quoteFound, quoteNearlyFound } from '../lib/quoteMatch.js'
 import { unescapeXmlDeep } from '../lib/xml.js'
 import { OVERVIEW_PROMPT_VERSIONS, type FoundCheckInput, type FoundInput, type LinkInput } from '../prompts/overviews.js'
 import type { FoundAnswer, FoundCheckAnswer, LinkAnswer, LinkCandidateAnswer } from '../schemas/overviews.js'
@@ -21,7 +21,6 @@ import {
   type LinkOutcome,
   type LinkStory,
   type Memberships,
-  type QuotePair,
   type Role,
   type Shared,
 } from './overviewTypes.js'
@@ -60,11 +59,17 @@ export interface ShownPartner extends LinkStory {
   distance: number
 }
 
-/** A join or a founding partner code accepted: the candidate and the model's answer for it. */
+/**
+ * A join or a founding partner code accepted: the candidate and the model's answer for it, the shared
+ * fields as stored (an end whose quote was not found is cleared, `endDropped`), and whether a cause or
+ * place quote passed only by the near match (`quoteNearlyFound`), which the eval's diagnostics count.
+ */
 export interface Accepted<C> {
   candidate: C
   answer: LinkCandidateAnswer
   shared: Shared
+  endDropped: boolean
+  nearMatch: boolean
 }
 
 /** Why code refused a candidate the model said yes to. */
@@ -87,8 +92,10 @@ export interface Signal {
 export interface Acceptance {
   /** The nearest overview that passed; null when none did. */
   join: Accepted<ShownOverview> | null
-  /** The nearest passing founding partner, considered only when no overview passed. */
+  /** The nearest passing founding partner, considered only when no overview passed and no yes to an overview was refused. */
   partner: Accepted<ShownPartner> | null
+  /** The nearest overview the model said yes to and code refused, when it kept a passing founding partner from founding (a confident claim that the story belongs to an open overview); null otherwise. */
+  blockedBy: string | null
   /** Candidates the model said yes to (joins proposed). */
   proposed: number
   refusals: Refusal[]
@@ -110,57 +117,81 @@ export const storyTexts = (s: LinkStory) => [s.title, s.label, s.summary]
 /** An overview's side of a quote: its title, its charter's IN and its END_EVENT when it names one. Never its OUT list, which names what does not belong. */
 const overviewTexts = (o: CandidateOverview) => [o.title, o.charter.in, ...(o.charter.endEvent === null ? [] : [o.charter.endEvent])]
 
-/** A quote of `side` given but not found in its side's texts, as a refusal; an empty quote is not checked here. */
-function unfoundQuote(side: keyof Shared, pair: QuotePair, story: readonly string[], other: readonly string[]): string | null {
-  if (pair.story.trim() && !quoteFound(pair.story, story)) return `${side}: the story's quote is not in its text`
-  if (pair.other.trim() && !quoteFound(pair.other, other)) return `${side}: the candidate's quote is not in its text`
-  return null
-}
+/** How a quote given is found on its side: exactly, only by the near match (`quoteNearlyFound`), or not at all. */
+const howFound = (quote: string, texts: readonly string[]): 'exact' | 'near' | 'no' =>
+  quoteFound(quote, texts) ? 'exact' : quoteNearlyFound(quote, texts) ? 'near' : 'no'
+
+/** What code makes of a yes: why it is refused, or that it passes, with its end dropped or not and whether a quote passed only nearly. */
+type Judged = { refused: string } | { endDropped: boolean; nearMatch: boolean }
 
 /**
- * Why a yes is refused: the cause or the place left empty on a side, or a quote not found on its side,
- * the end's included wherever it is given; null when it passes.
+ * Whether a yes passes: refused for the cause or the place left empty on a side or a quote of theirs
+ * not found on its side; it passes otherwise, its end dropped when an end quote given is not found
+ * (the end never decides, and an end that is not real must not mark the end event).
  */
-function refusalOf(answer: LinkCandidateAnswer, story: readonly string[], other: readonly string[]): string | null {
+function judgeYes(answer: LinkCandidateAnswer, story: readonly string[], other: readonly string[]): Judged {
+  let nearMatch = false
   for (const side of REQUIRED_SIDES) {
     const pair = answer[side]
-    if (!pair.story.trim() || !pair.other.trim()) return `no ${side} on both sides`
-    const unfound = unfoundQuote(side, pair, story, other)
-    if (unfound) return unfound
+    if (!pair.story.trim() || !pair.other.trim()) return { refused: `no ${side} on both sides` }
+    const [s, o] = [howFound(pair.story, story), howFound(pair.other, other)]
+    if (s === 'no') return { refused: `${side}: the story's quote is not in its text` }
+    if (o === 'no') return { refused: `${side}: the candidate's quote is not in its text` }
+    nearMatch ||= s === 'near' || o === 'near'
   }
-  return unfoundQuote('end', answer.end, story, other)
+  const { end } = answer
+  const endDropped = (end.story.trim() !== '' && !quoteNearlyFound(end.story, story)) || (end.other.trim() !== '' && !quoteNearlyFound(end.other, other))
+  return { endDropped, nearMatch }
 }
 
 /**
  * Which candidate the story joins or may found with (`.context/overviews.md`, "How a story is linked",
- * step 2), by one rule for every candidate, overview or founding partner: a yes passes only with the
+ * step 3), by one rule for every candidate, overview or founding partner: a yes passes only with the
  * cause and the place filled on both sides and each quote found in its side's text (the story's title,
- * label or summary; the overview's title, IN or END_EVENT; the partner's title, label or summary). The
- * end may be left empty, on either side, but each end quote given must be found in its side's text.
- * `unsure` is no. The nearest passing overview wins (a story joins one at most); a founding partner is
- * considered only when no overview passed, the nearest passing first.
- * Also the re-center flags for each overview shown, `wider` and `centerMoved`, each kept only with its
- * quote found in the story's text.
+ * label or summary; the overview's title, IN or END_EVENT; the partner's title, label or summary),
+ * exactly or by the near match (small misspellings in long words, `quoteNearlyFound`). The end may be
+ * left empty, on either side; an end quote not found drops the end (cleared from the shared fields, and
+ * its end-event flag not counted) rather than refusing the yes. `unsure` is no. The nearest passing
+ * overview wins (a story joins one at most); a founding partner is considered only when no overview
+ * passed and the model said yes to no overview that code refused (`blockedBy`: a confident claim that
+ * the story belongs to an open overview is evidence against founding a second one), the nearest
+ * passing first. Also the re-center flags for each overview shown, `wider` and `centerMoved`, each
+ * kept only with its quote found in the story's text.
  */
 export function acceptLink(story: LinkStory, overviews: readonly ShownOverview[], partners: readonly ShownPartner[], answer: LinkAnswer): Acceptance {
   const byRef = new Map(answer.candidates.map(c => [c.id.trim(), c]))
   const refusals: Refusal[] = []
   let proposed = 0
-  const pick = <C extends { ref: string }>(candidates: readonly C[], texts: (c: C) => string[]): Accepted<C> | null => {
+  const pick = <C extends { ref: string; id: string }>(candidates: readonly C[], texts: (c: C) => string[]): { chosen: Accepted<C> | null; refused: C[] } => {
     let chosen: Accepted<C> | null = null
+    const refused: C[] = []
     for (const candidate of candidates) {
       const a = byRef.get(candidate.ref)
       if (a?.belongs !== 'yes') continue
       proposed++
-      const reason = refusalOf(a, storyTexts(story), texts(candidate))
-      if (reason) refusals.push({ id: candidate.ref, reason })
-      else chosen ??= { candidate, answer: a, shared: sharedOf(a) }
+      const judged = judgeYes(a, storyTexts(story), texts(candidate))
+      if ('refused' in judged) {
+        refusals.push({ id: candidate.ref, reason: judged.refused })
+        refused.push(candidate)
+        continue
+      }
+      const shared = sharedOf(a)
+      chosen ??= { candidate, answer: a, shared: judged.endDropped ? { ...shared, end: { story: '', other: '' } } : shared, ...judged }
     }
-    return chosen
+    return { chosen, refused }
   }
-  const join = pick(overviews, overviewTexts)
-  const partner = pick(partners, storyTexts)
-  return { join, partner: join ? null : partner, proposed, refusals, signals: signalsOf(story, overviews, byRef) }
+  const overviewPick = pick(overviews, overviewTexts)
+  const partnerPick = pick(partners, storyTexts)
+  const join = overviewPick.chosen
+  const refusedOverview = join ? null : (overviewPick.refused[0]?.id ?? null)
+  return {
+    join,
+    partner: join || refusedOverview ? null : partnerPick.chosen,
+    blockedBy: refusedOverview && partnerPick.chosen ? refusedOverview : null,
+    proposed,
+    refusals,
+    signals: signalsOf(story, overviews, byRef),
+  }
 }
 
 /** The re-center flags of each overview shown whose quote is found in the story's title, label or summary. */
@@ -168,7 +199,7 @@ function signalsOf(story: LinkStory, overviews: readonly ShownOverview[], byRef:
   return overviews.flatMap(o => {
     const a = byRef.get(o.ref)
     const quote = a?.signalQuote.trim() ?? ''
-    if (!a || !quote || !quoteFound(quote, storyTexts(story))) return []
+    if (!a || !quote || !quoteNearlyFound(quote, storyTexts(story))) return []
     const kinds: Signal['kind'][] = [...(a.scope === 'wider' ? ['wider' as const] : []), ...(a.centerMoved ? ['center_moved' as const] : [])]
     return kinds.map(kind => ({ overviewId: o.id, kind, quote }))
   })
@@ -243,6 +274,8 @@ export interface LinkResult {
   /** For a `held` story, the frozen overview that passed first: its decision names it, so the story waits on that freeze. */
   heldBy: string | null
   founding: FoundingAttempt | null
+  /** The overview whose refused yes kept a passing founding partner from founding (`acceptLink`'s `blockedBy`), when one did. */
+  foundingBlockedBy: string | null
   /** The candidates shown, by ref; the stale check reads the partners' memberships again. */
   shown: { overviews: { ref: string; id: string; distance: number }[]; partners: { ref: string; id: string; distance: number }[] }
   answer: LinkAnswer | null
@@ -272,6 +305,7 @@ const blank = (story: LinkStory, outcome: LinkResult['outcome']): LinkResult => 
   join: null,
   heldBy: null,
   founding: null,
+  foundingBlockedBy: null,
   shown: { overviews: [], partners: [] },
   answer: null,
   proposed: 0,
@@ -355,11 +389,11 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
   const alone = accepted.refusals.length > 0 ? 'rejected' : 'none'
   if (accepted.join) {
     if (accepted.join.candidate.frozen) return { ...settled, outcome: 'held', heldBy: accepted.join.candidate.id }
-    // The flag counts only for a charter that names an end event, the charter the call was shown
-    const reportsEndEvent = accepted.join.answer.reportsEndEvent && accepted.join.candidate.charter.endEvent !== null
+    // The flag counts only for a charter that names an end event, the charter the call was shown, and only with the end the model quoted found
+    const reportsEndEvent = accepted.join.answer.reportsEndEvent && !accepted.join.endDropped && accepted.join.candidate.charter.endEvent !== null
     return { ...settled, outcome: 'joined', role: endEventRole(role, reportsEndEvent), join: { ...accepted.join, reportsEndEvent } }
   }
-  if (!accepted.partner) return { ...settled, outcome: alone }
+  if (!accepted.partner) return { ...settled, outcome: alone, foundingBlockedBy: accepted.blockedBy }
   const founding = await found(story, accepted.partner, deps)
   if (founding.outcome === 'failed') return { ...settled, outcome: 'failed', founding }
   if (founding.outcome !== 'founded' || !founding.draft) return { ...settled, outcome: alone, founding }
@@ -395,8 +429,9 @@ export interface OrderedRun {
 
 /**
  * Links the stories in the order given (oldest first): link calls `concurrency` at a time, writes one
- * story at a time in that order. A stale result is asked again after the others, once; stale again,
- * it is stored as a conflict and retried at the next run. `keepGoing` is asked before each write and
+ * story at a time in that order. A stale result is asked again at once, before the next story is
+ * written (so it sees the overview its partner joined while the development's later stories still
+ * wait); stale again, it is stored as a conflict and retried at the next run. `keepGoing` is asked before each write and
  * before any call starts after the first ones (the switch, a budget); once it says no, no call starts
  * and nothing more is written: the calls already in flight finish, their answers unwritten, and the
  * rest stay owed.
@@ -424,12 +459,13 @@ export async function linkInOrder(
       next++
     }
   }
-  const again: LinkStory[] = []
-  const write = async (result: LinkResult, lastTry: boolean): Promise<void> => {
-    const done = await apply(result, lastTry)
+  /** Writes a result; a stale one is linked again at once, with fresh candidates, before the next story is written, and stored as a conflict if stale again. */
+  const write = async (result: LinkResult): Promise<void> => {
+    let done = await apply(result, false)
     if (done.kind === 'stale') {
-      again.push(result.story)
-      return
+      if (!(await going())) return
+      result = await safeLinkStory(result.story, deps)
+      done = await apply(result, true)
     }
     results.push(result)
     if (done.kind === 'written') outcomes.set(result.story.id, done.outcome)
@@ -440,13 +476,9 @@ export async function linkInOrder(
     const result = await pending[i]!
     written++
     if (!(await going())) break
-    await write(result, false)
+    await write(result)
     if (!(await going())) break
     start()
-  }
-  for (const story of again) {
-    if (!(await going())) break
-    await write(await safeLinkStory(story, deps), true)
   }
   // Calls already in flight finish inside the run, so their cost is the run's
   await Promise.all(pending.slice(written, next))

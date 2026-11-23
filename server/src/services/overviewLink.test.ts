@@ -121,22 +121,51 @@ describe('acceptLink', () => {
     expect(acceptLink(s, [], [partner], answer([yes('F1', emptyEnd)]))).toMatchObject({ partner: { candidate: { id: 'p' } }, refusals: [] })
   })
 
-  it('refuses a yes whose end quote is not found on its side, each side on its own', () => {
+  it('drops the end, and passes the yes, when an end quote is not found on its side, each side on its own', () => {
     const shown = [shownOverview('A', 'O1', 0.1)]
     const storySide = yes('O1', { end: { story: 'the WHO lifts the emergency', other: 'declares the outbreak over' } })
     expect(acceptLink(s, shown, [], answer([storySide]))).toMatchObject({
-      join: null,
-      refusals: [{ id: 'O1', reason: "end: the story's quote is not in its text" }],
+      join: { candidate: { id: 'A' }, endDropped: true, shared: { end: { story: '', other: '' } } },
+      refusals: [],
     })
     const otherSide = yes('O1', { end: { story: 'declares it over', other: 'the WHO lifts the emergency' } })
-    expect(acceptLink(s, shown, [], answer([otherSide]))).toMatchObject({
-      join: null,
-      refusals: [{ id: 'O1', reason: "end: the candidate's quote is not in its text" }],
-    })
+    expect(acceptLink(s, shown, [], answer([otherSide]))).toMatchObject({ join: { endDropped: true }, refusals: [] })
+    expect(acceptLink(s, shown, [], answer([yes('O1')]))).toMatchObject({ join: { endDropped: false, shared: { end: { story: 'declares it over' } } } })
     const partner = shownPartner(story('p', 5), 'F1', 0.2)
-    expect(acceptLink(s, [], [partner], answer([yes('F1', { end: { story: '', other: 'reporting stops' } })])).refusals).toEqual([
-      { id: 'F1', reason: "end: the candidate's quote is not in its text" },
-    ])
+    expect(acceptLink(s, [], [partner], answer([yes('F1', { end: { story: '', other: 'reporting stops' } })]))).toMatchObject({
+      partner: { candidate: { id: 'p' }, endDropped: true },
+      refusals: [],
+    })
+  })
+
+  it('still refuses a yes whose cause or place quote is not found', () => {
+    const got = acceptLink(s, [shownOverview('A', 'O1', 0.1)], [], answer([yes('O1', { cause: { story: 'cholera', other: 'Ebola' } })]))
+    expect(got).toMatchObject({ join: null, refusals: [{ id: 'O1', reason: "cause: the story's quote is not in its text" }] })
+  })
+
+  it('finds a quote with a small misspelling in a long word, and marks the join as passed by the near match', () => {
+    const t = story('t', 10, { summary: 'The Bundibugyo outbreak in Ituri province grew this week.' })
+    const near = yes('O1', { cause: { story: 'Bundibyo outbreak', other: 'Ebola' }, end: { story: '', other: '' } })
+    expect(acceptLink(t, [shownOverview('A', 'O1', 0.1)], [], answer([near]))).toMatchObject({ join: { candidate: { id: 'A' }, nearMatch: true } })
+    const exact = yes('O1', { cause: { story: 'Bundibugyo outbreak', other: 'Ebola' }, end: { story: '', other: '' } })
+    expect(acceptLink(t, [shownOverview('A', 'O1', 0.1)], [], answer([exact]))).toMatchObject({ join: { nearMatch: false } })
+  })
+
+  it('considers no founding partner when code refused a yes to an overview, and names that overview', () => {
+    const partner = shownPartner(story('p', 5), 'F1', 0.2)
+    const refused = yes('O1', { place: { story: 'Ituri', other: '' } })
+    expect(acceptLink(s, [shownOverview('A', 'O1', 0.1)], [partner], answer([refused, yesPartner('F1')]))).toMatchObject({
+      join: null,
+      partner: null,
+      blockedBy: 'A',
+      refusals: [{ id: 'O1', reason: 'no place on both sides' }],
+    })
+    // A refused yes to a partner alone still lets the next passing partner found
+    const other = shownPartner(story('q', 6), 'F2', 0.3)
+    expect(acceptLink(s, [], [partner, other], answer([yes('F1', { place: { story: 'Ituri', other: '' } }), yesPartner('F2')]))).toMatchObject({
+      partner: { candidate: { id: 'q' } },
+      blockedBy: null,
+    })
   })
 
   it('passes a half-filled end whose filled side is found', () => {
@@ -145,13 +174,14 @@ describe('acceptLink', () => {
     expect(acceptLink(s, shown, [], answer([yes('O1', { end: { story: ' ', other: 'declares the outbreak over' } })])).join).not.toBeNull()
   })
 
-  it('holds an overview naming no end event to the same rule: an empty end passes, an end quote found nowhere refuses', () => {
+  it('holds an overview naming no end event to the same rule: an empty end passes, an end quote found nowhere drops the end', () => {
     const none = { ...shownOverview('A', 'O1', 0.1), charter: { in: 'The Ebola outbreak in Ituri province.', out: [], endEvent: null } }
     const emptyEnd = yes('O1', { end: { story: '', other: '' } })
     expect(acceptLink(s, [none], [], answer([emptyEnd]))).toMatchObject({ join: { candidate: { id: 'A' } }, refusals: [] })
-    expect(acceptLink(s, [none], [], answer([yes('O1', { end: { story: 'declares it over', other: 'reporting stops' } })])).refusals).toEqual([
-      { id: 'O1', reason: "end: the candidate's quote is not in its text" },
-    ])
+    expect(acceptLink(s, [none], [], answer([yes('O1', { end: { story: 'declares it over', other: 'reporting stops' } })]))).toMatchObject({
+      join: { endDropped: true },
+      refusals: [],
+    })
     // The cause and the place are still required
     expect(acceptLink(s, [none], [], answer([{ ...emptyEnd, place: { story: 'Ituri', other: '' } }])).refusals).toEqual([
       { id: 'O1', reason: 'no place on both sides' },
@@ -320,6 +350,31 @@ describe('linkStory', () => {
   it('keeps the kind of a turning point that reports the end event', async () => {
     const got = await joining({ ...answer([yes('O1', { reportsEndEvent: true })]), role: 'turning_point', roleKind: 'deescalation' })
     expect(got).toMatchObject({ outcome: 'joined', role: { role: 'turning_point', roleKind: 'deescalation' }, join: { reportsEndEvent: true } })
+  })
+
+  it('counts no end-event flag for a join whose end quote was not found, and leaves the role as answered', async () => {
+    const got = await joining(
+      answer([yes('O1', { reportsEndEvent: true, end: { story: 'the WHO lifts the emergency', other: 'declares the outbreak over' } })]),
+    )
+    expect(got).toMatchObject({ outcome: 'joined', role: { role: 'routine', roleKind: null }, join: { reportsEndEvent: false, endDropped: true } })
+  })
+
+  it('stores a story whose refused yes to an overview blocked its founding as rejected, with no founding call', async () => {
+    const s = story('s', 10)
+    const w = world({
+      stories: [s, story('m', 8), story('p', 7)],
+      neighbours: {
+        s: [
+          { id: 'm', distance: 0.2 },
+          { id: 'p', distance: 0.3 },
+        ],
+      },
+      members: { m: membership('A') },
+      overviews: [overview('A')],
+      link: () => answer([yes('O1', { place: { story: 'Kivu', other: 'Ituri' } }), yesPartner('F1')]),
+    })
+    expect(await linkStory(s, w.deps)).toMatchObject({ outcome: 'rejected', founding: null, foundingBlockedBy: 'A' })
+    expect(w.calls.found).not.toHaveBeenCalled()
   })
 
   it('drops the flag on an overview naming no end event, as the call was shown it, and leaves the role as answered', async () => {
@@ -493,6 +548,38 @@ describe('linkInOrder', () => {
     expect(w.calls.found).toHaveBeenCalledTimes(2) // s2's first founding attempt went stale
     // The stale answer is not counted: each story's final result once, for the item tally
     expect(run.results.map(r => `${r.story.id}:${r.outcome}`)).toEqual(['s1:founded', 's2:joined'])
+  })
+
+  it('asks a stale result again at once, before the next story is written, and counts its second answer', async () => {
+    const p = story('p', 1)
+    const [s1, s2, s3] = [story('s1', 2), story('s2', 3), story('s3', 4)]
+    const w = world({
+      stories: [p, s1, s2, s3],
+      neighbours: { s1: [{ id: 'p', distance: 0.2 }], s2: [{ id: 'p', distance: 0.2 }] },
+      overviews: [overview('NEW')],
+      link: input => answer(input.overviews.length > 0 ? [yes('O1')] : [yesPartner('F1')]),
+    })
+    const writes: string[] = []
+    const run = await linkInOrder([s1, s2, s3], w.deps, memoryWriter(w.members, writes), { concurrency: 3 })
+    expect(writes).toEqual(['s1:founded', 's2:joined', 's3:none'])
+    expect(run.results.map(r => `${r.story.id}:${r.outcome}`)).toEqual(['s1:founded', 's2:joined', 's3:none'])
+  })
+
+  it('asks a stale result again only while the switch is on', async () => {
+    const p = story('p', 1)
+    const [s1, s2] = [story('s1', 2), story('s2', 3)]
+    const w = world({
+      stories: [p, s1, s2],
+      neighbours: { s1: [{ id: 'p', distance: 0.2 }], s2: [{ id: 'p', distance: 0.2 }] },
+      overviews: [overview('NEW')],
+      link: input => answer(input.overviews.length > 0 ? [yes('O1')] : [yesPartner('F1')]),
+    })
+    const writes: string[] = []
+    let asked = 0
+    // On for s1's write, s2's first write (stale) and the check after it; off before the re-ask
+    const run = await linkInOrder([s1, s2], w.deps, memoryWriter(w.members, writes), { concurrency: 2, keepGoing: async () => asked++ < 3 })
+    expect(writes).toEqual(['s1:founded'])
+    expect(run.outcomes.has('s2')).toBe(false)
   })
 
   it('stores a result stale twice as a conflict, left for the next run', async () => {

@@ -134,6 +134,36 @@ describe('diagnoseRun', () => {
     expect(by.get('e8')!.detail).toContain('A does not fit: a study')
   })
 
+  it("names a founding a refused yes to another development's overview blocked, with that overview", () => {
+    const blocked = trace('e6', '2026-05-06', {
+      outcome: 'rejected',
+      overviews: [candidate('O1', 'o2', 'yes', 'no place on both sides')],
+      partners: [candidate('F1', 'e3', 'yes')],
+      blockedBy: 'o2',
+    })
+    const d = diagnoseRun({ ...diagnoseInput(), traces: new Map([...TRACES, ['e6', blocked]]) })
+    expect(d.missed.find(m => m.slug === 'e6')).toMatchObject({ cause: 'founding blocked' })
+    expect(d.missed.find(m => m.slug === 'e6')!.detail).toContain('a refused yes to "Cholera" (cholera)')
+  })
+
+  it("gives each run's first founding of each development, and the joins whose quotes passed only by the near match, right or wrong", () => {
+    const near = new Map([
+      ...TRACES,
+      ['e4', trace('e4', '2026-05-04', { outcome: 'joined', overviews: [{ ...candidate('O1', 'o1', 'yes'), nearMatch: true }] })],
+      ['uganda', trace('uganda', '2026-05-01', { outcome: 'joined', overviews: [{ ...candidate('O1', 'o1', 'yes'), nearMatch: true }] })],
+    ])
+    const d = diagnoseRun({ ...diagnoseInput(), traces: near })
+    expect(d.firstFoundings).toEqual([
+      { key: 'cholera', foundedOn: '2026-05-02', title: 'Cholera' },
+      { key: 'ebola', foundedOn: '2026-05-02', title: 'Ebola in DRC' },
+      { key: 'strait', foundedOn: '2026-05-03', title: 'The strait' },
+    ])
+    expect(d.nearMatches).toEqual([
+      { slug: 'e4', overview: 'Ebola in DRC', verdict: 'right' },
+      { slug: 'uganda', overview: 'Ebola in DRC', verdict: 'wrong' },
+    ])
+  })
+
   it('gives a must entry not replayed the reason the replay was given for it, and with none, that it is not published', () => {
     expect(diagnose().missed.find(m => m.slug === 'gone')!.detail).toBe('not published in this database')
     const reason = 'not in the saved replay: the keys name it since the run'
@@ -280,6 +310,7 @@ describe('traceOf', () => {
       role: { role: 'routine', roleKind: null },
       join: null,
       heldBy: null,
+      foundingBlockedBy: null,
       founding: {
         partner: story('id-e2'),
         outcome: 'disagreed',
