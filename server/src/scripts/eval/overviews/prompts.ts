@@ -509,6 +509,7 @@ Judge whether the end event a new timeline was given (<FOUNDED>) is the same eve
 
 <REQUIREMENTS>
 - The events are the same when the moment one happens the other has happened too: the same declaration, signature, ruling or publication, by the same body, about the same development.
+- When <KEY> lists several bodies as alternatives, any one of which may make the declaration, an end event naming the declaration of one of those bodies is the same event.
 - A narrower or wider event is not the same: one province's outbreak declared over is not the country's, a signed text is not one in force.
 - Different wording of one event is the same.
 </REQUIREMENTS>
