@@ -653,7 +653,7 @@ describe('the sandbox', () => {
     expect(sandbox.overviews.get(id!)!.foundedFrom).toEqual(['a', 'b'])
     expect(await sandbox.apply(base(a), false)).toEqual({ kind: 'skipped' })
     const join = {
-      candidate: { id: id!, title: 'T', charter: draft.charter, entries: [], ref: 'O1', distance: 0.1, frozen: false },
+      candidate: { id: id!, title: 'T', charter: draft.charter, entries: [], ref: 'O1', distance: 0.1, frozen: false, mayHold: false },
       answer: {} as never,
       shared: {} as never,
       reportsEndEvent: false,
@@ -673,8 +673,29 @@ describe('the sandbox', () => {
     const [id] = [...sandbox.overviews.keys()]
     sandbox.overviews.get(id!)!.frozen = true
     expect(await sandbox.apply({ ...base(d), outcome: 'held', heldBy: id! }, false)).toEqual({ kind: 'written', outcome: 'held' })
-    const [owed] = owedOf(sandbox, [{ id: 'd', datePublished: d.datePublished }])
+    const [owed] = owedOf(sandbox, [{ id: 'd', datePublished: d.datePublished }], new Date(Date.UTC(2026, 4, 9)))
     expect(owedStanding(owed!.attempts, new Date(Date.UTC(2026, 4, 9)))).toEqual({ kind: 'frozen' })
+  })
+
+  it('keeps a story waiting for a re-center owed with no call, out of the partners, until its overview is next tried, as production does (ADR-0078)', async () => {
+    const sandbox = createSandbox()
+    const [a, b, d] = [story('a', 1), story('b', 2), story('d', 4)]
+    const draft = { title: 'T', charter: { in: 'In.', out: [], endEvent: null }, roles: { a: role('turning_point'), b: role('routine') } }
+    const shared = { cause: { story: 'x', other: 'y' }, place: { story: 'x', other: 'y' }, end: { story: '', other: '' } } as never
+    const founding = { partner: a, outcome: 'founded' as const, draft, answers: { draft: null, check: null }, shared, confidence: 0.9, costUsd: 0, model: null }
+    await sandbox.apply({ ...base(b), outcome: 'founded', founding, shown: { overviews: [], partners: [{ ref: 'F1', id: 'a', distance: 0.1 }] } }, false)
+    const [id] = [...sandbox.overviews.keys()]
+    const night = new Date(Date.UTC(2026, 4, 5))
+    sandbox.setClock(night)
+    expect(await sandbox.apply({ ...base(d), outcome: 'waiting', heldForRecenter: id! }, false)).toEqual({ kind: 'written', outcome: 'waiting' })
+    const standing = (now: Date) => owedStanding(owedOf(sandbox, [{ id: 'd', datePublished: d.datePublished }], now)[0]!.attempts, now)
+    expect(standing(night)).toEqual({ kind: 'waiting' })
+    expect((await sandbox.memberships(['d'])).heldForRecenter).toEqual(new Set(['d']))
+    expect((await sandbox.memberships(['d'])).heldBefore).toEqual(new Map([['d', [id!]]]))
+    // The overview's attempt that night kept its charter: the wait ends, and the story is due again
+    sandbox.overviews.get(id!)!.recenterTriedAt = night
+    expect(standing(new Date(Date.UTC(2026, 4, 6)))).toEqual({ kind: 'retry', lastTry: false })
+    expect((await sandbox.memberships(['d'])).heldForRecenter).toEqual(new Set())
   })
 })
 

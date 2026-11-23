@@ -597,6 +597,12 @@ export const config = {
     recenterMinJoins: 2,
     /** The newest active entries whose neighbours name the overviews a re-center must not swallow (`groupCandidates` at the development clock). */
     recenterNeighbourEntries: 3,
+    /**
+     * A story that points past an open overview waits for its re-center only when the overview has at
+     * least this many active entries (ADR-0078, the owner's of 2026-11-23): against a younger one it links
+     * as before and may found, so a two-story precursor never stalls a new development (`holdsForRecenter`).
+     */
+    recenterHoldMinEntries: 3,
     tiers: {
       link: 'small' as const,
       found: 'large' as const,

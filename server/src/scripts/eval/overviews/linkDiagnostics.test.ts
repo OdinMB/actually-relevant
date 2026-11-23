@@ -162,6 +162,134 @@ describe('diagnoseRun', () => {
     ])
   })
 
+  it("names a must entry held for a re-center with that overview, its own development's or another's, and lists every held story and the partners left out (ADR-0078)", () => {
+    const held = new Map([
+      ...TRACES,
+      ['e6', trace('e6', '2026-05-06', { outcome: 'waiting', overviews: [{ ...candidate('O1', 'o2', 'no'), scope: 'wider' }], heldForRecenter: 'o2' })],
+      ['e7', trace('e7', '2026-05-07', { outcome: 'waiting', overviews: [candidate('O1', 'o1', 'no')], heldForRecenter: 'o1', heldPartners: ['e8'] })],
+      ['e0', trace('e0', '2026-04-20', { outcome: 'waiting', overviews: [candidate('O1', 'o3', 'no')], heldForRecenter: 'o3' })],
+      ['uganda', trace('uganda', '2026-05-01', { outcome: 'waiting', overviews: [candidate('O1', 'o2', 'no')], heldForRecenter: 'o2' })],
+    ])
+    const d = diagnoseRun({ ...diagnoseInput(), traces: held })
+    const by = new Map(d.missed.map(m => [m.slug, m]))
+    expect(by.get('e6')).toMatchObject({ cause: 'held for a re-center' })
+    expect(by.get('e6')!.detail).toContain('of "Cholera" (cholera), another development\'s overview')
+    expect(by.get('e7')!.detail).toContain('of "Ebola in DRC" (ebola), its own development\'s overview')
+    // Held behind another development's overview before its own was founded: its first founding may be lost or delayed
+    expect(by.get('e0')!.detail).toContain("before ebola's overview was founded (2026-05-02)")
+    expect(d.held).toEqual([
+      {
+        slug: 'e0',
+        date: '2026-04-20',
+        as: 'must entry of ebola',
+        overview: 'The strait',
+        development: 'strait',
+        relation: 'another development',
+        beforeFounding: true,
+      },
+      {
+        slug: 'uganda',
+        date: '2026-05-01',
+        as: 'near miss of ebola',
+        overview: 'Cholera',
+        development: 'cholera',
+        relation: 'not a must entry',
+        beforeFounding: false,
+      },
+      {
+        slug: 'e6',
+        date: '2026-05-06',
+        as: 'must entry of ebola',
+        overview: 'Cholera',
+        development: 'cholera',
+        relation: 'another development',
+        beforeFounding: false,
+      },
+      {
+        slug: 'e7',
+        date: '2026-05-07',
+        as: 'must entry of ebola',
+        overview: 'Ebola in DRC',
+        development: 'ebola',
+        relation: 'own development',
+        beforeFounding: false,
+      },
+    ])
+    expect(d.heldPartners).toEqual([{ slug: 'e8', as: 'must entry of ebola' }])
+    // A trace saved before the rule holds nothing
+    expect(diagnose()).toMatchObject({ held: [], heldPartners: [] })
+  })
+
+  it('reports found twice, the second without the must entries held for their own development’s overview, and the held stories (ADR-0078)', () => {
+    const held = new Map([
+      ...TRACES,
+      ['e7', trace('e7', '2026-05-07', { outcome: 'waiting', overviews: [candidate('O1', 'o1', 'no')], heldForRecenter: 'o1' })],
+    ])
+    const d = diagnoseRun({ ...diagnoseInput(), traces: held })
+    const runs = [{ run: 2, overviews: OVERVIEWS.map(o => ({ ...o, endEvent: o.charter.endEvent })), roles: new Map() }]
+    const score = scoreLinking([EBOLA, CHOLERA], runs, new Map(), [STRAIT])
+    const report = {
+      half: 'tune' as const,
+      repeat: 1,
+      keys: ['ebola', 'cholera'],
+      stories: 12,
+      background: { keys: [], stories: 0 },
+      merged: [],
+      left: [],
+      score,
+      endEvents: [],
+      signals: [],
+      diagnostics: [d],
+      unanswered: 0,
+      errored: 0,
+      costUsd: 0,
+      perStoryUsd: null,
+    }
+    const text = linkLines(report, ['link', 'found', 'role']).join('\n')
+    // 5 of 12 must entries found; one held for its own development's overview is left out of the second reading: 5 of 11
+    expect(text).toContain('| Found, held for own overview excluded | no bar | 45.5% | for the owner: 5 of 11 in all runs |')
+    expect(text).toContain('### Held for a re-center')
+    expect(text).toContain('- Run 2, e7 (must entry of ebola, 2026-05-07): waits for "Ebola in DRC" (ebola), own development')
+    expect(text).toContain('whole-step replay')
+  })
+
+  it('counts as held only a story whose stored outcome is waiting: one founded by a same-day partner first, or stored as a conflict, waits for nothing (ADR-0078)', () => {
+    const traces = new Map([
+      ...TRACES,
+      // A waiting result whose write was skipped: a same-day story founded o1 with it as its partner first
+      ['e4', trace('e4', '2026-05-04', { outcome: 'founded', overviews: [candidate('O1', 'o1', 'no')], heldForRecenter: 'o1' })],
+      // A waiting result that went stale twice
+      ['e7', trace('e7', '2026-05-07', { outcome: 'conflict', overviews: [candidate('O1', 'o1', 'no')], heldForRecenter: 'o1' })],
+    ])
+    const d = diagnoseRun({ ...diagnoseInput(), traces })
+    expect(d.held).toEqual([])
+    const by = new Map(d.missed.map(m => [m.slug, m]))
+    expect(by.has('e4')).toBe(false)
+    expect(by.get('e7')).toMatchObject({ cause: 'conflict' })
+    const runs = [{ run: 2, overviews: OVERVIEWS.map(o => ({ ...o, endEvent: o.charter.endEvent })), roles: new Map() }]
+    const report = {
+      half: 'tune' as const,
+      repeat: 1,
+      keys: ['ebola', 'cholera'],
+      stories: 12,
+      background: { keys: [], stories: 0 },
+      merged: [],
+      left: [],
+      score: scoreLinking([EBOLA, CHOLERA], runs, new Map(), [STRAIT]),
+      endEvents: [],
+      signals: [],
+      diagnostics: [d],
+      unanswered: 0,
+      errored: 0,
+      costUsd: 0,
+      perStoryUsd: null,
+    }
+    // No hold, so no second found figure whose denominator would leave e4 out while it counts as found
+    const text = linkLines(report, ['link', 'found', 'role']).join('\n')
+    expect(text).not.toContain('Found, held for own overview excluded')
+    expect(text).not.toContain('### Held for a re-center')
+  })
+
   it("gives each run's first founding of each development, and the joins whose quotes passed only by the near match, right or wrong", () => {
     const near = new Map([
       ...TRACES,
@@ -326,6 +454,9 @@ describe('traceOf', () => {
       role: { role: 'routine', roleKind: null },
       join: null,
       heldBy: null,
+      heldForRecenter: null,
+      heldBefore: [],
+      heldPartners: [],
       foundingBlockedBy: null,
       refusedFoundings: [],
       excludedPartners: [],
@@ -357,5 +488,35 @@ describe('traceOf', () => {
     })
     expect(t.overviews).toEqual([{ ref: 'O1', id: 'o1', distance: 0.2, belongs: 'yes', confidence: 0.8, scope: 'inside', refusal: 'no cause on both sides' }])
     expect(t.partners[0]).toMatchObject({ id: 'e2', belongs: 'no', refusal: null })
+  })
+
+  it('keeps the overview a waiting result waits for only when waiting was stored (ADR-0078)', () => {
+    const waiting: LinkResult = {
+      story: story('id-e3'),
+      outcome: 'waiting',
+      role: { role: 'routine', roleKind: null },
+      join: null,
+      heldBy: null,
+      heldForRecenter: 'o1',
+      heldBefore: [],
+      heldPartners: [],
+      foundingBlockedBy: null,
+      refusedFoundings: [],
+      excludedPartners: [],
+      founding: null,
+      shown: { overviews: [{ ref: 'O1', id: 'o1', distance: 0.2 }], partners: [] },
+      answer,
+      proposed: 0,
+      refusals: [],
+      signals: [{ overviewId: 'o1', kind: 'wider', quote: 'q' }],
+      model: 'm',
+      promptVersion: 'v',
+      costUsd: 0,
+    }
+    const slug = (id: string) => id.replace('id-', '')
+    expect(traceOf(waiting, 'waiting', null, slug).heldForRecenter).toBe('o1')
+    // Founded by a same-day partner first, or stale twice: it waits for nothing
+    expect(traceOf(waiting, 'founded', null, slug).heldForRecenter).toBeUndefined()
+    expect(traceOf(waiting, 'conflict', null, slug).heldForRecenter).toBeUndefined()
   })
 })

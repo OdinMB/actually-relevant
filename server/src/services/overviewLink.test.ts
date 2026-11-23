@@ -15,6 +15,7 @@ import {
   type ShownPartner,
 } from './overviewLink.js'
 import type { CandidateOverview, LinkStory, Membership, Memberships } from './overviewTypes.js'
+import { linkResult } from '../test/db/overviewFixtures.js'
 
 const at = (day: number) => new Date(Date.UTC(2026, 4, day, 12))
 
@@ -57,7 +58,13 @@ const yesPartner = (id: string): LinkCandidateAnswer => yes(id, { end: { story: 
 
 const answer = (candidates: LinkCandidateAnswer[]): LinkAnswer => ({ candidates, role: 'routine', roleKind: null })
 
-const shownOverview = (id: string, ref: string, distance: number, frozen = false): ShownOverview => ({ ...overview(id), ref, distance, frozen })
+const shownOverview = (id: string, ref: string, distance: number, frozen = false, mayHold = false): ShownOverview => ({
+  ...overview(id),
+  ref,
+  distance,
+  frozen,
+  mayHold,
+})
 const shownPartner = (s: LinkStory, ref: string, distance: number): ShownPartner => ({ ...s, ref, distance })
 
 const draft: FoundAnswer = {
@@ -233,6 +240,84 @@ describe('acceptLink: the re-center signal', () => {
   })
 })
 
+describe('acceptLink: a story that points past an open overview waits for its re-center (ADR-0078)', () => {
+  const s = story('s', 10, { summary: 'The outbreak in Ituri province grew; Ebola has now reached North Kivu and Goma.' })
+  const partner = shownPartner(story('p', 5), 'F1', 0.3)
+  const wider = (ref: string, over: Partial<LinkCandidateAnswer> = {}) => no(ref, { scope: 'wider', signalQuote: 'has now reached North Kivu', ...over })
+  const open = (id: string, ref: string, distance: number) => shownOverview(id, ref, distance, false, true)
+
+  it('holds a story judged wider than an overview automation may still re-center, its quote found: no founding partner, even a passing one', () => {
+    expect(acceptLink(s, [open('A', 'O1', 0.1)], [partner], answer([wider('O1'), yesPartner('F1')]))).toMatchObject({
+      join: null,
+      partner: null,
+      partners: [],
+      heldFor: 'A',
+      blockedBy: null,
+    })
+  })
+
+  it('holds for a center flag alone', () => {
+    const moved = no('O1', { centerMoved: true, signalQuote: 'reached North Kivu and Goma' })
+    expect(acceptLink(s, [open('A', 'O1', 0.1)], [partner], answer([moved, yesPartner('F1')]))).toMatchObject({ heldFor: 'A', partners: [] })
+  })
+
+  it('holds nothing for a signal whose quote is not found, or for an overview automation can no longer re-center', () => {
+    const unquoted = acceptLink(s, [open('A', 'O1', 0.1)], [partner], answer([wider('O1', { signalQuote: 'spread to Kinshasa' }), yesPartner('F1')]))
+    expect(unquoted).toMatchObject({ heldFor: null, partner: { candidate: { id: 'p' } } })
+    const settled = acceptLink(s, [shownOverview('A', 'O1', 0.1)], [partner], answer([wider('O1'), yesPartner('F1')]))
+    expect(settled).toMatchObject({ heldFor: null, partner: { candidate: { id: 'p' } } })
+  })
+
+  it('holds nothing for an overview that held the story before, so asked again it may found', () => {
+    const got = acceptLink(s, [open('A', 'O1', 0.1)], [partner], answer([wider('O1'), yesPartner('F1')]), { before: new Set(['A']) })
+    expect(got).toMatchObject({ heldFor: null, partner: { candidate: { id: 'p' } } })
+    // Its signal for that overview is still reported; which count is the link record's
+    expect(got.signals).toEqual([{ overviewId: 'A', kind: 'wider', quote: 'has now reached North Kivu' }])
+  })
+
+  it('never holds a story that joins an overview, whatever it flagged for another', () => {
+    const got = acceptLink(s, [open('A', 'O1', 0.1), open('B', 'O2', 0.2)], [], answer([wider('O1'), yes('O2')]))
+    expect(got).toMatchObject({ join: { candidate: { id: 'B' } }, heldFor: null })
+  })
+
+  it('holds for the nearest of two signalled overviews, skipping one that held it before', () => {
+    const shown = [open('A', 'O1', 0.1), open('B', 'O2', 0.2)]
+    expect(acceptLink(s, shown, [], answer([wider('O2'), wider('O1')])).heldFor).toBe('A')
+    expect(acceptLink(s, shown, [], answer([wider('O2'), wider('O1')]), { before: new Set(['A']) }).heldFor).toBe('B')
+  })
+
+  it('holds nothing when the story may no longer wait at all, so its passing partner founds', () => {
+    const got = acceptLink(s, [open('A', 'O1', 0.1)], [partner], answer([wider('O1'), yesPartner('F1')]), { mayWait: false })
+    expect(got).toMatchObject({ heldFor: null, partner: { candidate: { id: 'p' } } })
+    expect(got.signals).toEqual([{ overviewId: 'A', kind: 'wider', quote: 'has now reached North Kivu' }])
+  })
+
+  it('names both the hold and a refused yes elsewhere that blocks a passing partner', () => {
+    const refused = yes('O2', { place: { story: 'Ituri', other: '' } })
+    const got = acceptLink(s, [open('A', 'O1', 0.1), shownOverview('B', 'O2', 0.2)], [partner], answer([wider('O1'), refused, yesPartner('F1')]))
+    expect(got).toMatchObject({ heldFor: 'A', blockedBy: 'B', partners: [] })
+  })
+})
+
+describe('isStale', () => {
+  const s = story('s', 10)
+  const shown = { overviews: [], partners: [{ ref: 'F1', id: 'p', distance: 0.2 }] }
+  const founded = linkResult(s, { outcome: 'founded', shown })
+  const none = (over: Partial<Memberships> = {}): Memberships => ({ active: new Map(), lockedOut: new Map(), ...over })
+
+  it('is true when a partner shown has joined an overview since', () => {
+    expect(isStale(founded, none({ active: new Map([['p', membership('A')]]) }))).toBe(true)
+    expect(isStale(founded, none())).toBe(false)
+  })
+
+  it('is true for a founding whose partner shown waits for a re-center by its write, false once that wait has ended (ADR-0078)', () => {
+    expect(isStale(founded, none({ heldForRecenter: new Set(['p']) }))).toBe(true)
+    expect(isStale(founded, none({ heldForRecenter: new Set() }))).toBe(false)
+    // A story that founded nothing took no partner: a wait does not make it stale
+    expect(isStale(linkResult(s, { outcome: 'none', shown }), none({ heldForRecenter: new Set(['p']) }))).toBe(false)
+  })
+})
+
 describe('acceptFounding', () => {
   it('founds only when the check agrees on both stories and on a named end event', () => {
     expect(acceptFounding(draft, agree)).toBe('founded')
@@ -275,6 +360,11 @@ function world(options: {
   neighbours?: Record<string, { id: string; distance: number }[]>
   members?: Record<string, Membership>
   lockedOut?: Record<string, string[]>
+  /** Stories waiting for a re-center, and the overviews that held each before (ADR-0078). */
+  held?: string[]
+  heldBefore?: Record<string, string[]>
+  /** The run's clock; ten days after day 10 by default. */
+  now?: Date
   overviews?: CandidateOverview[]
   link?: (input: Parameters<LinkDeps['link']>[0]) => LinkAnswer | null
   found?: FoundAnswer | null
@@ -286,9 +376,15 @@ function world(options: {
   const deps: LinkDeps = {
     neighbours: async s =>
       (options.neighbours?.[s.id] ?? []).map((n): Neighbour => ({ id: n.id, distance: n.distance, datePublished: byId.get(n.id)!.datePublished, via: 'near' })),
-    memberships: async (): Promise<Memberships> => ({ active: new Map(members), lockedOut: new Map(Object.entries(options.lockedOut ?? {})) }),
+    memberships: async (): Promise<Memberships> => ({
+      active: new Map(members),
+      lockedOut: new Map(Object.entries(options.lockedOut ?? {})),
+      heldForRecenter: new Set(options.held ?? []),
+      heldBefore: new Map(Object.entries(options.heldBefore ?? {})),
+    }),
     overviews: async ids => (options.overviews ?? []).filter(o => ids.includes(o.id)),
     stories: async ids => ids.flatMap(id => (byId.has(id) ? [byId.get(id)!] : [])),
+    now: () => options.now ?? at(20),
     link: async input => {
       calls.link(input)
       return { parsed: options.link ? options.link(input) : null, costUsd: 0.001, model: 'small-model' }
@@ -405,6 +501,57 @@ describe('linkStory', () => {
       link: () => answer([yes('O1')]),
     })
     expect(await linkStory(s, w.deps)).toMatchObject({ outcome: 'held', heldBy: 'A', join: null })
+  })
+
+  describe('a story that points past an open overview (ADR-0078)', () => {
+    const s = story('s', 10, { summary: 'The outbreak in Ituri province grew; Ebola has now reached North Kivu and Goma.' })
+    const wider = no('O1', { scope: 'wider', signalQuote: 'has now reached North Kivu' })
+    const setup = (over: Partial<Parameters<typeof world>[0]> = {}) =>
+      world({
+        stories: [s, story('m', 8), story('p', 5)],
+        neighbours: {
+          s: [
+            { id: 'm', distance: 0.2 },
+            { id: 'p', distance: 0.3 },
+          ],
+        },
+        members: { m: membership('A', { mayHold: true }) },
+        overviews: [overview('A')],
+        link: input => answer([wider, ...input.partners.map(p => yesPartner(p.ref))]),
+        ...over,
+      })
+
+    it('waits for that overview’s re-center, naming it, and attempts no founding', async () => {
+      const w = setup()
+      expect(await linkStory(s, w.deps)).toMatchObject({ outcome: 'waiting', heldForRecenter: 'A', founding: null, heldBefore: [] })
+      expect(w.calls.found).not.toHaveBeenCalled()
+    })
+
+    it('founds when that overview held it before (asked again), and records the overviews that did', async () => {
+      const w = setup({ heldBefore: { s: ['A'] } })
+      expect(await linkStory(s, w.deps)).toMatchObject({ outcome: 'founded', heldForRecenter: null, heldBefore: ['A'] })
+    })
+
+    it('founds rather than waits when the story is past the re-center lookback at the run’s clock, as its wait would already be over', async () => {
+      const lookback = config.overviews.recenterLookbackDays * 86_400_000
+      const past = setup({ now: new Date(s.datePublished.getTime() + lookback + 86_400_000) })
+      expect(await linkStory(s, past.deps)).toMatchObject({ outcome: 'founded', heldForRecenter: null })
+      // On the lookback's last day it still waits
+      const last = setup({ now: new Date(s.datePublished.getTime() + lookback) })
+      expect(await linkStory(s, last.deps)).toMatchObject({ outcome: 'waiting', heldForRecenter: 'A' })
+    })
+
+    it('links as before, and may found, when the overview is too young to hold it (the owner, 2026-11-23)', async () => {
+      const w = setup({ members: { m: membership('A', { mayHold: false }) } })
+      expect(await linkStory(s, w.deps)).toMatchObject({ outcome: 'founded', heldForRecenter: null })
+    })
+
+    it('shows no waiting neighbour as a founding partner, and lists it', async () => {
+      const w = setup({ members: { m: membership('A') }, held: ['p'] })
+      const got = await linkStory(s, w.deps)
+      expect(got).toMatchObject({ outcome: 'none', heldPartners: ['p'] })
+      expect(got.shown.partners).toEqual([])
+    })
   })
 
   it('never joins an overview closed by an editor, nor one an editor detached the story from', async () => {
@@ -713,6 +860,78 @@ describe('linkInOrder', () => {
     expect(run.unwritten).toEqual(['a'])
     // Its call was made: its result counts for the item tally
     expect(run.results.map(r => r.story.id)).toEqual(['a', 'b'])
+  })
+
+  describe("a founding whose partner comes later in the run's order, its own result not yet written (ADR-0079)", () => {
+    // s and p are of one day, s first in the order: p may be s's partner, and p's own result is written after s's
+    const [m, s, p] = [story('m', 1), story('s', 3), story('p', 3)]
+    const setup = (pLink: () => LinkAnswer | null, pNeighbours: { id: string; distance: number }[] = [{ id: 'm', distance: 0.1 }]) =>
+      world({
+        stories: [m, s, p],
+        neighbours: { s: [{ id: 'p', distance: 0.2 }], p: pNeighbours },
+        members: { m: membership('A') },
+        overviews: [overview('A'), overview('NEW')],
+        link: input => (input.story.id === 'p' ? pLink() : answer(input.overviews.length > 0 ? [yes('O1')] : [yesPartner('F1')])),
+      })
+    /** Delays one story's reads, so the other's result is in first. */
+    const slower = (deps: LinkDeps, id: string): LinkDeps => ({
+      ...deps,
+      neighbours: async story => (story.id === id ? await new Promise(r => setTimeout(r, 10)) : undefined, deps.neighbours(story)),
+    })
+
+    it('is stale when the partner joins an open overview: written after the partner, then asked again, it joins that overview too', async () => {
+      const w = setup(() => answer([yes('O1')]))
+      const writes: string[] = []
+      const run = await linkInOrder([s, p], w.deps, memoryWriter(w.members, writes), { concurrency: 2 })
+      expect(writes).toEqual(['p:joined', 's:joined'])
+      expect(run.results.map(r => `${r.story.id}:${r.outcome}`)).toEqual(['p:joined', 's:joined'])
+      // s's first answer founded; its second is the one counted
+      expect(w.calls.found).toHaveBeenCalledTimes(1)
+    })
+
+    it('is stale when the partner’s result is in and held by a frozen overview: the held decision is written first, then the story is asked again', async () => {
+      const w = world({
+        stories: [m, s, p],
+        neighbours: { s: [{ id: 'p', distance: 0.2 }], p: [{ id: 'm', distance: 0.1 }] },
+        members: { m: membership('A', { frozen: true }) },
+        overviews: [overview('A'), overview('NEW')],
+        link: input => answer(input.story.id === 'p' ? [yes('O1')] : [yesPartner('F1')]),
+      })
+      const writes: string[] = []
+      const run = await linkInOrder([s, p], slower(w.deps, 's'), memoryWriter(w.members, writes), { concurrency: 2 })
+      // Written at once, s's founding would make p an active entry and p's write would be skipped
+      expect(writes[0]).toBe('p:held')
+      expect(run.outcomes.get('p')).toBe('held')
+      expect(w.calls.link.mock.calls.map(([input]) => (input as { story: LinkStory }).story.id)).toEqual(['p', 's', 's'])
+    })
+
+    it('is stale while the partner’s result is still pending: asked again once the partner is written', async () => {
+      const w = setup(() => null, [])
+      const writes: string[] = []
+      await linkInOrder([s, p], slower(w.deps, 'p'), memoryWriter(w.members, writes), { concurrency: 2 })
+      // p had no candidate (none); asked again, s founds with it as before
+      expect(writes).toEqual(['p:none', 's:founded'])
+      expect(w.calls.link.mock.calls.map(([input]) => (input as { story: LinkStory }).story.id)).toEqual(['s', 's'])
+    })
+
+    it('is written at once when the partner’s result is in and passes no join', async () => {
+      const w = setup(() => answer([no('O1')]))
+      const writes: string[] = []
+      await linkInOrder([s, p], slower(w.deps, 's'), memoryWriter(w.members, writes), { concurrency: 2 })
+      // p, taken as s's partner, is skipped as linked meanwhile
+      expect(writes).toEqual(['s:founded'])
+      expect(w.calls.link).toHaveBeenCalledTimes(2)
+    })
+
+    it('leaves the story unwritten, owed, when the switch goes off before the partner is written', async () => {
+      const w = setup(() => answer([yes('O1')]))
+      const writes: string[] = []
+      let asked = 0
+      // On for s's write only
+      const run = await linkInOrder([s, p], w.deps, memoryWriter(w.members, writes), { concurrency: 2, keepGoing: async () => asked++ < 1 })
+      expect(writes).toEqual([])
+      expect(run.outcomes.size).toBe(0)
+    })
   })
 
   it('a backfilled development is founded from its earliest stories, and the later ones join it', async () => {

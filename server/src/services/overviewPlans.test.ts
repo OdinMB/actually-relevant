@@ -230,6 +230,22 @@ describe('the link record: which re-center signals count', () => {
     expect(planJoin(overview(), joined, ctx).plan.decision.inputs).toMatchObject({ signals: [signals[0]] })
   })
 
+  it('writes a story waiting for a re-center as `waiting`, naming the overview, with every counted signal (ADR-0078)', () => {
+    const waiting = planAlone(linkResult(story, { outcome: 'waiting', heldForRecenter: 'o2', signals }), ctx)
+    expect(waiting.outcome).toBe('waiting')
+    expect(waiting.plan.decision).toMatchObject({ outcome: 'waiting', overviewId: 'o2', inputs: { signals, heldForRecenter: 'o2', linkedAt: NOW } })
+    // A join or a founding names no wait
+    expect(planJoin(overview(), { ...joinResult(story, 'o1'), signals }, ctx).plan.decision.inputs).toMatchObject({ heldForRecenter: null })
+    expect(planAlone(linkResult(story, { outcome: 'none', signals }), ctx).plan.decision.inputs).toMatchObject({ heldForRecenter: null })
+  })
+
+  it('keeps no signal of a story asked again for an overview that held it before, so its wider counts once (ADR-0078)', () => {
+    const again = planAlone(linkResult(story, { outcome: 'none', signals, heldBefore: ['o2'] }), ctx).plan.decision.inputs
+    expect(again).toMatchObject({ signals: [signals[0]] })
+    const stillWaiting = planAlone(linkResult(story, { outcome: 'waiting', heldForRecenter: 'o1', signals, heldBefore: ['o2'] }), ctx).plan.decision.inputs
+    expect(stillWaiting).toMatchObject({ signals: [signals[0]] })
+  })
+
   it('keeps nothing of a story held, in conflict or failed, which is linked again, nor of a founding', () => {
     for (const outcome of ['held', 'failed'] as const)
       expect(planAlone(linkResult(story, { outcome, signals }), ctx).plan.decision.inputs).toMatchObject({ signals: [] })

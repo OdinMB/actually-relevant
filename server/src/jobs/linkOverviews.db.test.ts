@@ -218,6 +218,7 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
               owedOf(
                 sandbox,
                 published.map(s => ({ id: s.id, datePublished: s.datePublished! })),
+                now,
               ),
               now,
             ),

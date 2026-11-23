@@ -21,6 +21,8 @@ import type { CandidateOverview, Charter, EntryRole, Memberships, OverviewScope,
 const DAY_MS = 86_400_000
 
 export type RecenterOptions = Pick<typeof config.overviews, 'anchorTurningShare' | 'anchorStandIns' | 'maxAutomatedRecenters' | 'editorRecenterLockDays'>
+/** What `holdsForRecenter` reads: the limits `recenterMayCome` reads and the entries an overview needs to hold a story. */
+export type HoldOptions = RecenterOptions & Pick<typeof config.overviews, 'recenterHoldMinEntries'>
 
 /** An entry as the anchor reads it. */
 export interface AnchorEntry {
@@ -129,6 +131,39 @@ export function automatedRecenterBlocked(
   if (o.automatedRecenters >= options.maxAutomatedRecenters) return 'limit'
   const lock = recenterLock(o, options)
   return lock && now.getTime() < lock.until.getTime() ? 'locked' : null
+}
+
+/**
+ * Whether automation may still re-center the overview, now or later (ADR-0078): it is not closed, is
+ * under `maxAutomatedRecenters` and no lock is in force. A story that points past such an overview waits
+ * for its re-center instead of founding a second one. What only holds an attempt back for now (a
+ * forming or single scope, a freeze, quiet) does not count; a faded overview is closed and holds nothing.
+ */
+export function recenterMayCome(
+  o: Pick<RecenterState, 'status' | 'automatedRecenters' | 'recenteredAt' | 'recenteredBy' | 'recenterUndoneAt'>,
+  now: Date,
+  options: RecenterOptions = config.overviews,
+): boolean {
+  if (o.status === 'closed' || o.automatedRecenters >= options.maxAutomatedRecenters) return false
+  const lock = recenterLock(o, options)
+  return !lock || now.getTime() >= lock.until.getTime()
+}
+
+/**
+ * Whether a story that points past the overview waits for its re-center (ADR-0078, narrowed by the
+ * owner on 2026-11-23): only an established overview holds one, with at least `recenterHoldMinEntries`
+ * active entries (as linking sees it: those of published stories on or before the story's date), and
+ * only while automation may still re-center it (`recenterMayCome`). Against a younger overview the story
+ * links as before and may found, so a small precursor overview (two near misses founding a "standoff")
+ * never stalls a big new development, while an established one still widens to take its stories in.
+ * Where the re-center itself needs an ongoing scope, the wait simply lasts until a review makes it so.
+ */
+export function holdsForRecenter(
+  o: Parameters<typeof recenterMayCome>[0] & { activeEntries: number },
+  now: Date,
+  options: HoldOptions = config.overviews,
+): boolean {
+  return o.activeEntries >= options.recenterHoldMinEntries && recenterMayCome(o, now, options)
 }
 
 // ---------------------------------------------------------------------------

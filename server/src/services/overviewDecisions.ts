@@ -51,6 +51,8 @@ export const linkInputs = z.object({
   foundedWith: z.string().nullable().default(null),
   signals: z.array(signalSchema).default([]),
   linkedAt: storedDate.nullable().default(null),
+  /** A `waiting` decision's overview, whose re-center the story waits for (ADR-0078); older rows read null. */
+  heldForRecenter: z.string().nullable().default(null),
   ...changeSet,
 })
 

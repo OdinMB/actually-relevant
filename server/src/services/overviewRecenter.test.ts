@@ -7,9 +7,11 @@ import {
   anchorOf,
   automatedRecenterBlocked,
   draftHoldsAnchor,
+  holdsForRecenter,
   neighbourOverviews,
   recenterCaseOf,
   recenterLock,
+  recenterMayCome,
   recenterOverview,
   signalFires,
   signalsSince,
@@ -124,6 +126,40 @@ describe('the fixed limits on an automated re-center', () => {
     // The later lock holds, whichever set it: an Undo's after an editor's, or an editor's after an Undo's
     expect(recenterLock({ ...at('editor', 10), recenterUndoneAt: ago(5) }, OPTIONS)).toEqual({ until: new Date(NOW.getTime() + 175 * 86_400_000), by: 'undo' })
     expect(recenterLock({ ...at('editor', 5), recenterUndoneAt: ago(10) }, OPTIONS)?.by).toBe('editor')
+  })
+
+  describe('recenterMayCome: whether automation may still re-center it, for a story that points past it (ADR-0078)', () => {
+    const ago = (days: number) => new Date(NOW.getTime() - days * 86_400_000)
+
+    it('is false at the limit, under an editor lock or an Undo lock, and once closed', () => {
+      expect(recenterMayCome(state({ automatedRecenters: 2 }), NOW, OPTIONS)).toBe(false)
+      expect(recenterMayCome(state({ recenteredBy: 'editor', recenteredAt: ago(10) }), NOW, OPTIONS)).toBe(false)
+      expect(recenterMayCome(state({ recenterUndoneAt: ago(10) }), NOW, OPTIONS)).toBe(false)
+      expect(recenterMayCome(state({ status: 'closed' }), NOW, OPTIONS)).toBe(false)
+    })
+
+    it('is true once a lock has run out, and for what only holds an attempt back for now: forming, single, frozen, quiet', () => {
+      expect(recenterMayCome(state({ recenteredBy: 'editor', recenteredAt: ago(180) }), NOW, OPTIONS)).toBe(true)
+      expect(recenterMayCome(state({ scope: 'forming' }), NOW, OPTIONS)).toBe(true)
+      expect(recenterMayCome(state({ scope: 'single' }), NOW, OPTIONS)).toBe(true)
+      expect(recenterMayCome(state({ frozen: true }), NOW, OPTIONS)).toBe(true)
+      expect(recenterMayCome(state({ status: 'quiet', automatedRecenters: 1 }), NOW, OPTIONS)).toBe(true)
+    })
+  })
+
+  describe('holdsForRecenter: only an established overview holds a story that points past it (the owner, 2026-11-23)', () => {
+    const HOLD = { ...OPTIONS, recenterHoldMinEntries: 3 }
+
+    it('holds from 3 active entries on, while automation may still re-center it', () => {
+      expect(holdsForRecenter({ ...state({ scope: 'forming' }), activeEntries: 3 }, NOW, HOLD)).toBe(true)
+      expect(holdsForRecenter({ ...state(), activeEntries: 40 }, NOW, HOLD)).toBe(true)
+    })
+
+    it('never holds for a younger overview, such as a two-story founding, nor for one automation will not re-center', () => {
+      expect(holdsForRecenter({ ...state(), activeEntries: 2 }, NOW, HOLD)).toBe(false)
+      expect(holdsForRecenter({ ...state({ automatedRecenters: 2 }), activeEntries: 40 }, NOW, HOLD)).toBe(false)
+      expect(holdsForRecenter({ ...state({ status: 'closed' }), activeEntries: 40 }, NOW, HOLD)).toBe(false)
+    })
   })
 })
 

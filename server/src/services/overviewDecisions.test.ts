@@ -12,7 +12,7 @@ describe('the decision log schemas', () => {
   })
 
   it('fills what an older record lacks, and gives null for one that does not parse', () => {
-    expect(readInputs(linkInputs, {})).toMatchObject({ reportsEndEvent: false, changes: [], created: [] })
+    expect(readInputs(linkInputs, {})).toMatchObject({ reportsEndEvent: false, heldForRecenter: null, changes: [], created: [] })
     expect(readInputs(linkInputs, { shown: 'not a list' })).toBeNull()
   })
 

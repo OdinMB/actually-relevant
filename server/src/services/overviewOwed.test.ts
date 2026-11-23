@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { config } from '../config.js'
-import { owedSlices, owedStanding, type LinkAttempt, type OwedStory } from './overviewOwed.js'
+import { owedSlices, owedStanding, waitInForce, waitsOf, type LinkAttempt, type OwedStory, type WaitDecision } from './overviewOwed.js'
 
 const NOW = new Date('2026-11-20T02:00:00Z')
 const DAY_MS = 86_400_000
@@ -10,6 +10,7 @@ const attempt = (outcome: LinkAttempt['outcome'], days: number, over: Partial<Li
   undone: false,
   at: daysAgo(days),
   heldFrozen: false,
+  waitInForce: false,
   ...over,
 })
 
@@ -45,6 +46,69 @@ describe('owedStanding', () => {
       lastTry: false,
     })
   })
+
+  it('waits, with no call, for a re-center while the wait is in force, and is due again once it is not (ADR-0078)', () => {
+    expect(owedStanding([attempt('waiting', 3, { waitInForce: true })], NOW)).toEqual({ kind: 'waiting' })
+    expect(owedStanding([attempt('waiting', 3)], NOW)).toEqual({ kind: 'retry', lastTry: false })
+    // A waiting attempt ends a failure streak, as a held one does: the model answered
+    expect(owedStanding([attempt('failed', 30), attempt('failed', 29), attempt('failed', 28), attempt('waiting', 20), attempt('failed', 1)], NOW)).toEqual({
+      kind: 'retry',
+      lastTry: false,
+    })
+  })
+})
+
+describe('waitInForce', () => {
+  const options = { recenterLookbackDays: 90 }
+  const wait = (over: Partial<Parameters<typeof waitInForce>[0]> = {}) => ({
+    recenterable: true,
+    triedAt: null,
+    linkedAt: daysAgo(3),
+    datePublished: daysAgo(5),
+    ...over,
+  })
+
+  it('holds while the overview may still be re-centered, has not been tried since the wait was written, and the story is within the lookback', () => {
+    expect(waitInForce(wait(), NOW, options)).toBe(true)
+    expect(waitInForce(wait({ triedAt: daysAgo(4) }), NOW, options)).toBe(true)
+  })
+
+  it("ends after the overview's next attempt (the same run's too), once it can no longer be re-centered, and past the lookback", () => {
+    expect(waitInForce(wait({ triedAt: daysAgo(1) }), NOW, options)).toBe(false)
+    expect(waitInForce(wait({ triedAt: daysAgo(3) }), NOW, options)).toBe(false)
+    expect(waitInForce(wait({ recenterable: false }), NOW, options)).toBe(false)
+    expect(waitInForce(wait({ datePublished: daysAgo(91) }), NOW, options)).toBe(false)
+    expect(waitInForce(wait({ datePublished: daysAgo(90) }), NOW, options)).toBe(true)
+  })
+})
+
+describe('waitsOf', () => {
+  const options = { recenterLookbackDays: 90 }
+  const decision = (storyId: string, outcome: WaitDecision['outcome'], days: number, over: Partial<WaitDecision> = {}): WaitDecision => ({
+    storyId,
+    outcome,
+    overviewId: outcome === 'waiting' ? 'o1' : null,
+    at: daysAgo(days),
+    datePublished: daysAgo(20),
+    overview: outcome === 'waiting' ? { recenterable: true, triedAt: null } : null,
+    ...over,
+  })
+
+  it('holds a story whose newest live link decision waits with the wait in force, and names every overview that held it', () => {
+    const got = waitsOf(
+      [
+        decision('a', 'waiting', 3),
+        decision('b', 'waiting', 9, { overviewId: 'o2' }),
+        decision('b', 'none', 2),
+        decision('c', 'waiting', 3, { overview: { recenterable: true, triedAt: daysAgo(1) } }),
+        decision('d', 'failed', 1),
+      ],
+      NOW,
+      options,
+    )
+    expect([...got.heldForRecenter]).toEqual(['a'])
+    expect(Object.fromEntries(got.heldBefore)).toEqual({ a: ['o1'], b: ['o2'], c: ['o1'] })
+  })
 })
 
 describe('owedSlices', () => {
@@ -64,6 +128,7 @@ describe('owedSlices', () => {
       story('retry-old', 100, [attempt('held', 4)]),
       story('retry-older', 120, [attempt('failed', 30), attempt('failed', 20), attempt('failed', 10)]),
       story('frozen', 130, [attempt('held', 9, { heldFrozen: true })]),
+      story('recentering', 135, [attempt('waiting', 9, { waitInForce: true })]),
       story('backing-off', 140, [attempt('failed', 0)]),
       story('given-up', 150, [attempt('failed', 40), attempt('failed', 35), attempt('failed', 30), attempt('failed', 20)]),
       story('too-old', 200),
@@ -75,6 +140,7 @@ describe('owedSlices', () => {
       backlogTotal: 2,
       lastTries: ['retry-older'],
       frozenWaiting: 1,
+      recenterWaiting: 1,
     })
   })
 

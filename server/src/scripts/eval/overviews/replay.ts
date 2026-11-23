@@ -173,6 +173,7 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
       memberships: sandbox.memberships,
       overviews: sandbox.candidateOverviews,
       stories: storiesOf,
+      now: () => clock,
       ...linkCalls,
     }
     const keepGoing = async () => {
@@ -195,6 +196,7 @@ export async function runReplayStep(o: ReplayStepOptions): Promise<ReplayStepRep
               owedOf(
                 sandbox,
                 replayed.filter(s => s.date <= day),
+                clock,
               ),
               clock,
             ),

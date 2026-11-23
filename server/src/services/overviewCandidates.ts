@@ -9,7 +9,10 @@
  *   sandbox's in memory).
  */
 import { config } from '../config.js'
-import type { Membership, Memberships, OverviewScope, OverviewStatus } from './overviewTypes.js'
+import { waitsOf } from './overviewOwed.js'
+import { holdsForRecenter, recenterMayCome } from './overviewRecenter.js'
+import { LINK_OUTCOMES, type Membership, type Memberships, type OverviewScope, type OverviewStatus } from './overviewTypes.js'
+import { oneOf } from './storyContextRecords.js'
 
 /** The part of a Prisma client (or the eval's read-only session) this module uses. */
 export interface OverviewDb {
@@ -124,39 +127,81 @@ export async function nearestPublished(
   return [...byId.values()].sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id))
 }
 
-interface MembershipRow {
+/** The columns that say whether automation may still re-center an overview (`recenterMayCome`). */
+interface RecenterColumns {
+  status: OverviewStatus
+  automated_recenters: number
+  recentered_at: Date | null
+  recentered_by: string | null
+  recenter_undone_at: Date | null
+}
+
+interface MembershipRow extends RecenterColumns {
   story_id: string
   overview_id: string
   scope: OverviewScope
-  status: OverviewStatus
   closed_reason: string | null
   frozen: boolean
   last_entry_at: Date | null
+  /** Its active entries of published stories (on or before `asOf` when given), as `holdsForRecenter` counts them. */
+  active_entries: number
+}
+
+const recenterStateOf = (r: RecenterColumns) => ({
+  status: r.status,
+  automatedRecenters: r.automated_recenters,
+  recenteredAt: r.recentered_at,
+  recenteredBy: r.recentered_by,
+  recenterUndoneAt: r.recenter_undone_at,
+})
+const recenterableAt = (r: RecenterColumns, now: Date): boolean => recenterMayCome(recenterStateOf(r), now)
+
+/** A live `link` decision of a story, with the overview it names (its columns null with none), as `waitsOf` reads it. */
+interface WaitRow extends Omit<RecenterColumns, 'status' | 'automated_recenters'> {
+  story_id: string
+  outcome: string
+  overview_id: string | null
+  linked_at: string | null
+  created_at: Date
+  date_published: Date | null
+  status: OverviewStatus | null
+  automated_recenters: number | null
+  recenter_tried_at: Date | null
 }
 
 /**
- * The stories' active overviews, the overviews an editor detached each from (`locked`), and those whose
+ * The stories' active overviews, the overviews an editor detached each from (`locked`), those whose
  * latest founding check judged them to report no occurrence (`noOccurrence`, from the `found` decisions'
- * stored answers, the newest first, as A or B; an Undo of a founding leaves its check's judgment standing). With
- * `asOf` (the story being linked's date), an overview's last entry is its newest active entry of a
- * story still published, published on or before it, as linking a story sees the development on its
- * own day (a member unpublished before the job detached it keeps nothing alive); without, the
- * overview's `last_entry_at`.
+ * stored answers, the newest first, as A or B; an Undo of a founding leaves its check's judgment standing),
+ * and the waits for a re-center (`heldForRecenter`, `heldBefore`, from their live `link` decisions,
+ * `waitsOf`, ADR-0078). Each overview says whether a story that points past it waits for its re-center
+ * (`mayHold`, `holdsForRecenter`: its active entries counted as its last entry is, automation's limits at
+ * `now`, the run's wall clock). With `asOf` (the story being linked's date), an overview's last entry is
+ * its newest active entry of a story still published, published on or before it, and its entries are
+ * counted so, as linking a story sees the development on its own day (a member unpublished before the
+ * job detached it keeps nothing alive); without, the overview's `last_entry_at` and every active entry
+ * of a published story.
  */
-export async function membershipsOf(db: OverviewDb, storyIds: readonly string[], asOf?: Date): Promise<Memberships> {
+export async function membershipsOf(db: OverviewDb, storyIds: readonly string[], asOf?: Date, now: Date = new Date()): Promise<Memberships> {
   const ids = [...new Set(storyIds)]
   if (ids.length === 0) return { active: new Map(), lockedOut: new Map() }
   const rows = asOf
     ? await db.$queryRaw<MembershipRow[]>`
         SELECT e.story_id, o.id AS overview_id, o.scope::text AS scope, o.status::text AS status, o.closed_reason, o.frozen,
+               o.automated_recenters, o.recentered_at, o.recentered_by, o.recenter_undone_at,
                (SELECT max(s.date_published) FROM overview_entries m JOIN stories s ON s.id = m.story_id
-                WHERE m.overview_id = o.id AND m.status = 'active' AND s.status = 'published' AND s.date_published <= ${asOf}) AS last_entry_at
+                WHERE m.overview_id = o.id AND m.status = 'active' AND s.status = 'published' AND s.date_published <= ${asOf}) AS last_entry_at,
+               (SELECT count(*)::int FROM overview_entries m JOIN stories s ON s.id = m.story_id
+                WHERE m.overview_id = o.id AND m.status = 'active' AND s.status = 'published' AND s.date_published <= ${asOf}) AS active_entries
         FROM overview_entries e
         JOIN overviews o ON o.id = e.overview_id
         WHERE e.status = 'active' AND e.story_id = ANY(${ids}::text[])
       `
     : await db.$queryRaw<MembershipRow[]>`
-        SELECT e.story_id, o.id AS overview_id, o.scope::text AS scope, o.status::text AS status, o.closed_reason, o.frozen, o.last_entry_at
+        SELECT e.story_id, o.id AS overview_id, o.scope::text AS scope, o.status::text AS status, o.closed_reason, o.frozen, o.last_entry_at,
+               o.automated_recenters, o.recentered_at, o.recentered_by, o.recenter_undone_at,
+               (SELECT count(*)::int FROM overview_entries m JOIN stories s ON s.id = m.story_id
+                WHERE m.overview_id = o.id AND m.status = 'active' AND s.status = 'published') AS active_entries
         FROM overview_entries e
         JOIN overviews o ON o.id = e.overview_id
         WHERE e.status = 'active' AND e.story_id = ANY(${ids}::text[])
@@ -168,8 +213,44 @@ export async function membershipsOf(db: OverviewDb, storyIds: readonly string[],
   const active = new Map<string, Membership>(
     rows.map(r => [
       r.story_id,
-      { overviewId: r.overview_id, scope: r.scope, status: r.status, closedReason: r.closed_reason, frozen: r.frozen, lastEntryAt: r.last_entry_at },
+      {
+        overviewId: r.overview_id,
+        scope: r.scope,
+        status: r.status,
+        closedReason: r.closed_reason,
+        frozen: r.frozen,
+        lastEntryAt: r.last_entry_at,
+        mayHold: holdsForRecenter({ ...recenterStateOf(r), activeEntries: r.active_entries }, now),
+      },
     ]),
+  )
+  const links = await db.$queryRaw<WaitRow[]>`
+    SELECT d.story_id, d.outcome, d.overview_id, d.inputs->>'linkedAt' AS linked_at, d.created_at, s.date_published,
+           o.status::text AS status, o.automated_recenters, o.recentered_at, o.recentered_by, o.recenter_undone_at, o.recenter_tried_at
+    FROM overview_decisions d
+    JOIN stories s ON s.id = d.story_id
+    LEFT JOIN overviews o ON o.id = d.overview_id
+    WHERE d.kind = 'link' AND d.undone_at IS NULL AND d.story_id = ANY(${ids}::text[])
+  `
+  const waits = waitsOf(
+    links.flatMap(l =>
+      l.date_published
+        ? [
+            {
+              storyId: l.story_id,
+              outcome: oneOf(l.outcome, LINK_OUTCOMES, 'failed'),
+              overviewId: l.overview_id,
+              at: l.linked_at ? new Date(l.linked_at) : l.created_at,
+              datePublished: l.date_published,
+              overview:
+                l.status !== null && l.automated_recenters !== null
+                  ? { recenterable: recenterableAt({ ...l, status: l.status, automated_recenters: l.automated_recenters }, now), triedAt: l.recenter_tried_at }
+                  : null,
+            },
+          ]
+        : [],
+    ),
+    now,
   )
   const lockedOut = new Map<string, string[]>()
   for (const r of locked) lockedOut.set(r.story_id, [...(lockedOut.get(r.story_id) ?? []), r.overview_id])
@@ -193,7 +274,7 @@ export async function membershipsOf(db: OverviewDb, storyIds: readonly string[],
     WHERE story_id = ANY(${ids}::text[]) AND occurred IS NOT NULL
     ORDER BY story_id, created_at DESC, id DESC
   `
-  return { active, lockedOut, noOccurrence: new Set(checked.filter(r => r.occurred === 'no').map(r => r.story_id)) }
+  return { active, lockedOut, noOccurrence: new Set(checked.filter(r => r.occurred === 'no').map(r => r.story_id)), ...waits }
 }
 
 /** A founding attempt as the occurrence rule reads it: the linked story, its partner, their days, and the check's per-story answers (A the earlier, the partner on a tie). */
@@ -229,6 +310,8 @@ export interface RankedOverview {
   overviewId: string
   distance: number
   frozen: boolean
+  /** A story that points past it waits for its re-center (`Membership.mayHold`, ADR-0078). */
+  mayHold: boolean
 }
 
 export interface Candidates {
@@ -238,6 +321,8 @@ export interface Candidates {
   partners: Neighbour[]
   /** Unlinked neighbours within the distance and window left out as partners because a founding check judged them to report no occurrence. */
   excludedPartners: string[]
+  /** Unlinked neighbours within the distance and window left out as partners because they wait for an overview's re-center (ADR-0078). */
+  heldPartners: string[]
 }
 
 /**
@@ -255,7 +340,8 @@ const takesStories = (m: Membership, asOf: Date, lookbackDays: number): boolean 
  * are active members of an overview that still takes stories, minus those an editor detached the story
  * from, ranked by their nearest member; and the neighbours with no active entry, within the distance
  * and the founding window before the story, as founding partners, except those a founding check judged
- * to report no occurrence (`noOccurrence`), left out before the cut so the slot goes to the next one. A
+ * to report no occurrence (`noOccurrence`) and those waiting for an overview's re-center
+ * (`heldForRecenter`, ADR-0078), each left out before the cut so the slot goes to the next one. A
  * frozen overview stays a candidate, so a story that belongs there is held rather than settled
  * elsewhere. Pure.
  */
@@ -269,6 +355,7 @@ export function groupCandidates(
   const nearestOf = new Map<string, RankedOverview>()
   const partners: Neighbour[] = []
   const excludedPartners: string[] = []
+  const heldPartners: string[] = []
   const windowStart = story.datePublished.getTime() - options.foundingWindowDays * DAY_MS
   for (const n of neighbours) {
     if (n.id === story.id || n.datePublished.getTime() > story.datePublished.getTime()) continue
@@ -276,12 +363,14 @@ export function groupCandidates(
     if (!m) {
       if (n.distance > options.maxDistance || n.datePublished.getTime() < windowStart) continue
       if (memberships.noOccurrence?.has(n.id)) excludedPartners.push(n.id)
+      else if (memberships.heldForRecenter?.has(n.id)) heldPartners.push(n.id)
       else partners.push(n)
       continue
     }
     if (lockedOut.has(m.overviewId) || !takesStories(m, story.datePublished, options.memberLookbackDays)) continue
     const known = nearestOf.get(m.overviewId)
-    if (!known || n.distance < known.distance) nearestOf.set(m.overviewId, { overviewId: m.overviewId, distance: n.distance, frozen: m.frozen })
+    if (!known || n.distance < known.distance)
+      nearestOf.set(m.overviewId, { overviewId: m.overviewId, distance: n.distance, frozen: m.frozen, mayHold: m.mayHold === true })
   }
   const byDistance =
     <T extends { distance: number }>(key: (x: T) => string) =>
@@ -291,5 +380,6 @@ export function groupCandidates(
     overviews: [...nearestOf.values()].sort(byDistance(o => o.overviewId)).slice(0, options.candidateOverviews),
     partners: partners.sort(byDistance(p => p.id)).slice(0, options.foundingCandidates),
     excludedPartners,
+    heldPartners,
   }
 }

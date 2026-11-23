@@ -25,7 +25,8 @@ import { entryRole } from '../../../services/overviewCases.js'
 import { noOccurrenceOf, type CheckedAttempt } from '../../../services/overviewCandidates.js'
 import { foundInputs, linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import { isStale, type ApplyLink } from '../../../services/overviewLink.js'
-import type { LinkAttempt, OwedStory } from '../../../services/overviewOwed.js'
+import { waitInForce, waitsOf, type LinkAttempt, type OwedStory, type WaitDecision } from '../../../services/overviewOwed.js'
+import { holdsForRecenter, recenterMayCome } from '../../../services/overviewRecenter.js'
 import { planAlone, planConflict, planFounding, planJoin, type LinkPlan, type PlanContext } from '../../../services/overviewPlans.js'
 import {
   SETTLING_OUTCOMES,
@@ -109,7 +110,26 @@ export function createSandbox(): Sandbox {
     closedReason: o.closedReason,
     frozen: o.frozen,
     lastEntryAt: asOf ? (entriesAsOf(o, asOf)[0]?.datePublished ?? null) : o.lastEntryAt,
+    // Production's rule (`membershipsOf`): its active entries as of the story's date, automation's limits at the clock
+    mayHold: holdsForRecenter({ ...o, activeEntries: entriesAsOf(o, asOf).length }, clock),
   })
+  /** The live link decisions as the waits for a re-center read them (`waitsOf`), each overview at the sandbox's clock. */
+  const waitDecisions = (storyIds: ReadonlySet<string>): WaitDecision[] =>
+    decisions.flatMap(d => {
+      const story = d.kind === 'link' && !d.undone && d.storyId && storyIds.has(d.storyId) ? stories.get(d.storyId) : undefined
+      if (!story) return []
+      const o = d.overviewId ? overviews.get(d.overviewId) : undefined
+      return [
+        {
+          storyId: story.id,
+          outcome: d.outcome as LinkOutcome,
+          overviewId: d.overviewId,
+          at: readInputs(linkInputs, d.inputs)?.linkedAt ?? new Date(0),
+          datePublished: story.datePublished,
+          overview: o ? { recenterable: recenterMayCome(o, clock), triedAt: o.recenterTriedAt } : null,
+        },
+      ]
+    })
   const memberships = async (storyIds: string[], asOf?: Date): Promise<Memberships> => ({
     active: new Map(
       storyIds.flatMap(id => {
@@ -127,6 +147,7 @@ export function createSandbox(): Sandbox {
         return story && partner ? [{ storyId: story.id, partnerId: partner.id, storyDate: story.datePublished, partnerDate: partner.datePublished, check }] : []
       }),
     ),
+    ...waitsOf(waitDecisions(new Set(storyIds)), clock),
   })
   const candidateOverviews = async (storyIds: string[], asOf: Date): Promise<CandidateOverview[]> =>
     storyIds.flatMap(id => {
@@ -224,21 +245,30 @@ export function createSandbox(): Sandbox {
 /**
  * The stories of `candidates` (published by now) still owed a link decision by production's rule
  * (active in no overview, no live settling `link` decision), each with its link decisions as the owed
- * rule reads them, for `owedSlices` to slice as production's `owedStories` does.
+ * rule reads them at `now` (a wait for a re-center in force or not), for `owedSlices` to slice as
+ * production's `owedStories` does.
  */
-export function owedOf(sandbox: Sandbox, candidates: readonly { id: string; datePublished: Date }[]): OwedStory[] {
+export function owedOf(sandbox: Sandbox, candidates: readonly { id: string; datePublished: Date }[], now: Date): OwedStory[] {
   const active = new Set([...sandbox.overviews.values()].flatMap(o => activeEntries(o).map(e => e.storyId)))
   const links = new Map<string, SandboxDecision[]>()
   for (const d of sandbox.decisions) if (d.kind === 'link' && d.storyId) links.set(d.storyId, [...(links.get(d.storyId) ?? []), d])
   return candidates.flatMap(s => {
     const own = links.get(s.id) ?? []
     if (active.has(s.id) || own.some(d => !d.undone && SETTLES.has(d.outcome as LinkOutcome))) return []
-    const attempts: LinkAttempt[] = own.map(d => ({
-      outcome: d.outcome as LinkOutcome,
-      undone: d.undone,
-      at: readInputs(linkInputs, d.inputs)?.linkedAt ?? new Date(0),
-      heldFrozen: d.outcome === 'held' && d.overviewId !== null && sandbox.overviews.get(d.overviewId)?.frozen === true,
-    }))
+    const attempts: LinkAttempt[] = own.map(d => {
+      const at = readInputs(linkInputs, d.inputs)?.linkedAt ?? new Date(0)
+      const o = d.overviewId !== null ? sandbox.overviews.get(d.overviewId) : undefined
+      return {
+        outcome: d.outcome as LinkOutcome,
+        undone: d.undone,
+        at,
+        heldFrozen: d.outcome === 'held' && o?.frozen === true,
+        waitInForce:
+          d.outcome === 'waiting' &&
+          o !== undefined &&
+          waitInForce({ recenterable: recenterMayCome(o, now), triedAt: o.recenterTriedAt, linkedAt: at, datePublished: s.datePublished }, now),
+      }
+    })
     return [{ id: s.id, datePublished: s.datePublished, attempts }]
   })
 }

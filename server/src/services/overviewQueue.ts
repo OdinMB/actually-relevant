@@ -11,7 +11,8 @@ import { config } from '../config.js'
 import prisma from '../lib/prisma.js'
 import { linkInputs, readInputs } from './overviewDecisions.js'
 import { OVERVIEW_EVAL_GATE } from './overviewGate.js'
-import { owedSlices, type OwedSlices, type OwedStory } from './overviewOwed.js'
+import { owedSlices, waitInForce, type OwedSlices, type OwedStory } from './overviewOwed.js'
+import { recenterMayCome } from './overviewRecenter.js'
 import { LINK_OUTCOMES, SETTLING_OUTCOMES } from './overviewTypes.js'
 import { oneOf } from './storyContextRecords.js'
 import { PASS_EVAL_GATE } from './researchPassGate.js'
@@ -62,7 +63,8 @@ const DAY_MS = 86_400_000
  * The stories one run links (`owedSlices`: the new backlog oldest first, the retries due, then the
  * night's), from every owed story of the backfill window with its link decisions: published, active
  * in no overview, with no live settling `link` decision. A held decision reads whether its overview is
- * still frozen.
+ * still frozen; a waiting one whether its wait for that overview's re-center is still in force
+ * (`waitInForce`, ADR-0078).
  */
 export async function owedStories(now: Date = new Date(), options = config.overviews): Promise<OwedSlices> {
   const rows = await prisma.story.findMany({
@@ -77,25 +79,49 @@ export async function owedStories(now: Date = new Date(), options = config.overv
       datePublished: true,
       overviewDecisions: {
         where: { kind: 'link' },
-        select: { outcome: true, undoneAt: true, createdAt: true, inputs: true, overview: { select: { frozen: true } } },
+        select: {
+          outcome: true,
+          undoneAt: true,
+          createdAt: true,
+          inputs: true,
+          overview: {
+            select: {
+              frozen: true,
+              status: true,
+              automatedRecenters: true,
+              recenteredAt: true,
+              recenteredBy: true,
+              recenterUndoneAt: true,
+              recenterTriedAt: true,
+            },
+          },
+        },
       },
     },
   })
-  const owed: OwedStory[] = rows.flatMap(s =>
-    s.datePublished
-      ? [
-          {
-            id: s.id,
-            datePublished: s.datePublished,
-            attempts: s.overviewDecisions.map(d => ({
-              outcome: oneOf(d.outcome, LINK_OUTCOMES, 'failed'),
-              undone: d.undoneAt !== null,
-              at: readInputs(linkInputs, d.inputs)?.linkedAt ?? d.createdAt,
-              heldFrozen: d.outcome === 'held' && d.overview?.frozen === true,
-            })),
-          },
-        ]
-      : [],
-  )
+  const owed: OwedStory[] = rows.flatMap(s => {
+    const published = s.datePublished
+    if (!published) return []
+    return [
+      {
+        id: s.id,
+        datePublished: published,
+        attempts: s.overviewDecisions.map(d => {
+          const at = readInputs(linkInputs, d.inputs)?.linkedAt ?? d.createdAt
+          const o = d.overview
+          return {
+            outcome: oneOf(d.outcome, LINK_OUTCOMES, 'failed'),
+            undone: d.undoneAt !== null,
+            at,
+            heldFrozen: d.outcome === 'held' && o?.frozen === true,
+            waitInForce:
+              d.outcome === 'waiting' &&
+              o !== null &&
+              waitInForce({ recenterable: recenterMayCome(o, now, options), triedAt: o.recenterTriedAt, linkedAt: at, datePublished: published }, now, options),
+          }
+        }),
+      },
+    ]
+  })
   return owedSlices(owed, now, options)
 }

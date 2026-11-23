@@ -103,6 +103,71 @@ describeDb('overview candidates', () => {
     expect(read.noOccurrence).toEqual(new Set([warning.id]))
   })
 
+  it("reads each overview's re-center limits and the stories waiting for a re-center from their newest live link decision (ADR-0078)", async () => {
+    const feed = await createFeed((await createIssue()).id)
+    const [member, waiting, undone, tried, reasked] = [
+      await published(feed.id, -6, null),
+      await published(feed.id, -5, null),
+      await published(feed.id, -4, null),
+      await published(feed.id, -3, null),
+      await published(feed.id, -2, null),
+    ]
+    const charter = { in: 'In.', out: [], endEvent: null }
+    const overview = (data: object = {}) =>
+      prisma.overview.create({
+        data: { title: 'O', charter, charterModel: 'm', charterPromptVersion: 'v', foundedAt: daysFrom(-10), lastEntryAt: daysFrom(-6), ...data },
+      })
+    const [open, atLimit, triedSince] = [await overview(), await overview({ automatedRecenters: 2 }), await overview({ recenterTriedAt: daysFrom(-1) })]
+    await prisma.overviewEntry.create({ data: { overviewId: atLimit.id, storyId: member.id, role: 'routine', joinedBy: 'pipeline' } })
+    const link = (storyId: string, outcome: string, overviewId: string | null, at: Date, undoneAt: Date | null = null) =>
+      prisma.overviewDecision.create({
+        data: { kind: 'link', outcome, storyId, overviewId, inputs: { linkedAt: at.toISOString() }, actor: 'pipeline', undoneAt, createdAt: at },
+      })
+    await link(waiting.id, 'waiting', open.id, daysFrom(-2))
+    await link(undone.id, 'waiting', open.id, daysFrom(-2), daysFrom(-1))
+    await link(tried.id, 'waiting', triedSince.id, daysFrom(-2))
+    // Asked again after its wait: its newest decision is a conflict, so it waits no more, but the overview held it before
+    await link(reasked.id, 'waiting', open.id, daysFrom(-2))
+    await link(reasked.id, 'conflict', null, daysFrom(-1))
+
+    const read = await membershipsOf(prisma, [member.id, waiting.id, undone.id, tried.id, reasked.id], undefined, AS_OF)
+    expect(read.active.get(member.id)?.mayHold).toBe(false)
+    expect(read.heldForRecenter).toEqual(new Set([waiting.id]))
+    expect(read.heldBefore).toEqual(
+      new Map([
+        [waiting.id, [open.id]],
+        [tried.id, [triedSince.id]],
+        [reasked.id, [open.id]],
+      ]),
+    )
+    // Past the lookback the wait ends
+    expect((await membershipsOf(prisma, [waiting.id], undefined, daysFrom(100))).heldForRecenter).toEqual(new Set())
+  })
+
+  it('holds for a re-center only an overview with at least 3 active entries of published stories as of the date asked (the owner, 2026-11-23)', async () => {
+    const feed = await createFeed((await createIssue()).id)
+    const [a, b, c, d, e] = [
+      await published(feed.id, -6, null),
+      await published(feed.id, -5, null),
+      await published(feed.id, -4, null),
+      await published(feed.id, -3, null),
+      await published(feed.id, -2, null),
+    ]
+    const charter = { in: 'In.', out: [], endEvent: null }
+    const overview = () =>
+      prisma.overview.create({
+        data: { title: 'O', charter, charterModel: 'm', charterPromptVersion: 'v', foundedAt: daysFrom(-10), lastEntryAt: daysFrom(-2) },
+      })
+    const [established, young] = [await overview(), await overview()]
+    for (const s of [a, b, c]) await prisma.overviewEntry.create({ data: { overviewId: established.id, storyId: s.id, role: 'routine', joinedBy: 'pipeline' } })
+    for (const s of [d, e]) await prisma.overviewEntry.create({ data: { overviewId: young.id, storyId: s.id, role: 'routine', joinedBy: 'pipeline' } })
+
+    const now = await membershipsOf(prisma, [a.id, d.id], undefined, AS_OF)
+    expect([now.active.get(a.id)?.mayHold, now.active.get(d.id)?.mayHold]).toEqual([true, false])
+    // As of the second story's date the established overview had two entries: it held nothing yet
+    expect((await membershipsOf(prisma, [a.id], daysFrom(-5), AS_OF)).active.get(a.id)?.mayHold).toBe(false)
+  })
+
   it('groups the same candidates from memberships read from the tables as from the same map in memory', async () => {
     const issue = await createIssue()
     const feed = await createFeed(issue.id)
@@ -132,6 +197,8 @@ describeDb('overview candidates', () => {
       closedReason: null,
       frozen: false,
       lastEntryAt,
+      // One active entry each: too young to hold a story for its re-center (`recenterHoldMinEntries`)
+      mayHold: false,
     })
     const inMemory = {
       active: new Map([
@@ -140,6 +207,8 @@ describeDb('overview candidates', () => {
       ]),
       lockedOut: new Map([[story.id, [b.id]]]),
       noOccurrence: new Set<string>(),
+      heldForRecenter: new Set<string>(),
+      heldBefore: new Map<string, string[]>(),
     }
     expect(read).toEqual(inMemory)
     const options = { ...OPTIONS, foundingWindowDays: 30, candidateOverviews: 5, foundingCandidates: 3 }

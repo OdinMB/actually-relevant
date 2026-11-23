@@ -60,6 +60,12 @@ export interface Membership {
   frozen: boolean
   /** The newest active entry's publication date. */
   lastEntryAt: Date | null
+  /**
+   * A story that points past it waits for its re-center rather than founding a second overview
+   * (`holdsForRecenter`: established, with at least `recenterHoldMinEntries` active entries as of the
+   * story's date, and automation may still re-center it; ADR-0078). Absent where nothing reads it: false.
+   */
+  mayHold?: boolean
 }
 
 /** Every membership the candidate grouping needs: each story's active entry, and the overviews an editor detached the story from (`locked`), which automation never links it to again. */
@@ -72,6 +78,14 @@ export interface Memberships {
    * partner's slot (`groupCandidates`). Absent where nothing reads founding checks.
    */
   noOccurrence?: ReadonlySet<string>
+  /**
+   * The stories waiting for an overview's re-center, the wait in force (`waitsOf`, ADR-0078): they take
+   * no founding partner's slot (`groupCandidates`), and a founding that showed one is stale at its write
+   * (`isStale`). Absent where nothing reads link decisions.
+   */
+  heldForRecenter?: ReadonlySet<string>
+  /** The overviews that held each story for their re-center before (its live `waiting` decisions): asked again, none of them holds it twice. */
+  heldBefore?: ReadonlyMap<string, readonly string[]>
 }
 
 /** A candidate overview as the link prompt shows it: its title, charter and newest entries. */
@@ -96,8 +110,11 @@ export interface Shared {
   end: QuotePair
 }
 
-/** A link decision's outcome. Joined, founded, none and rejected settle the story; held, conflict and failed leave it for the next run. */
-export const LINK_OUTCOMES = ['joined', 'founded', 'none', 'rejected', 'held', 'conflict', 'failed'] as const
+/**
+ * A link decision's outcome. Joined, founded, none and rejected settle the story; held (by a frozen
+ * overview), waiting (for an open overview's re-center, ADR-0078), conflict and failed leave it owed.
+ */
+export const LINK_OUTCOMES = ['joined', 'founded', 'none', 'rejected', 'held', 'waiting', 'conflict', 'failed'] as const
 export type LinkOutcome = (typeof LINK_OUTCOMES)[number]
 
 export const SETTLING_OUTCOMES: readonly LinkOutcome[] = ['joined', 'founded', 'none', 'rejected']

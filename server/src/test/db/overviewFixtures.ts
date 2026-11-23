@@ -40,6 +40,9 @@ export const linkResult = (story: LinkStory, over: Partial<LinkResult> = {}): Li
   refusals: [],
   signals: [],
   heldBy: null,
+  heldForRecenter: null,
+  heldBefore: [],
+  heldPartners: [],
   model: 'small-model',
   promptVersion: 'v1',
   costUsd: 0.001,
@@ -51,7 +54,7 @@ export const joinResult = (story: LinkStory, overviewId: string, reportsEndEvent
     outcome: 'joined',
     role: { role: 'turning_point', roleKind: 'spread' },
     join: {
-      candidate: { id: overviewId, title: 'Ebola in Ituri', charter, entries: [], ref: 'O1', distance: 0.2, frozen: false },
+      candidate: { id: overviewId, title: 'Ebola in Ituri', charter, entries: [], ref: 'O1', distance: 0.2, frozen: false, mayHold: false },
       answer: { id: 'O1', belongs: 'yes', ...fixtureShared, reportsEndEvent, scope: 'inside', centerMoved: false, signalQuote: '', confidence: 0.8 },
       shared: fixtureShared,
       endDropped: false,

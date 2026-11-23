@@ -38,6 +38,7 @@ function deps(owed: OwedSlices) {
     memberships: async () => ({ active: new Map(), lockedOut: new Map() }),
     overviews: async () => [],
     stories: async () => [],
+    now: () => NOW,
     link: vi.fn(),
     found: vi.fn(),
     foundCheck: vi.fn(),

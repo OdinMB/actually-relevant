@@ -45,7 +45,7 @@ function missedLines(r: LinkStepReport): string[] {
   return [
     '### Missed must entries (diagnostics; no bar)',
     '',
-    `Summed over the ${r.diagnostics.length} run${r.diagnostics.length === 1 ? '' : 's'}. **no candidate**: the story was shown nothing and no call was made; **not offered**: its development's overview or a partner of its development was not among the candidates shown; **refused by code**: the model said yes and the quote checks refused it (the rule is given); **founding blocked**: a partner of its development passed, but the model's yes to another development's overview, refused by code, kept the story from founding; **founding refused: partner reported no occurrence**: a founding with a partner of its development was refused only because the check judged the partner to report no occurrence, and no further partner founded; **founding not agreed**: a founding with a partner of its development was drafted and refused or not agreed by the check; **model no / unsure**: the model's answer for its development's candidates (confidence, and scope when not inside; the link answer gives no reason). "Before … was founded" marks a story linked before its development had an overview.`,
+    `Summed over the ${r.diagnostics.length} run${r.diagnostics.length === 1 ? '' : 's'}. **no candidate**: the story was shown nothing and no call was made; **held for a re-center**: it points past an open overview and waits for that overview's re-center, founding nothing (ADR-0078; the overview, and whether it is its own development's, are given); **not offered**: its development's overview or a partner of its development was not among the candidates shown; **refused by code**: the model said yes and the quote checks refused it (the rule is given); **founding blocked**: a partner of its development passed, but the model's yes to another development's overview, refused by code, kept the story from founding; **founding refused: partner reported no occurrence**: a founding with a partner of its development was refused only because the check judged the partner to report no occurrence, and no further partner founded; **founding not agreed**: a founding with a partner of its development was drafted and refused or not agreed by the check; **model no / unsure**: the model's answer for its development's candidates (confidence, and scope when not inside; the link answer gives no reason). "Before … was founded" marks a story linked before its development had an overview.`,
     '',
     `| Development | ${causes.join(' | ')} | All |`,
     `|---|${causes.map(() => '---|').join('')}---|`,
@@ -112,6 +112,52 @@ function occurrenceLines(r: LinkStepReport): string[] {
     ...r.diagnostics.flatMap(d => [
       ...d.retries.map(x => `- Run ${d.run}, ${x.slug}: tried ${x.tried.join(', ')}; ${x.founded ? 'founded with the last' : 'founded nothing'}`),
       ...(d.excluded.length > 0 ? [`- Run ${d.run}, left out as partners: ${d.excluded.map(x => `${x.slug} (${x.as})`).join('; ')}`] : []),
+    ]),
+    '',
+  ]
+}
+
+/**
+ * Found read a second way (ADR-0078): the must entries still waiting for their own development's
+ * overview to re-center left out, since the owner chose that they wait and the link-only replay runs no
+ * re-center that could take them in. Mean over the runs, as the bar; the counts summed. Null with no hold.
+ */
+function foundWithoutOwnHolds(r: LinkStepReport): string[] {
+  if (r.diagnostics.every(d => d.held.length === 0)) return []
+  const per = r.score.runs.map(s => {
+    const own = r.diagnostics.find(d => d.run === s.run)?.held.filter(h => h.relation === 'own development').length ?? 0
+    return { found: s.found, of: s.must - own }
+  })
+  const rates = per.filter(p => p.of > 0).map(p => p.found / p.of)
+  const mean = rates.length === 0 ? null : rates.reduce((a, b) => a + b, 0) / rates.length
+  const [found, of] = [per.reduce((n, p) => n + p.found, 0), per.reduce((n, p) => n + p.of, 0)]
+  return [`| Found, held for own overview excluded | no bar | ${mean === null ? 'n/a' : pct(mean)} | for the owner: ${found} of ${of} in all runs |`]
+}
+
+/** The stories waiting for a re-center at each run's end (ADR-0078), what the keys make of each, and the partners their waits left out. */
+function heldLines(r: LinkStepReport): string[] {
+  if (r.diagnostics.every(d => d.held.length === 0 && d.heldPartners.length === 0)) return []
+  const count = (d: LinkStepReport['diagnostics'][number], relation: string) => d.held.filter(h => h.relation === relation).length
+  return [
+    '### Held for a re-center (diagnostics; no bar)',
+    '',
+    "A story with no passing overview that points past one automation may still re-center waits for that re-center and founds nothing (ADR-0078). This link-only replay runs no upkeep, so no re-center runs and no wait ends: each story below still waits at the run's end, and a must entry among them is a miss for found. Only the whole-step replay (`--steps replay`, with reviews and re-centers) measures whether held stories end up joined. **Own development**: the overview stands for the story's own development, so a re-center would file it right; **another development** or **no development**: it could only file it wrong, or the story waits out the lookback; **before its development had an overview**: a hold that may lose or delay that development's first founding.",
+    '',
+    '| Run | Held | Musts, own development | Musts, another development | Musts, no development | Not a must entry | Partners left out |',
+    '|---|---|---|---|---|---|---|',
+    ...r.diagnostics.map(
+      d =>
+        `| ${d.run} | ${d.held.length} | ${count(d, 'own development')} | ${count(d, 'another development')} | ${count(d, 'no development')} | ${count(d, 'not a must entry')} | ${d.heldPartners.length} |`,
+    ),
+    '',
+    ...r.diagnostics.flatMap(d => [
+      ...d.held.map(
+        h =>
+          `- Run ${d.run}, ${h.slug} (${h.as}, ${h.date}): waits for "${cell(h.overview)}" (${h.development ?? 'no development'}), ${h.relation}${h.beforeFounding ? ': before its development had an overview, so its first founding may be lost or delayed' : ''}`,
+      ),
+      ...(d.heldPartners.length > 0
+        ? [`- Run ${d.run}, left out as partners while they waited: ${d.heldPartners.map(x => `${x.slug} (${x.as})`).join('; ')}`]
+        : []),
     ]),
     '',
   ]
@@ -189,6 +235,7 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
     '| Measure | Bar | Mean | Verdict |',
     '|---|---|---|---|',
     ...(shown('link') ? rows(r.score.link) : []),
+    ...(shown('link') ? foundWithoutOwnHolds(r) : []),
     ...(shown('found') ? rows(r.score.found) : []),
     ...(shown('role') ? rows(r.score.role) : []),
     '',
@@ -232,6 +279,7 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
     ...(shown('role') ? roleLines(r) : []),
     ...(shown('found') || shown('link') ? foundingDateLines(r) : []),
     ...(shown('found') || shown('link') ? occurrenceLines(r) : []),
+    ...(shown('found') || shown('link') ? heldLines(r) : []),
     ...(shown('found') || shown('link') ? charterLines(r) : []),
   ]
 }

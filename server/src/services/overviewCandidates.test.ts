@@ -41,8 +41,8 @@ describe('groupCandidates', () => {
       candidateOverviews: 2,
     })
     expect(got.overviews).toEqual([
-      { overviewId: 'A', distance: 0.05, frozen: false },
-      { overviewId: 'B', distance: 0.2, frozen: false },
+      { overviewId: 'A', distance: 0.05, frozen: false, mayHold: false },
+      { overviewId: 'B', distance: 0.2, frozen: false, mayHold: false },
     ])
   })
 
@@ -68,7 +68,7 @@ describe('groupCandidates', () => {
 
   it('keeps a frozen overview, marked, so a story that belongs there is held', () => {
     const got = groupCandidates(story, [near('a', 0.1)], memberships({ a: member('A', { frozen: true }) }), OPTIONS)
-    expect(got.overviews).toEqual([{ overviewId: 'A', distance: 0.1, frozen: true }])
+    expect(got.overviews).toEqual([{ overviewId: 'A', distance: 0.1, frozen: true, mayHold: false }])
   })
 
   it('offers unlinked neighbours as founding partners only within the founding window and the distance, nearest first', () => {
@@ -86,7 +86,7 @@ describe('groupCandidates', () => {
   it('ignores the story itself and any neighbour dated after it', () => {
     const later = { ...near('later', 0.1), datePublished: new Date(STORY_DATE.getTime() + DAY) }
     const got = groupCandidates(story, [near('story', 0), later], memberships({ later: member('A') }), OPTIONS)
-    expect(got).toEqual({ overviews: [], partners: [], excludedPartners: [] })
+    expect(got).toEqual({ overviews: [], partners: [], excludedPartners: [], heldPartners: [] })
   })
 
   it('caps the partners at foundingCandidates', () => {
@@ -118,5 +118,24 @@ describe('groupCandidates', () => {
     expect(got.partners.map(p => p.id)).toEqual(['a', 'b', 'c'])
     expect(got.excludedPartners).toEqual(['warning'])
     expect(got.overviews.map(o => o.overviewId)).toEqual(['A'])
+  })
+
+  it('carries whether each overview may hold a story for its re-center (ADR-0078)', () => {
+    const got = groupCandidates(story, [near('a', 0.1), near('b', 0.2)], memberships({ a: member('A', { mayHold: true }), b: member('B') }), OPTIONS)
+    expect(got.overviews.map(o => [o.overviewId, o.mayHold])).toEqual([
+      ['A', true],
+      ['B', false],
+    ])
+  })
+
+  it('leaves out a partner waiting for a re-center, before the cut, so its slot goes to the next; once its wait ends it is a partner again (ADR-0078)', () => {
+    const neighbours = [near('waiting', 0.05), near('a', 0.1), near('b', 0.2), near('c', 0.3), near('m', 0.1)]
+    const held = groupCandidates(story, neighbours, { ...memberships({ m: member('A') }), heldForRecenter: new Set(['waiting', 'm']) }, OPTIONS)
+    expect(held.partners.map(p => p.id)).toEqual(['a', 'b', 'c'])
+    expect(held.heldPartners).toEqual(['waiting'])
+    expect(held.overviews.map(o => o.overviewId)).toEqual(['A'])
+    const ended = groupCandidates(story, neighbours, { ...memberships({ m: member('A') }), heldForRecenter: new Set() }, OPTIONS)
+    expect(ended.partners.map(p => p.id)).toEqual(['waiting', 'a', 'b'])
+    expect(ended.heldPartners).toEqual([])
   })
 })

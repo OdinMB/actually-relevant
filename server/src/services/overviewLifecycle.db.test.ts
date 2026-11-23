@@ -263,6 +263,7 @@ describeDb('the overview lifecycle', () => {
       memberships: (ids, asOf) => membershipsOf(prisma, ids, asOf),
       overviews: (ids, asOf) => candidateOverviews(prisma, ids, asOf),
       stories: ids => linkStories(prisma, ids),
+      now: () => new Date(),
       link: async () => ({ parsed: { candidates: [yes], role: 'routine', roleKind: null }, costUsd: 0, model: 'small-model' }),
       found: async () => ({ parsed: null, costUsd: 0, model: 'large-model' }),
       foundCheck: async () => ({ parsed: null, costUsd: 0, model: 'large-model' }),
@@ -340,6 +341,7 @@ describeDb('the overview lifecycle', () => {
       memberships: (ids, asOf) => membershipsOf(prisma, ids, asOf),
       overviews: (ids, asOf) => candidateOverviews(prisma, ids, asOf),
       stories: ids => linkStories(prisma, ids),
+      now: () => new Date(),
       // A yes to the overview when one is shown, else to every partner
       link: async input => ({
         parsed: { candidates: input.overviews.length > 0 ? [quoted('O1')] : input.partners.map(p => quoted(p.ref)), role: 'routine', roleKind: null },

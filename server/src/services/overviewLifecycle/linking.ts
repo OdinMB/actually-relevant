@@ -14,7 +14,8 @@ import { applyPlan, readRows, refusedByIndex } from './apply.js'
 /**
  * Writes one story's linking. Nothing is written for a story that has an active entry or a settling
  * `link` decision by now (it was linked meanwhile, as a founding partner); a result whose founding
- * partner has joined an overview since is `stale`, and on its `lastTry` a `conflict`. A join is planned
+ * partner has joined an overview since, or a founding whose partner waits for a re-center by now
+ * (`isStale`), is `stale`, and on its `lastTry` a `conflict`. A join is planned
  * on its overview as it stands now: a `conflict` once it is gone or closed (but faded), `held` once
  * frozen. A write the one-active-entry index refuses (an editor's attach at the same moment) is rolled
  * back and logged as a `conflict`, which the next run retries. `now` is the run's: the entries'
@@ -24,7 +25,7 @@ export async function applyLink(result: LinkResult, lastTry: boolean, now: Date 
   const ctx: PlanContext = { now, newId: randomUUID }
   try {
     return await db.$transaction(async tx => {
-      const memberships = await membershipsOf(tx, [result.story.id, ...result.shown.partners.map(p => p.id)])
+      const memberships = await membershipsOf(tx, [result.story.id, ...result.shown.partners.map(p => p.id)], undefined, now)
       const settled = await tx.overviewDecision.findFirst({
         where: { storyId: result.story.id, kind: 'link', undoneAt: null, outcome: { in: [...SETTLING_OUTCOMES] } },
         select: { id: true },

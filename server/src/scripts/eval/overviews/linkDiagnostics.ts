@@ -1,10 +1,11 @@
 /**
  * The linking replay's diagnostics (`link.ts`; `.context/model-eval.md`, "Overview evals"): what lets a
  * rerun from the cache confirm why a bar failed. For each run: every must entry not found in its
- * development's overview, with why (not replayed, in another overview, no candidate, its development
- * not offered, refused by code with the rule, the founding not agreed, or the model's no or unsure with
- * its confidence and scope; the link answer gives no reason); the roles of found must entries that
- * disagree with the key; and every founded charter. The keys are read as the bars read them
+ * development's overview, with why (not replayed, in another overview, no candidate, held for an
+ * overview's re-center (ADR-0078), its development not offered, refused by code with the rule, the
+ * founding not agreed, or the model's no or unsure with its confidence and scope; the link answer gives
+ * no reason); the roles of found must entries that disagree with the key; every founded charter; and
+ * the stories waiting for a re-center, with the partners their waits left out. The keys are read as the bars read them
  * (`linkKeys`): an overview stands for a development of any key, and a must entry is found in an
  * overview whose key holds it as must. No bars: the owner reads them. Pure.
  */
@@ -55,7 +56,22 @@ export interface StoryTrace {
   excluded?: string[]
   /** The overview whose refused yes kept a passing partner from founding (`LinkResult.foundingBlockedBy`); absent when none did. */
   blockedBy?: string
+  /**
+   * The overview whose re-center a `waiting` story waits for (ADR-0078), set only when `waiting` was what
+   * was stored; absent when none (a replay saved before the rule reads as none). The diagnostics read it
+   * only with a stored `waiting`, as a replay saved before that guard may carry it on another outcome.
+   */
+  heldForRecenter?: string
+  /** Neighbours left out as founding partners because they waited for a re-center; absent when none. */
+  heldPartners?: string[]
 }
+
+/**
+ * The overview a story still waits for at the run's end: its `heldForRecenter` only when the outcome
+ * stored is `waiting`. A `waiting` result whose write was skipped because a same-day story founded with
+ * it first (stored `founded`), or that went stale twice (stored `conflict`), waits for nothing.
+ */
+const waitedFor = (t: StoryTrace): string | undefined => (t.outcome === 'waiting' ? t.heldForRecenter : undefined)
 
 /** Why a founding attempt founded nothing, from its calls' answers. */
 function foundingWhy(f: NonNullable<LinkResult['founding']>): string | null {
@@ -110,6 +126,9 @@ export function traceOf(result: LinkResult, stored: LinkOutcome | null, neighbou
     ...(result.refusedFoundings.length > 0 ? { retried: result.refusedFoundings.map(f => ({ partner: slug(f.partner.id), why: foundingWhy(f) })) } : {}),
     ...(result.excludedPartners.length > 0 ? { excluded: result.excludedPartners.map(slug) } : {}),
     ...(result.foundingBlockedBy ? { blockedBy: result.foundingBlockedBy } : {}),
+    // Only a wait that was stored: a `waiting` result founded by a same-day partner first, or stored as `conflict` after going stale twice, waits for nothing
+    ...(result.heldForRecenter && stored === 'waiting' ? { heldForRecenter: result.heldForRecenter } : {}),
+    ...(result.heldPartners.length > 0 ? { heldPartners: result.heldPartners.map(slug) } : {}),
   }
 }
 
@@ -130,6 +149,7 @@ export const MISS_CAUSES = [
   'not linked',
   'in another overview',
   'no candidate',
+  'held for a re-center',
   'not offered',
   'refused by code',
   'founding blocked',
@@ -188,6 +208,27 @@ export interface RunDiagnostics {
   retries: { slug: string; tried: string[]; founded: boolean }[]
   /** The stories left out as founding partners because a founding check judged them to report no occurrence, with what the keys make of each (a must entry among them is a loss to read). */
   excluded: { slug: string; as: string }[]
+  /** Every story still waiting for a re-center at the run's end (ADR-0078), in date order: what the keys make of it and the overview it waits for (`HeldStory`). */
+  held: HeldStory[]
+  /** The stories left out as founding partners because they waited for a re-center, with what the keys make of each. */
+  heldPartners: { slug: string; as: string }[]
+}
+
+/**
+ * A story waiting for a re-center, as the diagnostics read it: the overview it waits for and the
+ * development, of any key, that overview stands for; for a must entry whether that is its own
+ * development's (a re-center would file it right), another's or none's (it could only file it wrong,
+ * or wait out the lookback), and whether its own development had no overview yet on its day (a hold
+ * that may lose or delay that development's first founding).
+ */
+export interface HeldStory {
+  slug: string
+  date: string
+  as: string
+  overview: string
+  development: string | null
+  relation: 'own development' | 'another development' | 'no development' | 'not a must entry'
+  beforeFounding: boolean
 }
 
 export interface DiagnoseInput {
@@ -290,6 +331,16 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
       miss('no candidate', `${neighbourText(t.neighbours) || 'no neighbour'}${when(e.key, t.date)}`)
       continue
     }
+    const waitsFor = waitedFor(t)
+    if (waitsFor) {
+      const relation = isOurs(waitsFor)
+        ? "its own development's overview"
+        : devOf.get(waitsFor)
+          ? "another development's overview"
+          : 'an overview of no development'
+      miss('held for a re-center', `of ${titled(waitsFor)}, ${relation}${when(e.key, t.date)}`)
+      continue
+    }
     const ours = [
       ...t.overviews.filter(c => isOurs(c.id)),
       ...t.partners.filter(c => [...mustKeys(slug).keys()].some(id => anyEntry.get(c.id)?.has(id) ?? false)),
@@ -363,7 +414,31 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
   )
   const excludedSlugs = [...new Set([...d.traces.values()].flatMap(t => t.excluded ?? []))].sort()
   const excluded = excludedSlugs.map(slug => ({ slug, as: what(slug) }))
-  return { run: d.run, missed, rolesJudged, rolesEither, roleMisses, charters, firstFoundings, nearMatches, retries, excluded }
+  const held = [...d.traces.values()]
+    .flatMap((t): HeldStory[] => {
+      const id = waitedFor(t)
+      if (!id) return []
+      const e = entry.get(t.slug)
+      const dev = devOf.get(id) ?? null
+      const must = e?.join === 'must'
+      const own = must && mustKeys(t.slug).has(dev ?? '')
+      const relation: HeldStory['relation'] = !must ? 'not a must entry' : own ? 'own development' : dev ? 'another development' : 'no development'
+      const first = must ? firstOf.get(e.key) : undefined
+      return [
+        {
+          slug: t.slug,
+          date: t.date,
+          as: what(t.slug),
+          overview: d.overviews.find(o => o.id === id)?.title ?? id,
+          development: dev,
+          relation,
+          beforeFounding: must && !own && (!first || t.date < first.foundedOn),
+        },
+      ]
+    })
+    .sort((a, b) => a.date.localeCompare(b.date) || a.slug.localeCompare(b.slug))
+  const heldPartners = [...new Set([...d.traces.values()].flatMap(t => t.heldPartners ?? []))].sort().map(slug => ({ slug, as: what(slug) }))
+  return { run: d.run, missed, rolesJudged, rolesEither, roleMisses, charters, firstFoundings, nearMatches, retries, excluded, held, heldPartners }
 }
 
 /** Each development's missed must entries by cause, summed over the runs, in `MISS_CAUSES` order. */

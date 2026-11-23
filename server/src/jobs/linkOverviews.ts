@@ -47,12 +47,13 @@ export const OVERVIEW_JOB_DISABLED = 'Overviews are switched off: the link_overv
 export const productionCalls = (): OverviewCalls =>
   overviewCalls((step, prompt) => structuredCall(step.tier, step.schema, prompt, step.effort ? { effort: step.effort } : {}))
 
-/** Linking as production runs it: the tables, read as they stand at each step, and the step's calls. */
-export const productionLinkDeps = (calls: OverviewCalls = productionCalls()): LinkDeps => ({
+/** Linking as production runs it: the tables, read as they stand at each step (the re-center limits and waits at the run's `now`), and the step's calls. */
+export const productionLinkDeps = (calls: OverviewCalls = productionCalls(), now: Date = new Date()): LinkDeps => ({
   neighbours: story => nearestPublished(prisma, story.id, story.datePublished),
-  memberships: (ids, asOf) => membershipsOf(prisma, ids, asOf),
+  memberships: (ids, asOf) => membershipsOf(prisma, ids, asOf, now),
   overviews: (ids, asOf) => candidateOverviews(prisma, ids, asOf),
   stories: ids => linkStories(prisma, ids),
+  now: () => now,
   ...calls.link,
 })
 
@@ -174,23 +175,26 @@ export async function notifyFailedStories(taken: number, failed: number, givenUp
 
 /**
  * "Linked 9 stories: 4 joined, 1 founded, 4 alone", by stored outcome, with the outcomes that leave a
- * story owed after it, the stories whose write stored nothing, those given up and those waiting on a freeze.
+ * story owed after it, the stories whose write stored nothing, those given up and those waiting on a
+ * freeze or for a re-center.
  */
 export function linkSummary(
   outcomes: ReadonlyMap<string, LinkOutcome>,
   backlog: { taken: number; total: number } | null,
-  waits: { givenUp: number; frozenWaiting: number; unwritten?: number } = { givenUp: 0, frozenWaiting: 0 },
+  waits: { givenUp: number; frozenWaiting: number; recenterWaiting?: number; unwritten?: number } = { givenUp: 0, frozenWaiting: 0 },
 ): string {
   const n = (...wanted: LinkOutcome[]) => [...outcomes.values()].filter(o => wanted.includes(o)).length
   const optional = (count: number, words: string) => (count > 0 ? `, ${count.toLocaleString('en-US')} ${words}` : '')
   const line =
     `Linked ${countOf(outcomes.size, 'story', 'stories')}: ${n('joined')} joined, ${n('founded')} founded, ${n('none', 'rejected')} alone` +
     optional(n('held'), 'held by a frozen overview') +
+    optional(n('waiting'), 'held for an overview to widen') +
     optional(n('conflict'), 'left for the next run') +
     optional(n('failed'), 'failed') +
     optional(waits.unwritten ?? 0, 'not written (tried again next run)') +
     optional(waits.givenUp, 'given up after their last try') +
-    optional(waits.frozenWaiting, 'waiting on a frozen overview')
+    optional(waits.frozenWaiting, 'waiting on a frozen overview') +
+    optional(waits.recenterWaiting ?? 0, 'waiting for an overview to widen')
   return backlog ? `${line}; backfill ${backlog.taken.toLocaleString('en-US')} of ${backlog.total.toLocaleString('en-US')}` : line
 }
 
@@ -231,7 +235,7 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
     {
       owed,
       stories: ids => linkStories(prisma, ids),
-      link: productionLinkDeps(calls),
+      link: productionLinkDeps(calls, now),
       apply,
       upkeep: productionUpkeepDeps(now, calls),
     },
@@ -264,10 +268,11 @@ export async function runLinkOverviewsJob(now: Date = new Date(), calls: Overvie
   const left = stories.length - taken
   const linked =
     stories.length === 0
-      ? `Nothing to link${slices.frozenWaiting > 0 ? `, ${slices.frozenWaiting.toLocaleString('en-US')} waiting on a frozen overview` : ''}`
+      ? `Nothing to link${slices.frozenWaiting > 0 ? `, ${slices.frozenWaiting.toLocaleString('en-US')} waiting on a frozen overview` : ''}${slices.recenterWaiting > 0 ? `, ${slices.recenterWaiting.toLocaleString('en-US')} waiting for an overview to widen` : ''}`
       : linkSummary(run.outcomes, slices.backlogTotal > 0 ? { taken: slices.backlog.length, total: slices.backlogTotal } : null, {
           givenUp,
           frozenWaiting: slices.frozenWaiting,
+          recenterWaiting: slices.recenterWaiting,
           unwritten,
         })
   const summary = upkeep ? `${linked}; ${upkeepSummary(upkeep)}` : linked

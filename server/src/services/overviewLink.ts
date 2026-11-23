@@ -13,6 +13,7 @@ import { OVERVIEW_PROMPT_VERSIONS, type FoundCheckInput, type FoundInput, type L
 import type { FoundAnswer, FoundCheckAnswer, LinkAnswer, LinkCandidateAnswer } from '../schemas/overviews.js'
 import { groupCandidates, type CandidateOptions, type Neighbour, type RankedOverview } from './overviewCandidates.js'
 import { amendCharter, FOUNDING_RIGHTS, NO_CHARTER, type CharterLimits } from './overviewCharterRules.js'
+import { mayWaitForRecenter } from './overviewOwed.js'
 import {
   endEventOf,
   type CandidateOverview,
@@ -45,6 +46,12 @@ export interface LinkDeps {
   link(input: LinkInput): Promise<ModelCall<LinkAnswer>>
   found(input: FoundInput): Promise<ModelCall<FoundAnswer>>
   foundCheck(input: FoundCheckInput): Promise<ModelCall<FoundCheckAnswer>>
+  /**
+   * The run's clock (production's run `now`, the sandbox's clock in the eval): a story past
+   * `recenterLookbackDays` of it never waits for a re-center (`mayWaitForRecenter`, ADR-0078), as its wait
+   * would already be over.
+   */
+  now(): Date
   options?: CandidateOptions
 }
 
@@ -53,6 +60,8 @@ export interface ShownOverview extends CandidateOverview {
   ref: string
   distance: number
   frozen: boolean
+  /** A story that points past it waits for its re-center (`holdsForRecenter`: established, and automation may still re-center it; ADR-0078). */
+  mayHold: boolean
 }
 export interface ShownPartner extends LinkStory {
   ref: string
@@ -92,10 +101,17 @@ export interface Signal {
 export interface Acceptance {
   /** The nearest overview that passed; null when none did. */
   join: Accepted<ShownOverview> | null
-  /** The nearest passing founding partner, considered only when no overview passed and no yes to an overview was refused. */
+  /** The nearest passing founding partner, considered only when no overview passed, no yes to an overview was refused and the story waits for no re-center. */
   partner: Accepted<ShownPartner> | null
   /** Every passing founding partner, nearest first, under the same conditions: a founding the partner's lack of an occurrence refused tries the next (`linkStory`). */
   partners: Accepted<ShownPartner>[]
+  /**
+   * The overview whose re-center the story waits for (ADR-0078), when no overview passed: the nearest
+   * shown that may hold it (`mayHold`: established, with at least `recenterHoldMinEntries` active
+   * entries, and automation may still re-center it), that has not held the story before, and for which
+   * a re-center signal of the story was kept (`signals`); null otherwise. It considers no founding partner.
+   */
+  heldFor: string | null
   /** The nearest overview the model said yes to and code refused, when it kept a passing founding partner from founding (a confident claim that the story belongs to an open overview); null otherwise. */
   blockedBy: string | null
   /** Candidates the model said yes to (joins proposed). */
@@ -158,9 +174,23 @@ function judgeYes(answer: LinkCandidateAnswer, story: readonly string[], other: 
  * passed and the model said yes to no overview that code refused (`blockedBy`: a confident claim that
  * the story belongs to an open overview is evidence against founding a second one), the nearest
  * passing first. Also the re-center flags for each overview shown, `wider` and `centerMoved`, each
- * kept only with its quote found in the story's text.
+ * kept only with its quote found in the story's text. A story with no passing overview and a flag kept
+ * for an overview that may hold it (`mayHold`: an established one, at least `recenterHoldMinEntries`
+ * active entries, that automation may still re-center) waits for that overview's re-center (`heldFor`,
+ * the owner's rule of 2026-11-23, ADR-0078: a story that points past an established open overview makes
+ * it widen instead of founding a second one; against a younger one it may found) and considers no
+ * founding partner; an overview in `hold.before`
+ * held it once already, so it holds it no more, and a story that may no longer wait at all
+ * (`hold.mayWait` false: past `recenterLookbackDays` of the run's clock, `mayWaitForRecenter`) is held by none.
  */
-export function acceptLink(story: LinkStory, overviews: readonly ShownOverview[], partners: readonly ShownPartner[], answer: LinkAnswer): Acceptance {
+export function acceptLink(
+  story: LinkStory,
+  overviews: readonly ShownOverview[],
+  partners: readonly ShownPartner[],
+  answer: LinkAnswer,
+  hold: { before?: ReadonlySet<string>; mayWait?: boolean } = {},
+): Acceptance {
+  const heldBefore = hold.before ?? new Set<string>()
   const byRef = new Map(answer.candidates.map(c => [c.id.trim(), c]))
   const refusals: Refusal[] = []
   let proposed = 0
@@ -187,15 +217,19 @@ export function acceptLink(story: LinkStory, overviews: readonly ShownOverview[]
   const partnerPick = pick(partners, storyTexts)
   const join = overviewPick.passed[0] ?? null
   const refusedOverview = join ? null : (overviewPick.refused[0]?.id ?? null)
-  const passing = join || refusedOverview ? [] : partnerPick.passed
+  const signals = signalsOf(story, overviews, byRef)
+  const heldFor =
+    join || hold.mayWait === false ? null : (overviews.find(o => o.mayHold && !heldBefore.has(o.id) && signals.some(s => s.overviewId === o.id))?.id ?? null)
+  const passing = join || refusedOverview || heldFor ? [] : partnerPick.passed
   return {
     join,
     partner: passing[0] ?? null,
     partners: passing,
+    heldFor,
     blockedBy: refusedOverview && partnerPick.passed.length > 0 ? refusedOverview : null,
     proposed,
     refusals,
-    signals: signalsOf(story, overviews, byRef),
+    signals,
   }
 }
 
@@ -282,7 +316,7 @@ export interface FoundingAttempt {
 /** One story's linking, for the writer (`applyLink`) or the sandbox to apply. */
 export interface LinkResult {
   story: LinkStory
-  /** joined, founded, none, rejected, held or failed; the writer turns a stale or refused write into `conflict`. */
+  /** joined, founded, none, rejected, held, waiting or failed; the writer turns a stale or refused write into `conflict`. */
   outcome: Exclude<LinkOutcome, 'conflict'>
   /**
    * The story's role, from the link answer (a join, or alone) or the founding draft; for a join that
@@ -296,6 +330,12 @@ export interface LinkResult {
   join: (Accepted<ShownOverview> & { reportsEndEvent: boolean }) | null
   /** For a `held` story, the frozen overview that passed first: its decision names it, so the story waits on that freeze. */
   heldBy: string | null
+  /** For a `waiting` story, the overview whose re-center it waits for (`acceptLink`'s `heldFor`, ADR-0078): its decision names it. */
+  heldForRecenter: string | null
+  /** The overviews that held the story for their re-center before (`Memberships.heldBefore`): none holds it again, and its link record keeps no signal for them. */
+  heldBefore: string[]
+  /** Unlinked neighbours left out as founding partners because they wait for an overview's re-center (`groupCandidates`). */
+  heldPartners: string[]
   founding: FoundingAttempt | null
   /** Earlier founding attempts refused only because their partner reported no occurrence, in the order tried; the writer stores each as its own `found` decision. */
   refusedFoundings: FoundingAttempt[]
@@ -331,6 +371,9 @@ const blank = (story: LinkStory, outcome: LinkResult['outcome']): LinkResult => 
   role: null,
   join: null,
   heldBy: null,
+  heldForRecenter: null,
+  heldBefore: [],
+  heldPartners: [],
   founding: null,
   refusedFoundings: [],
   excludedPartners: [],
@@ -375,7 +418,9 @@ async function found(story: LinkStory, partner: Accepted<ShownPartner>, deps: Li
  * nearest first, at most `foundingCandidates` attempts in all, the refused ones kept
  * (`refusedFoundings`) so each is stored and its partner no longer takes a partner's slot. A frozen
  * overview that passes first holds the story for the next run, so a story never settles elsewhere
- * while an editor's freeze stands. A joined story that reports the end event of an overview whose
+ * while an editor's freeze stands; a story with no passing overview that points past an established one
+ * automation may still re-center (`mayHold`) waits for that re-center (`waiting`, ADR-0078) and founds nothing, unless it is past
+ * `recenterLookbackDays` of the run's clock (`deps.now`), where no re-center would take it in. A joined story that reports the end event of an overview whose
  * charter names one becomes a turning point (`endEventRole`); the flag follows the charter the call
  * was shown, so an editor's re-center between the call and the write that changes the END_EVENT
  * leaves the turning point the old one marked (accepted: an editor sets the role in one click).
@@ -396,7 +441,7 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
   const overviews: ShownOverview[] = grouped.overviews
     .flatMap((o: RankedOverview) => {
       const details = overviewDetails.get(o.overviewId)
-      return details ? [{ ...details, distance: o.distance, frozen: o.frozen }] : []
+      return details ? [{ ...details, distance: o.distance, frozen: o.frozen, mayHold: o.mayHold }] : []
     })
     .map((o, i) => ({ ...o, ref: `O${i + 1}` }))
   const partners: ShownPartner[] = grouped.partners
@@ -409,14 +454,19 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
     overviews: overviews.map(o => ({ ref: o.ref, id: o.id, distance: o.distance })),
     partners: partners.map(p => ({ ref: p.ref, id: p.id, distance: p.distance })),
   }
-  const excludedPartners = grouped.excludedPartners
-  if (overviews.length === 0 && partners.length === 0) return { ...blank(story, 'none'), shown, excludedPartners }
+  const { excludedPartners, heldPartners } = grouped
+  const heldBefore = [...(memberships.heldBefore?.get(story.id) ?? [])]
+  const read = { shown, excludedPartners, heldPartners, heldBefore }
+  if (overviews.length === 0 && partners.length === 0) return { ...blank(story, 'none'), ...read }
 
   const call = await deps.link({ story, overviews, partners })
-  const base = { ...blank(story, 'failed'), shown, excludedPartners, model: call.model, promptVersion: OVERVIEW_PROMPT_VERSIONS.link, costUsd: call.costUsd }
+  const base = { ...blank(story, 'failed'), ...read, model: call.model, promptVersion: OVERVIEW_PROMPT_VERSIONS.link, costUsd: call.costUsd }
   if (!call.parsed) return base
   const answer = unescapeXmlDeep(call.parsed)
-  const accepted = acceptLink(story, overviews, partners, answer)
+  const accepted = acceptLink(story, overviews, partners, answer, {
+    before: new Set(heldBefore),
+    mayWait: mayWaitForRecenter(story.datePublished, deps.now()),
+  })
   const role = roleOf(answer)
   const settled = { ...base, answer, proposed: accepted.proposed, refusals: accepted.refusals, signals: accepted.signals, role }
   const alone = accepted.refusals.length > 0 ? 'rejected' : 'none'
@@ -426,6 +476,8 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
     const reportsEndEvent = accepted.join.answer.reportsEndEvent && !accepted.join.endDropped && accepted.join.candidate.charter.endEvent !== null
     return { ...settled, outcome: 'joined', role: endEventRole(role, reportsEndEvent), join: { ...accepted.join, reportsEndEvent } }
   }
+  // It points past an open overview: it waits for that overview's re-center and founds nothing (ADR-0078)
+  if (accepted.heldFor) return { ...settled, outcome: 'waiting', heldForRecenter: accepted.heldFor, foundingBlockedBy: accepted.blockedBy }
   if (accepted.partners.length === 0) return { ...settled, outcome: alone, foundingBlockedBy: accepted.blockedBy }
   // A founding refused only for the partner's lack of an occurrence tries the next passing partner, nearest first, at most foundingCandidates attempts
   const limit = (deps.options ?? config.overviews).foundingCandidates
@@ -446,9 +498,12 @@ export async function linkStory(story: LinkStory, deps: LinkDeps): Promise<LinkR
 /**
  * Whether a result is stale against the memberships as they stand at its write: a founding partner it
  * was shown has joined or founded an overview since its candidates were read (two stories of one
- * night proposing the same partner). Asked again once, it sees that overview.
+ * night proposing the same partner), or, for a founding, a partner it was shown waits for a re-center
+ * by now (its wait written after the candidates were read: a waiting story is no founding partner,
+ * ADR-0078). Asked again once, it sees that overview, or no longer that partner.
  */
-export const isStale = (result: LinkResult, memberships: Memberships): boolean => result.shown.partners.some(p => memberships.active.has(p.id))
+export const isStale = (result: LinkResult, memberships: Memberships): boolean =>
+  result.shown.partners.some(p => memberships.active.has(p.id) || (result.outcome === 'founded' && (memberships.heldForRecenter?.has(p.id) ?? false)))
 
 /**
  * What writing a result did: written (with the outcome stored), stale (asked again), skipped (the story
@@ -470,13 +525,28 @@ export interface OrderedRun {
 }
 
 /**
+ * Whether a partner's own result, written after a founding with it, would keep it from being a founding
+ * partner (ADR-0079): it joins an open overview (the founding would make a second one of that
+ * development), it is held by one (its passing join is to a frozen overview, still open: taken first as
+ * a partner, its held decision would never be written), or it waits for an established overview's
+ * re-center (a waiting story is no founding partner, ADR-0078).
+ */
+export const takesPartnerAway = (result: Pick<LinkResult, 'outcome'>): boolean =>
+  result.outcome === 'joined' || result.outcome === 'held' || result.outcome === 'waiting'
+
+/**
  * Links the stories in the order given (oldest first): link calls `concurrency` at a time, writes one
  * story at a time in that order. A stale result is asked again at once, before the next story is
  * written (so it sees the overview its partner joined while the development's later stories still
- * wait); stale again, it is stored as a conflict and retried at the next run. `keepGoing` is asked before each write and
- * before any call starts after the first ones (the switch, a budget); once it says no, no call starts
- * and nothing more is written: the calls already in flight finish, their answers unwritten, and the
- * rest stay owed.
+ * wait); stale again, it is stored as a conflict and retried at the next run. **A founding whose
+ * partner comes later in the order** (a story of the same day, unwritten) is stale too when the
+ * partner's own result is still pending or is in and takes the partner away (`takesPartnerAway`, the
+ * owner's of 2026-11-23, ADR-0079): it is held back until the partner is written and then asked again
+ * at once, as its last try, so it sees the overview the partner joined or no longer sees the partner.
+ * Once per story: the second answer is written as it comes (stale, a conflict), so nothing loops.
+ * `keepGoing` is asked before each write and before any call starts after the first ones (the switch, a
+ * budget); once it says no, no call starts and nothing more is written: the calls already in flight
+ * finish, their answers unwritten, and the rest stay owed (a founding held back for its partner too).
  */
 export async function linkInOrder(
   stories: readonly LinkStory[],
@@ -488,6 +558,11 @@ export async function linkInOrder(
   const unwritten: string[] = []
   const results: LinkResult[] = []
   const pending: Promise<LinkResult>[] = new Array(stories.length)
+  /** Each story's result once its call is in, by its place in the order. */
+  const arrived: (LinkResult | undefined)[] = new Array(stories.length)
+  const placeOf = new Map(stories.map((s, i) => [s.id, i]))
+  /** The foundings held back until their partner, at that place in the order, is written. */
+  const heldBack = new Map<number, LinkResult[]>()
   let next = 0
   let written = 0
   let stopped = false
@@ -497,28 +572,51 @@ export async function linkInOrder(
   }
   const start = () => {
     while (next < stories.length && next - written < concurrency) {
-      pending[next] = safeLinkStory(stories[next]!, deps)
+      const at = next
+      pending[at] = safeLinkStory(stories[at]!, deps).then(r => {
+        arrived[at] = r
+        return r
+      })
       next++
     }
   }
-  /** Writes a result; a stale one is linked again at once, with fresh candidates, before the next story is written, and stored as a conflict if stale again. */
-  const write = async (result: LinkResult): Promise<void> => {
-    let done = await apply(result, false)
-    if (done.kind === 'stale') {
-      if (!(await going())) return
-      result = await safeLinkStory(result.story, deps)
-      done = await apply(result, true)
-    }
+  /** The place of a founding's partner later in the order whose own result is still pending or takes it away (ADR-0079); null otherwise. */
+  const partnerAhead = (result: LinkResult, i: number): number | null => {
+    const j = result.outcome === 'founded' && result.founding ? placeOf.get(result.founding.partner.id) : undefined
+    if (j === undefined || j <= i) return null
+    const theirs = arrived[j]
+    return theirs === undefined || takesPartnerAway(theirs) ? j : null
+  }
+  const record = (result: LinkResult, done: ApplyOutcome) => {
     results.push(result)
     if (done.kind === 'written') outcomes.set(result.story.id, done.outcome)
     if (done.kind === 'unwritten') unwritten.push(result.story.id)
+  }
+  /** Asks a stale story again at once, with fresh candidates, and writes the answer as its last try. */
+  const askAgain = async (story: LinkStory): Promise<void> => {
+    if (!(await going())) return
+    const result = await safeLinkStory(story, deps)
+    record(result, await apply(result, true))
+  }
+  /** Writes the result at place `i`; a stale one is asked again at once, a founding whose partner is ahead once that partner is written. */
+  const write = async (result: LinkResult, i: number): Promise<void> => {
+    const j = partnerAhead(result, i)
+    if (j !== null) {
+      heldBack.set(j, [...(heldBack.get(j) ?? []), result])
+      return
+    }
+    const done = await apply(result, false)
+    if (done.kind === 'stale') await askAgain(result.story)
+    else record(result, done)
   }
   start()
   for (let i = 0; i < stories.length; i++) {
     const result = await pending[i]!
     written++
     if (!(await going())) break
-    await write(result)
+    await write(result, i)
+    for (const back of heldBack.get(i) ?? []) await askAgain(back.story)
+    heldBack.delete(i)
     if (!(await going())) break
     start()
   }

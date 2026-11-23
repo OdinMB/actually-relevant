@@ -74,12 +74,16 @@ export const activated = (e: Pick<NewEntry, 'id' | 'fields'>): Change[] => entry
  * The re-center signals a link decision keeps (`.context/overviews.md`, "Re-centering"): only a story
  * active in no overview after its link raises one, since a story that joined one overview and is wider
  * for another is the merge question, not a re-center's. So a story left alone (`none`, `rejected`) keeps
- * every flag; a joined one only its centerMoved for the overview it joined; a story held, in conflict
- * or failed keeps none, since it is linked again, and nor does a founding.
+ * every flag, and so does one waiting for a re-center (`waiting`, ADR-0078), so the attempt counts its
+ * flags and may take it in; a joined one only its centerMoved for the overview it joined; a story held,
+ * in conflict or failed keeps none, since it is linked again, and nor does a founding. A story asked
+ * again after a wait keeps no flag for an overview that held it before (`heldBefore`): that overview's
+ * attempt already counted it once.
  */
 export function countedSignals(result: LinkResult, outcome: LinkOutcome, overviewId: string | null): LinkResult['signals'] {
-  if (outcome === 'none' || outcome === 'rejected') return result.signals
-  if (outcome === 'joined') return result.signals.filter(s => s.kind === 'center_moved' && s.overviewId === overviewId)
+  const fresh = result.signals.filter(s => !result.heldBefore.includes(s.overviewId))
+  if (outcome === 'none' || outcome === 'rejected' || outcome === 'waiting') return fresh
+  if (outcome === 'joined') return fresh.filter(s => s.kind === 'center_moved' && s.overviewId === overviewId)
   return []
 }
 
@@ -91,6 +95,7 @@ const linkRecord = (result: LinkResult, outcome: LinkOutcome, overviewId: string
   reportsEndEvent: result.join?.reportsEndEvent ?? false,
   signals: countedSignals(result, outcome, overviewId),
   linkedAt: ctx.now,
+  heldForRecenter: outcome === 'waiting' ? result.heldForRecenter : null,
 })
 
 const linkDecision = (result: LinkResult, outcome: LinkOutcome, overviewId: string | null, ctx: PlanContext, confidence: number | null = null): DecisionDraft =>
@@ -245,13 +250,15 @@ export function planFounding(result: LinkResult, ctx: PlanContext): LinkPlan {
 }
 
 /**
- * The story left alone (`none`, `rejected`, `held` with no overview row read, `failed`), with its
- * founding attempt's decision when it made one. A story held at its link names the frozen overview
- * that holds it (`heldBy`), so the owed rule waits on that freeze rather than retrying it each night.
+ * The story left alone (`none`, `rejected`, `held` with no overview row read, `waiting`, `failed`), with
+ * its founding attempt's decision when it made one. A story held at its link names the frozen overview
+ * that holds it (`heldBy`), so the owed rule waits on that freeze rather than retrying it each night;
+ * one waiting for a re-center names that overview (`heldForRecenter`, ADR-0078), so the owed rule waits
+ * on its next attempt.
  */
 export function planAlone(result: LinkResult, ctx: PlanContext): LinkPlan {
   const outcome = result.outcome === 'joined' || result.outcome === 'founded' ? 'conflict' : result.outcome
-  const overviewId = result.join?.candidate.id ?? (outcome === 'held' ? result.heldBy : null)
+  const overviewId = result.join?.candidate.id ?? (outcome === 'held' ? result.heldBy : outcome === 'waiting' ? result.heldForRecenter : null)
   return {
     plan: plan(linkDecision(result, outcome, overviewId, ctx), {
       also: [...refusedFoundingDecisions(result, ctx), ...(result.founding ? [foundDecision(result, null, ctx)] : [])],

@@ -264,6 +264,8 @@ async function replayRun(run: number, r: ReplayInput): Promise<SavedLinkRun> {
     memberships: sandbox.memberships,
     overviews: sandbox.candidateOverviews,
     stories: async wanted => wanted.flatMap(id => (byId.has(id) ? [byId.get(id)!] : [])),
+    // The sandbox's clock, which the link-only replay never moves: every story may wait, as every wait counts as in force
+    now: () => sandbox.context().now,
     ...evalCalls(r.ctx, run).link,
   }
   let stopped = false
