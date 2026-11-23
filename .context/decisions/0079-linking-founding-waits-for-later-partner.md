@@ -3,7 +3,7 @@ id: ADR-0079
 title: "A founding whose partner comes later in the run's order waits for that partner's own result"
 status: accepted
 date: 2026-11-24
-deciders: ["claude-code (AI)"]
+deciders: ["Odin Mühlenbein", "claude-code (AI)"]
 context-repo: OdinMB/actually-relevant
 themes: [ai-risk]
 tags: ["overviews", "linking"]

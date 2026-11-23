@@ -3,7 +3,7 @@ id: ADR-0078
 title: "A story that points past an established open overview waits for its re-center and founds nothing while it waits"
 status: accepted
 date: 2026-11-24
-deciders: ["claude-code (AI)"]
+deciders: ["Odin Mühlenbein", "claude-code (AI)"]
 context-repo: OdinMB/actually-relevant
 themes: [ai-risk]
 tags: ["overviews", "linking"]
