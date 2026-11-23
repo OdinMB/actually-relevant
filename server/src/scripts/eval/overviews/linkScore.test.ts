@@ -393,6 +393,25 @@ describe('scoreLinking', () => {
     expect(ends('unjudged')).toMatchObject({ value: null, met: null })
   })
 
+  it('holds roles agreeing to 65% (the owner lowered it from 85% on 2026-11-23)', () => {
+    const roles = (wrong: number): ReplayRun =>
+      run(
+        [
+          { id: 'o1', members: ['e1', 'e2', 'e3'], foundedFrom: ['e1', 'e2'], endEvent: 'End.' },
+          { id: 'o2', members: ['c1', 'c2'], foundedFrom: ['c1', 'c2'], endEvent: 'End.' },
+        ],
+        [
+          ['e1', wrong > 0 ? 'routine' : 'turning_point'],
+          ['e2', 'routine'],
+          ['e3', wrong > 1 ? 'turning_point' : 'routine'],
+          ['c1', 'routine'],
+          ['c2', 'routine'],
+        ],
+      )
+    expect(scoreLinking(KEYS, [roles(1)]).role[0]).toMatchObject({ value: 0.8, target: 0.65, met: true })
+    expect(scoreLinking(KEYS, [roles(2)]).role[0]).toMatchObject({ value: 0.6, target: 0.65, met: false })
+  })
+
   it('has no data without runs', () => {
     expect(scoreLinking(KEYS, []).link.map(b => b.met)).toEqual([null, null])
   })

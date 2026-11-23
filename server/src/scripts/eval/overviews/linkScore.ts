@@ -340,8 +340,8 @@ export type EndEventVerdict = 'right' | 'wrong' | 'none' | 'unjudged' | null
 /**
  * The bars over every run: joins right ≥97% and must entries found ≥85% (`link`); no wrong founding,
  * and no wrong end event, judged only where a founding names one (`found`, from `endEvents`:
- * development id → its verdict per run; no verdict while a named one is unjudged); roles agreeing ≥85%
- * (`role`).
+ * development id → its verdict per run; no verdict while a named one is unjudged); roles agreeing ≥65%
+ * (`role`; the owner lowered it from 85% on 2026-11-23: getting roles right matters less).
  */
 export function scoreLinking(
   keys: readonly AnswerKey[],
@@ -360,6 +360,6 @@ export function scoreLinking(
       bar('true joins found', mean(scored.map(s => ratio(s.found, s.must))), 0.85),
     ],
     found: [bar('wrong foundings', mean(scored.map(s => s.wrongFoundings)), 0, 'atMost'), bar('wrong end events (where one is named)', wrongEnds, 0, 'atMost')],
-    role: [bar('roles agreeing', mean(scored.map(s => ratio(s.rolesAgreeing, s.rolesJudged))), 0.85)],
+    role: [bar('roles agreeing', mean(scored.map(s => ratio(s.rolesAgreeing, s.rolesJudged))), 0.65)],
   }
 }
