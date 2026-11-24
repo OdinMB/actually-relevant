@@ -84,3 +84,12 @@ event" bar stays, since the marker is visible to readers.
   that refused about half of the missed stories.
 - **Ignore an end quote on an overview with no END_EVENT** — two rules for one field; the owner asked
   for one rule for every candidate.
+
+## Amendment 2026-11-23: an end quote not found drops the end (ADR-0077)
+
+The Decision's "each end quote the model does give must be found on its side, or the yes is refused"
+and the consequence "An end quote the model makes up now refuses a yes on an overview that names no
+END_EVENT" no longer hold. Since 2026-11-23 an end quote that is not found is cleared from the stored
+judgment and its end-event flag is not counted, and the yes passes on the cause and the place, still
+one rule for every candidate. Quotes are found exactly or by a near match that allows only letters
+dropped from long words. The marker, the closing rules and the dropped records stand.

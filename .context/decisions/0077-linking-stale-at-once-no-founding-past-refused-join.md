@@ -62,3 +62,12 @@ considered: the story settles `rejected`.
 - **A confidence threshold on the blocking yes, or a retry of refused stories** — `unsure` is already no,
   and a retry needs a new owed state.
 - **One wrong letter per word** — would not have caught the diagnosed misspelling, which lacks two.
+
+## Amendment 2026-11-24: a founding waits for a later partner (ADR-0079)
+
+The stale check here caught only a partner that had joined or founded by the write. Since
+2026-11-24 a founding whose partner comes later in the run's order, and whose partner's own result
+is still pending or takes the partner away (a join, a hold, a wait for a re-center), is held back
+and asked again at once after that partner is written, once per story (ADR-0079). A founding is
+also stale when a partner it was shown waits for a re-center by its write (ADR-0078). The rest
+stands.

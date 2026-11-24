@@ -104,3 +104,31 @@ a **re-center**, an editor's or (once built) two agreeing automated calls, may r
 and END_EVENT, held to the overview's anchor and, for automation, to a limit of 2. And a charter may
 name no end event, so founding no longer requires one. Both are ADR-0071's; everything else here
 stands as written.
+
+## Amendment 2026-11-22: no end-event closing (ADR-0072)
+
+Written down on 2026-11-24; the index named it from 2026-11-22. The 2026-11-19 amendment's "what an
+entry leaving does (a closing on its story cancelled) is one rule every writer applies" no longer
+holds: an overview closes only by fading or an editor's Close, so there is no closing to cancel. The
+cancel rule, the `closing` status, the `close` decision kind and their columns were dropped
+(migration `20261122015800_overview_no_end_event_closing`). The one write model and Undo stand as
+written.
+
+## Amendment 2026-11-24: founding and the ordered writes (ADR-0075, ADR-0077, ADR-0078, ADR-0079)
+
+Four later decisions change the Decision's linking bullets; the records, the one writer and the
+gates stand.
+
+- **Founding** needs more than two agreeing calls (ADR-0075, the owner's rule of 2026-11-23): the
+  founding check also judges whether each story reports an occurrence, and only two stories that
+  each do found a development.
+- **Ordered writes:** a result made stale by a write of the same run is asked again at once, before
+  the next story is written, not after the whole run (ADR-0077); stale again, it is a conflict, as
+  before. A founding whose partner comes later in the run's order waits for that partner's own
+  result and is then asked again once (ADR-0079). A story that points past an established open
+  overview (at least 3 active entries) waits for that overview's re-center instead of founding
+  (ADR-0078).
+- **Settled or owed:** `waiting` joins held, conflict and failed among the outcomes that leave a
+  story owed; it is owed with no call while its wait is in force, and is no founding partner
+  meanwhile (ADR-0078). A story whose yes to an overview code refused settles `rejected` and
+  considers no founding partner (ADR-0077).

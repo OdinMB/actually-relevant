@@ -2,7 +2,8 @@
  * One story's linking over injected I/O (`.context/overviews.md`, "How a story is linked"), the same
  * in production (`jobs/linkOverviews.ts`) and in the eval's sandbox: its candidates (`groupCandidates`), the
  * link confirmation, the acceptance rules (`acceptLink`: cosine proposes, a model confirms, code
- * checks the quotes), and a founding (two large calls that must agree, `acceptFounding`). Then the
+ * checks the quotes), and a founding (two large calls that must agree, on two stories that each
+ * report an occurrence, `acceptFounding`). Then the
  * ordered run (`linkInOrder`): calls in flight at once, writes one story at a time in date order, a
  * stale answer asked again at once. Pure: nothing here reads or writes the database.
  */

@@ -109,3 +109,20 @@ in force or after an Undo, whichever is later, and an undo of that Undo lifts it
 
 Consequences: `recentered_by` is only `recenter` or `editor`; the admin names whose lock holds
 (`lockedBy`). Nothing in production holds overview rows yet, so no data moves.
+
+## Amendment 2026-11-22: no end-event closing (ADR-0072)
+
+Written down on 2026-11-24; the index named it from 2026-11-22. D-RC13's "An overview with none
+closes only by fading; the end-event closing passes it by" now holds for every overview: none closes
+by its END_EVENT, which only marks a joined story reporting it as a turning point. D-RC10 (an
+editor's changed END_EVENT cancels a closing) has nothing left to cancel, and D-RC12's rule that a
+re-center's join never starts a closing holds trivially. The founding check and the re-center check
+still judge a named END_EVENT concrete. Everything else stands.
+
+## Amendment 2026-11-24: a story waits for a re-center (ADR-0078)
+
+The link call's `wider` and `centerMoved` signals (D-RC3) now also hold a story back: when no
+overview passes and the story keeps a counted signal for an overview with at least 3 active entries
+that automation may still re-center, the story waits for that re-center (a `waiting` link decision)
+instead of founding a second overview, and its signals count towards the attempt once. The
+re-center itself, the anchor and the limit are unchanged.

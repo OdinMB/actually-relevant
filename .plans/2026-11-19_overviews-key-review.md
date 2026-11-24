@@ -37,7 +37,9 @@ A second kind of item, separate from the responses: an AI session reviewed every
 - **Reject an "either":** delete both the `eitherRole` and `roleReview` lines; the entry keeps the role it had.
 - **Reject a relabel or a kind change:** put back the role or kind the line says was there, and delete the line.
 
-Mark "either" only where both readings hold for a careful editor, never to raise the bar: a routine count update the model calls a setback stays routine. Each key's `notes` ends with what stayed routine and any gap (the Iran war's August ceasefire has no turning point yet).
+Mark "either" only where both readings hold for a careful editor, never to raise the bar: a routine count update the model calls a setback stays routine. Each key's `notes` ends with what stayed routine and any gap (the Iran war's August ceasefire got its turning point on 2026-11-23: the 29 August story, either role accepted).
+
+**Entries your founding rule made optional (2026-11-23).** The same `roleReview` line, naming `join` this time, marks each `must` entry made `optional` because it comes before the development's second occurrence and reports none itself (a forecast, an appeal, an explainer): under your rule it can neither found nor join. Seven El Niño forecasts, Colorado's explainer of 28 February and autonomous weapons' UN–ICRC appeal of 26 August; each such key names its first two occurrences in `occurrences`. Keep one by deleting the line; restore one by putting `"join": "must"` back and deleting the line.
 
 ## When you are done
 
