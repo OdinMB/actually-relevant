@@ -12,7 +12,7 @@
  */
 import type { StandsOutcome } from '../../../services/overviewStands.js'
 import type { AnswerKey } from './keySchema.js'
-import { bar, mean, rateBar, ratio, type Bar } from './linkScore.js'
+import { mean, rateBar, ratio, shareBar, UNSUPPORTED_LINES_BAR, type Bar } from './linkScore.js'
 import type { CheckpointName } from './replayScore.js'
 
 export const STANDS_MIN_CHECKPOINTS = 15
@@ -83,9 +83,12 @@ export function scoreStands(runs: readonly StandsCheckpointRun[], minCheckpoints
   const points = new Set(runs.map(r => `${r.key}@${r.day}`))
   const enoughPoints = new Set(runs.filter(r => r.enough).map(r => `${r.key}@${r.day}`))
   const byRun = [...new Set(runs.map(r => r.run))].map(n => runs.filter(r => r.run === n && r.enough))
-  const unsupported = (part: 'sentence' | 'doing') =>
-    mean(byRun.map(rs => rs.reduce((s, r) => s + r.lines.filter(l => l.part === part && l.supported === false).length, 0)))
   const enoughRuns = byRun.flat()
+  // The share of the part's lines the judge found unsupported, pooled over the runs (5%, the owner's ruling of 2026-11-24; none until then)
+  const unsupported = (name: string, part: 'sentence' | 'doing') => {
+    const lines = enoughRuns.flatMap(r => r.lines.filter(l => l.part === part))
+    return shareBar(name, lines.filter(l => l.supported === false).length, lines.length, UNSUPPORTED_LINES_BAR, enoughRuns.length > 0)
+  }
   const latest = mean(
     byRun.map(rs =>
       ratio(
@@ -96,7 +99,7 @@ export function scoreStands(runs: readonly StandsCheckpointRun[], minCheckpoints
   )
   const present = mean(byRun.map(rs => ratio(rs.filter(r => r.responseDue && r.doingPresent).length, rs.filter(r => r.responseDue).length)))
   const bars = [
-    bar('unsupported sentences', unsupported('sentence'), 0, 'atMost'),
+    unsupported('unsupported sentences', 'sentence'),
     rateBar(
       'latest value stated',
       latest,
@@ -104,7 +107,7 @@ export function scoreStands(runs: readonly StandsCheckpointRun[], minCheckpoints
       enoughRuns.reduce((s, r) => s + r.latest.length, 0),
     ),
     rateBar("what's being done present", present, DOING_PRESENT_BAR, enoughRuns.filter(r => r.responseDue).length),
-    bar("what's being done unsupported", unsupported('doing'), 0, 'atMost'),
+    unsupported("what's being done unsupported", 'doing'),
   ]
   const short = enoughPoints.size < minCheckpoints
   return {

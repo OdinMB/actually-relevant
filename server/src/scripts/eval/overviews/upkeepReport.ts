@@ -3,6 +3,7 @@
  * `review` bars under planted errors, the `recenter` bars on planted and real cases, and the whole
  * module's replay (`replay`) with its linking bars, checkpoints, re-centers, safeguards and cost. Pure.
  */
+import type { Role } from '../../../services/overviewTypes.js'
 import { rows } from './linkReport.js'
 import { MEMBERS_PER_CHECKPOINT, type PassPoolReport } from './passPool.js'
 import type { RecenterStepReport } from './recenter.js'
@@ -64,11 +65,36 @@ export function reviewLines(r: ReviewStepReport): string[] {
     ...table,
     ...rows(r.score.bars),
     '',
-    '| Run | Planted caught | Correct items demoted |',
-    '|---|---|---|',
-    ...r.score.runs.map(s => `| ${s.run} | ${s.caught} of ${s.planted} | ${s.demoted} of ${s.correct} |`),
+    '| Run | Planted caught | Correct items taken out | Correct items relabeled |',
+    '|---|---|---|---|',
+    ...r.score.runs.map(s => `| ${s.run} | ${s.caught} of ${s.planted} | ${s.removed} of ${s.correct} | ${s.relabeled} of ${s.correct} |`),
+    ...(r.score.demotions.length > 0
+      ? [
+          '',
+          `**Correct items changed:** ${r.score.demotions.filter(d => d.how === 'removed').length} taken out, ${r.score.demotions.filter(d => d.how === 'relabeled').length} relabeled.`,
+          '',
+          ...r.score.demotions.map(d =>
+            d.how === 'removed'
+              ? `- ${d.key} run ${d.run}: ${slugOf(d.entryId)}: taken out: ${cell(d.reason ?? '')}`
+              : `- ${d.key} run ${d.run}: ${slugOf(d.entryId)}: relabeled, the key says ${roleText(d.keyRole)}, the review ${roleText(d.to)}`,
+          ),
+        ]
+      : []),
+    ...(r.score.misses.length > 0
+      ? [
+          '',
+          '**Planted errors left standing:**',
+          '',
+          ...r.score.misses.map(m => `- ${m.key} run ${m.run}: ${m.what}${m.entryId ? `: ${slugOf(m.entryId)}` : ''}`),
+        ]
+      : []),
   ]
 }
+
+/** An eval entry id (`key:<slug>`, `planted:<slug>`) as its story's slug. */
+const slugOf = (entryId: string): string => entryId.replace(/^(key|planted):/, '')
+
+const roleText = (r: Role | undefined): string => (!r ? 'none' : r.role === 'turning_point' ? `turning point (${r.roleKind ?? 'no kind'})` : 'routine')
 
 export function recenterLines(r: RecenterStepReport): string[] {
   const s = r.score

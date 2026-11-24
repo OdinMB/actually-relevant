@@ -11,7 +11,9 @@
  */
 import type { OverviewScope, OverviewStatus } from '../../../services/overviewTypes.js'
 import type { AnswerKey } from './keySchema.js'
-import { bar, mean, ratio, scoreLinking, type Bar, type LinkScore, type ReplayRun } from './linkScore.js'
+import { mean, ratio, RECENTER_MISTAKES_BAR, scoreLinking, shareBar, type Bar, type LinkScore, type ReplayRun } from './linkScore.js'
+
+const sum = (values: number[]): number => values.reduce((s, v) => s + v, 0)
 
 export const CHECKPOINTS = ['third', 'two-thirds', 'end'] as const
 export type CheckpointName = (typeof CHECKPOINTS)[number]
@@ -110,14 +112,23 @@ export function scoreReplayRecenters(keys: readonly AnswerKey[], runs: readonly 
       applied: r.recenters.length,
       wrong: r.recenters.filter(x => x.development === null || !from.has(x.development)).length,
       nearMisses: r.recenters.reduce((s, x) => s + x.nearMissesJoined.length, 0),
+      joined: r.recenters.reduce((s, x) => s + x.joined.length, 0),
       most: Math.max(0, ...counts.values()),
       splits: r.splits.length,
     }
   })
   return {
     bars: [
-      bar('false re-centers', mean(perRun.map(p => p.wrong)), 0, 'atMost'),
-      bar('near misses joined by a re-center', mean(perRun.map(p => p.nearMisses)), 0, 'atMost'),
+      // Shares pooled over the runs (10%, the owner's ruling of 2026-11-24; none until then); a replay with no re-center made no mistake
+      shareBar('false re-centers', sum(perRun.map(p => p.wrong)), sum(perRun.map(p => p.applied)), RECENTER_MISTAKES_BAR, runs.length > 0),
+      shareBar(
+        // Of the stories the re-centers took in
+        'near misses joined by a re-center',
+        sum(perRun.map(p => p.nearMisses)),
+        sum(perRun.map(p => p.joined)),
+        RECENTER_MISTAKES_BAR,
+        runs.length > 0,
+      ),
     ],
     applied: mean(perRun.map(p => p.applied)),
     splits: mean(perRun.map(p => p.splits)),

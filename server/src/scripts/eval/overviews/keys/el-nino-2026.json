@@ -741,6 +741,18 @@
       "why": "Hansen and colleagues say the El Niño is already the strongest on record, with ocean heat anomalies above 1997–98."
     },
     {
+      "slug": "2026-fires-prompt-over-110-deployments-in-49-countries",
+      "date": "2026-08-28",
+      "title": "2026 fires prompt over 110 deployments in 49 countries",
+      "join": "optional",
+      "role": "routine",
+      "kind": null,
+      "eitherRole": true,
+      "values": [],
+      "statuses": [],
+      "why": "Borderline: about military deployments to fires worldwide, mostly before the event formed, but it names a strong El Niño as what fueled the fires. The owner ruled it acceptable on 2026-11-24 (a near miss until then), after the re-center took it in in all three runs."
+    },
+    {
       "slug": "philippine-farms-face-big-rice-shortfall-and-price-spikes",
       "date": "2026-09-02",
       "title": "Philippine farms face big rice shortfall and price spikes",
@@ -1116,12 +1128,6 @@
       "date": "2026-08-28",
       "title": "Warming linked to stronger Pacific climate swings",
       "why": "Labelled 'El Niño', but a coral-record study of how El Niño cycles have intensified over decades, not this event."
-    },
-    {
-      "slug": "2026-fires-prompt-over-110-deployments-in-49-countries",
-      "date": "2026-08-28",
-      "title": "2026 fires prompt over 110 deployments in 49 countries",
-      "why": "Says 2026 wildfires were fueled by a strong El Niño, but it is about military deployments to fires worldwide, mostly before the event formed."
     },
     {
       "slug": "human-warming-supercharges-pacific-climate-swings",

@@ -128,7 +128,7 @@ describe('plannedCases', () => {
       'neighbour lebanon-war-2026 2026-04-17 14/6',
       'negative colorado-river-rules 2026-08-18 5/4',
       'negative ebola-drc-2026 2026-11-16 52/3',
-      'negative el-nino-2026 2026-11-07 36/8',
+      'negative el-nino-2026 2026-11-07 36/7',
       'negative lebanon-war-2026 2026-04-25 15/7',
     ])
     expect(notRun).toEqual([{ what: 'negative pandemic-agreement-pabs', reason: '0 stories to offer on 2026-09-12, fewer than the 2 a re-center takes in' }])
@@ -300,7 +300,7 @@ describe('scoreRecenters', () => {
 
   it('counts a false re-center, a near miss joined, a draft that broke the anchor and a wrong end event, and leaves failed calls out', () => {
     const s = scoreRecenters([
-      run({ nearMissesJoined: ['n1'], endEventVerdict: 'wrong' }),
+      run({ joined: ['a', 'n1'], nearMissesJoined: ['n1'], endEventVerdict: 'wrong' }),
       run({ outcome: 'kept', title: null, endEventVerdict: null, draftAnchorHeld: null }),
       run({ outcome: 'failed', endEventVerdict: null, draftAnchorHeld: null }),
       run({ kind: 'breach', endEventVerdict: null }),
@@ -321,9 +321,10 @@ describe('scoreRecenters', () => {
     expect(s.bars.map(b => [b.value, b.met])).toEqual([
       [0.5, null],
       [1, null],
-      [1, false],
-      [1, false],
-      [1, false],
+      // Shares, at most 10% each: 1 of 2 negatives re-centered, 1 near miss of the 2 stories taken in, 1 of 3 drafts off the anchor
+      [0.5, false],
+      [0.5, false],
+      [1 / 3, false],
     ])
   })
 

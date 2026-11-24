@@ -264,14 +264,15 @@ describe('runReviewStep', () => {
         }
       : null
 
-  it('reviews each development with its plants and scores what was caught and demoted', async () => {
+  it('reviews each development with its plants and scores what was caught, taken out and relabeled', async () => {
     const report = await runReviewStep({ ctx: fakeEvalContext(reviewAnswer), files: FILES, half: 'judge', stories, repeat: 1, budgetUsd: 5 })
     expect(report.keys).toEqual([ID])
     expect(report.cases).toHaveLength(1)
     expect(report.cases[0]!.plantedJoins).toEqual(['planted:n1'])
     // The flipped role set back and OUT narrowed again; the planted join kept
-    expect(report.score.runs).toEqual([{ run: 1, planted: 3, caught: 2, correct: 2, demoted: 0 }])
-    expect(reviewLines(report).join('\n')).toContain('| 1 | 2 of 3 | 0 of 2 |')
+    expect(report.score.runs).toEqual([{ run: 1, planted: 3, caught: 2, correct: 2, removed: 0, relabeled: 0 }])
+    expect(report.score.misses).toEqual([{ key: ID, run: 1, what: 'wrong join kept', entryId: 'planted:n1' }])
+    expect(reviewLines(report).join('\n')).toContain('| 1 | 2 of 3 | 0 of 2 | 0 of 2 |')
   })
 
   it('reviews nothing once the budget is spent', async () => {

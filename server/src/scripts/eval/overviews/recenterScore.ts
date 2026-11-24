@@ -2,17 +2,20 @@
  * The `recenter` bars (`.context/model-eval.md`, "Overview evals"; plan
  * `.plans/2026-11-19_overview-recentering.md`, "Evals"), scored on production's automated re-center
  * run directly on cases built from the answer keys (`recenter.ts`): re-centered where a re-center is
- * expected (the planted narrowed charters and a reviewed center of a key, ≥80%, left to the owner under
+ * expected (the planted narrowed charters and a reviewed center of a key, ≥90%, left to the owner under
  * 20 judgments); no named END_EVENT other than the expected one (the strong judge; one naming none is
- * counted, never wrong); no false re-center (the anchor breach, the neighbor a wider charter would
- * absorb and the end-checkpoint negatives); no near miss joined; and no proposal whose own judgments
+ * counted, never wrong; report only); and, each a share of at most 10% since the owner's ruling of
+ * 2026-11-24 (none until then): false re-centers (of the anchor breach, the neighbor a wider charter
+ * would absorb and the end-checkpoint negatives), near misses among the stories the applied re-centers
+ * took in, and proposals whose own judgments
  * broke the anchor (`draftHoldsAnchor`: what the model made of it before code held both calls to it,
  * since an applied re-center holds it by construction). Counts over all runs. Pure.
  */
 import type { RecenterOutcome, RecenterRule } from '../../../services/overviewRecenter.js'
-import { bar, END_EVENT_REPORT_ONLY, rateBar, ratio, reportOnly, type Bar, type EndEventVerdict } from './linkScore.js'
+import { bar, END_EVENT_REPORT_ONLY, rateBar, ratio, RECENTER_MISTAKES_BAR, reportOnly, shareBar, type Bar, type EndEventVerdict } from './linkScore.js'
 
-export const RECENTERED_BAR = 0.8
+/** 90% since the owner raised it on 2026-11-24 (80% until then). */
+export const RECENTERED_BAR = 0.9
 
 /** The cases' kinds, and the runs each is asked (the plan's table; the neighbor case as the breach). */
 export type RecenterCaseKind = 'planted' | 'center' | 'breach' | 'neighbour' | 'negative'
@@ -98,9 +101,16 @@ export function scoreRecenters(runs: readonly RecenterCaseRun[]): RecenterScore 
         bar('wrong end events (where one is named)', endEvents.unjudged > 0 || judgedEnds === 0 ? null : endEvents.wrong, 0, 'atMost'),
         END_EVENT_REPORT_ONLY,
       ),
-      bar('false re-centers', negatives.length === 0 ? null : falseRecenters, 0, 'atMost'),
-      bar('near misses joined', answered.length === 0 ? null : nearMissesJoined, 0, 'atMost'),
-      bar('proposals whose own judgments broke the anchor', proposals.length === 0 ? null : anchorBreaks, 0, 'atMost'),
+      shareBar('false re-centers', falseRecenters, negatives.length, RECENTER_MISTAKES_BAR),
+      shareBar(
+        // Of the stories the applied re-centers took in
+        'near misses joined',
+        nearMissesJoined,
+        applied.reduce((s, r) => s + r.joined.length, 0),
+        RECENTER_MISTAKES_BAR,
+        answered.length > 0,
+      ),
+      shareBar('proposals whose own judgments broke the anchor', anchorBreaks, proposals.length, RECENTER_MISTAKES_BAR),
     ],
   }
 }

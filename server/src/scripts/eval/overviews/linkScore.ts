@@ -97,6 +97,21 @@ export const bar = (name: string, value: number | null, target: number, directio
  * never closes an overview (ADR-0072), so a wrong one is listed for the owner and never blocks the gate.
  */
 export const END_EVENT_REPORT_ONLY = 'report only: an end event only marks a turning point'
+/** How often a role must agree with the key (the owner's, 2026-11-23: getting roles right matters less); the `role` bar, and the review's bar on the roles it leaves. */
+export const ROLES_AGREEING_BAR = 0.65
+
+/**
+ * A bar on a share of mistakes (the owner, 2026-11-24, in place of "none"): `hit` of `of`, at most
+ * `target`. With nothing to judge it has no data, unless `emptyIsNone`: then nothing done is no mistake.
+ */
+export const shareBar = (name: string, hit: number, of: number, target: number, emptyIsNone = false): Bar => ({
+  ...bar(name, of === 0 && emptyIsNone ? 0 : ratio(hit, of), target, 'atMost'),
+  share: true,
+})
+/** Mistakes a re-center may make, as a share (false re-centers, near misses joined, drafts off the anchor), and unsupported lines a stands may hold. */
+export const RECENTER_MISTAKES_BAR = 0.1
+export const UNSUPPORTED_LINES_BAR = 0.05
+
 export const reportOnly = (b: Bar, why: string): Bar => ({ ...b, met: null, forOwner: why })
 
 /** A rate's bar from the judgments behind it (all runs together): below `MIN_RATE_SAMPLE` it is reported for the owner, not decided. */
@@ -445,6 +460,6 @@ export function scoreLinking(
       },
       reportOnly(bar('wrong end events (where one is named)', wrongEnds, 0, 'atMost'), END_EVENT_REPORT_ONLY),
     ],
-    role: [bar('roles agreeing', mean(scored.map(s => ratio(s.rolesAgreeing, s.rolesJudged))), 0.65)],
+    role: [bar('roles agreeing', mean(scored.map(s => ratio(s.rolesAgreeing, s.rolesJudged))), ROLES_AGREEING_BAR)],
   }
 }

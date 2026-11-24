@@ -295,7 +295,7 @@ The **sandbox** (`overviewSandbox.ts`) keeps overviews in memory and feeds each 
 | `role` | Turning point or routine agreement with the key | ≥85% |
 | `stands` | Over checkpoints with enough offerable facts (at least 15 on the judged half): sentences the strong judge finds unsupported after the fact check; a figure stated at its latest key value as of the checkpoint (at 1/3, 2/3 and the end of each development) when the offered facts hold that value; "What's being done" present where the key has a sourced response by then and an offered fact reports it, and never unsupported | none; ≥90%; ≥70% present, none unsupported |
 | `closure` | Premature closures (Uganda's end for Congo's Ebola); closed developments closed within 14 days of the key's end | none; ≥80% |
-| `review` | Planted wrong joins (near misses inserted), wrong roles and narrowed charters caught; correct items demoted | ≥80%; ≤3% |
+| `review` | Planted wrong joins (near misses inserted), wrong roles and narrowed charters caught; correct items taken out; correct roles kept (split by the owner on 2026-11-24 from "correct items demoted ≤3%": a relabel weighs less than a removal) | ≥80%; ≤3%; ≥65% |
 | `replay` | The whole module per development: joins, roles, statuses and closure against the key at three checkpoints; stands support; cost per story and per overview; how often each safeguard fired | all the bars above on the judged half; cost within the table above |
 
 `fact-check --facts stands` runs the planted-error kinds on stands sentences (catch ≥90%, false rejection ≤5%). The anomaly checks and the status machine are code, with ordinary tests.

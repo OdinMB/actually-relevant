@@ -151,8 +151,15 @@ describe("the replay's re-centers", () => {
       4,
     ).recentering
     expect(s.bars.map(b => [b.name, b.value, b.met])).toEqual([
-      ['false re-centers', 0.5, false],
-      ['near misses joined by a re-center', 0.5, false],
+      // Shares pooled over the runs: 1 of 3 re-centers false, 1 near miss of the 4 stories they took in; at most 10% each
+      ['false re-centers', 1 / 3, false],
+      ['near misses joined by a re-center', 0.25, false],
+    ])
+    expect(s.bars.every(b => b.share && b.target === 0.1)).toBe(true)
+    // A replay that re-centered nothing made no mistake
+    expect(scoreReplay(KEYS, [replayRun({ recenters: [] })], 3, 4).recentering.bars.map(b => [b.value, b.met])).toEqual([
+      [0, true],
+      [0, true],
     ])
     expect(s).toMatchObject({ applied: 1.5, splits: 0.5, mostPerOverview: 2 })
     expect(s.timing).toEqual([
@@ -235,9 +242,9 @@ describe('the stands bars', () => {
     expect(short.bars.every(b => b.met === null)).toBe(true)
     const full = scoreStands(runs, 1)
     expect(full.note).toBeNull()
-    // The counts decide on any sample; the two rates rest on 2 and 1 judgments, too few, so the owner reads them
+    // The unsupported shares (at most 5%) decide on any sample; the two rates rest on 2 and 1 judgments, too few, so the owner reads them
     expect(full.bars.map(b => [b.name, b.value, b.met])).toEqual([
-      ['unsupported sentences', 1, false],
+      ['unsupported sentences', 0.5, false],
       ['latest value stated', 0.5, null],
       ["what's being done present", 1, null],
       ["what's being done unsupported", 0, true],
@@ -276,7 +283,7 @@ describe('the review bars', () => {
     ...over,
   })
 
-  it('counts wrong joins detached, a flipped role set back and the charter narrowed as caught, and correct entries detached or relabeled as demoted', () => {
+  it('counts wrong joins detached, a flipped role set back and the charter narrowed as caught, and correct entries taken out apart from those relabeled', () => {
     const s = scoreReviewRun([
       reviewCase([
         { kind: 'detach', entryId: 'planted:n1', storyId: 'n1', reason: 'no' },
@@ -287,14 +294,26 @@ describe('the review bars', () => {
       // A failed review is not scored
       reviewCase([], { outcome: 'failed' }),
     ])
-    expect(s).toEqual({ planted: 4, caught: 3, correct: 2, demoted: 1 })
+    expect(s).toEqual({ planted: 4, caught: 3, correct: 2, removed: 1, relabeled: 0 })
   })
 
-  it('never counts a relabel of an entry that accepts either role as demoted', () => {
+  it('never counts a relabel of an entry that accepts either role', () => {
     const relabel = { kind: 'relabel' as const, entryId: 'key:e1', storyId: 'e1', from: routine, to: turning }
-    expect(scoreReviewRun([reviewCase([relabel])])).toMatchObject({ correct: 2, demoted: 1 })
+    expect(scoreReviewRun([reviewCase([relabel])])).toMatchObject({ correct: 2, removed: 0, relabeled: 1 })
     const either = reviewCase([relabel], { correct: [{ entryId: 'key:e1', keyRole: routine, eitherRole: true }] })
-    expect(scoreReviewRun([either])).toMatchObject({ correct: 1, demoted: 0 })
+    expect(scoreReviewRun([either])).toMatchObject({ correct: 1, removed: 0, relabeled: 0 })
+  })
+
+  it('holds removals to 3% and the roles kept to the role bar, so relabels alone do not fail the review', () => {
+    const relabel = { kind: 'relabel' as const, entryId: 'key:e1', storyId: 'e1', from: routine, to: turning }
+    const bars = (actions: ReviewCaseRun['actions']) => Object.fromEntries(scoreReviews([reviewCase(actions)]).bars.map(b => [b.name, [b.value, b.met]]))
+    // One of two correct entries relabeled: half the roles kept, below 65%
+    expect(bars([relabel])).toMatchObject({ 'correct items taken out': [0, true], 'correct roles kept': [0.5, false] })
+    expect(bars([])).toMatchObject({ 'correct items taken out': [0, true], 'correct roles kept': [1, true] })
+    expect(bars([{ kind: 'detach', entryId: 'key:e1', storyId: 'e1', reason: 'no' }])).toMatchObject({
+      'correct items taken out': [0.5, false],
+      'correct roles kept': [1, true],
+    })
   })
 
   it('scores the bars as means over runs', () => {
@@ -305,8 +324,35 @@ describe('the review bars', () => {
     ])
     expect(s.bars.map(b => [b.name, b.value, b.met])).toEqual([
       ['planted errors caught', 0.125, false],
-      ['correct items demoted', 0, true],
+      ['correct items taken out', 0, true],
+      ['correct roles kept', 1, true],
     ])
+  })
+
+  it('names each correct entry taken out or relabeled and each plant left standing, and the report lists them', () => {
+    const s = scoreReviews([
+      reviewCase([
+        { kind: 'detach', entryId: 'planted:n1', storyId: 'n1', reason: 'no' },
+        { kind: 'detach', entryId: 'key:e3', storyId: 'e3', reason: 'Another outbreak.' },
+        { kind: 'relabel', entryId: 'key:e1', storyId: 'e1', from: routine, to: turning },
+      ]),
+      reviewCase([], { outcome: 'failed', run: 2 }),
+    ])
+    expect(s.demotions).toEqual([
+      { key: 'ebola', run: 1, entryId: 'key:e1', how: 'relabeled', keyRole: routine, to: turning },
+      { key: 'ebola', run: 1, entryId: 'key:e3', how: 'removed', keyRole: routine, reason: 'Another outbreak.' },
+    ])
+    expect(s.misses).toEqual([
+      { key: 'ebola', run: 1, what: 'wrong join kept', entryId: 'planted:n2' },
+      { key: 'ebola', run: 1, what: 'flipped role kept', entryId: 'key:e2' },
+      { key: 'ebola', run: 1, what: 'charter not narrowed' },
+    ])
+    const report = reviewLines({ half: 'judge', repeat: 1, keys: ['ebola'], cases: [], score: s, costUsd: 0 }).join('\n')
+    expect(report).toContain('**Correct items changed:** 1 taken out, 1 relabeled.')
+    expect(report).toContain('- ebola run 1: e1: relabeled, the key says routine, the review turning point (milestone)')
+    expect(report).toContain('- ebola run 1: e3: taken out: Another outbreak.')
+    expect(report).toContain('- ebola run 1: wrong join kept: n2')
+    expect(report).toContain('- ebola run 1: charter not narrowed')
   })
 })
 
@@ -375,7 +421,7 @@ describe('the upkeep report sections', () => {
     expect(pool).toContain("on 38 of the half's 121 must entries")
     expect(pool).toContain('Spend this run $4.50, $0.1500 a story')
     const review = reviewLines({ half: 'all', repeat: 1, keys: ['ebola'], cases: [], score: scoreReviews([]), costUsd: 0 }).join('\n')
-    expect(review).toContain('| planted errors caught | at least 80% | n/a | no data |')
+    expect(review).toContain('| planted errors caught | at least 90% | n/a | no data |')
     const replay = replayLines({ half: 'all', repeat: 1, keys: ['ebola'], stories: 0, runs: [], score: scoreReplay([], [], 3, 0), costUsd: 0, left: [] }).join(
       '\n',
     )
