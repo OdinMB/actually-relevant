@@ -36,12 +36,14 @@ const evidenceOf = (f: ContextFactData) => f.passage ?? f.supportingSentence
 /** One story's facts as context reads them: a `context` run's, or a first pass's pool's (`cardFacts`). */
 export interface StoryFacts {
   slug: string
+  /** The story's title: with each source's own headline, what the fact check's second pass reads the article to be about (`factDrift.ts`). */
+  title: string
   facts: ContextFactData[]
 }
 
 /** Each story's own supported facts, taken in turn from each story, at most `size`; the peers are from all of the story's facts. */
 export function contextFactFixtures(stories: readonly StoryFacts[], size: number): ContextFacts {
-  const lists = stories.map(({ slug, facts: all }) => {
+  const lists = stories.map(({ slug, title, facts: all }) => {
     const peers = { places: distinct(all.map(f => f.place)), credits: distinct(all.map(f => f.credited)) }
     return all
       .filter(f => f.verdict === 'supported' && f.reusedFromId === null)
@@ -57,7 +59,7 @@ export function contextFactFixtures(stories: readonly StoryFacts[], size: number
         statement: renderFact(f),
         measures: f.counted,
         sentence: evidenceOf(f),
-        context: { fact: f, peers },
+        context: { fact: f, peers, title },
       }))
   })
   const facts: FactFixture[] = []

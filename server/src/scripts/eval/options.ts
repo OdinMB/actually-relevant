@@ -299,7 +299,8 @@ export const OVERVIEW_DEFAULT_STEPS: readonly OverviewStep[] = ['keys', 'fact-ch
  * named beside `fact-check` in `--steps` (null for research's extracted statements, sampled from the
  * database); what that step leaves to sample; and whether the sample is module-1 facts as production's
  * `renderFact` renders them, with their structured fields, so the field kinds are planted in them and
- * the label pass measures the rendering (`scoreFidelity`). Each sample is built by its entry in
+ * the label pass, with a second pass on the facts it rejects (`overviews/factDrift.ts`, paid calls
+ * of its own), measures the rendering (`scoreFidelity`). Each sample is built by its entry in
  * `overviews/factSources.ts`.
  */
 export const OVERVIEW_FACT_SOURCES = {

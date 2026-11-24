@@ -37,7 +37,7 @@ export const FACT_SAMPLERS: Record<OverviewFactSource, (runs: SampledRuns, size:
     runs.context && {
       source: 'context',
       facts: contextFactFixtures(
-        runs.context.runs.filter(r => r.run === 1).map(r => ({ slug: r.slug, facts: r.result.facts })),
+        runs.context.runs.filter(r => r.run === 1).map(r => ({ slug: r.slug, title: r.input.title, facts: r.result.facts })),
         size,
       ),
       half,

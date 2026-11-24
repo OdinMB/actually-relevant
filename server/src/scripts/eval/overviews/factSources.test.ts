@@ -46,7 +46,7 @@ describe('FACT_SAMPLERS', () => {
   })
 
   it("samples the pass-pool step's stories as given", () => {
-    const sample = FACT_SAMPLERS.pool({ ...NOTHING, pool: [{ slug: 'p', facts: [contextFact('S1F1'), contextFact('S1F2')] }] }, 1, 'tune')
+    const sample = FACT_SAMPLERS.pool({ ...NOTHING, pool: [{ slug: 'p', title: 'P', facts: [contextFact('S1F1'), contextFact('S1F2')] }] }, 1, 'tune')
     expect(sample).toMatchObject({ source: 'pool', half: 'tune' })
     expect(keys(sampledFacts(sample!))).toEqual(['p:S1F1'])
   })
@@ -58,7 +58,7 @@ describe('FACT_SAMPLERS', () => {
 
 describe('sampledFacts', () => {
   it("reads research's fixtures and a step's sample alike", () => {
-    const facts = contextFactFixtures([{ slug: 'p', facts: [contextFact('S1F1'), contextFact('S2F1')] }], 10)
+    const facts = contextFactFixtures([{ slug: 'p', title: 'P', facts: [contextFact('S1F1'), contextFact('S2F1')] }], 10)
     const fixtures: FactFixtures = {
       version: FACT_FIXTURES_VERSION,
       createdAt: '2026-11-24T08:00:00.000Z',

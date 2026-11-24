@@ -2,8 +2,11 @@
  * The fact check's report section (`factCheck.ts`, `factCheckScore.ts`): the sample, the label pass,
  * the variants built from the accepted facts, each arm against the bars with its misses and false
  * rejections, and the facts the label pass rejected. For a sample of rendered module-1 facts that
- * last part is the label pass read as a measure of the rendering (`scoreFidelity`): its two
- * report-only shares, then every rejected fact, those with a figure first. Pure.
+ * last part is the measure of the rendering (`scoreFidelity`): the two report-only faithful shares,
+ * each group's counts, the label pass's own share, the changed facts by kind, then every fact the
+ * second pass (`factDrift.ts`) found changed or left unjudged, those with a figure first; the facts
+ * it found lacking only context are counted, never listed. Where the second pass did not run, why,
+ * and every fact the label pass rejected. Pure.
  */
 import { pct } from '../checks.js'
 import { armKey } from '../models.js'
@@ -26,7 +29,9 @@ export interface FactCheckReport {
   scores: ArmScore[]
   /** Why the arms did not run once the labels were known (the budget, or the API key); absent when they ran. */
   stoppedArms?: string
-  /** The label pass as a measure of the rendering; only for a sample of rendered module-1 facts. */
+  /** Why the second pass did not run (the budget, or the API key); absent when it ran or was not due. */
+  stoppedDrift?: string
+  /** The two strong-judge passes as a measure of the rendering; only for a sample of rendered module-1 facts. */
   fidelity?: Fidelity
 }
 
@@ -108,9 +113,12 @@ function sampleLines(sample: FactSample): string[] {
   ]
 }
 
-/** A fact the label pass rejected: as it was shown, its evidence, and the judge's reason. */
-const rejectedLine = (v: Verdict) =>
-  `- ${quoted(v.item.text)}; sentence ${quoted(v.item.fact.sentence)}${v.item.fact.measures ? `; measures ${quoted(v.item.fact.measures)}` : ''} (${cell(v.item.fact.outlet)}): ${cell(v.problem) || 'no reason given'}`
+/** A fact as it was shown, its evidence, and the reason a judge gave, behind the kind of change where there is one. */
+const factLine = (v: Verdict, reason: string, kind?: string) =>
+  `- ${kind ? `${kind}: ` : ''}${quoted(v.item.text)}; sentence ${quoted(v.item.fact.sentence)}${v.item.fact.measures ? `; measures ${quoted(v.item.fact.measures)}` : ''} (${cell(v.item.fact.outlet)}): ${cell(reason) || 'no reason given'}`
+
+/** A fact the label pass rejected, with that judge's reason. */
+const rejectedLine = (v: Verdict) => factLine(v, v.problem)
 
 /** The statements the label pass rejected, the first `MAX_LISTED`: for a sample of statements or lines, which the label pass does not measure. */
 function rejectedLines(unsupported: Verdict[]): string[] {
@@ -123,33 +131,69 @@ function rejectedLines(unsupported: Verdict[]): string[] {
   ]
 }
 
-/**
- * The label pass read as a measure of the rendering (`scoreFidelity`): its two report-only bars, each
- * group's counts, then every fact the judge rejected, those with a figure first. No cap: the list is
- * what the shares are read with, and it cannot be printed again once the rendering changes.
- */
-function fidelityLines(f: Fidelity): string[] {
-  const counts = (name: string, g: FidelityGroup) => `- ${name}: ${g.accepted} of ${g.judged} judged facts accepted; ${g.unlabeled} without a verdict.`
-  const rejected = (name: string, g: FidelityGroup) => [
-    `#### Facts ${name} the judge rejected (${g.rejected.length})`,
+/** A `####` list of facts, its count in the heading; `None.` when it is empty. */
+const factList = (heading: string, lines: string[]) => [`#### ${heading} (${lines.length})`, '', ...(lines.length > 0 ? lines : ['None.'])]
+
+/** The second pass's sorting, for the shares' measure: what each group's faithful share counts and what it leaves out. */
+function faithfulLines(f: Fidelity): string[] {
+  const counts = (name: string, g: FidelityGroup) =>
+    `- ${name}: ${g.faithful} of ${g.judged} judged facts faithful (${g.accepted} the label pass accepted, ${g.context} it rejected only for context the sentence lacks); ${g.changed.length} changed; ${g.unjudged.length} the second pass left unjudged; ${g.unlabeled} without a verdict.`
+  const changed = (g: FidelityGroup) => g.changed.map(r => factLine(r.rejection, r.reason, r.kind ?? undefined))
+  const unjudged = [...f.withFigure.unjudged, ...f.withoutFigure.unjudged].map(r => rejectedLine(r.rejection))
+  return [
+    counts('With a figure', f.withFigure),
+    counts('Without a figure', f.withoutFigure),
+    `- The label pass alone: with a figure ${f.withFigure.accepted} of ${f.withFigure.judged} accepted (${pct(f.withFigure.acceptedShare)}); without a figure ${f.withoutFigure.accepted} of ${f.withoutFigure.judged} (${pct(f.withoutFigure.acceptedShare)}).`,
     '',
-    ...(g.rejected.length > 0 ? g.rejected.map(rejectedLine) : ['None.']),
+    '| Changed, by kind | With a figure | Without a figure |',
+    '|---|---|---|',
+    ...f.changedByKind.map(k => `| ${k.kind} | ${k.withFigure} | ${k.withoutFigure} |`),
+    '',
+    ...factList('Facts with a figure the second pass found changed', changed(f.withFigure)),
+    '',
+    ...factList('Facts without a figure the second pass found changed', changed(f.withoutFigure)),
+    ...(unjudged.length > 0 ? ['', `#### Facts the second pass left unjudged (${unjudged.length}), counted as not faithful`, '', ...unjudged] : []),
   ]
+}
+
+/** The label pass alone, where the second pass did not run: each group's counts, then every fact it rejected. */
+function labelOnlyLines(f: Fidelity): string[] {
+  const counts = (name: string, g: FidelityGroup) =>
+    `- ${name}: ${g.accepted} of ${g.judged} judged facts accepted by the label pass; ${g.unlabeled} without a verdict.`
+  return [
+    counts('With a figure', f.withFigure),
+    counts('Without a figure', f.withoutFigure),
+    '',
+    ...factList('Facts with a figure the label pass rejected', f.withFigure.rejected.map(rejectedLine)),
+    '',
+    ...factList('Facts without a figure the label pass rejected', f.withoutFigure.rejected.map(rejectedLine)),
+  ]
+}
+
+/**
+ * The two strong-judge passes read as a measure of the rendering (`scoreFidelity`): the two
+ * report-only faithful shares, then the second pass's sorting (`faithfulLines`), or, where it did
+ * not run, why and the label pass alone (`labelOnlyLines`). No cap on the lists: they are what the
+ * shares are read with, and they cannot be printed again once the rendering changes.
+ */
+function fidelityLines(f: Fidelity, stoppedDrift: string | undefined): string[] {
+  const ran = f.withFigure.faithful !== null
   return [
     '### The facts as rendered against their sources (report only)',
     '',
-    `What the label pass says about the facts themselves, before any error is planted: each sampled fact as production's \`renderFact\` shows it to writers and checks, judged by ${armKey(LABEL_ARM)} against its source's sentence or passage and the source's date. The sample is facts production's own check supported, none reused, so this is what writers are shown. A fact with a figure is shown from its fields alone where it names what the figure counts, and as its statement with the figure beside it where it does not. The judge never sees the source's full text, so a fact that rightly carries scope or a period from elsewhere in the article counts against the share too: read the shares with the rejected facts, every one listed below with the judge's reason.`,
+    `What the fact check's two strong-judge passes say about the facts themselves, before any error is planted: each sampled fact as production's \`renderFact\` shows it to writers and checks, judged by ${armKey(LABEL_ARM)} against its source's sentence or passage and the source's date. The sample is facts production's own check supported, none reused, so this is what writers are shown. A fact with a figure is shown from its fields alone where it names what the figure counts, and as its statement with the figure beside it where it does not. The label pass sees one sentence or passage of the source, so it also rejects a fact that only names the subject, place, body or person the rest of the article supplies. A second pass by the same judge, once, reads each fact it rejected again, with the source's headline, our story's title and, where the rendering does not hold it, research's own statement, and sorts it: lacking only context, or changed (a figure or thing counted the source does not give, a proposal or possibility stated as fact, a period or condition dropped, a credit the source does not give, an estimate mark it does not warrant, a placeholder in a field). A fact is faithful when the label pass accepted it or the second pass found it lacking only context; a fact the second pass left unanswered counts as not faithful. Neither pass sees the source's full text: the second trusts the source's headline and our story's title for the context it cannot check, so a wrong place or body that fits them passes as context, and a credit the article gives outside the sentence counts as changed. Read the shares with the changed facts, every one listed below with its kind and the judge's reason.`,
     '',
+    ...(ran
+      ? []
+      : [
+          `The second pass did not run: ${cell(stoppedDrift ?? 'no reason recorded')}. The faithful shares are unknown until it does; what follows is the label pass alone.`,
+          '',
+        ]),
     '| Measure | Reference | Share | Verdict |',
     '|---|---|---|---|',
     ...rows(f.bars),
     '',
-    counts('With a figure', f.withFigure),
-    counts('Without a figure', f.withoutFigure),
-    '',
-    ...rejected('with a figure', f.withFigure),
-    '',
-    ...rejected('without a figure', f.withoutFigure),
+    ...(ran ? faithfulLines(f) : labelOnlyLines(f)),
   ]
 }
 
@@ -173,6 +217,6 @@ export function factCheckLines(r: FactCheckReport): string[] {
     ...(r.stoppedArms ? [`No arm ran: ${cell(r.stoppedArms)}.`, ''] : []),
     ...r.scores.flatMap(s => armLines(s, kinds, r.sample.source === 'stands')),
     // The rejected facts close the section: as the rendering's measure where it was scored, else the capped list
-    ...(r.fidelity ? fidelityLines(r.fidelity) : rejectedLines(unsupported)),
+    ...(r.fidelity ? fidelityLines(r.fidelity, r.stoppedDrift) : rejectedLines(unsupported)),
   ]
 }

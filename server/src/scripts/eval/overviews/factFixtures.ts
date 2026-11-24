@@ -40,9 +40,11 @@ export interface FactFixture {
   sentence: string
   /**
    * Only for a module-1 fact (`--facts context` or `--facts pool`, `contextFacts.ts`): the fact as
-   * run 1 kept it, which production renders, and the story's places and credited bodies.
+   * run 1 kept it, which production renders, and the story's places and credited bodies; and the
+   * title of our story the fact was researched for, which the fact check's second pass
+   * (`factDrift.ts`) shows, beside the source's own headline, as what the article is about.
    */
-  context?: { fact: ContextFactData; peers: FieldPeers }
+  context?: { fact: ContextFactData; peers: FieldPeers; title: string }
 }
 
 export interface FactFixtures {

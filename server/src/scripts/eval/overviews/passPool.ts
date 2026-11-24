@@ -107,7 +107,11 @@ export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoo
     storyUsd: () => FIRST_PASS_RESERVE_USD,
     run: async ({ id, input }) => {
       const pass = await passInEval(input, { ctx: o.ctx, tavily: o.tavily, relevanceMin: o.relevanceMin, latestDate: input.storyDay, run: 1 })
-      return { storyId: input.story.id, facts: poolMemberFacts(input.story.id, pass.pool), story: { slug: id, facts: cardFacts(pass.pool) } }
+      return {
+        storyId: input.story.id,
+        facts: poolMemberFacts(input.story.id, pass.pool),
+        story: { slug: id, title: input.current.title, facts: cardFacts(pass.pool) },
+      }
     },
   })
   const facts = new Map(done.results.map(r => [r.storyId, r.facts]))

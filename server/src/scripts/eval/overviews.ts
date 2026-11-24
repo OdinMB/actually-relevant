@@ -13,7 +13,8 @@
  * anchor breach and the keys' reviewed centers, and the whole module replayed day by day for its
  * linking, checkpoints and re-centers. The fact check samples research's statements by default, or
  * what a step run beside it kept (`--facts context`, `--facts pool` for the first passes' pools,
- * `--facts stands`); on rendered module-1 facts its label pass also measures the rendering.
+ * `--facts stands`); on rendered module-1 facts its label pass and a second pass on the facts the
+ * labels rejected also measure the rendering.
  *
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline
@@ -60,6 +61,7 @@ import {
 import { estimateFactCheck, runFactCheck } from './overviews/factCheck.js'
 import type { FactCheckReport } from './overviews/factCheckReport.js'
 import { scoreArm, scoreFidelity } from './overviews/factCheckScore.js'
+import { runDriftPass } from './overviews/factDrift.js'
 import { loadFactFixtures, reusableFixtures, type FactFixture, type FactFixtures } from './overviews/factFixtures.js'
 import { FACT_SAMPLERS, sampledFacts, type FactSample } from './overviews/factSources.js'
 import { loadGapCandidates, runGapDraftStep, type GapDraftStepOptions } from './overviews/gapDraft.js'
@@ -171,14 +173,24 @@ async function factCheckStep(
   console.log(
     `fact-check: labeling ${facts.length} ${sample.source} facts, then ${opts.arms.length} arm(s) × ${opts.repeat} run(s) on the accepted facts' variants`,
   )
-  const run = await runFactCheck(ctx, facts, opts.arms, opts.repeat, { budgetUsd: opts.budget, canCall: Boolean(process.env.OPENAI_API_KEY) })
+  const gate = { budgetUsd: opts.budget, canCall: Boolean(process.env.OPENAI_API_KEY) }
+  const run = await runFactCheck(ctx, facts, opts.arms, opts.repeat, gate)
   if (run.stopped) skipped.push({ step: `fact-check (${run.stopped.pass})`, reason: run.stopped.reason })
   if (!run.labels) return null
+  const rendered = OVERVIEW_FACT_SOURCES[sample.source].rendered
   console.log(
     `fact-check: ${run.labels.accepted.length} accepted, ${run.labels.unsupported.length} not supported by their evidence; ${run.variants.length} variants`,
   )
-  // Rendered module-1 facts: the labels also measure the rendering itself, known before the arms run
-  const fidelity = OVERVIEW_FACT_SOURCES[sample.source].rendered ? scoreFidelity(run.labels) : null
+  // Rendered module-1 facts: a second pass sorts the facts the labels rejected, and the two together measure the rendering itself
+  const drift = rendered ? await runDriftPass(ctx, run.labels.unsupported, gate) : null
+  if (drift) {
+    // The unjudged count beside the shares: a failed or skipped call's facts count as not faithful, which lowers both
+    const count = (category: 'context' | 'changed' | null) => drift.readings?.filter(r => r.category === category).length ?? 0
+    const sorted = drift.readings ? `${count('context')} context, ${count('changed')} changed, ${count(null)} unjudged (counted as not faithful)` : 'not run'
+    console.log(`fact-check: second pass on the ${run.labels.unsupported.length} rejected facts: ${estimateText(drift.estimate)}; ${sorted}`)
+  }
+  if (drift?.stopped) skipped.push({ step: 'fact-check (second pass)', reason: drift.stopped })
+  const fidelity = drift ? scoreFidelity(run.labels, drift.readings) : null
   for (const b of fidelity?.bars ?? []) console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
   const scores = run.runs.map(scoreArm)
   for (const s of scores) console.log(`  ${s.arm}: catch ${pct(s.catchRate)}, false rejection ${pct(s.falseRejection)}, unjudged ${s.unjudged}`)
@@ -190,6 +202,7 @@ async function factCheckStep(
     ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
     scores,
     ...(run.stopped?.pass === 'arms' ? { stoppedArms: run.stopped.reason } : {}),
+    ...(drift?.stopped ? { stoppedDrift: drift.stopped } : {}),
     ...(fidelity ? { fidelity } : {}),
   }
 }
