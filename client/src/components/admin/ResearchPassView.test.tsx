@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import type { ArticleVersionView, PoolFactView, ResearchPass, ResearchResult, StoryPasses } from '@shared/types'
 import { ArticleVersions, EvidencePoolView, passLabel, ResearchPassView } from './ResearchPassView'
+import { REMOVED_FIGURE_REASONS } from './removedFigures'
 
 const projection = { paragraphs: [], whyThisMatters: [], caveats: [], quoteSourceId: null, sources: [] } as unknown as ArticleVersionView['research']
 
@@ -296,6 +297,36 @@ describe('ResearchPassView', () => {
     expect(screen.getByText('contradicted by newer reporting')).toBeInTheDocument()
     expect(screen.getByText('an editor dropped it')).toBeInTheDocument()
     expect(screen.getByText('Kept as past values, a newer value found: S1F3 (by S2F1).')).toBeInTheDocument()
+  })
+
+  it('lists the figures the figure check removed, each with what it counted and the reason its answer gives', () => {
+    renderPass(
+      pass({
+        record: {
+          context: {
+            removedFigures: [
+              { ref: 'S2F3', figure: 'about 2.88 million hectares', counted: 'area burned', answer: 'not-stated' },
+              { ref: 'S1F2', figure: '40 percent', counted: '', answer: 'no-answer' },
+            ],
+          },
+        },
+      }),
+    )
+    const row = (ref: string) => screen.getByText(ref).closest('li')!
+    expect(screen.getByText('Figures removed: not found in the source')).toBeInTheDocument()
+    expect(row('S2F3')).toHaveTextContent('“about 2.88 million hectares” (area burned)')
+    expect(row('S2F3')).toHaveTextContent(REMOVED_FIGURE_REASONS['not-stated'])
+    expect(row('S2F3')).not.toHaveTextContent(REMOVED_FIGURE_REASONS['no-answer'])
+    // Nothing was said to be counted, so the line names none
+    expect(row('S1F2').textContent).toBe(`S1F2 “40 percent”${REMOVED_FIGURE_REASONS['no-answer']}`)
+  })
+
+  it('shows no removed figures for a pass without a context record, one from before the figure check, or one that removed none', () => {
+    for (const record of [null, { context: {} }, { context: { removedFigures: [] } }]) {
+      const { unmount } = renderPass(pass({ record }))
+      expect(screen.queryByText(/removed: not found in the source/i)).not.toBeInTheDocument()
+      unmount()
+    }
   })
 
   it('says what became of the cards, with the ones the checks dropped', () => {

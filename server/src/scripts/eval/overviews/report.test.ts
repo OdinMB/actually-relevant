@@ -9,6 +9,8 @@ import type { FactCheckReport } from './factCheckReport.js'
 import type { DriftReading } from './factDrift.js'
 import { FACT_FIXTURES_VERSION, type FactFixture, type FactFixtures } from './factFixtures.js'
 import { MAX_LISTED, scoreArm, scoreFidelity, type Fidelity } from './factCheckScore.js'
+import { figureFixtures, figureVariants, type Answered, type FigureCheckResult, type FigureFixture } from './figureCheck.js'
+import { scoreFigureCheck } from './figureCheckScore.js'
 import type { KeyDraftReport } from './keyDraft.js'
 import { rows } from './linkReport.js'
 import { DRIFT_KINDS } from './factDriftPrompt.js'
@@ -501,5 +503,99 @@ describe('renderOverviewReport', () => {
     expect(md).toContain('; measures "deaths" (Outlet / One): not stated')
     expect(md).toContain('| Cost (`cost_usd`) | 1 | $0.0500 |')
     expect(md).toContain('Fact fixtures sampled 2026-11-17T08:00:00.000Z from the local database copy')
+  })
+})
+
+describe('the figure check against its source', () => {
+  /** A kept figure (100 people) and one production removed (3 villages). */
+  const sample = figureFixtures(
+    [
+      {
+        slug: 'a',
+        title: 'A',
+        facts: [contextFact('S1F1', { supportingSentence: 'About 100 people fled.' }), contextFact('S1F2', { value: null, unit: '', counted: '' })],
+        removed: [{ ref: 'S1F2', figure: '3 villages', counted: 'villages burned', answer: 'computed' }],
+      },
+    ],
+    300,
+  )
+  const [kept, removed] = sample.figures
+  const labels: Answered<FigureFixture>[] = [
+    { item: kept!, answer: 'given' },
+    { item: removed!, answer: 'given' },
+  ]
+  const variants = kept?.kept ? figureVariants(kept) : []
+  /** The arm misses every planted error. */
+  const runs = [{ arm: 'gpt-6-luna@low', runs: [variants.map(item => ({ item, answer: 'given' as const }))] }]
+  const none = { calls: 0, uncached: 0, usd: 0 }
+  const result = (extra: Partial<FigureCheckResult> = {}): FigureCheckResult => ({
+    source: 'pool',
+    half: 'judge',
+    sample,
+    labeled: sample.figures.length,
+    estimate: { labels: none, arms: none, armsUpperBound: false },
+    labels,
+    variants,
+    stopped: null,
+    score: scoreFigureCheck(labels, runs),
+    ...extra,
+  })
+  /** The section's lines, its heading up to the next. */
+  const section = (md: string) => {
+    const lines = md.split('\n')
+    const from = lines.indexOf('## Figure check against its source')
+    const to = lines.findIndex((l, i) => i > from && l.startsWith('## '))
+    return lines.slice(from + 1, to)
+  }
+
+  it("follows the fact check's section", () => {
+    const factCheck: FactCheckReport = {
+      sample: { source: 'research', fixtures },
+      labeled: 0,
+      labels: { accepted: [], unsupported: [], unlabeled: [] },
+      variants: [],
+      scores: [],
+    }
+    expect(headings(renderOverviewReport(input({ factCheck, figureCheck: result() })))).toEqual([
+      '## Fact check under planted errors',
+      '## Figure check against its source',
+      '## Spend',
+    ])
+  })
+
+  it("gives each arm's bars, and lists the arm's misses and production's disagreements with the figure's source", () => {
+    const md = section(renderOverviewReport(input({ figureCheck: result() }))).join('\n')
+    for (const row of rows(result().score.bars)) expect(md).toContain(row)
+    expect(md).toContain('### gpt-6-luna@low')
+    expect(md).toContain('150 people')
+    expect(md).toContain('3 villages')
+    expect(md).toContain('About 100 people fled.')
+  })
+
+  it('says why the label pass did not run, and shows nothing it would have given', () => {
+    const lines = section(
+      renderOverviewReport(
+        input({ figureCheck: result({ labels: null, variants: [], stopped: { pass: 'labels', reason: 'reason R' }, score: scoreFigureCheck(null, []) }) }),
+      ),
+    )
+    expect(lines.join('\n')).toContain('reason R')
+    expect(lines.filter(l => l.startsWith('|') || l.startsWith('#'))).toEqual([])
+  })
+
+  it('says why no arm ran once the labels were known, and shows the labels but no arm', () => {
+    const md = section(
+      renderOverviewReport(input({ figureCheck: result({ stopped: { pass: 'arms', reason: 'reason R' }, score: scoreFigureCheck(labels, []) }) })),
+    ).join('\n')
+    expect(md).toContain('reason R')
+    expect(md).toContain('3 villages')
+    expect(md).not.toContain('### gpt-6-luna@low')
+  })
+
+  it('renders an empty sample with its shortfall and its bars without a value', () => {
+    const empty = figureFixtures([], 300)
+    const score = scoreFigureCheck([], [{ arm: 'gpt-6-luna@low', runs: [[]] }])
+    const md = section(renderOverviewReport(input({ figureCheck: result({ sample: empty, labeled: 0, labels: [], variants: [], score }) }))).join('\n')
+    expect(md).toContain(empty.shortfalls[0]!)
+    for (const row of rows(score.bars)) expect(md).toContain(row)
   })
 })

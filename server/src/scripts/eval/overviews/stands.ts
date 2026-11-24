@@ -97,7 +97,11 @@ export function standsFactFixtures(kept: readonly KeptLine[], size: number): Con
   }
 }
 
-/** Whether an offered fact holds a value: its structured value, or its rendering stating it. */
+/**
+ * Whether an offered fact holds a value: its structured value, or its rendering stating it. Since
+ * 2026-11-24 the rendering begins with the fact's statement (ADR-0080), so a fact also holds a value
+ * its statement states, and "latest value stated" is not comparable with runs before that day.
+ */
 const holds = (o: OfferedFact, value: number) => o.fact.value === value || statesValue(renderFact(o.fact), value)
 
 export async function runStandsStep(o: StandsStepOptions): Promise<StandsStepReport> {

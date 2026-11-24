@@ -14,7 +14,9 @@
  * linking, checkpoints and re-centers. The fact check samples research's statements by default, or
  * what a step run beside it kept (`--facts context`, `--facts pool` for the first passes' pools,
  * `--facts stands`); on rendered module-1 facts its label pass and a second pass on the facts the
- * labels rejected also measure the rendering.
+ * labels rejected also measure the rendering. The figure check (`figure-check`) samples run 1's
+ * figures of `--facts context` or `--facts pool`, kept and removed, and measures production's figure
+ * judgment against a strong judge's labels and under planted errors.
  *
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-17_overview-eval --steps keys,baseline
@@ -28,6 +30,7 @@
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool --half judge --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,stands,fact-check --facts stands --half judge --budget 13
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,fact-check --facts pool --half judge --budget 13
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,fact-check,figure-check --facts pool --half judge
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,replay --half judge --budget 18
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_review-eval --steps recenter --half judge --budget 6
  *
@@ -42,12 +45,12 @@ import 'dotenv/config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { config } from '../../config.js'
-import { createEvalContext, type EvalContext } from './models.js'
+import { createEvalContext } from './models.js'
 import { OVERVIEW_FACT_SOURCES, parseOverviewOptions, type OverviewOptions, type OverviewStep } from './options.js'
 import { classifyDb, openReadOnlyDb, readOnlyStatus, type ReadOnlyDb } from './readOnlyDb.js'
 import { createTavilyClient, TAVILY_USD_PER_CREDIT } from './research/tavily.js'
 import { loadBaselineRuns, summarizeBaseline, type Baseline } from './overviews/baseline.js'
-import type { CallEstimate } from './overviews/callBudget.js'
+import { estimateText } from './overviews/callBudget.js'
 import { FIRST_PASS_RESERVE_USD, runContextStep, type ContextStepOptions, type ContextStepRun } from './overviews/context.js'
 import type { StoryFacts } from './overviews/contextFacts.js'
 import {
@@ -58,12 +61,8 @@ import {
   PASS_INPUTS_VERSION,
   UPDATE_INPUTS_VERSION,
 } from './overviews/contextInputs.js'
-import { estimateFactCheck, runFactCheck } from './overviews/factCheck.js'
-import type { FactCheckReport } from './overviews/factCheckReport.js'
-import { scoreArm, scoreFidelity } from './overviews/factCheckScore.js'
-import { runDriftPass } from './overviews/factDrift.js'
-import { loadFactFixtures, reusableFixtures, type FactFixture, type FactFixtures } from './overviews/factFixtures.js'
-import { FACT_SAMPLERS, sampledFacts, type FactSample } from './overviews/factSources.js'
+import { estimateFactCheck } from './overviews/factCheck.js'
+import { loadFactFixtures, reusableFixtures, type FactFixtures } from './overviews/factFixtures.js'
 import { loadGapCandidates, runGapDraftStep, type GapDraftStepOptions } from './overviews/gapDraft.js'
 import { checkGapKeyFiles } from './overviews/gapKeyCheck.js'
 import { checkDuplicates, checkKeyFiles, loadKeyStories } from './overviews/keyCheck.js'
@@ -80,6 +79,7 @@ import { MEMBERS_PER_CHECKPOINT, passPoolStories, runPassPool } from './overview
 import { runReplayStep } from './overviews/replay.js'
 import { runRecenterStep } from './overviews/recenter.js'
 import { runReviewStep } from './overviews/review.js'
+import { runSamplingSteps } from './overviews/samplingSteps.js'
 import { runStandsStep, type StandsStepReport } from './overviews/stands.js'
 import { nearestPublished } from '../../services/overviewCandidates.js'
 import { linkStories } from '../../services/overviewInput.js'
@@ -90,7 +90,6 @@ import type { Db } from './readOnlyDb.js'
 import { LINKING_STEPS } from './options.js'
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
-const pct = (v: number | null) => (v === null ? 'n/a' : `${(v * 100).toFixed(1)}%`)
 const presence = (v: string | undefined) => (v ? 'present' : 'missing')
 /** The steps that call a model; a run of none of them, or a dry run, is offline. */
 const CALLING_STEPS: OverviewStep[] = [
@@ -107,6 +106,7 @@ const CALLING_STEPS: OverviewStep[] = [
   'recenter',
   'replay',
   'fact-check',
+  'figure-check',
 ]
 
 /** The stories as overview linking reads them, by slug, through the read-only session; null for a slug not published there. */
@@ -158,53 +158,6 @@ async function getFactFixtures(opts: OverviewOptions, cacheDir: string, session:
   const fx = await loadFactFixtures(await session.get(), opts.size)
   writeFileSync(file, JSON.stringify(fx, null, 1))
   return fx
-}
-
-const estimateText = (e: CallEstimate) => `${e.calls} calls (${e.uncached} uncached) ≈ ${usd(e.usd)}`
-
-/** The step, its passes each checked against the budget; null when the label pass could not run. */
-async function factCheckStep(
-  opts: OverviewOptions,
-  sample: FactSample,
-  facts: FactFixture[],
-  ctx: EvalContext,
-  skipped: { step: string; reason: string }[],
-): Promise<FactCheckReport | null> {
-  console.log(
-    `fact-check: labeling ${facts.length} ${sample.source} facts, then ${opts.arms.length} arm(s) × ${opts.repeat} run(s) on the accepted facts' variants`,
-  )
-  const gate = { budgetUsd: opts.budget, canCall: Boolean(process.env.OPENAI_API_KEY) }
-  const run = await runFactCheck(ctx, facts, opts.arms, opts.repeat, gate)
-  if (run.stopped) skipped.push({ step: `fact-check (${run.stopped.pass})`, reason: run.stopped.reason })
-  if (!run.labels) return null
-  const rendered = OVERVIEW_FACT_SOURCES[sample.source].rendered
-  console.log(
-    `fact-check: ${run.labels.accepted.length} accepted, ${run.labels.unsupported.length} not supported by their evidence; ${run.variants.length} variants`,
-  )
-  // Rendered module-1 facts: a second pass sorts the facts the labels rejected, and the two together measure the rendering itself
-  const drift = rendered ? await runDriftPass(ctx, run.labels.unsupported, gate) : null
-  if (drift) {
-    // The unjudged count beside the shares: a failed or skipped call's facts count as not faithful, which lowers both
-    const count = (category: 'context' | 'changed' | null) => drift.readings?.filter(r => r.category === category).length ?? 0
-    const sorted = drift.readings ? `${count('context')} context, ${count('changed')} changed, ${count(null)} unjudged (counted as not faithful)` : 'not run'
-    console.log(`fact-check: second pass on the ${run.labels.unsupported.length} rejected facts: ${estimateText(drift.estimate)}; ${sorted}`)
-  }
-  if (drift?.stopped) skipped.push({ step: 'fact-check (second pass)', reason: drift.stopped })
-  const fidelity = drift ? scoreFidelity(run.labels, drift.readings) : null
-  for (const b of fidelity?.bars ?? []) console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${verdict(b)})`)
-  const scores = run.runs.map(scoreArm)
-  for (const s of scores) console.log(`  ${s.arm}: catch ${pct(s.catchRate)}, false rejection ${pct(s.falseRejection)}, unjudged ${s.unjudged}`)
-  return {
-    sample,
-    labeled: facts.length,
-    labels: run.labels,
-    variants: run.variants,
-    ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
-    scores,
-    ...(run.stopped?.pass === 'arms' ? { stoppedArms: run.stopped.reason } : {}),
-    ...(drift?.stopped ? { stoppedDrift: drift.stopped } : {}),
-    ...(fidelity ? { fidelity } : {}),
-  }
 }
 
 async function main(): Promise<void> {
@@ -384,6 +337,11 @@ async function main(): Promise<void> {
         const { slugs, mustEntries } = passPoolStories(keyFiles, opts.half, opts.limit)
         console.log(
           `pass-pool: ${slugs.length} of the half's ${mustEntries} must entries (the newest ${MEMBERS_PER_CHECKPOINT} at each stands checkpoint), one first pass each; at most ${usd(slugs.length * FIRST_PASS_RESERVE_USD)} at a first pass's ceiling`,
+        )
+      }
+      if (runs('figure-check')) {
+        console.log(
+          `figure-check: --facts ${opts.facts} samples the figures of ${factSource.samples} (run 1), kept and removed; each pass is checked against the budget once they are known`,
         )
       }
       console.log(`folder spend so far ${usd(ctx.spentUsd())}; budget ${usd(opts.budget)} (a cap on the folder's model ledger plus Tavily credits)`)
@@ -649,23 +607,8 @@ async function main(): Promise<void> {
         }
       }
     }
-    if (runs('fact-check')) {
-      try {
-        const sample = FACT_SAMPLERS[opts.facts]({ research: fx, context: contextRun, stands: standsRun, pool: poolStories }, opts.size, opts.half)
-        if (!sample) {
-          skipped.push({
-            step: 'fact-check',
-            reason: factSource.step ? `--facts ${opts.facts}: the ${factSource.step} step did not run` : `--facts ${opts.facts}: no sample was loaded`,
-          })
-        } else {
-          const sampled = sampledFacts(sample)
-          const factCheck = await factCheckStep(opts, sample, opts.limit === undefined ? sampled : sampled.slice(0, opts.limit), ctx, skipped)
-          if (factCheck) report.factCheck = factCheck
-        }
-      } catch (err) {
-        failed('fact-check', err)
-      }
-    }
+    // The fact check and the figure check sample what the steps above left (`samplingSteps.ts`)
+    Object.assign(report, await runSamplingSteps(opts, { research: fx, context: contextRun, stands: standsRun, pool: poolStories }, ctx, { skipped, failed }))
     if (runs('baseline')) {
       try {
         const baseline: Baseline = summarizeBaseline(await (await session.get()).read(loadBaselineRuns))

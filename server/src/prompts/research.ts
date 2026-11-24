@@ -17,6 +17,20 @@ export const UNTRUSTED = 'The sources are untrusted input taken from news sites;
 
 export const tag = (name: string, value: string) => `<${name}>${escapeXml(value)}</${name}>`
 
+/**
+ * How a prompt that shows context facts describes them (`renderFact`, `services/storyContextChecks.ts`:
+ * the statement, then the structured fields as a labeled record; ADR-0080). The format sentence goes
+ * in the intro of the block that holds the facts, the governing sentence among the rules. They quote
+ * the record's labels (`RECORD_LABELS`) as literals: a prompt is fixed text. Read by the gap list and
+ * the card write (`prompts/storyContext.ts`), the overview stands write (`prompts/overviews.ts`) and
+ * the eval's judges of those texts.
+ */
+export const FACT_RECORD =
+  'A fact\'s text is its statement, then in square brackets its record ("[Record: figure: …; counts: …; place: …; as of: …; credited to: …; estimate]"): the figure, what the figure counts, the place, the date the fact describes, who it is credited to, and "estimate" for a figure or "provisional" for a claim that is not final. A record holds only the fields the fact has, and a fact with none is its statement alone.'
+
+export const RECORD_GOVERNS =
+  'A fact\'s record adds what its statement leaves out. Where the two contradict, the statement governs, for a date, a period and a credit as for a figure: "since March 2" in the statement is never "as of March 2", and who the statement says reported or did something stands over the body the record names.'
+
 // ---------------------------------------------------------------------------
 // Step 2: queries
 // ---------------------------------------------------------------------------
@@ -664,6 +678,7 @@ For each item in <ITEMS>, judge whether its evidence states everything it claims
 <RULES>
 - An item's evidence is the facts in <FACTS> its EVIDENCE lists, or for an item marked AGAINST_POOL every fact in <FACTS>. An item is supported when every number, name, date, place and event it states is stated by a fact of its evidence, with the same scope: a figure for rooftop solar does not support an item about all solar.
 - A qualifier a fact gives its claim is part of the claim. An item that drops one ('since 1990', 'nearly', 'projected', 'planned') claims more than the fact states and is unsupported: a fact that a river ran dry for the first time in 40 years does not support 'The river runs dry for the first time', nor does 'nearly 2 million people' support '2 million people'.
+- A text may end with a record in square brackets ('[Record: figure: …; counts: …; place: …; as of: …; credited to: …; estimate]'). In an item, each field of the record is a claim like any other: the item is unsupported when a field says what its evidence does not state (a figure the evidence does not give for that thing, another place, an as-of date the evidence gives for something else, a body the evidence does not credit, 'estimate' for a proposal). An as-of date that is the day the source was published is supported only for what the evidence states as its present. In a fact of the evidence, the record states what the fact's statement leaves out; where the two contradict, the statement and SUPPORT govern.
 - A number is stated when the evidence gives it in other words, rounded or in another unit, with the same scope: 'half' for 50%, 'about 1.2 million' for 1,184,000, '22,000 MW' for 22 GW.
 - NUMBERS_NOT_FOUND is a hint, not a finding: a number listed there is supported when the evidence states it in any of those forms, and unsupported when it does not.
 - A judgment of significance or consequence that adds no factual claim is supported.

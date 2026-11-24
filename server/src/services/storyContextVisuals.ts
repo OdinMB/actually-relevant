@@ -4,6 +4,7 @@
  * which values a tile shows (the tile rule, ADR-0063) and whether a chart may be drawn (the chart
  * rules, ADR-0064). Every date is a `YYYY-MM-DD` day, or an as-of of `YYYY-MM` or `YYYY`.
  */
+import { fieldText } from '../schemas/factFields.js'
 import type { Approx, CreditedKind, StoredChart, StoredPoint, Validity } from '../schemas/storyContext.js'
 
 /** What the rules read of a fact. */
@@ -140,10 +141,14 @@ export function formatFigure(f: Figure): { text: string; estimate: boolean } | n
   return { text, estimate: f.provisional }
 }
 
-/** A fact's number in words for the checks, with its qualifier and unit: "about 2.88 million hectares", "at least 63%". Null without one. */
+/**
+ * A fact's number in words for the checks, with its qualifier and unit: "about 2.88 million hectares",
+ * "at least 63%". Null without one. A unit that is only a filler ("none", stored before 2026-11-24)
+ * is left out (`fieldText`).
+ */
 export function spelledFigure(f: Figure): string | null {
   if (f.value === null) return null
-  const unit = f.unit.trim()
+  const unit = fieldText(f.unit)
   const symbol = PREFIX_UNITS[unit.toLowerCase()] || SUFFIX_UNITS.has(unit.toLowerCase())
   const one = (v: number) => (symbol ? withSymbol(spelledNumber(v), unit) : spelledNumber(v))
   const n = f.valueHigh !== null && f.valueHigh !== f.value ? `${one(f.value)} to ${one(f.valueHigh)}` : one(f.value)

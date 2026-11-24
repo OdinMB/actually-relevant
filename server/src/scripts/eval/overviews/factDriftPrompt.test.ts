@@ -6,8 +6,7 @@ const fact = (extra: Partial<DriftJudgeFact> = {}): DriftJudgeFact => ({
   storyTitle: 'Ebola outbreak grows in Congo',
   source: 'Cases rose to 100 in the province.',
   date: '2026-11-10',
-  rendering: 'Ebola cases: 100 people, in Ituri',
-  statement: 'Ebola cases in Ituri rose to 100.',
+  rendering: 'Ebola cases in Ituri rose to 100. [Record: figure: 100 people; counts: Ebola cases; place: Ituri]',
   ...extra,
 })
 
@@ -20,18 +19,16 @@ describe('buildDriftJudgePrompt', () => {
     expect(rules(one)).toBe(rules(two))
     expect(two.indexOf('<FACT number="1"')).toBeGreaterThan(two.indexOf('</REQUIREMENTS>'))
     expect(two.indexOf('Another rendering')).toBeLessThan(two.indexOf('<FACT number="2"'))
-    expect(two.indexOf('<FACT number="2"')).toBeLessThan(two.indexOf('Ebola cases: 100 people, in Ituri'))
+    expect(two.indexOf('<FACT number="2"')).toBeLessThan(two.indexOf('<RENDERING>Ebola cases in Ituri rose to 100.'))
   })
 
-  it("leaves out the article's headline and research's statement where a fact has none, and marks an unknown date", () => {
+  it("leaves out the article's headline where a fact has none, and marks an unknown date", () => {
     const shown = (prompt: string) => prompt.slice(prompt.indexOf('<FACT number'))
-    const bare = shown(buildDriftJudgePrompt([fact({ sourceTitle: null, statement: null, date: null })]))
+    const bare = shown(buildDriftJudgePrompt([fact({ sourceTitle: null, date: null })]))
     expect(bare).not.toContain('<SOURCE_TITLE>')
-    expect(bare).not.toContain('<STATEMENT>')
     expect(bare).toContain('published="unknown"')
     const full = shown(buildDriftJudgePrompt([fact()]))
     expect(full).toContain('<SOURCE_TITLE>Ebola spreads in Ituri</SOURCE_TITLE>')
-    expect(full).toContain('<STATEMENT>Ebola cases in Ituri rose to 100.</STATEMENT>')
     expect(full).toContain('published="2026-11-10"')
   })
 

@@ -292,3 +292,13 @@ Consequences: a story's context costs two fact-check passes (facts, then cards) 
 no repair. A wrong number the judge misses reaches a card with its source shown (ADR-0063); where
 numbers slip through, the fact check's rules get tighter, and since the prompt is shared, research
 and context tighten together.
+
+## Amendment 2026-11-24: a fact is checked as its statement with its record (ADR-0080)
+
+The amendment of 2026-11-16 above has the fact check judge "each fact as `renderFact` renders its
+structured fields". Since ADR-0080 a context fact is shown to the fact check, and to every writer, as
+its statement with its fields as a labeled record beside it, the statement governing where the two
+contradict; and before the fact check a model judges whether each figure is given by its source's
+words, a figure not given being removed while the fact stays. This decision's rule holds as written:
+a number is judged by a model against its source's words, and code fails only structure. The figure
+judgment is a second such judgment, with code only applying its answer.

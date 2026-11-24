@@ -61,16 +61,38 @@ describe('contextFactFixtures', () => {
 describe('contextVariants', () => {
   const [fx] = contextFactFixtures([{ slug: 'story-a', title: 'Story A', facts: [fire, smoke] }], 1).facts
 
-  it('plants the text kinds in the rendering and the field kinds in the fields, rendered again', () => {
+  /** The bracketed record a rendering ends with. */
+  const recordOf = (text: string) => text.slice(text.indexOf(' [Record: '))
+
+  it('keeps the fact as rendered for the faithful variant', () => {
+    const faithful = contextVariants(fx!).find(v => v.kind === 'faithful')!
+    expect(faithful).toEqual({ kind: 'faithful', text: renderFact(fire), change: '', fact: fire })
+  })
+
+  it("plants each text kind in the fact's statement and renders it again with its record untouched", () => {
+    const text = contextVariants(fx!).filter(v => ['reworded', 'wrong-number', 'dropped-qualifier', 'wrong-year', 'wrong-scale'].includes(v.kind))
+    // The statement holds no year and no number a rewording applies to
+    expect(text.map(v => v.kind)).toEqual(['wrong-number', 'dropped-qualifier', 'wrong-scale'])
+    for (const v of text) {
+      expect(v.fact).toEqual({ ...fire, statement: v.fact.statement })
+      expect(v.fact.statement).not.toBe(fire.statement)
+      expect(v.text).toBe(renderFact(v.fact))
+      expect(recordOf(v.text)).toBe(recordOf(renderFact(fire)))
+    }
+    const wrong = text.find(v => v.kind === 'wrong-number')!
+    expect(wrong.fact.statement).toBe('Fires burned about 4.32 million hectares in Indonesia this year, the disaster agency said.')
+    expect(wrong.change).toBe('2.88 million → 4.32 million')
+  })
+
+  it('plants the field kinds in one field of the record, rendered again', () => {
     const variants = contextVariants(fx!)
-    const kinds = variants.map(v => v.kind)
-    expect(kinds).toEqual(expect.arrayContaining(['faithful', 'wrong-number', 'wrong-place', 'wrong-as-of', 'wrong-credit', 'cumulative-swap']))
+    expect(variants.map(v => v.kind)).toEqual(expect.arrayContaining(['wrong-place', 'wrong-as-of', 'wrong-credit', 'cumulative-swap']))
     const place = variants.find(v => v.kind === 'wrong-place')!
-    expect(place.fact.place).toBe('Malaysia')
+    expect(place.fact).toEqual({ ...fire, place: 'Malaysia' })
     expect(place.text).toBe(renderFact({ ...fire, place: 'Malaysia' }))
     const swap = variants.find(v => v.kind === 'cumulative-swap')!
-    expect(swap.text).toContain('New area burned')
-    expect(variants.find(v => v.kind === 'wrong-number')!.fact).toBe(fire)
+    expect(swap.text).toContain('counts: new area burned')
+    expect(swap.fact.statement).toBe(fire.statement)
   })
 
   it('reaches the fact check through variantItems', () => {

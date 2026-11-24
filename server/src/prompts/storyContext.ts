@@ -1,7 +1,7 @@
 /**
  * The story context prompts (`services/storyContextPipeline.ts`; `.context/story-context.md`):
- * structure research's facts, the gap list, the extraction of a search result, and the write of the
- * boxes. The fact and box checks use research's `buildFactCheckPrompt` unchanged. First drafts
+ * structure research's facts, the gap list, the extraction of a search result, the figure check and
+ * the write of the boxes. The fact and box checks use research's `buildFactCheckPrompt` unchanged. First drafts
  * under `.context/prompting.md`: role, goal, XML constraint blocks, declarative, format guidance in
  * the schemas (`schemas/storyContext.ts`). Every fetched or stored text sits in escaped XML behind
  * research's untrusted-input line; our own story's text is marked as ours.
@@ -9,7 +9,7 @@
 import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
 import { CONTEXT_SLOTS, type ContextSlot } from '../schemas/storyContext.js'
 import { escapeXml } from './shared.js'
-import { tag, UNTRUSTED } from './research.js'
+import { FACT_RECORD, RECORD_GOVERNS, tag, UNTRUSTED } from './research.js'
 
 /** What each slot asks for; the gap list and the write read the same definitions. */
 export const SLOT_DEFINITIONS: Record<ContextSlot, string> = {
@@ -107,7 +107,7 @@ For every fact in <FACTS>, return its structured fields: its figure and unit, wh
 
 export interface GapFact {
   id: string
-  /** The fact rendered (`renderFact`). */
+  /** The fact rendered (`renderFact`): its statement, then its record (`FACT_RECORD`). */
   text: string
   /** Current on the story's day (`isCurrent`). */
   current: boolean
@@ -125,7 +125,7 @@ export function buildGapListPromptParts(input: { story: StoryText; facts: GapFac
     `${storyBlock(input.story)}
 
 <FACTS>
-Facts from the story's sources and from our earlier stories' sources, each marked current or expired on the story's date. ${UNTRUSTED}
+Facts from the story's sources and from our earlier stories' sources, each marked current or expired on the story's date. ${FACT_RECORD} ${UNTRUSTED}
 ${facts}
 </FACTS>`,
   )
@@ -150,6 +150,7 @@ ${checklist()}
 <REQUIREMENTS>
 - A slot is needed when a reader of this story would miss it: a figure without a comparison, a cause the story leaves open, a term it does not explain. Not every story needs every slot; "response" is always needed.
 - A slot is covered by facts that answer it and are current, or by the story itself. An expired fact covers only a past state, never one that is still changing.
+- ${RECORD_GOVERNS}
 - When the story itself reports what is being done about the problem, copy its sentence that reports it into responseInStory, character for character; then "response" is covered.
 - A search asks for one missing item, in plain words a person would type, about the subject of the story, never about our story or its sources. It wants recent data only when nothing older than 30 days can answer it.
 - When "response" is not covered and the story does not report it, responseSearches holds two queries from two angles: action, on who is responding to this problem and what is being done about it; elsewhere, on what has worked against the same problem in other places or at other times. Both are made before any other search.
@@ -221,12 +222,80 @@ Judge whether <SOURCE> is usable, classify it, and extract the facts it states t
 </REQUIREMENTS>`
 
 // ---------------------------------------------------------------------------
+// Before step 8: the figure check
+// ---------------------------------------------------------------------------
+
+/** One recorded number as the figure check is shown it (`services/storyContextFigures.ts`). */
+export interface FigureItem {
+  /** The fact's ref, `S2F3`. */
+  id: string
+  /** The figure as the checks spell it (`spelledFigure`): "about 2.88 million hectares". */
+  number: string
+  /** What the figure is said to count; its unit where the fact names nothing else. */
+  counts: string
+  /** The source's own words: the supporting sentence, or for a search fact the passage around it. */
+  source: string
+}
+
+/**
+ * Whether each recorded number is given by its source (ADR-0080): the model answers the fact, one
+ * of `FIGURE_ANSWERS` per figure, and code applies the rule (`judgeFigures`: only `given` keeps the
+ * figure). The fact's statement is not shown: the question is what the source says.
+ *
+ * Cache: off. The rules and the output schema stay under the 1,024-token minimum, so this is a plain
+ * string with no breakpoint. House order: the role, the goal, both answers' definitions and the
+ * requirements first; the figures last.
+ */
+export function buildFigureCheckPrompt(figures: FigureItem[]): string {
+  const items = figures
+    .map(f => `<FIGURE id="${escapeXml(f.id)}">\n${tag('NUMBER', f.number)}\n${tag('COUNTS', f.counts)}\n${tag('SOURCE', f.source)}\n</FIGURE>`)
+    .join('\n')
+  return `${FIGURE_CHECK_RULES}
+
+<FIGURES>
+Numbers a research step recorded from news sources, each with what it is said to count and the words of its source. ${UNTRUSTED}
+${items}
+</FIGURES>`
+}
+
+const FIGURE_CHECK_RULES = `<ROLE>
+You are a figure checker for a news desk. You compare one recorded number at a time with the words of the source it was taken from.
+</ROLE>
+
+<GOAL>
+For each figure in <FIGURES>, say whether its SOURCE gives that number for the thing COUNTS names.
+</GOAL>
+
+<GIVEN>
+A figure is given when SOURCE itself states the number for that thing, in any form and any language:
+- digits or words: "twelve" or "a dozen" for 12
+- an abbreviation or another scale: "2.88m", "2,88 Mio." or "2,880,000" for 2.88 million; "22,000 MW" for 22 GW
+- a fraction, a share or a simple equivalent: "half" for 50%, "two-thirds" for about 67%, "one in five" for 20%, "doubled" for a rise of 100%
+- a rounded form: "2,880,000" for about 2.9 million, "nearly 3 million" for about 3 million, "more than 1,600" for at least 1,600
+- a range: "between 5,000 and 5,400" for 5,000 to 5,400
+</GIVEN>
+
+<NOT_GIVEN>
+- computed: SOURCE does not state the number, and it can only be reached by counting or calculating: the items of a list counted ("Kenya, Uganda and Rwanda" as 3 countries), two numbers added, subtracted or divided, the named few of a larger group taken as the group ("11 countries, including five named" as 5 countries).
+- other-thing: SOURCE states the number, but for something other than COUNTS names: another measure, group, place or period (deaths for cases, a proposed share for a share in force, the national total for one province, this week's count for the total since the start, the three weeks a report covers for how long the fighting has lasted), or a year or a date taken as an amount ("by 2027" as 2,027 years).
+- not-stated: SOURCE states no number for this thing ("a series of actions" as 1 series, "several villages" as any number), or states a different one.
+</NOT_GIVEN>
+
+<REQUIREMENTS>
+- Judge from SOURCE alone. What you know from elsewhere does not count, and neither does what the number plausibly is.
+- The amount and the thing counted decide. A missing or different "about", "at least" or "under" changes nothing here, and neither does a unit that states the same amount.
+- A range is given only when SOURCE gives both of its ends.
+- Where COUNTS only repeats the unit, the unit names the thing.
+- Answer each figure by its id, once, and only the ids in <FIGURES>.
+</REQUIREMENTS>`
+
+// ---------------------------------------------------------------------------
 // Step 9: the write
 // ---------------------------------------------------------------------------
 
 export interface WriteFact {
   id: string
-  /** The fact rendered (`renderFact`), with its source's outlet and day. */
+  /** The fact rendered (`renderFact`: its statement, then its record, `FACT_RECORD`), with its source's outlet and day. */
   text: string
   outlet: string
   date: string | null
@@ -265,7 +334,7 @@ ${needed}
 </NEEDED>
 
 <FACTS>
-Every fact checked against its source, marked current or expired on the story's date. ${UNTRUSTED}
+Every fact checked against its source, marked current or expired on the story's date. ${FACT_RECORD} ${UNTRUSTED}
 ${facts}
 </FACTS>`,
   )
@@ -285,12 +354,14 @@ Write at most 6 context boxes for <STORY> from the facts in <FACTS>, each box an
 
 <REQUIREMENTS>
 - A box only where facts support it. Every sentence, tile and chart point cites the facts that state everything it says; nothing comes from your own knowledge. A slot the facts do not answer gets no box.
+- ${RECORD_GOVERNS}
 - A box adds to the story and never repeats it: no sentence restates what <STORY>'s paragraphs, Why This Matters points or caveats already say. Tiles and charts may show the story's own numbers.
   Bad, beside a story that says 2.88 million hectares burned: "This year 2.88 million hectares burned."
   Good: "The 2015 fires, the worst on record, burned 2.6 million hectares."
 - Each sentence is your own words in American English, plain, with no talk about the sources, the facts or this task.
   Bad: "According to the provided facts, the agency's data shows a rise."
   Good: "Indonesia's disaster agency counts 400,000 people evacuated since August."
+- Write from a fact's statement and never copy it: a sentence that repeats 12 or more words in a row from a fact's statement or its source is dropped before anyone sees it. The record's brackets and labels never appear in a sentence.
 - An expired fact is stated only as a past value with its date ("In March 2026, 12 provinces had declared an emergency"), never as how things stand now. Tiles show only current facts.
 - At most one em dash in a box. A heading has at most 8 words, a teaser at most 8 words: the teaser is the one line a phone shows under its paragraph or point.
 - A context box has 0-3 sentences and at most one visual: tiles (1-4 big numbers), bars (2 or more points comparing one measure in one unit) or a line (3 or more points of one measure over time, each at a different date). Every point of a chart measures the same thing; a different measure goes in apart, shown beside the comparison, never in it. A box with neither sentences nor a visual is not written.

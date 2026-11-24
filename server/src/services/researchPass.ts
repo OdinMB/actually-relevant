@@ -4,7 +4,7 @@
  * confirmation and queries from its last pass's plan while their prompts are the same, and the
  * extraction gives each fact its structured fields), the structure call for a fact without them, the
  * gap list and its searches (context's, `researchPassCards.ts`), one fact check of each fact not
- * judged before, the article (a first pass's from the supported facts with research's checks, repair
+ * judged before (its figure judged against its source first, `checkFacts`), the article (a first pass's from the supported facts with research's checks, repair
  * and gate; a later pass's update, `researchPassLater.ts`), then the cards from the pool with context's
  * write and box check. It reads and returns the story's evidence pool (`researchPassPool.ts`): what the
  * pool holds is not searched, read or checked again. No I/O of its own, like `researchStory`: the
@@ -37,9 +37,10 @@ import {
   type StepCaller,
   type StoryResearch,
 } from './researchPipeline.js'
-import { asResearchEarlier, asResearchSource, contextFact, usable, type ArticleVersionData, type Pool } from './researchPool.js'
+import { asResearchEarlier, asResearchSource, contextFact, usable, type ArticleVersionData, type Pool, type PoolFact } from './researchPool.js'
 import { researchedValues } from './researchSwap.js'
 import type { ContextFactData, DraftBox } from './storyContextChecks.js'
+import { FIGURELESS } from './storyContextFigures.js'
 import type { StoryLayout } from './storyContextLayout.js'
 import {
   checkFacts,
@@ -254,7 +255,8 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
     }
   }
 
-  // Step 7: one fact check of each fact no pass or run judged: our earlier stories' are our own text
+  // Step 7: one fact check of each fact no pass or run judged, after the figure check: our earlier
+  // stories' are our own text. A failed call of either, a budget skip among them, writes nothing
   try {
     const unjudged = pool.pages().flatMap(s => pool.factsOf(s, f => f.verdict === 'unjudged').map(f => contextFact(f, s)))
     if (unjudged.length > 0) {
@@ -264,7 +266,7 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
         promptVersion: CONTEXT_PROMPT_VERSIONS['fact-check'],
         passId: input.passId,
       }
-      for (const f of checked) if (f.verdict !== 'unjudged') pool.update(f.ref, { verdict: f.verdict, verdictProblem: f.verdictProblem, checkedBy })
+      storeJudged(pool, checked, context, checkedBy)
     }
   } catch (err) {
     if (isBudget(err)) return budgetStop()
@@ -320,6 +322,24 @@ export async function runResearchPass(input: PassInput, deps: PassDeps): Promise
   if (cards.kind === 'skipped') return finish(settled)
   record.cards = cards.boxes.length > 0 ? 'written' : 'none'
   return finish({ ...settled, boxes: cards.boxes, boxFacts: cards.facts, writer: cards.writer })
+}
+
+/**
+ * Step 7's writes to the pool: each fact the check judged gets its verdict and, when the figure check
+ * removed its figure, its stored fields without it in the same update (`FIGURELESS`; who structured
+ * it kept). A fact left unjudged is written nothing: it keeps its figure and is judged again by the
+ * next pass, figure and all, so its removal is taken out of the record, which lists only those stored.
+ */
+function storeJudged(pool: WorkingPool, checked: ContextFactData[], context: ContextRunRecord, checkedBy: NonNullable<PoolFact['checkedBy']>): void {
+  const judged = checked.filter(f => f.verdict !== 'unjudged')
+  const refs = new Set(judged.map(f => f.ref))
+  context.removedFigures = context.removedFigures.filter(r => refs.has(r.ref))
+  const removed = new Set(context.removedFigures.map(r => r.ref))
+  for (const f of judged) {
+    const stored = pool.facts.find(p => p.ref === f.ref)?.structured
+    const figureless = removed.has(f.ref) && stored ? { structured: { ...stored, ...FIGURELESS } } : {}
+    pool.update(f.ref, { verdict: f.verdict, verdictProblem: f.verdictProblem, checkedBy, ...figureless })
+  }
 }
 
 /** A later pass's outcome from its article step's (a budget stop and a technical failure end the pass before this). */

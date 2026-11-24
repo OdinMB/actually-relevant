@@ -1,12 +1,14 @@
 /**
  * Story context's pure checks (`.context/story-context.md`, "Checks"; ADR-0057's rule as amended for
- * every new step): a fact rendered as the check reads it, the fact and box items with their
+ * every new step): a fact rendered as the writers and checks read it (its statement and labeled
+ * record, `RECORD_LABELS`), the fact and box items with their
  * evidence and number hints for research's own fact-check prompt, the verdicts applied, the
  * structural box checks, failed items and empty boxes dropped, and the item tally. It reuses
  * research's `checkCopying`, `sourceLines`, `judgedProblems`, `publishedFact` and `numberHints`.
  */
 import { config } from '../config.js'
 import type { CheckedItem } from '../prompts/research.js'
+import { fieldText } from '../schemas/factFields.js'
 import type { FactCheck } from '../schemas/research.js'
 import type {
   Approx,
@@ -99,35 +101,56 @@ export function asOfWords(asOf: string): string {
   return d ? `${month} ${Number(d)}, ${y}` : `${month} ${y}`
 }
 
-const capitalized = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+/**
+ * The words of a fact's record as `renderFact` writes them. The prompts that describe the record quote
+ * them as literals (`FACT_RECORD`, the record rule in `FACT_CHECK_RULES`), and the eval's planting
+ * rules read them here.
+ */
+export const RECORD_LABELS = {
+  record: 'Record',
+  figure: 'figure',
+  counts: 'counts',
+  place: 'place',
+  asOf: 'as of',
+  credited: 'credited to',
+  estimate: 'estimate',
+  provisional: 'provisional',
+} as const
 
 /**
- * A fact as the check judges it: with a figure, what it counts and the figure with its qualifier and
- * unit; then its place, its as-of date and who it is credited to, and "estimate" (or "provisional",
- * for a claim without a figure) where it applies. Without a figure, its statement with those details.
+ * A fact as every writer and check reads it (ADR-0080): its statement, then its record in one labeled
+ * bracket, "[Record: figure: …; counts: …; place: …; as of: …; credited to: …; estimate]", only the
+ * fields that are set, in that order; "counts" only beside a figure, and "estimate" with a figure or
+ * "provisional" without. A fact with none is its statement alone. The record adds what the statement
+ * leaves out; where they contradict, the statement governs (the prompts say so). A filler stored in a
+ * text field before `fieldText` read the fields is never shown.
  */
 export function renderFact(
   f: Pick<ContextFactData, 'statement' | 'value' | 'valueHigh' | 'unit' | 'approx' | 'provisional' | 'counted' | 'place' | 'asOf' | 'credited'>,
 ): string {
+  const L = RECORD_LABELS
   const figure = spelledFigure(f)
-  const main = figure !== null && f.counted.trim() ? `${capitalized(f.counted.trim())}: ${figure}` : f.statement.trim()
-  const details = [
-    f.place.trim() && !main.toLowerCase().includes(f.place.trim().toLowerCase()) ? `in ${f.place.trim()}` : '',
-    f.asOf ? `as of ${asOfWords(f.asOf)}` : '',
-    f.credited.trim() ? `according to ${f.credited.trim()}` : '',
+  const counted = fieldText(f.counted)
+  const place = fieldText(f.place)
+  const credited = fieldText(f.credited)
+  const fields = [
+    figure !== null ? `${L.figure}: ${figure}` : '',
+    figure !== null && counted ? `${L.counts}: ${counted}` : '',
+    place ? `${L.place}: ${place}` : '',
+    f.asOf ? `${L.asOf}: ${asOfWords(f.asOf)}` : '',
+    credited ? `${L.credited}: ${credited}` : '',
+    f.provisional ? (figure !== null ? L.estimate : L.provisional) : '',
   ].filter(Boolean)
-  const flag = f.provisional ? (figure !== null ? ' (estimate)' : ' (provisional)') : ''
-  if (figure !== null && f.counted.trim()) return `${[main, ...details].join(', ')}${flag}`
-  const extra = [...(figure !== null ? [figure] : []), ...details]
-  return `${main}${extra.length > 0 ? ` (${extra.join(', ')})` : ''}${flag}`
+  const statement = f.statement.trim()
+  return fields.length > 0 ? `${statement} [${L.record}: ${fields.join('; ')}]` : statement
 }
 
-/** As the checks show a fact in a box item's evidence: rendered, with its source's words. */
+/** As the checks show a fact in a box item's evidence: its statement and record (`renderFact`), with its source's words. */
 const asEvidence = (f: ContextFactData): PoolFact => ({
   id: f.ref,
   statement: renderFact(f),
   supportingSentence: f.passage ?? f.supportingSentence,
-  measures: f.counted,
+  measures: fieldText(f.counted),
 })
 
 const sourceDateFacts = (facts: ContextFactData[]): PoolFact[] => {

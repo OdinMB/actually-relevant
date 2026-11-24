@@ -1,10 +1,11 @@
 /**
  * `overview-eval.md` for `eval:overviews`: a section per step that ran (the answer keys and their
- * drafted responses, the gap keys and their drafts, story context against its bars, a later pass's updates against theirs, overview linking against its bars, the fact check under planted errors, research's
- * cost baseline), what was skipped and why, then the spend and the fixtures' anchor. The name
- * carries a tag for every departure from the default run, so a trial never overwrites the report of
- * record. The answer keys' and the baseline's sections are rendered here; every other step's in its
- * own module (`contextReport.ts`, `factCheckReport.ts`, `linkReport.ts`, `upkeepReport.ts`, …). Pure.
+ * drafted responses, the gap keys and their drafts, story context against its bars, a later pass's updates against theirs, overview linking against its bars, the fact check under planted errors, the figure
+ * check against its source, research's cost baseline), what was skipped and why, then the spend and
+ * the fixtures' anchor. The name carries a tag for every departure from the default run, so a trial
+ * never overwrites the report of record. The answer keys' and the baseline's sections are rendered
+ * here; every other step's in its own module (`contextReport.ts`, `factCheckReport.ts`,
+ * `figureCheckReport.ts`, `linkReport.ts`, `upkeepReport.ts`, …). Pure.
  */
 import { num } from '../checks.js'
 import { armKey } from '../models.js'
@@ -14,6 +15,8 @@ import { WINDOW_DAYS, type Baseline, type CostStats } from './baseline.js'
 import type { ContextStepReport } from './context.js'
 import { contextLines, gapDraftLines, gapKeyLines } from './contextReport.js'
 import { factCheckLines, type FactCheckReport } from './factCheckReport.js'
+import type { FigureCheckResult } from './figureCheck.js'
+import { figureCheckLines } from './figureCheckReport.js'
 import type { GapDraftReport } from './gapDraft.js'
 import type { GapKeyResult } from './gapKeyCheck.js'
 import type { DuplicatesResult, KeyResult } from './keyCheck.js'
@@ -75,6 +78,7 @@ export interface OverviewReportInput {
   /** The `replay` step's replay. */
   replay?: ReplayStepReport
   factCheck?: FactCheckReport
+  figureCheck?: FigureCheckResult
   baseline?: Baseline
   skipped: { step: string; reason: string }[]
   thisRunUsd: number
@@ -176,6 +180,7 @@ export function renderOverviewReport(input: OverviewReportInput): string {
     ...(input.recenter ? ['## Automated re-centers on planted and real cases', '', ...recenterLines(input.recenter), ''] : []),
     ...(input.replay ? ['## The whole module replayed', '', ...replayLines(input.replay), ''] : []),
     ...(input.factCheck ? ['## Fact check under planted errors', '', ...factCheckLines(input.factCheck), ''] : []),
+    ...(input.figureCheck ? ['## Figure check against its source', '', ...figureCheckLines(input.figureCheck), ''] : []),
     ...(input.baseline ? ["## Research's cost baseline", '', ...baselineLines(input.baseline), ''] : []),
     ...(input.skipped.length > 0 ? ['## Skipped', '', ...input.skipped.map(s => `- ${s.step}: ${s.reason}`), ''] : []),
     '## Spend',

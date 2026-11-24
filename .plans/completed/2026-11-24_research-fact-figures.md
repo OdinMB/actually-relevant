@@ -1,22 +1,20 @@
 ---
 plan-id: 2026-11-24_research-fact-figures
 title: Research facts are shown by their statement, and a model checks that each figure is in its source
-status: in-progress
+status: implemented
 created: 2026-11-24
 author: claude-code (AI)
 repo: OdinMB/actually-relevant
 themes: [ai-risk]
 decisions:
-  - id: ADR-0080
-    title: A research fact is its statement, and its figure stays only when a model finds it in the source
-    status: proposed
-    context: Writers and checks read a fact with a figure from its structured fields, which drift from the source and invent figures; 10 of 22 rejected overview lines faithfully repeated such a fact.
-    decision: Every reader of a fact gets its statement with the fields beside it, the statement governing; before the fact check a small-tier model judges whether the source gives each figure, and a figure not given or not answered is removed.
+  - ref: .context/decisions/0080-fact-statement-governs-model-judges-figures.md
 type: bugfix
 complexity: complex
 ---
 
 # Research facts: show the statement, and judge each figure against its source
+
+Archived on 2026-11-24. The paid measurements after the change are still to be made (`BACKLOG.md`).
 
 The owner approved both changes on 2026-11-24 (the caller's brief; the caller records the
 confirmation line). ADR-0080 is the owner's decision: that the statement governs, that the figure
@@ -445,6 +443,21 @@ Docs, in the same change as the code they describe:
 | `.context/admin-dashboard.md` | "What the run did" and the pass view's Facts list removed figures. |
 | `BACKLOG.md` | The drift item rewritten to what stays open: the provisional flag reads "estimate" for a proposal; a period ("2023-2024") is no as-of and is dropped; the credit field can name the outlet or speaker instead of the body; facts stored before the change keep unjudged figures; the owner sets the fidelity and figure bars after the first measurement. A new item: `storyContextPipeline.ts` holds six concerns and wants a split of its own. |
 | ADR-0080 | Promoted at implementation (`adr` skill). It amends ADR-0057's amendment of 2026-11-16 ("on each fact as `renderFact` renders its structured fields"): the pointer goes there as that log's amendments do. |
+
+**As built (phase 2, implemented 2026-11-24), where it differs from the text above:**
+
+- **A failed figure-check call is a failed step, never a removal** (the main session's change before the implementation, recorded in ADR-0080). `ask` goes through the pipeline's `required`, so a call without a parsed answer throws as the fact check's does: a context run fails as technical and is tried again when the failure may pass, a pass fails or stops on its budget, and nothing is written. Only a figure a parsed answer leaves out (`no-answer`) or answers with anything but `given` is removed. The paragraphs above that remove a failed call's figures ("every figure of a call that gave no answer", "One exception: a `skipped` call throws", "A failed figure call removes its figures for good") do not hold; neither do the tests listed for them.
+- **Filler fields read as empty** (the main session's addition): `fieldText` in `schemas/factFields.ts`, used by `structured()` before its junk-number rule, by `renderFact` and by the figure item, so a filler stored earlier is never shown either.
+- **The step is folded into step 8's row** of `.context/story-context.md` (figure check, then fact check, both in `checkFacts`), so no step number moved.
+- **`storeJudged`** in `researchPass.ts` holds step 7's writes (the verdict, the figureless fields, the record's removals trimmed to the judged facts).
+- **`RemovedFigure.counted`** is what the check was shown under COUNTS (the counted thing, else the unit), so the eval rebuilds the item from the record.
+- **Prompts:** `RECORD_GOVERNS` names dates, periods and credit ("since March 2" is never "as of March 2"); the fact check's record rule names an as-of date the evidence gives for something else and a body it does not credit, and accepts an as-of date that is only the publication day for what the evidence states as its present; the stands prompt also says a record's brackets and labels never appear in a sentence; the figure prompt's rounded-form example no longer accepts "nearly 3 million" for 2.9 million, and `other-thing` gained two measured cases (a report's period taken as a duration, a year taken as an amount).
+- **The drift judge** (`factDriftPrompt.ts`) describes the new rendering, is shown no statement beside it, and reads a record with its statement (a field is a change for what it states that the source does not, never for leaving out what the statement keeps).
+- **A removal is recorded only with the facts `checkFacts` returns** (after the fact check, found in review): a fact check that fails or is skipped after the figure check answered leaves no removal in the record, since nothing was stored.
+- **The eval:** `figureCheck.ts`, `figureCheckScore.ts` and `figureCheckReport.ts`; `figureInput` in `factSources.ts`; `figureItemOf` exported from `storyContextFigures.ts` so the eval shows the model what production does. A kept figure is one on a fact the fact check judged (an `unjudged` fact's figure is in neither group). The two agreement shares are shown with counts and no bar. `wrongFigure` returns the planted value and range only; the figure kinds live beside it in `plant.ts`. The CLI's two sampling steps (`fact-check`, `figure-check`) moved out of `main` into `overviews/samplingSteps.ts`.
+- **The client:** the reasons and the line are in `components/admin/removedFigures.tsx`; each view keeps its own block.
+- **`.context/ai-transparency.md`:** row 16 only. Row 15 is research's own run, which has no figure check.
+- **Paid runs:** none made. The main session runs a leaner set than the table above: the `--facts pool` line once with `figure-check`, then the stands line.
 
 ## Tests
 

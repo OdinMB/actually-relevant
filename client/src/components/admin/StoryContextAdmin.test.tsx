@@ -18,6 +18,7 @@ import { ApiError } from '../../lib/admin-api'
 import { gatherOutcome } from '../../hooks/useStoryContextAdmin'
 import { StoryContextAdmin } from './StoryContextAdmin'
 import { slotOutcomes } from './ContextRunView'
+import { REMOVED_FIGURE_REASONS } from './removedFigures'
 
 const box = (id: string, over: Partial<ContextAdminBox> = {}): ContextAdminBox => ({
   id,
@@ -360,6 +361,42 @@ describe('StoryContextAdmin', () => {
     expect(details).toHaveTextContent('Results left out: 1 already read in an earlier run.')
     // The slot an earlier run searched for counts as searched
     expect(within(details).getByText('searched, nothing the sources support').closest('li')).toHaveTextContent(slotKicker('who_affected'))
+  })
+
+  it('lists each figure the figure check removed with what it counted and the reason its answer gives', async () => {
+    const user = userEvent.setup()
+    const checked: ContextRunRecord = {
+      ...record,
+      removedFigures: [
+        { ref: 'S2F3', figure: 'about 2.88 million hectares', counted: 'area burned', answer: 'computed' },
+        { ref: 'S1F2', figure: '40 percent', counted: '', answer: 'other-thing' },
+      ],
+    }
+    mockContext.get.mockResolvedValue(view({ run: run({ result: checked }) }))
+    renderSection()
+    const region = await section()
+    await user.click(within(region).getByText('What the run did'))
+    const details = within(region).getByText('What the run did').closest('details')!
+    const row = (ref: string) => within(details).getByText(ref).closest('li')!
+
+    expect(details).toHaveTextContent('2 figures removed: not found in the source')
+    expect(row('S2F3')).toHaveTextContent('“about 2.88 million hectares” (area burned)')
+    expect(row('S2F3')).toHaveTextContent(REMOVED_FIGURE_REASONS.computed)
+    expect(row('S2F3')).not.toHaveTextContent(REMOVED_FIGURE_REASONS['other-thing'])
+    // Nothing was said to be counted, so the line names none
+    expect(row('S1F2').textContent).toBe(`S1F2 “40 percent”${REMOVED_FIGURE_REASONS['other-thing']}`)
+  })
+
+  it('shows no removed figures for a record from before the figure check, nor for one that removed none', async () => {
+    const user = userEvent.setup()
+    for (const result of [record, { ...record, removedFigures: [] }]) {
+      mockContext.get.mockResolvedValue(view({ run: run({ result }) }))
+      const { unmount } = renderSection()
+      const region = await section()
+      await user.click(within(region).getByText('What the run did'))
+      expect(within(region).getByText('What the run did').closest('details')).not.toHaveTextContent(/removed: not found in the source/)
+      unmount()
+    }
   })
 })
 

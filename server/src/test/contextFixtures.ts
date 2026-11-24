@@ -71,6 +71,7 @@ export function contextResult(extra: Partial<StoryContextResult> = {}, record: P
       extractionDrops: [],
       facts: { research: 0, leftOut: 0, search: 0, reused: 0, carried: 0, supported: 0, rejected: 0, unjudged: 0 },
       droppedFacts: [],
+      removedFigures: [],
       boxDrops: [],
       numberHints: [],
       responseNotFound: false,

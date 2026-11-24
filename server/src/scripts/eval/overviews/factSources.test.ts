@@ -6,7 +6,7 @@ import type { JudgedRun } from './contextJudge.js'
 import { contextFactFixtures } from './contextFacts.js'
 import { resultDates, scoreContext, scoreFields } from './contextScore.js'
 import { FACT_FIXTURES_VERSION, type FactFixture, type FactFixtures } from './factFixtures.js'
-import { FACT_SAMPLERS, sampledFacts, type SampledRuns } from './factSources.js'
+import { FACT_SAMPLERS, figureInput, sampledFacts, type SampledRuns } from './factSources.js'
 
 const NOTHING: SampledRuns = { research: null, context: null, stands: null, pool: null }
 
@@ -46,13 +46,45 @@ describe('FACT_SAMPLERS', () => {
   })
 
   it("samples the pass-pool step's stories as given", () => {
-    const sample = FACT_SAMPLERS.pool({ ...NOTHING, pool: [{ slug: 'p', title: 'P', facts: [contextFact('S1F1'), contextFact('S1F2')] }] }, 1, 'tune')
+    const sample = FACT_SAMPLERS.pool(
+      { ...NOTHING, pool: [{ slug: 'p', title: 'P', facts: [contextFact('S1F1'), contextFact('S1F2')], removed: [] }] },
+      1,
+      'tune',
+    )
     expect(sample).toMatchObject({ source: 'pool', half: 'tune' })
     expect(keys(sampledFacts(sample!))).toEqual(['p:S1F1'])
   })
 
   it('gives no sample for a source whose step did not run', () => {
     for (const sample of Object.values(FACT_SAMPLERS)) expect(sample(NOTHING, 10, 'all')).toBeNull()
+  })
+})
+
+describe('figureInput', () => {
+  const removed = { ref: 'S3F2', figure: '1 series', counted: 'series of actions', answer: 'not-stated' as const }
+
+  it("gives the figure check run 1's stories of the context step, each with the figures production removed", () => {
+    const first = { ...judgedRun('a', 1, [contextFact('S1F1')]), result: contextResult({ facts: [contextFact('S1F1')] }, { removedFigures: [removed] }) }
+    const runs = contextRun([first, judgedRun('a', 2, [contextFact('S2F1')]), judgedRun('b', 1, [contextFact('S3F1')])])
+    const input = figureInput('context', { ...NOTHING, context: runs }, 'judge')
+    expect(input).toMatchObject({ source: 'context', half: 'judge' })
+    expect(input?.stories.map(s => [s.slug, s.facts.map(f => f.ref), s.removed])).toEqual([
+      ['a', ['S1F1'], [removed]],
+      ['b', ['S3F1'], []],
+    ])
+  })
+
+  it("gives the pass-pool step's stories as given", () => {
+    const pool = [{ slug: 'p', title: 'P', facts: [contextFact('S1F1')], removed: [removed] }]
+    expect(figureInput('pool', { ...NOTHING, pool }, 'tune')).toEqual({ source: 'pool', half: 'tune', stories: pool })
+  })
+
+  it('gives none for a source whose step did not run, or one with no rendered facts', () => {
+    expect(figureInput('context', NOTHING, 'all')).toBeNull()
+    expect(figureInput('pool', NOTHING, 'all')).toBeNull()
+    const ran = { ...NOTHING, context: contextRun([judgedRun('a', 1, [contextFact('S1F1')])]) }
+    expect(figureInput('research', ran, 'all')).toBeNull()
+    expect(figureInput('stands', ran, 'all')).toBeNull()
   })
 })
 

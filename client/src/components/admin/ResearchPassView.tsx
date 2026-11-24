@@ -13,14 +13,15 @@ import type {
 import { formatDateWithTime } from '../../lib/constants'
 import { Badge } from '../ui/Badge'
 import { ResearchDraftView, RunTrigger, SafeLink, verdictText } from './ResearchRunView'
+import { REMOVED_FIGURE_REASONS, RemovedFigureText, type RemovedFigure } from './removedFigures'
 
 /**
  * One research pass, read only (`.context/research-passes.md`): who started it and what became of
  * it; what changed (a first pass's article, or a later pass's judgment of each section with its
  * before and after and the Update note); the searches it made and skipped; the sources it added; the
- * facts it found, checked, rejected and demoted; its cards; the checks; and its cost. Beside it, the
- * story's versions and its whole evidence pool. Every fetched or model-written text renders as React
- * text, never as HTML.
+ * facts it found, checked, rejected and demoted, and the figures it removed from them; its cards; the
+ * checks; and its cost. Beside it, the story's versions and its whole evidence pool. Every fetched or
+ * model-written text renders as React text, never as HTML.
  */
 
 const H = 'text-xs font-semibold text-neutral-500 uppercase tracking-wide'
@@ -271,6 +272,26 @@ function FactLine({ fact, note }: { fact: PoolFactView; note?: string }) {
   )
 }
 
+/** The figures the pass's figure check took out of facts it kept, each with why; nothing when it took none. */
+function RemovedFigures({ figures }: { figures: RemovedFigure[] }) {
+  if (figures.length === 0) return null
+  return (
+    <div>
+      <h4 className={H}>Figures removed: not found in the source</h4>
+      <ul className="space-y-2">
+        {figures.map(f => (
+          <li key={f.ref}>
+            <p>
+              <RemovedFigureText figure={f} />
+            </p>
+            <p className="text-amber-800">{REMOVED_FIGURE_REASONS[f.answer]}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function Facts({ pass, view }: { pass: ResearchPass; view: StoryPasses }) {
   const facts = view.pool.facts
   const found = facts.filter(f => f.firstPassId === pass.id)
@@ -295,6 +316,7 @@ function Facts({ pass, view }: { pass: ResearchPass; view: StoryPasses }) {
           </ul>
         </div>
       )}
+      <RemovedFigures figures={pass.record?.context?.removedFigures ?? []} />
       {demoted.length > 0 && (
         <div>
           <h4 className={H}>Demoted: shown and offered no more</h4>

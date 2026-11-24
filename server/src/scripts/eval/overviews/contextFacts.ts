@@ -2,13 +2,15 @@
  * The planted-error fact check on module-1 facts (`eval:overviews --facts context`, `--facts pool`):
  * the sample is the facts run 1 kept on each story, of the `context` step (`--facts context`) or of
  * the `pass-pool` step's first passes (`--facts pool`), supported by production's check and none
- * reused, each rendered by production's `renderFact` as the check reads it, with the story's places
- * and credited bodies for the field-level kinds. A fact's variants are the text kinds planted in its
- * rendering and the field kinds planted in its fields and rendered again; each item reaches the check
- * with production's evidence and number hints (`factCheckItems`). Pure.
+ * reused, each rendered by production's `renderFact` as the check reads it (its statement, then its
+ * record), with the story's places and credited bodies for the field-level kinds. A fact's variants
+ * are the text kinds planted in its statement and the field kinds planted in one field of its
+ * record, each rendered again; each item reaches the check with production's evidence and number
+ * hints (`factCheckItems`). Pure.
  */
 import { numberHints, publishedFact } from '../../../services/researchChecks.js'
 import { factCheckItems, renderFact, type ContextFactData } from '../../../services/storyContextChecks.js'
+import type { RemovedFigure } from '../../../services/storyContextFigures.js'
 import type { CheckedItem } from '../../../prompts/research.js'
 import type { FactFixture } from './factFixtures.js'
 import { plantFieldVariants, plantVariants, type VariantKind } from './plant.js'
@@ -39,10 +41,12 @@ export interface StoryFacts {
   /** The story's title: with each source's own headline, what the fact check's second pass reads the article to be about (`factDrift.ts`). */
   title: string
   facts: ContextFactData[]
+  /** The figures production's figure check removed from these facts (`ContextRunRecord.removedFigures`): what the figure check's eval samples beside the kept ones (`figureCheck.ts`). */
+  removed: RemovedFigure[]
 }
 
 /** Each story's own supported facts, taken in turn from each story, at most `size`; the peers are from all of the story's facts. */
-export function contextFactFixtures(stories: readonly StoryFacts[], size: number): ContextFacts {
+export function contextFactFixtures(stories: readonly Pick<StoryFacts, 'slug' | 'title' | 'facts'>[], size: number): ContextFacts {
   const lists = stories.map(({ slug, title, facts: all }) => {
     const peers = { places: distinct(all.map(f => f.place)), credits: distinct(all.map(f => f.credited)) }
     return all
@@ -76,16 +80,23 @@ export interface ContextVariant {
   kind: VariantKind
   text: string
   change: string
-  /** The fact as this variant renders it: the sampled one, or with one field changed. */
+  /** The fact as this variant renders it: the sampled one, or with its statement or one field of its record changed. */
   fact: ContextFactData
 }
 
-/** The faithful rendering and each kind that applies: the text kinds on the rendering, then the field kinds. */
+/**
+ * The faithful rendering and each kind that applies: the text kinds planted in the fact's statement,
+ * then the field kinds in one field of its record, each rendered again. So a text variant is a
+ * statement that says more or other than its source, beside a correct record.
+ */
 export function contextVariants(fx: FactFixture): ContextVariant[] {
   if (!fx.context) return []
   const { fact, peers } = fx.context
   const rendered = renderFact(fact)
-  const text = plantVariants(rendered).map(v => ({ ...v, fact }))
+  const text = plantVariants(fact.statement).map(v => {
+    const planted = v.kind === 'faithful' ? fact : { ...fact, statement: v.text }
+    return { kind: v.kind, text: renderFact(planted), change: v.change, fact: planted }
+  })
   const fields = plantFieldVariants(fact, peers, rendered, evidenceOf(fact)).flatMap(v => {
     const changed = { ...fact, ...v.fields }
     const shown = renderFact(changed)

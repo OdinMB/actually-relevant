@@ -211,10 +211,10 @@ function fidelityGroup(labels: Labels, readings: DriftReading[] | null, inGroup:
  * source's date, before any error is planted; split by whether the fact carries a figure. A fact is
  * faithful when the label pass accepts it, or rejects it only for context its one sentence lacks
  * (the second pass's `context`); a fact the second pass finds changed, or leaves unanswered, is not.
- * `readings` null: the second pass did not run, and only the label pass's own share is known. A fact
- * with a figure is shown from its fields alone where it names what the figure counts, and as its
- * statement with the figure beside it where it does not; both are in the one group. Both bars are
- * report only until the owner sets them.
+ * `readings` null: the second pass did not run, and only the label pass's own share is known. Every
+ * fact is shown as its statement with its record beside it (ADR-0080; until 2026-11-24 a fact with a
+ * figure and a counted thing was shown from its fields alone, so shares from before are not comparable
+ * fact for fact). Both bars are report only until the owner sets them.
  */
 export function scoreFidelity(labels: Labels, readings: DriftReading[] | null): Fidelity {
   const withFigure = fidelityGroup(labels, readings, hasFigure)

@@ -85,6 +85,7 @@ export const STEP_ESTIMATES: Record<StepName, StepEstimate> = {
   structure: { input: 5000, output: 1500, inDesign: false },
   'gap-list': { input: 4000, output: 1000, inDesign: false },
   'gap-extract': { input: 15000, output: 10000, inDesign: false },
+  'figure-check': { input: 7000, output: 2500, inDesign: false },
   'facts-check': { input: 18000, output: 4500, inDesign: false },
   'cards-write': { input: 10000, output: 3000, inDesign: false },
   'box-check': { input: 5000, output: 1500, inDesign: false },

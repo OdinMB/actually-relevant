@@ -269,6 +269,30 @@ describe('parseOverviewOptions', () => {
     expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'pass-pool', '--facts', 'pool'])).toThrow(/--facts pool/)
   })
 
+  it('runs figure-check only when named, right after fact-check', () => {
+    expect(OVERVIEW_DEFAULT_STEPS).not.toContain('figure-check')
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'figure-check,fact-check,pass-pool', '--facts', 'pool']).steps).toEqual([
+      'pass-pool',
+      'fact-check',
+      'figure-check',
+    ])
+  })
+
+  it("refuses figure-check unless --facts names a source of rendered facts, whose run 1's figures it samples", () => {
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'figure-check'])).toThrow(/figure-check samples the figures of run 1: name --facts pool/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'pass-pool,figure-check'])).toThrow(/--facts context \(with context\)/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'stands,figure-check', '--facts', 'stands'])).toThrow(/figure-check samples/)
+  })
+
+  it('takes a --facts source with its step and either checking step', () => {
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'pass-pool,figure-check', '--facts', 'pool']).steps).toEqual(['pass-pool', 'figure-check'])
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'context,figure-check', '--facts', 'context']).facts).toBe('context')
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'pass-pool,fact-check', '--facts', 'pool']).facts).toBe('pool')
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'figure-check', '--facts', 'pool'])).toThrow(
+      /name both pass-pool and fact-check or figure-check/,
+    )
+  })
+
   it("defaults to production's research fact-check arm, production's small tier as configured by default", () => {
     expect(OVERVIEW_DEFAULT_ARMS).toEqual([STEP_ARMS['fact-check']])
     expect(STEP_TIERS['fact-check']).toBe('small')

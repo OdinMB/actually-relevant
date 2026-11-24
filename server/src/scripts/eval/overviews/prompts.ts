@@ -12,7 +12,7 @@
  * strings only in the schemas (no length limits), as production's structured outputs use them.
  */
 import { z } from 'zod'
-import { tag, UNTRUSTED } from '../../../prompts/research.js'
+import { FACT_RECORD, RECORD_GOVERNS, tag, UNTRUSTED } from '../../../prompts/research.js'
 import { escapeXml } from '../../../prompts/shared.js'
 import { SLOT_DEFINITIONS, type StoryText } from '../../../prompts/storyContext.js'
 import { CONTEXT_SLOTS } from '../../../schemas/storyContext.js'
@@ -259,12 +259,13 @@ ${items || '(no cards)'}
 </CONTEXT>
 
 <FACTS>
-The facts the items cite, each checked against its source. ${UNTRUSTED}
+The facts the items cite, each checked against its source. ${FACT_RECORD} ${UNTRUSTED}
 ${facts || '(none)'}
 </FACTS>
 
 <REQUIREMENTS>
 - A need is met only when an item in <CONTEXT> states what its ACCEPTS asks for: the figure with its scope, or the fact, from a named source. An item on the same topic that leaves out what ACCEPTS asks for does not meet it.
+- ${RECORD_GOVERNS}
 - Only the items count: what <STORY> says meets no need here.
 - A met need names the facts cited by the items that meet it.
 - Answer every need by its id, once.
@@ -560,10 +561,12 @@ Judge whether each line in <LINES>, written on ${escapeXml(input.today)} about $
 - A line is supported when its cited facts state everything it says: no number, date, place, party, cause or trend they do not give.
 - A fact marked current="no" is past: a line may state it only as a past value with its date. A line that states it as how things are now is not supported.
 - Plain rewording of a fact is supported; so is a line joining two facts that each state their part.
+- ${RECORD_GOVERNS}
 - Judge only against the facts given, never on your own knowledge of the subject.
 </REQUIREMENTS>
 
 <LINES>
+Each line with the facts it cites. ${FACT_RECORD}
 ${input.lines
   .map(l =>
     [

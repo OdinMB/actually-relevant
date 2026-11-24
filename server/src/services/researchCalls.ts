@@ -35,6 +35,7 @@ const STEP_OUTPUT_TOKENS: Record<PassStep, number> = {
   structure: 1500,
   'gap-list': 1000,
   'gap-extract': 2000,
+  'figure-check': 1500,
   'facts-check': 1500,
   'cards-write': 3000,
   'box-check': 1500,

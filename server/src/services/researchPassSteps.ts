@@ -17,6 +17,7 @@ export const CARD_STEPS = {
   structure: 'structure',
   'gap-list': 'gap-list',
   'gap-extract': 'extract',
+  'figure-check': 'figure-check',
   'facts-check': 'fact-check',
   'cards-write': 'write',
   'box-check': 'box-check',

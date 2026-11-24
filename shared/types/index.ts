@@ -1606,6 +1606,8 @@ export interface ContextRunRecord {
   facts: { research: number; leftOut: number; search: number; reused: number; carried?: number; supported: number; rejected: number; unjudged: number }
   /** Each fact the check rejected or left unjudged, with its problem. */
   droppedFacts: { ref: string; text: string; verdict: 'rejected' | 'unjudged'; problem: string | null }[]
+  /** Each figure the figure check removed because its source does not give it (the fact stays); absent on records from before 2026-11-24. */
+  removedFigures?: { ref: string; figure: string; counted: string; answer: 'computed' | 'other-thing' | 'not-stated' | 'no-answer' }[]
   boxDrops: { label: string; cause: 'structure' | 'expired' | 'undrawn' | 'check' | 'unjudged' | 'copying' | 'empty'; problem?: string }[]
   numberHints: { label: string; numbers: string[] }[]
   /** `response` was searched for, the story does not report it, and nothing supported answers it: no card says so. */

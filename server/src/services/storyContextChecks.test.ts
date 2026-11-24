@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { buildFactCheckPrompt, FACT_RECORD } from '../prompts/research.js'
 import {
   applyBoxVerdicts,
   asOfWords,
@@ -8,6 +9,7 @@ import {
   factVerdicts,
   itemTally,
   promptItems,
+  RECORD_LABELS,
   renderFact,
   resolveVisuals,
   structuralBoxes,
@@ -55,41 +57,63 @@ const contextFact = (over: Partial<ContextFactData> & { ref: string }): ContextF
 })
 
 describe('renderFact', () => {
-  it('renders a figure with what it counts, its qualifier, as-of date, credit and estimate', () => {
+  /** A fact without a figure or any detail: only what a case sets shows in its record. */
+  const bare = (over: Partial<ContextFactData>) =>
+    contextFact({ ref: 'S1F1', value: null, unit: '', counted: '', place: '', asOf: null, credited: '', provisional: false, ...over })
+
+  it('gives the statement, then the whole record in order, the place shown though the counted phrase names it', () => {
     expect(renderFact(contextFact({ ref: 'S1F1', approx: 'about', credited: "Indonesia's disaster agency", provisional: true }))).toBe(
-      "Area burned in Indonesia: about 2.88 million hectares, as of 2026, according to Indonesia's disaster agency (estimate)",
+      "Fires burned 2.88 million hectares this year. [Record: figure: about 2.88 million hectares; counts: area burned in Indonesia; place: Indonesia; as of: 2026; credited to: Indonesia's disaster agency; estimate]",
     )
   })
 
-  it('names a place the counted phrase leaves out, and a range with both ends', () => {
-    expect(
-      renderFact(contextFact({ ref: 'S1F1', counted: 'people killed', place: 'Riau', value: 5000, valueHigh: 5400, unit: 'people', asOf: '2026-11' })),
-    ).toBe('People killed: 5,000 to 5,400 people, in Riau, as of November 2026')
-  })
-
-  it('renders a fact without a figure as its statement with its details', () => {
+  it('records a range with both ends', () => {
     expect(
       renderFact(
         contextFact({
           ref: 'S1F1',
-          value: null,
-          counted: '',
-          place: '',
-          statement: 'The ministry banned burning.',
-          asOf: '2026-11-03',
-          credited: 'the ministry',
+          statement: 'Between 5,000 and 5,400 people died in Riau.',
+          counted: 'people killed',
+          place: 'Riau',
+          value: 5000,
+          valueHigh: 5400,
+          unit: 'people',
+          asOf: '2026-11',
         }),
       ),
-    ).toBe('The ministry banned burning. (as of November 3, 2026, according to the ministry)')
-    expect(renderFact(contextFact({ ref: 'S1F1', value: null, counted: '', place: '', asOf: null, statement: 'A ban is planned.', provisional: true }))).toBe(
-      'A ban is planned. (provisional)',
+    ).toBe('Between 5,000 and 5,400 people died in Riau. [Record: figure: 5,000 to 5,400 people; counts: people killed; place: Riau; as of: November 2026]')
+  })
+
+  it("records a figureless fact's details, and its flag as provisional", () => {
+    expect(renderFact(bare({ statement: 'The ministry banned burning.', asOf: '2026-11-03', credited: 'the ministry' }))).toBe(
+      'The ministry banned burning. [Record: as of: November 3, 2026; credited to: the ministry]',
+    )
+    expect(renderFact(bare({ statement: 'A ban is planned.', provisional: true }))).toBe('A ban is planned. [Record: provisional]')
+  })
+
+  it('gives a fact with no field set as its statement alone, trimmed', () => {
+    expect(renderFact(bare({ statement: '  A ban is planned. ' }))).toBe('A ban is planned.')
+  })
+
+  it('leaves out what a figure counts when the fact names nothing', () => {
+    expect(renderFact(contextFact({ ref: 'S1F1', counted: '', place: '', asOf: null }))).toBe(
+      'Fires burned 2.88 million hectares this year. [Record: figure: 2.88 million hectares]',
     )
   })
 
-  it('puts a figure without a counted phrase beside the statement', () => {
-    expect(renderFact(contextFact({ ref: 'S1F1', counted: '', place: '', asOf: null }))).toBe(
-      'Fires burned 2.88 million hectares this year. (2.88 million hectares)',
+  it('never shows a filler stored in the place, the credit or the thing counted', () => {
+    expect(renderFact(contextFact({ ref: 'S1F1', counted: 'n/a', place: 'Unknown', asOf: null, credited: 'None.' }))).toBe(
+      'Fires burned 2.88 million hectares this year. [Record: figure: 2.88 million hectares]',
     )
+  })
+
+  it('writes the record with the labels the prompts quote for it', () => {
+    // The prompts describe the record in fixed text; a label changed here alone would leave them describing another format
+    const L = RECORD_LABELS
+    const quoted = `[${L.record}: ${L.figure}: …; ${L.counts}: …; ${L.place}: …; ${L.asOf}: …; ${L.credited}: …; ${L.estimate}]`
+    expect(FACT_RECORD).toContain(quoted)
+    expect(FACT_RECORD).toContain(`"${L.provisional}"`)
+    expect(buildFactCheckPrompt([], [], [])).toContain(quoted)
   })
 
   it('writes coarse as-of dates as coarsely', () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
 import { promptText } from '../lib/promptCache.js'
 import { coverageExtractionSchema, type Draft, type Extraction, type FactCheck } from '../schemas/research.js'
-import type { GapList } from '../schemas/storyContext.js'
+import type { FigureAnswer, FigureCheck, GapList } from '../schemas/storyContext.js'
 import { articleOf } from './articleVersions.js'
 import { buildResearchedStory } from './researchedStory.js'
 import { runResearchPass, type PassDeps, type PassInput } from './researchPass.js'
@@ -12,6 +12,7 @@ import type { ResearchStory } from './researchInput.js'
 import type { ResearchSearchAnswer } from './researchPipeline.js'
 import { cardFacts, EMPTY_POOL, researchView, type Pool, type PoolFact, type PoolSource } from './researchPool.js'
 import { storyLayout } from './storyContextLayout.js'
+import { CONTEXT_PROMPT_VERSIONS } from './storyContextPipeline.js'
 import { boxRefs } from './storyContextRecords.js'
 
 const words = (seed: string, n = 150) => Array.from({ length: n }, (_, i) => `${seed}w${i}`).join(' ')
@@ -134,6 +135,13 @@ const gap = (): GapList => ({
   searches: [],
 })
 
+/** The figure check's answer: `given` for every figure in the prompt but those `answers` names. */
+const figuresAnswered =
+  (answers: Record<string, FigureAnswer> = {}) =>
+  (prompt: string): FigureCheck => ({
+    figures: [...prompt.matchAll(/<FIGURE id="([^"]+)"/g)].map(m => ({ id: m[1]!, inSource: answers[m[1]!] ?? 'given' })),
+  })
+
 type Responder = Partial<Record<PassStep, (prompt: string) => unknown>>
 
 const noVisual = { kind: 'none', tiles: [], measure: '', unit: '', points: [], apart: null }
@@ -145,6 +153,7 @@ const responders = (over: Responder = {}): Responder => ({
   'fact-check': checking(),
   structure: prompt => ({ facts: [...prompt.matchAll(/<FACT id="([^"]+)"/g)].map(m => ({ id: m[1], ...fields })) }),
   'gap-list': () => gap(),
+  'figure-check': figuresAnswered(),
   'facts-check': checking(),
   'cards-write': () => ({
     boxes: [
@@ -456,6 +465,91 @@ describe('runResearchPass, a first pass', () => {
     expect(result.pool.sources.find(s => s.ref === 'S2')?.url).toBe('https://a.example/x')
     expect(result.boxes[0]?.sentences[0]?.factIds).toEqual(['S2F1'])
     expect(result.boxFacts.get('S2F1')?.reusedFromId).toBe('fact-a')
+  })
+})
+
+describe('runResearchPass: the figure check before the fact check', () => {
+  // Both pages' first fact, S0F1 and S1F1, carries a figure (22 GW); the second facts carry none
+  const extractWithFigures = () => ({
+    ...extraction(),
+    facts: extraction().facts.map((f, i) => ({ ...f, ...fields, value: i === 0 ? 22 : null, unit: i === 0 ? 'GW' : '' })),
+  })
+  const poolFact = (result: { pool: Pool }, ref: string) => result.pool.facts.find(f => f.ref === ref)!
+
+  it("writes a removed figure into the pool with the fact's verdict, its other fields and who structured it kept", async () => {
+    const fake = fakeDeps({ extract: extractWithFigures, 'figure-check': figuresAnswered({ S1F1: 'computed' }) })
+    const result = await runResearchPass(input(), fake.deps)
+
+    expect(result).toMatchObject({ status: 'completed', outcome: 'written' })
+    expect(poolFact(result, 'S1F1')).toMatchObject({
+      verdict: 'supported',
+      structured: {
+        value: null,
+        valueHigh: null,
+        unit: '',
+        counted: '',
+        approx: 'exact',
+        validity: 'fixed',
+        by: { model: 'model-extract', promptVersion: 'research-extract' },
+      },
+      checkedBy: { model: 'model-facts-check', promptVersion: CONTEXT_PROMPT_VERSIONS['fact-check'], passId: 'pass-1' },
+    })
+    expect(poolFact(result, 'S0F1')).toMatchObject({ verdict: 'supported', structured: { value: 22, unit: 'GW' } })
+    expect(result.record.context.removedFigures.map(r => [r.ref, r.answer])).toEqual([['S1F1', 'computed']])
+    expect(result.changed).toEqual([])
+    const check = fake.calls.find(c => c.step === 'facts-check')!.prompt
+    expect(fake.stepsCalled().indexOf('figure-check')).toBeLessThan(fake.stepsCalled().indexOf('facts-check'))
+    expect(check.split('figure: 22').length - 1).toBe(1)
+  })
+
+  it('leaves the figure of a fact the fact check leaves unjudged in the pool, and out of the removals', async () => {
+    const leavesOutS1F1 = (prompt: string): FactCheck => ({ items: checking()(prompt).items.filter(i => items(prompt)[i.number - 1]?.label !== 'Fact S1F1') })
+    const fake = fakeDeps({
+      extract: extractWithFigures,
+      'figure-check': figuresAnswered({ S0F1: 'not-stated', S1F1: 'not-stated' }),
+      'facts-check': leavesOutS1F1,
+    })
+    const result = await runResearchPass(input(), fake.deps)
+
+    expect(poolFact(result, 'S1F1')).toMatchObject({ verdict: 'unjudged', checkedBy: null, structured: { value: 22, unit: 'GW' } })
+    expect(poolFact(result, 'S0F1')).toMatchObject({ verdict: 'supported', structured: { value: null, unit: '' } })
+    expect(result.record.context.removedFigures.map(r => r.ref)).toEqual(['S0F1'])
+  })
+
+  it('fails the pass when the figure call gives no answer, saying whether it may pass, with the pool’s facts unjudged and their figures kept', async () => {
+    for (const transient of [true, false]) {
+      const fake = fakeDeps({ extract: extractWithFigures, 'figure-check': () => null })
+      const call = fake.deps.call
+      fake.deps.call = async (step, schema, prompt) => {
+        const res = await call(step, schema, prompt)
+        return step === 'figure-check' ? { ...res, transient } : res
+      }
+      const result = await runResearchPass(input(), fake.deps)
+
+      expect(result, `transient ${transient}`).toMatchObject({ status: 'failed', outcome: 'technical', error: 'figure-check: error', transient, version: null })
+      expect(fake.stepsCalled()).not.toContain('facts-check')
+      for (const ref of ['S0F1', 'S1F1']) expect(poolFact(result, ref), ref).toMatchObject({ verdict: 'unjudged', structured: { value: 22 } })
+    }
+  })
+
+  it('ends as a budget stop when the budget skips the figure call, the pool’s figures untouched', async () => {
+    const fake = fakeDeps({ extract: extractWithFigures, 'figure-check': () => SKIP })
+    const result = await runResearchPass(input(), fake.deps)
+
+    expect(result).toMatchObject({ outcome: 'budget', verdict: { kind: 'fallback', reason: 'budget' }, version: null, boxes: [] })
+    expect(fake.stepsCalled()).not.toContain('facts-check')
+    for (const ref of ['S0F1', 'S1F1']) expect(poolFact(result, ref), ref).toMatchObject({ verdict: 'unjudged', structured: { value: 22 } })
+  })
+
+  it('records no removal when the fact check fails or is skipped after the figure check answered: nothing was stored', async () => {
+    for (const factsCheck of [() => null, () => SKIP]) {
+      const fake = fakeDeps({ extract: extractWithFigures, 'figure-check': figuresAnswered({ S1F1: 'not-stated' }), 'facts-check': factsCheck })
+      const result = await runResearchPass(input(), fake.deps)
+
+      expect(fake.stepsCalled()).toContain('figure-check')
+      expect(result.record.context.removedFigures).toEqual([])
+      for (const ref of ['S0F1', 'S1F1']) expect(poolFact(result, ref), ref).toMatchObject({ verdict: 'unjudged', structured: { value: 22 } })
+    }
   })
 })
 

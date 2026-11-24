@@ -11,6 +11,7 @@ import {
   VARIANT_KINDS,
   wrongAsOf,
   wrongCredit,
+  wrongFigure,
   wrongNumber,
   wrongPlace,
   wrongScale,
@@ -184,7 +185,8 @@ const fields = (extra: Partial<PlantableFields> = {}): PlantableFields => ({
   counted: 'total area burned',
   ...extra,
 })
-const RENDERED = "Total area burned: 2.88 million hectares, in Indonesia, as of November 14, 2026, according to Indonesia's disaster agency"
+const RENDERED =
+  "Fires burned 2.88 million hectares this year. [Record: figure: about 2.88 million hectares; counts: total area burned; place: Indonesia; as of: November 14, 2026; credited to: Indonesia's disaster agency]"
 const EVIDENCE = 'Fires have burned 2.88 million hectares this year, the agency said on Friday.'
 
 describe('wrongPlace', () => {
@@ -195,10 +197,22 @@ describe('wrongPlace', () => {
     })
   })
 
-  it('leaves a fact without a shown place, a place inside the other, and a place the evidence names', () => {
+  it('finds the place as the first field of a record, and at its end', () => {
+    const peers = { places: ['Malaysia'], credits: [] }
+    expect(wrongPlace(fields(), peers, 'Fires burned. [Record: place: Indonesia; as of: 2026]', EVIDENCE)?.fields).toEqual({ place: 'Malaysia' })
+    expect(wrongPlace(fields(), peers, 'Fires burned. [Record: as of: 2026; place: Indonesia]', EVIDENCE)?.fields).toEqual({ place: 'Malaysia' })
+  })
+
+  it("leaves a fact whose record shows no place, or another, even where its statement or what it counts names the fact's", () => {
     const peers = { places: ['Malaysia'], credits: [] }
     expect(wrongPlace(fields({ place: '' }), peers, RENDERED, EVIDENCE)).toBeNull()
-    expect(wrongPlace(fields(), peers, 'Area burned in Indonesia: 2.88 million hectares', EVIDENCE)).toBeNull()
+    expect(
+      wrongPlace(fields(), peers, 'Fires burned in Indonesia. [Record: figure: 2.88 million hectares; counts: area burned in Indonesia]', EVIDENCE),
+    ).toBeNull()
+    expect(wrongPlace(fields(), peers, "Fires burned. [Record: place: Indonesia's Riau province]", EVIDENCE)).toBeNull()
+  })
+
+  it('leaves a place inside the other, and a place the evidence names', () => {
     expect(wrongPlace(fields(), { places: ['Riau, Indonesia', 'Southeast Asia'], credits: [] }, RENDERED, 'Smoke drifted over Southeast Asia.')).toBeNull()
   })
 })
@@ -212,6 +226,11 @@ describe('wrongCredit', () => {
     expect(wrongCredit(fields({ credited: '' }), { places: [], credits: ['Greenpeace'] }, RENDERED, EVIDENCE)).toBeNull()
     expect(wrongCredit(fields(), { places: [], credits: ['the agency'] }, RENDERED, EVIDENCE)).toBeNull()
     expect(wrongCredit(fields(), { places: [], credits: [] }, RENDERED, EVIDENCE)).toBeNull()
+  })
+
+  it('leaves a fact whose record credits no one, even where its statement credits the body in its own words', () => {
+    const rendered = "Fires burned 2.88 million hectares, according to Indonesia's disaster agency. [Record: figure: 2.88 million hectares]"
+    expect(wrongCredit(fields(), { places: [], credits: ['Greenpeace'] }, rendered, EVIDENCE)).toBeNull()
   })
 })
 
@@ -245,6 +264,38 @@ describe('cumulativeSwap', () => {
     expect(cumulativeSwap(fields({ counted: 'cases in New York' }), 'Cases in New York: 40', 'Forty cases.')).toBeNull()
     expect(cumulativeSwap(fields(), 'Fires burned 2.88 million hectares (in Indonesia)', EVIDENCE)).toBeNull()
     expect(cumulativeSwap(fields(), RENDERED, 'The new fires added to the total.')).toBeNull()
+  })
+})
+
+describe('wrongFigure', () => {
+  const figure = (value: number, valueHigh: number | null = null) => ({ value, valueHigh })
+
+  it('multiplies a figure by 1.5 at the precision it had', () => {
+    expect(wrongFigure(figure(2_880_000), EVIDENCE)).toEqual({ value: 4_320_000, valueHigh: null })
+    expect(wrongFigure(figure(4887), EVIDENCE)).toEqual({ value: 7331, valueHigh: null })
+    expect(wrongFigure(figure(2.25), EVIDENCE)).toEqual({ value: 3.38, valueHigh: null })
+    expect(wrongFigure(figure(-12), EVIDENCE)).toEqual({ value: -18, valueHigh: null })
+  })
+
+  it('doubles a figure where 1.5 at its precision leaves it unchanged', () => {
+    // 0.01 × 1.5 is 0.015 just below its decimal in floating point, which rounds back to 0.01 at two decimals
+    expect(Number((0.01 * 1.5).toFixed(2))).toBe(0.01)
+    expect(wrongFigure(figure(0.01), EVIDENCE)).toEqual({ value: 0.02, valueHigh: null })
+  })
+
+  it("changes a range's two ends alike", () => {
+    expect(wrongFigure(figure(5000, 5400), EVIDENCE)).toEqual({ value: 7500, valueHigh: 8100 })
+    expect(wrongFigure(figure(0, 10), EVIDENCE)).toEqual({ value: 0, valueHigh: 15 })
+  })
+
+  it('gives none for a figure neither factor changes', () => {
+    expect(wrongFigure(figure(0), EVIDENCE)).toBeNull()
+    expect(wrongFigure(figure(0, 0), EVIDENCE)).toBeNull()
+  })
+
+  it("gives none where the source's words state the planted value or either planted end", () => {
+    expect(wrongFigure(figure(2_880_000), 'Fires burned 2.88 million hectares, up from 4.32 million last year.')).toBeNull()
+    expect(wrongFigure(figure(5000, 5400), 'Between 5,000 and 5,400 people fled; 8,100 had fled by May.')).toBeNull()
   })
 })
 

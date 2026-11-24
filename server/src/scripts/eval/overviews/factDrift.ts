@@ -4,9 +4,9 @@
  * sentence, so it rejects a rendering that only names the subject, place or body the rest of the
  * article supplies as it rejects one that drops a period or strengthens a claim. This pass reads
  * each rejected fact again, on the label pass's arm, once (no repeat), and sorts it: `context` or
- * `changed` with the kind of change (`factDriftPrompt.ts`). It is shown the rendering, the source's
- * sentence or passage, date and headline, the story's title and, where the rendering does not
- * already hold it, research's own statement. The label pass and its cached calls are untouched. The pass
+ * `changed` with the kind of change (`factDriftPrompt.ts`). It is shown the rendering, which holds
+ * research's own statement, the source's sentence or passage, date and headline, and the story's
+ * title. The label pass and its cached calls are untouched. The pass
  * runs only when its uncached calls fit the budget (`callBudget.ts`); calls go through the eval
  * context (cache, ledger, budget), never wrapped in a retry.
  */
@@ -35,19 +35,17 @@ export interface DriftReading {
 /**
  * The rejected fact as the prompt shows it: with its source article's own headline beside our
  * story's title, since a page a search found may be background about another year or place.
- * Research's statement is left out where the rendering already holds it: a fact rendered as its
- * statement would otherwise show the judge its own words twice, as if one corroborated the other.
+ * Research's statement is not shown beside the rendering, which begins with it (ADR-0080): shown
+ * twice, a fact's own words would read as if one corroborated the other.
  */
 export function driftFact(v: Verdict): DriftJudgeFact {
   const { fact } = v.item
-  const statement = fact.context?.fact.statement.trim() ?? ''
   return {
     sourceTitle: fact.context?.fact.source.title.trim() || null,
     storyTitle: fact.context?.title ?? '',
     source: fact.sentence,
     date: fact.date,
     rendering: v.item.text,
-    statement: statement === '' || v.item.text.includes(statement) ? null : statement,
   }
 }
 

@@ -25,6 +25,9 @@ export type Ledger = Pick<EvalContext, 'isCached' | 'spentUsd'>
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 
+/** An estimate as the console prints it: "12 calls (12 uncached) ≈ $0.5111". */
+export const estimateText = (e: CallEstimate) => `${e.calls} calls (${e.uncached} uncached) ≈ ${usd(e.usd)}`
+
 export function estimateCalls(ledger: Pick<Ledger, 'isCached'>, calls: PlannedCall[]): CallEstimate {
   const uncached = calls.filter(c => !ledger.isCached(c))
   return { calls: calls.length, uncached: uncached.length, usd: uncached.reduce((sum, c) => sum + estimateCallUsd(c), 0) }

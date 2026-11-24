@@ -74,19 +74,18 @@ describe('driftFact', () => {
   /** A source of fact 1 under another headline. */
   const headlined = (title: string): ContextFactData['source'] => ({ ...contextFact('S1F1').source, title })
 
-  it("shows the judge the rendering, the source's sentence, date and headline, the story's title and research's own statement", () => {
+  it("shows the judge the rendering, the source's sentence, date and headline and the story's title, and no statement beside the rendering", () => {
     const fx = fixture(
       1,
       { supportingSentence: 'Cases rose to 100 in the province.', statement: 'Ebola cases in Ituri rose to 100.', source: headlined('Ituri counts 100 cases') },
       'Ebola spreads in Ituri',
     )
-    expect(driftFact(rejection(fx, 'Ebola cases: 100 people (in Ituri)'))).toEqual({
+    expect(driftFact(rejection(fx, 'Ebola cases in Ituri rose to 100. [Record: figure: 100 people; counts: Ebola cases; place: Ituri]'))).toEqual({
       sourceTitle: 'Ituri counts 100 cases',
       storyTitle: 'Ebola spreads in Ituri',
       source: 'Cases rose to 100 in the province.',
       date: '2026-11-10',
-      rendering: 'Ebola cases: 100 people (in Ituri)',
-      statement: 'Ebola cases in Ituri rose to 100.',
+      rendering: 'Ebola cases in Ituri rose to 100. [Record: figure: 100 people; counts: Ebola cases; place: Ituri]',
     })
   })
 
@@ -95,23 +94,12 @@ describe('driftFact', () => {
     expect(driftFact(rejection(fx)).source).toBe('A passage around the sentence.')
   })
 
-  it('leaves the statement out where the rendering already holds it, so the judge never reads a fact as corroborating itself', () => {
-    const fx = fixture(1, { statement: 'Ebola cases in Ituri rose to 100.' })
-    expect(driftFact(rejection(fx, 'Ebola cases: 100 people (in Ituri)')).statement).toBe('Ebola cases in Ituri rose to 100.')
-    expect(driftFact(rejection(fx, 'Ebola cases in Ituri rose to 100. (as of 2026-11-10)')).statement).toBeNull()
-  })
-
-  it('trims the statement, and leaves out an empty one', () => {
-    expect(driftFact(rejection(fixture(1, { statement: '  Cases rose.  ' }))).statement).toBe('Cases rose.')
-    expect(driftFact(rejection(fixture(1, { statement: '   ' }))).statement).toBeNull()
-  })
-
   it("trims the source's headline, and leaves out an empty one", () => {
     expect(driftFact(rejection(fixture(1, { source: headlined('  Ituri counts 100 cases ') }))).sourceTitle).toBe('Ituri counts 100 cases')
     expect(driftFact(rejection(fixture(1, { source: headlined('  ') }))).sourceTitle).toBeNull()
   })
 
-  it('gives a fact with no module-1 record no headline, title or statement, and an undated source no date', () => {
+  it('gives a fact with no module-1 record no headline or title, and an undated source no date', () => {
     const fx = { ...fixture(1), context: undefined, date: null }
     expect(driftFact(rejection(fx))).toEqual({
       sourceTitle: null,
@@ -119,7 +107,6 @@ describe('driftFact', () => {
       source: fx.sentence,
       date: null,
       rendering: fx.statement,
-      statement: null,
     })
   })
 })

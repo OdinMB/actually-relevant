@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
 import { promptText } from '../lib/promptCache.js'
 import { TavilyError } from '../lib/tavily.js'
-import type { BoxesAnswer, ContextExtraction, GapList } from '../schemas/storyContext.js'
+import type { BoxesAnswer, ContextExtraction, FigureAnswer, GapList } from '../schemas/storyContext.js'
 import { contextFact } from '../test/contextFixtures.js'
 import {
   buildStoryContext,
@@ -98,6 +98,10 @@ interface Fakes {
   gap?: GapList
   boxes?: BoxesAnswer
   extract?: (prompt: string) => ContextExtraction | null
+  /** The structure step's fields for a fact, by its id, over the figureless defaults. */
+  structured?: Record<string, Partial<typeof fields>>
+  /** The figure check's answer for a figure, by its id; `given` for every figure not named. */
+  figures?: Record<string, FigureAnswer>
   /** Labels the checks reject. */
   reject?: string[]
   answers?: Record<string, ContextSearchAnswer>
@@ -120,7 +124,9 @@ function fakeDeps(f: Fakes = {}) {
       const prompt = promptText(sent)
       prompts[step] = [...(prompts[step] ?? []), prompt]
       let parsed: unknown
-      if (step === 'structure') parsed = { facts: [...prompt.matchAll(/<FACT id="([^"]+)"/g)].map(m => ({ id: m[1], ...fields })) }
+      if (step === 'structure') parsed = { facts: [...prompt.matchAll(/<FACT id="([^"]+)"/g)].map(m => ({ id: m[1], ...fields, ...f.structured?.[m[1]!] })) }
+      else if (step === 'figure-check')
+        parsed = { figures: [...prompt.matchAll(/<FIGURE id="([^"]+)"/g)].map(m => ({ id: m[1], inSource: f.figures?.[m[1]!] ?? 'given' })) }
       else if (step === 'gap-list') parsed = f.gap ?? gap('yes')
       else if (step === 'extract')
         parsed = f.extract
@@ -495,6 +501,72 @@ describe('buildStoryContext', () => {
     expect(prompts['gap-list']![0]).toContain('id="S1F1"')
     expect(out.facts.find(f => f.ref === 'S1F1')).toMatchObject({ reusedFromId: 'earlier-fact-1', verdict: 'supported', model: 'old', source: { id: 'S1' } })
     expect(prompts['fact-check']![0]).not.toContain('Fact S1F1')
+  })
+})
+
+describe('buildStoryContext: the figure check before the fact check', () => {
+  const allCovered = { ...gap('yes'), slots: gap('yes').slots.map(s => ({ ...s, covered: 'yes' as const })) }
+  const withFigures: Fakes = {
+    gap: allCovered,
+    structured: {
+      S0F1: { value: 2_880_000, unit: 'hectares', counted: 'area burned' },
+      S0F2: { value: 2_600_000, unit: 'hectares', counted: 'area burned in 2015' },
+    },
+  }
+
+  it('judges the figures before the fact check, which is shown a removed figure’s fact without it, and records the removal', async () => {
+    const { deps, prompts } = fakeDeps({ ...withFigures, figures: { S0F1: 'not-stated' } })
+    const out = await buildStoryContext(input(), deps)
+
+    expect(out.record.calls.map(c => c.step)).toEqual(['structure', 'gap-list', 'figure-check', 'fact-check', 'write'])
+    const check = prompts['fact-check']![0]!
+    expect(check).not.toContain('figure: 2.88 million hectares')
+    expect(check).toContain('figure: 2.6 million hectares')
+    expect(out.facts.map(f => [f.ref, f.value, f.counted, f.verdict])).toEqual([
+      ['S0F1', null, '', 'supported'],
+      ['S0F2', 2_600_000, 'area burned in 2015', 'supported'],
+    ])
+    expect(out.record.removedFigures).toEqual([{ ref: 'S0F1', figure: '2.88 million hectares', counted: 'area burned', answer: 'not-stated' }])
+  })
+
+  it('makes no figure call and records no removal when no fact carries a figure', async () => {
+    const { deps } = fakeDeps({ gap: allCovered })
+    const out = await buildStoryContext(input(), deps)
+    expect(out.record.calls.map(c => c.step)).toEqual(['structure', 'gap-list', 'fact-check', 'write'])
+    expect(out.record.removedFigures).toEqual([])
+  })
+
+  it('fails the run as technical when the figure call gives no answer, with nothing stored, no fact check, and the call’s transient flag', async () => {
+    for (const transient of [true, false]) {
+      const { deps, prompts } = fakeDeps(withFigures)
+      const original = deps.call
+      deps.call = async (step, schema, prompt) =>
+        step === 'figure-check' ? { parsed: null, outcome: 'error', usage: ZERO_USAGE, costUsd: 0, model: 'm', transient } : original(step, schema, prompt)
+      const out = await buildStoryContext(input(), deps)
+
+      expect(out, `transient ${transient}`).toMatchObject({
+        status: 'failed',
+        outcome: 'technical',
+        error: 'figure-check: error',
+        transient,
+        facts: [],
+        boxes: [],
+      })
+      expect(prompts['fact-check']).toBeUndefined()
+      expect(out.record.removedFigures).toEqual([])
+    }
+  })
+
+  it('records no removal when the fact check fails after the figure check answered: the run stores no fact', async () => {
+    const { deps } = fakeDeps({ ...withFigures, figures: { S0F1: 'not-stated' } })
+    const original = deps.call
+    deps.call = async (step, schema, prompt) =>
+      step === 'fact-check' ? { parsed: null, outcome: 'error', usage: ZERO_USAGE, costUsd: 0, model: 'm' } : original(step, schema, prompt)
+    const out = await buildStoryContext(input(), deps)
+
+    expect(out).toMatchObject({ status: 'failed', outcome: 'technical', error: 'fact-check: error', facts: [] })
+    expect(out.record.calls.map(c => c.step)).toContain('figure-check')
+    expect(out.record.removedFigures).toEqual([])
   })
 })
 

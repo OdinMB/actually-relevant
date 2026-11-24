@@ -259,8 +259,9 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
 
 /**
  * Every step, in the order a run takes them: `context`, `pass-pool` and `stands` before `fact-check`,
- * which `--facts context`, `--facts pool` and `--facts stands` sample from; `pass-pool` before
- * `stands` and `replay`, which take its pools.
+ * which `--facts context`, `--facts pool` and `--facts stands` sample from, and before `figure-check`,
+ * which samples the figures of `--facts context` or `--facts pool`; `pass-pool` before `stands` and
+ * `replay`, which take its pools.
  */
 export const OVERVIEW_STEPS = [
   'keys',
@@ -278,6 +279,7 @@ export const OVERVIEW_STEPS = [
   'recenter',
   'replay',
   'fact-check',
+  'figure-check',
   'baseline',
 ] as const
 export type OverviewStep = (typeof OVERVIEW_STEPS)[number]
@@ -296,12 +298,13 @@ export const LINKING_STEPS: readonly OverviewStep[] = ['link', 'found', 'role']
 export const OVERVIEW_DEFAULT_STEPS: readonly OverviewStep[] = ['keys', 'fact-check', 'baseline']
 /**
  * Which facts the fact check plants errors in (`--facts`). For each: the step whose run 1 it samples,
- * named beside `fact-check` in `--steps` (null for research's extracted statements, sampled from the
- * database); what that step leaves to sample; and whether the sample is module-1 facts as production's
- * `renderFact` renders them, with their structured fields, so the field kinds are planted in them and
- * the label pass, with a second pass on the facts it rejects (`overviews/factDrift.ts`, paid calls
- * of its own), measures the rendering (`scoreFidelity`). Each sample is built by its entry in
- * `overviews/factSources.ts`.
+ * named beside `fact-check` or `figure-check` in `--steps` (null for research's extracted statements,
+ * sampled from the database); what that step leaves to sample; and whether the sample is module-1
+ * facts as production's `renderFact` renders them, statement and record, so the field kinds are
+ * planted in them and the label pass, with a second pass on the facts it rejects
+ * (`overviews/factDrift.ts`, paid calls of its own), measures the rendering (`scoreFidelity`). Only a
+ * rendered source has figures for `figure-check` to sample, with the figures production's figure
+ * check removed. Each sample is built by its entry in `overviews/factSources.ts`.
  */
 export const OVERVIEW_FACT_SOURCES = {
   research: { step: null, samples: "research's extracted statements", rendered: false },
@@ -310,7 +313,12 @@ export const OVERVIEW_FACT_SOURCES = {
   pool: { step: 'pass-pool', samples: "the facts the pass-pool step's first passes keep", rendered: true },
 } as const satisfies Record<string, { step: OverviewStep | null; samples: string; rendered: boolean }>
 export type OverviewFactSource = keyof typeof OVERVIEW_FACT_SOURCES
+/** The sources of module-1 facts as rendered (`rendered`): the ones `figure-check` samples. */
+export type RenderedFactSource = {
+  [K in OverviewFactSource]: (typeof OVERVIEW_FACT_SOURCES)[K]['rendered'] extends true ? K : never
+}[OverviewFactSource]
 const isFactSource = (s: string): s is OverviewFactSource => Object.hasOwn(OVERVIEW_FACT_SOURCES, s)
+export const isRenderedSource = (s: OverviewFactSource): s is RenderedFactSource => OVERVIEW_FACT_SOURCES[s].rendered
 const OVERVIEW_HALVES = ['tune', 'judge', 'all'] as const
 export type OverviewHalf = (typeof OVERVIEW_HALVES)[number]
 export const OVERVIEW_DEFAULT_BUDGET_USD = 3
@@ -350,7 +358,8 @@ export interface OverviewOptions {
   /**
    * What the fact check samples (`OVERVIEW_FACT_SOURCES`): research's statements from the database, or
    * what run 1 of a step named beside it kept: the `context` step's facts (`context`), the `pass-pool`
-   * step's first passes' facts (`pool`), the `stands` step's lines (`stands`).
+   * step's first passes' facts (`pool`), the `stands` step's lines (`stands`). The figure check samples
+   * the figures of `context` or `pool`.
    */
   facts: OverviewFactSource
   /** The gap keys the `context` step runs on, and the answer keys' stories the `update` and linking steps run on: prompts are tuned on `tune`, the gate is read on `judge`. */
@@ -412,10 +421,13 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
   }
   const facts = values.facts ?? 'research'
   if (!isFactSource(facts)) throw new Error(`--facts must be one of ${Object.keys(OVERVIEW_FACT_SOURCES).join(', ')}`)
+  if (steps.includes('figure-check') && !isRenderedSource(facts)) {
+    throw new Error('figure-check samples the figures of run 1: name --facts pool (with pass-pool) or --facts context (with context)')
+  }
   const { step: sampled, samples } = OVERVIEW_FACT_SOURCES[facts]
-  if (sampled && !(steps.includes(sampled) && steps.includes('fact-check'))) {
+  if (sampled && !(steps.includes(sampled) && (steps.includes('fact-check') || steps.includes('figure-check')))) {
     throw new Error(
-      `--facts ${facts} samples ${samples}: name both ${sampled} and fact-check in --steps (the ${sampled} step's calls are cached, so a repeated run costs nothing more)`,
+      `--facts ${facts} samples ${samples}: name both ${sampled} and fact-check or figure-check in --steps (the ${sampled} step's calls are cached, so a repeated run costs nothing more)`,
     )
   }
   const half = OVERVIEW_HALVES.find(h => h === (values.half ?? 'all'))

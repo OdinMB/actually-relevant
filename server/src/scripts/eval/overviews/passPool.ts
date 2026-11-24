@@ -7,7 +7,8 @@
  * step's do; it writes nothing. The resulting pools' usable, structured page facts go to those steps
  * as members' facts, each with an id of its own (a fact a pass found in memory has none); the members
  * not researched offer none. The same pools, as context reads them (`cardFacts`), are what
- * `--facts pool` samples for the fact check. Run 1 only: the pools are the steps' input, not a
+ * `--facts pool` samples for the fact check, and with the figures each pass's figure check removed
+ * (`record.context.removedFigures`) for the figure check. Run 1 only: the pools are the steps' input, not a
  * measure. Stories start only while the budget covers one more first pass.
  */
 import type { PassInput } from '../../../services/researchPass.js'
@@ -89,7 +90,8 @@ export function passPoolStories(files: readonly KeyFile[], half: PassPoolOptions
 
 /**
  * The step's run: the report, each researched story's members' facts by story id, and each story's
- * facts as context reads them by slug, in the order researched (`--facts pool`).
+ * facts as context reads them by slug, with the figures its pass removed, in the order researched
+ * (`--facts pool`).
  */
 export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoolReport; facts: Map<string, MemberFact[]>; stories: StoryFacts[] }> {
   const { slugs, mustEntries } = passPoolStories(o.files, o.half, o.limit)
@@ -110,7 +112,7 @@ export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoo
       return {
         storyId: input.story.id,
         facts: poolMemberFacts(input.story.id, pass.pool),
-        story: { slug: id, title: input.current.title, facts: cardFacts(pass.pool) },
+        story: { slug: id, title: input.current.title, facts: cardFacts(pass.pool), removed: pass.record.context.removedFigures },
       }
     },
   })

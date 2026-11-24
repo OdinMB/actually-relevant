@@ -94,6 +94,7 @@ const ALLOWED_SERVICE_IMPORTS: Record<string, string[] | '*'> = {
   // runs; each held below to doing no I/O of its own.
   'services/storyContextPipeline.js': '*',
   'services/storyContextChecks.js': '*',
+  'services/storyContextFigures.js': '*',
   'services/storyContextSources.js': '*',
   'services/storyContextPlacement.js': '*',
   'services/storyContextRecords.js': '*',
@@ -159,6 +160,7 @@ const OVERVIEW_READERS = ['overviewCandidates.ts', 'overviewInput.ts']
 const CONTEXT_SERVICE_MODULES = [
   'storyContextPipeline.ts',
   'storyContextChecks.ts',
+  'storyContextFigures.ts',
   'storyContextSources.ts',
   'storyContextPlacement.ts',
   'storyContextRecords.ts',

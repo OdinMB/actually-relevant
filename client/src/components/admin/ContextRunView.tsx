@@ -1,11 +1,12 @@
 import type { ContextAdminBox, ContextAdminRun, ContextRunRecord } from '@shared/types'
 import { slotKicker } from '../context/contextText'
+import { REMOVED_FIGURE_REASONS, RemovedFigureText, type RemovedFigure } from './removedFigures'
 
 /**
  * "What the run did" under a story's Context section (`.context/story-context.md`, "Records"): what
  * the context run looked for and how each slot came out, what it took over from the story's earlier
- * runs, its web searches, what the checks dropped and why, and its cost. Read only; every recorded
- * text renders as React text.
+ * runs, its web searches, what the checks dropped and why (the figures the figure check removed
+ * among them), and its cost. Read only; every recorded text renders as React text.
  */
 
 const usd = (v: number) => `$${v.toFixed(3)}`
@@ -139,6 +140,26 @@ function EarlierWork({ record }: { record: RunRecord }) {
   )
 }
 
+/** The figures the figure check took out of facts it kept, each with why; nothing when it took none. */
+function RemovedFigures({ figures }: { figures: RemovedFigure[] }) {
+  if (figures.length === 0) return null
+  return (
+    <>
+      <p className="mt-2 text-neutral-500">{plural(figures.length, 'figure')} removed: not found in the source</p>
+      <ul>
+        {figures.map(f => (
+          <li key={f.ref} className={ROW}>
+            <span className="text-neutral-900">
+              <RemovedFigureText figure={f} />
+            </span>
+            <span className={NOTE}>{REMOVED_FIGURE_REASONS[f.answer]}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
 function Checks({ record }: { record: RunRecord }) {
   const tally = record.tally ?? { checked: 0, failed: 0 }
   const facts = record.droppedFacts ?? []
@@ -170,6 +191,7 @@ function Checks({ record }: { record: RunRecord }) {
           ))}
         </ul>
       )}
+      <RemovedFigures figures={record.removedFigures ?? []} />
     </>
   )
 }

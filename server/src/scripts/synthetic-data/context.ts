@@ -324,6 +324,7 @@ export function contextRows(seed: ContextSeed, origin: string, idFor: (key: stri
       unjudged: 0,
     },
     droppedFacts: [],
+    removedFigures: [],
     boxDrops: [],
     numberHints: [],
     responseNotFound: true,

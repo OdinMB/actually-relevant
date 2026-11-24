@@ -2,9 +2,33 @@
  * A fact's structured fields (its figure, unit, scope, place, date, credit and validity): story
  * context's structure step and extraction return them (`schemas/storyContext.ts`), and a research
  * pass's coverage extraction too (`coverageExtractionSchema`, `schemas/research.ts`). Their own module,
- * so both schemas import them without importing each other.
+ * so both schemas import them without importing each other; with how a text field the model returned
+ * is read (`fieldText`), which both the structuring and the checks that show the fields use.
  */
 import { z } from 'zod'
+
+/** What the model writes into a text field instead of leaving it empty (measured 2026-11-24: "according to none", "in unknown"). */
+const FILLERS: ReadonlySet<string> = new Set([
+  'none',
+  'unknown',
+  'n/a',
+  'null',
+  'not specified',
+  'unspecified',
+  'not stated',
+  'not given',
+  'not applicable',
+  'not available',
+  '-',
+  '–',
+  '—',
+])
+
+/** A text field as written, trimmed; empty when the whole field is a filler ("None", "n/a.", never "None of the provinces"). */
+export function fieldText(value: string): string {
+  const text = value.trim()
+  return FILLERS.has(text.toLowerCase().replace(/\.$/, '')) ? '' : text
+}
 
 export const APPROX = ['exact', 'about', 'at_least', 'under'] as const
 export type Approx = (typeof APPROX)[number]

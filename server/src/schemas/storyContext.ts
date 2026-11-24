@@ -3,7 +3,8 @@
  * shape (`context_boxes.sentences` and `.visual`). Format guidance lives in the `.describe()`s
  * (`.context/prompting.md`, "Schema carries format guidance"); each schema is part of its step's
  * prompt version (`CONTEXT_PROMPT_VERSIONS`), so a changed description changes the version.
- * The fact and box checks reuse research's `factCheckSchema` unchanged.
+ * The fact and box checks reuse research's `factCheckSchema` unchanged; the figure check before
+ * them has its own (`figureCheckSchema`).
  */
 import { z } from 'zod'
 import { structuredFactFields } from './factFields.js'
@@ -162,7 +163,31 @@ export const boxesSchema = z.object({
     .describe('At most 6 context boxes, each answering one slot, most useful first.'),
 })
 
+/**
+ * What the figure check answers for one recorded number (`prompts/storyContext.ts`,
+ * `buildFigureCheckPrompt`): whether its source gives it. Code applies the rule: only `given`
+ * keeps the figure (`services/storyContextFigures.ts`).
+ */
+export const FIGURE_ANSWERS = ['given', 'computed', 'other-thing', 'not-stated'] as const
+export type FigureAnswer = (typeof FIGURE_ANSWERS)[number]
+
+export const figureCheckSchema = z.object({
+  figures: z
+    .array(
+      z.object({
+        id: z.string().describe('The id of the figure in <FIGURES>, e.g. "S2F3".'),
+        inSource: z
+          .enum(FIGURE_ANSWERS)
+          .describe(
+            'given: SOURCE itself states the number for the thing COUNTS names, as <GIVEN> defines it. Otherwise the one of <NOT_GIVEN> that applies: computed, other-thing or not-stated.',
+          ),
+      }),
+    )
+    .describe('One entry for every figure in <FIGURES>, in its order.'),
+})
+
 export type StructureAnswer = z.infer<typeof structureSchema>
+export type FigureCheck = z.infer<typeof figureCheckSchema>
 export type GapList = z.infer<typeof gapListSchema>
 export type ContextExtraction = z.infer<typeof contextExtractionSchema>
 export type BoxesAnswer = z.infer<typeof boxesSchema>

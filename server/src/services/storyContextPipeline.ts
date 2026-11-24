@@ -1,7 +1,8 @@
 /**
  * One story's context, steps 2-12 (`.context/story-context.md`, "What one story goes through"):
  * structure research's facts, the gap list, the searches with the opt-out and source filter, one
- * extraction per new source, the fact check, the write, the box checks and the response check. On a
+ * extraction per new source, the figure check and the fact check (`checkFacts`; the figure judgment
+ * is `storyContextFigures.ts`), the write, the box checks and the response check. On a
  * story with earlier runs (`ContextInput.earlier`) it builds on them: their facts carried over, their
  * judged research facts, queries, response angles and read pages not repeated. No I/O
  * of its own, as `researchStory` has none: model calls, search and the opt-out policy are injected
@@ -19,16 +20,19 @@ import {
   buildBoxesPromptParts,
   buildContextExtractionPrompt,
   buildContextExtractionPromptParts,
+  buildFigureCheckPrompt,
   buildGapListPrompt,
   buildGapListPromptParts,
   buildStructurePrompt,
   buildStructurePromptParts,
   type StoryText,
 } from '../prompts/storyContext.js'
+import { fieldText } from '../schemas/factFields.js'
 import { factCheckSchema, type FactCheck } from '../schemas/research.js'
 import {
   boxesSchema,
   contextExtractionSchema,
+  figureCheckSchema,
   gapListSchema,
   structureSchema,
   type ContextSlot,
@@ -56,12 +60,13 @@ import {
   type DraftBox,
   type FactSource,
 } from './storyContextChecks.js'
+import { judgeFigures, type RemovedFigure } from './storyContextFigures.js'
 import { layoutSpots, type StoryLayout } from './storyContextLayout.js'
 import { boxRefs, factKey } from './storyContextRecords.js'
 import { normalizedQuery, passageAround, pickNewSources, type ContextSearchAnswer, type ContextSearchRequest, type SourceDrop } from './storyContextSources.js'
 import { isCurrent, normalizeAsOf, type ValidityWindows } from './storyContextVisuals.js'
 
-export const CONTEXT_STEPS = ['structure', 'gap-list', 'extract', 'fact-check', 'write', 'box-check'] as const
+export const CONTEXT_STEPS = ['structure', 'gap-list', 'extract', 'figure-check', 'fact-check', 'write', 'box-check'] as const
 export type ContextStep = (typeof CONTEXT_STEPS)[number]
 
 /** The starting tier of each step: small throughout, the write at medium, as research's write. The eval moves a step up. */
@@ -69,6 +74,7 @@ export const CONTEXT_STEP_TIERS: Record<ContextStep, 'small' | 'medium'> = {
   structure: 'small',
   'gap-list': 'small',
   extract: 'small',
+  'figure-check': 'small',
   'fact-check': 'small',
   write: 'medium',
   'box-check': 'small',
@@ -187,6 +193,8 @@ export interface ContextRunRecord {
   facts: { research: number; leftOut: number; search: number; reused: number; carried: number; supported: number; rejected: number; unjudged: number }
   /** Each fact the check rejected or left unjudged, with its problem. */
   droppedFacts: { ref: string; text: string; verdict: 'rejected' | 'unjudged'; problem: string | null }[]
+  /** Each figure the figure check removed before the fact check, with its answer (`judgeFigures`); the fact went on without it. */
+  removedFigures: RemovedFigure[]
   boxDrops: BoxDrop[]
   numberHints: { label: string; numbers: string[] }[]
   /** `response` was searched for, the story does not report it, and nothing supported answers it: no card says so. */
@@ -259,6 +267,7 @@ export const CONTEXT_PROMPT_VERSIONS: Record<ContextStep, string> = {
     }),
     contextExtractionSchema,
   ),
+  'figure-check': versionOf(buildFigureCheckPrompt([{ id: 'S1F1', number: '1 unit', counts: 'Thing.', source: 'Sentence.' }]), figureCheckSchema),
   'fact-check': versionOf(buildFactCheckPrompt([CANONICAL_ITEM], [], []), factCheckSchema),
   write: versionOf(
     buildBoxesPrompt({
@@ -310,23 +319,28 @@ const sourceNumber = (id: string) => Number(/^S(\d+)$/.exec(id)?.[1] ?? -1)
  * numbers instead of leaving them null (0, -1, a day of the month; measured 2026-11-24: no null among
  * 1,205 extracted facts), so code reads them: a number with neither a unit nor a thing counted is no
  * figure, and a range's upper end counts only above its lower one. Kept as given, they rendered as
- * "at least 800,000 to 0 people" or "(0, according to …)", and the fact check rejected the fact.
+ * "at least 800,000 to 0 people" or "(0, according to …)", and the fact check rejected the fact. It
+ * fills the text fields with "none", "unknown" or "n/a" in the same way, so a field that is only
+ * such a filler reads as empty (`fieldText`), before either rule.
  */
 export function structured(
   a: StructuredFact,
 ): Pick<ContextFactData, 'value' | 'valueHigh' | 'unit' | 'approx' | 'provisional' | 'counted' | 'place' | 'asOf' | 'credited' | 'creditedKind' | 'validity'> {
-  const value = a.unit.trim() || a.counted.trim() ? a.value : null
+  const unit = fieldText(a.unit)
+  const counted = fieldText(a.counted)
+  const credited = fieldText(a.credited)
+  const value = unit || counted ? a.value : null
   return {
     value,
     valueHigh: value !== null && a.valueHigh !== null && a.valueHigh > value ? a.valueHigh : null,
-    unit: a.unit.trim(),
+    unit,
     approx: a.approx,
     provisional: a.provisional,
-    counted: a.counted.trim(),
-    place: a.place.trim(),
+    counted,
+    place: fieldText(a.place),
     asOf: normalizeAsOf(a.asOf),
-    credited: a.credited.trim(),
-    creditedKind: a.credited.trim() && a.creditedKind !== 'none' ? a.creditedKind : null,
+    credited,
+    creditedKind: credited && a.creditedKind !== 'none' ? a.creditedKind : null,
     validity: a.validity,
   }
 }
@@ -456,6 +470,7 @@ export function emptyContextRecord(optOutChecked: boolean): ContextRunRecord {
     extractionDrops: [],
     facts: { research: 0, leftOut: 0, search: 0, reused: 0, carried: 0, supported: 0, rejected: 0, unjudged: 0 },
     droppedFacts: [],
+    removedFigures: [],
     boxDrops: [],
     numberHints: [],
     responseNotFound: false,
@@ -626,8 +641,18 @@ export async function gapStage(
   return { gap, plan, facts }
 }
 
-/** Step 8: the fact check, research's prompt, at most `checkBatchSize` items a call; each fact with its verdict, counted and its drops recorded. */
-export async function checkFacts(toCheck: ContextFactData[], call: ContextStepCall, record: ContextRunRecord): Promise<ContextFactData[]> {
+/**
+ * Step 8: first the figure check (`judgeFigures`): a figure its source does not give is removed and
+ * recorded, and the fact goes on without it. Then the fact check, research's prompt, at most
+ * `checkBatchSize` items a call; each fact with its verdict, counted and its drops recorded. A call of
+ * either that gives no answer throws (`Stop`, with its transient flag) before anything is returned,
+ * and before any removal is recorded: the record lists a removal only with the facts it returns.
+ */
+export async function checkFacts(unjudged: ContextFactData[], call: ContextStepCall, record: ContextRunRecord): Promise<ContextFactData[]> {
+  const judged = await judgeFigures(unjudged, async figures =>
+    required(await call('figure-check', figureCheckSchema, buildFigureCheckPrompt(figures)), 'figure-check'),
+  )
+  const toCheck = judged.facts
   const verdictOf = new Map<string, { verdict: ContextFactData['verdict']; problem: string | null }>()
   const checkedTexts = new Map<string, string>()
   for (const batch of chunks(toCheck, config.storyContext.checkBatchSize)) {
@@ -643,6 +668,7 @@ export async function checkFacts(toCheck: ContextFactData[], call: ContextStepCa
     const v = verdictOf.get(f.ref) ?? { verdict: 'unjudged' as const, problem: null }
     return { ...f, verdict: v.verdict, verdictProblem: v.problem }
   })
+  record.removedFigures.push(...judged.removed)
   for (const f of facts) {
     record.facts[f.verdict]++
     if (f.verdict !== 'supported')

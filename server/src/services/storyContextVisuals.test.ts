@@ -100,6 +100,11 @@ describe('formatFigure', () => {
     expect(spelledFigure(fact({ ref: 'a', value: 63, unit: '%', approx: 'at_least' }))).toBe('at least 63%')
     expect(spelledFigure(fact({ ref: 'a', value: null }))).toBeNull()
   })
+
+  it('spells a figure whose stored unit is only a filler without it', () => {
+    expect(spelledFigure(fact({ ref: 'a', value: 12, unit: 'none' }))).toBe('12')
+    expect(spelledFigure(fact({ ref: 'a', value: 12, unit: 'N/A' }))).toBe('12')
+  })
 })
 
 describe('tileDisplay', () => {

@@ -4,13 +4,17 @@
  * one faithful rewording, and one planted error per kind. Every rule changes one number, read with
  * production's number reader (`readNumbers`, the reader behind the fact check's hints), and never
  * one inside a word or an id (`S2F3`, `5G`, `COVID-19`) or in a URL-like string. For module-1
- * facts (`--facts context`) four field-level kinds change one structured field instead, before
- * production's `renderFact` renders the fact (`contextFacts.ts`). Pure.
+ * facts (`--facts context`, `--facts pool`) these text kinds are planted in the fact's statement, and
+ * four field-level kinds change one field of its record instead; production's `renderFact` renders
+ * the fact again either way (`contextFacts.ts`). For the figure check (`figureCheck.ts`) one rule
+ * changes a recorded figure's value (`wrongFigure`). Pure.
  */
 import { readNumbers, significant, type NumberToken } from '../../../lib/numbers.js'
+import { RECORD_LABELS } from '../../../services/storyContextChecks.js'
+import { statesValue } from './standsScore.js'
 
 export const FAITHFUL_KINDS = ['faithful', 'reworded'] as const
-/** The kinds that change one structured field of a module-1 fact before production renders it (`--facts context`). */
+/** The kinds that change one field of a module-1 fact's record before production renders it again (`--facts context`, `--facts pool`). */
 export const FIELD_KINDS = ['wrong-place', 'wrong-as-of', 'wrong-credit', 'cumulative-swap'] as const
 export const PLANTED_KINDS = ['wrong-number', 'dropped-qualifier', 'wrong-year', 'wrong-scale', ...FIELD_KINDS] as const
 export const VARIANT_KINDS = [...FAITHFUL_KINDS, ...PLANTED_KINDS] as const
@@ -264,10 +268,11 @@ export function plantVariants(statement: string): Variant[] {
 }
 
 // ---------------------------------------------------------------------------
-// Field-level errors: one structured field of a module-1 fact changed, for production's renderFact.
-// Each rule takes the fact's rendering as it stands (`rendered`) and its evidence (the sentence or
-// passage the check reads), and leaves the fact alone where the change would not show in the
-// rendering or where the evidence names the planted value too, so the variant stays wrong.
+// Field-level errors: one field of a module-1 fact's record changed, for production's renderFact.
+// Each rule takes the fact's rendering as it stands (`rendered`: its statement, then its record) and
+// its evidence (the sentence or passage the check reads), and leaves the fact alone where the change
+// would not show in the record or where the evidence names the planted value too, so the variant
+// stays wrong.
 // ---------------------------------------------------------------------------
 
 /** The structured fields a field-level kind may change. */
@@ -296,7 +301,7 @@ export interface FieldVariant extends FieldPlanted {
 const lower = (s: string) => s.toLowerCase()
 
 /** The first peer that differs from `value`, neither inside the other, named neither in the evidence nor in the rendering. */
-function otherPeer(value: string, peers: string[], rendered: string, evidence: string): string | null {
+export function otherPeer(value: string, peers: string[], rendered: string, evidence: string): string | null {
   const v = lower(value.trim())
   return (
     peers
@@ -310,21 +315,26 @@ function otherPeer(value: string, peers: string[], rendered: string, evidence: s
 
 const escaped = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-/** The rendering shows the place as a detail of its own (", in Indonesia"), not inside what is counted. */
-const showsPlace = (rendered: string, place: string) => new RegExp(`(?:, |\\()in ${escaped(place)}(?=,|\\)|$| \\()`).test(rendered)
+/**
+ * The rendering's record shows the field as `<label>: <value>` (`RECORD_LABELS`, production's
+ * `renderFact`): the record's first field after "[Record: ", any other after "; ", and the field
+ * ending at the next ";" or the closing "]". A value the statement or another field names does not count.
+ */
+const showsField = (rendered: string, label: string, value: string) =>
+  new RegExp(`(?:\\[${escaped(RECORD_LABELS.record)}: |; )${escaped(label)}: ${escaped(value)}(?=;|\\])`).test(rendered)
 
-/** Another place among the story's facts, where the rendering shows the fact's own as a detail, "in <place>". */
+/** Another place among the story's facts, where the rendering's record shows the fact's own as its place field, "place: <place>". */
 export function wrongPlace(f: PlantableFields, peers: FieldPeers, rendered: string, evidence: string): FieldPlanted | null {
   const place = f.place.trim()
-  if (!place || !showsPlace(rendered, place)) return null
+  if (!place || !showsField(rendered, RECORD_LABELS.place, place)) return null
   const other = otherPeer(place, peers.places, rendered, evidence)
   return other ? { fields: { place: other }, change: `${place} → ${other}` } : null
 }
 
-/** Another credited body among the story's facts, where the rendering shows "according to <body>". */
+/** Another credited body among the story's facts, where the rendering's record shows "credited to: <body>". */
 export function wrongCredit(f: PlantableFields, peers: FieldPeers, rendered: string, evidence: string): FieldPlanted | null {
   const credited = f.credited.trim()
-  if (!credited || !rendered.includes(`according to ${credited}`)) return null
+  if (!credited || !showsField(rendered, RECORD_LABELS.credited, credited)) return null
   const other = otherPeer(credited, peers.credits, rendered, evidence)
   return other ? { fields: { credited: other }, change: `${credited} → ${other}` } : null
 }
@@ -374,6 +384,45 @@ export function cumulativeSwap(f: PlantableFields, rendered: string, evidence: s
     return { fields: { counted: counted.slice(0, m.index) + swapped + counted.slice(m.index + word.length) }, change: `${word} → ${swapped}` }
   }
   return null
+}
+
+// ---------------------------------------------------------------------------
+// A recorded figure changed, for the figure check (`figureCheck.ts`)
+// ---------------------------------------------------------------------------
+
+/** The variants of a recorded figure put to the figure check: the figure as it is, and one planted error per kind. */
+export const FIGURE_KINDS = ['faithful', 'wrong-number', 'other-thing'] as const
+export type FigureKind = (typeof FIGURE_KINDS)[number]
+/** What a correct figure check answers: the figure as it is is given, every planted error is not. */
+export const expectedGiven = (kind: FigureKind): boolean => kind === 'faithful'
+
+/** A recorded figure: its value, and its range's upper end where it has one. */
+export interface PlantableFigure {
+  value: number
+  valueHigh: number | null
+}
+
+/**
+ * The figure times 1.5 at its own precision (its count of decimals), or times 2 where that leaves it
+ * unchanged; a range's two ends by the same factor. Null where neither factor changes it, and where
+ * the source's words state the planted value or either planted end (`statesValue`), so the variant
+ * stays wrong.
+ */
+export function wrongFigure(f: PlantableFigure, source: string): PlantableFigure | null {
+  const times = (v: number, k: number) => Number((v * k).toFixed(decimalsOf(v)))
+  for (const k of [1.5, 2]) {
+    const planted = { value: times(f.value, k), valueHigh: f.valueHigh === null ? null : times(f.valueHigh, k) }
+    if (planted.value === f.value && planted.valueHigh === f.valueHigh) continue
+    const stated = [planted.value, planted.valueHigh].some(v => v !== null && statesValue(source, v))
+    return stated ? null : planted
+  }
+  return null
+}
+
+/** The decimals a value is written with: 2.25 has two, 2880000 none, 1.5e-7 eight. */
+function decimalsOf(v: number): number {
+  const [mantissa = '', exponent = '0'] = String(v).toLowerCase().split('e')
+  return Math.max(0, (mantissa.split('.')[1]?.length ?? 0) - Number(exponent))
 }
 
 /** Each field-level kind whose rule applies, in `FIELD_KINDS` order. */
