@@ -7,7 +7,7 @@ import { ONGOING_METHOD_ID, OVERVIEW_LABEL_TEXT } from './overviewCopy'
  * The methodology page's "Ongoing Stories" section (`.context/overviews.md`, "Switching on"). It
  * describes what the `link_overviews` step does, so it shows only while the step is switched on
  * (`useOngoingOn`, never while prerendering): switching the step on needs no change here. The words
- * are a draft until the owner approves them before the switch; the label it quotes is the owner's
+ * are the owner's (approved 2026-11-24), as is the label it quotes
  * (`AI_DISCLOSURE_COPY.overviewLabel`).
  */
 export default function OngoingStoriesMethod() {
@@ -20,9 +20,9 @@ export default function OngoingStoriesMethod() {
       <p>
         Many stories are part of a development that runs for weeks or months, such as an outbreak, a war or a negotiation. After a story is published, AI checks
         whether it belongs to one we already follow, among those its most similar earlier stories belong to. It adds the story only when it can quote both the
-        story and the development for a shared cause and place, and code finds each quote in their text. When two stories report a development we don&apos;t
-        follow yet, AI drafts what belongs to it, what stays separate and, if one can be named, the event that would end it, and a second AI check must agree
-        before it starts. A development gets its own page once an AI review keeps at least three stories in it.
+        story and the development for a shared cause and place, and code finds each quote in their text. When two stories each report something that has
+        happened in a development we don&apos;t follow yet, not just a warning, forecast or reaction, AI drafts what belongs to it and what stays separate, and
+        a second AI check must agree before it starts. A development gets its own page once an AI review keeps at least three stories in it.
       </p>
       <p>
         The page shows a timeline of our stories with the turning points AI marked and, once our research has checked enough facts, a short summary of where

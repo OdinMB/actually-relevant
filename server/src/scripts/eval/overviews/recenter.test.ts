@@ -233,7 +233,7 @@ describe('runRecenterStep', () => {
     expect(shown[0]!.prompt).toContain('<TITLE>Disruption of shipping through the Strait of Hormuz</TITLE>')
     expect(report.score.bars.map(b => [b.name, b.value, b.met])).toEqual([
       ['re-centered where expected', 1, null],
-      ['wrong end events (where one is named)', 0, true],
+      ['wrong end events (where one is named)', 0, null],
       ['false re-centers', 0, true],
       ['near misses joined', 0, true],
       ['proposals whose own judgments broke the anchor', 0, true],
@@ -320,7 +320,7 @@ describe('scoreRecenters', () => {
     })
     expect(s.bars.map(b => [b.value, b.met])).toEqual([
       [0.5, null],
-      [1, false],
+      [1, null],
       [1, false],
       [1, false],
       [1, false],

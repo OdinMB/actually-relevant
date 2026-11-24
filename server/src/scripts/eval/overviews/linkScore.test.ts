@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { parseOverviewOptions } from '../options.js'
 import type { AnswerKey } from './keySchema.js'
 import { linkLines } from './linkReport.js'
-import { keyIndex, linkKeys, scoreLinking, scoreLinkRun, scoreSignals, sharedMusts, type EndEventVerdict, type ReplayRun } from './linkScore.js'
+import {
+  END_EVENT_REPORT_ONLY,
+  keyIndex,
+  linkKeys,
+  scoreLinking,
+  scoreLinkRun,
+  scoreSignals,
+  sharedMusts,
+  type EndEventVerdict,
+  type ReplayRun,
+} from './linkScore.js'
 import { createSandbox, owedOf } from './overviewSandbox.js'
 import type { LinkResult } from '../../../services/overviewLink.js'
 import { owedStanding } from '../../../services/overviewOwed.js'
@@ -370,7 +380,9 @@ describe('scoreLinking', () => {
       ['cholera', ['right']],
     ])
     const s = scoreLinking(KEYS, [clean], verdicts)
-    expect([...s.link, ...s.found, ...s.role].map(b => b.met)).toEqual([true, true, true, true, true])
+    // The end-event bar is report only (the owner, 2026-11-24): its value is shown, it never decides
+    expect([...s.link, ...s.found, ...s.role].map(b => b.met)).toEqual([true, true, true, null, true])
+    expect(s.found[1]).toMatchObject({ value: 0, forOwner: END_EVENT_REPORT_ONLY })
     const wrongEnd = scoreLinking(
       KEYS,
       [clean],
@@ -379,7 +391,7 @@ describe('scoreLinking', () => {
         ['cholera', ['wrong']],
       ]),
     )
-    expect(wrongEnd.found[1]!.met).toBe(false)
+    expect(wrongEnd.found[1]).toMatchObject({ value: 1, met: null })
   })
 
   it('counts a development founded with no end event, or not founded, as no wrong end event, and decides nothing while a named one is unjudged', () => {
@@ -389,8 +401,8 @@ describe('scoreLinking', () => {
         ['cholera', [cholera]],
       ])
     const ends = (cholera: EndEventVerdict) => scoreLinking(KEYS, [run([])], verdicts(cholera)).found[1]!
-    expect(ends(null)).toMatchObject({ value: 0, met: true })
-    expect(ends('right')).toMatchObject({ value: 0, met: true })
+    expect(ends(null)).toMatchObject({ value: 0, met: null })
+    expect(ends('right')).toMatchObject({ value: 0, met: null })
     expect(ends('unjudged')).toMatchObject({ value: null, met: null })
   })
 

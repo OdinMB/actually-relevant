@@ -10,7 +10,7 @@
  * since an applied re-center holds it by construction). Counts over all runs. Pure.
  */
 import type { RecenterOutcome, RecenterRule } from '../../../services/overviewRecenter.js'
-import { bar, rateBar, ratio, type Bar, type EndEventVerdict } from './linkScore.js'
+import { bar, END_EVENT_REPORT_ONLY, rateBar, ratio, reportOnly, type Bar, type EndEventVerdict } from './linkScore.js'
 
 export const RECENTERED_BAR = 0.8
 
@@ -94,7 +94,10 @@ export function scoreRecenters(runs: readonly RecenterCaseRun[]): RecenterScore 
     heldBy,
     bars: [
       rateBar('re-centered where expected', ratio(recentered, positives.length), RECENTERED_BAR, positives.length),
-      bar('wrong end events (where one is named)', endEvents.unjudged > 0 || judgedEnds === 0 ? null : endEvents.wrong, 0, 'atMost'),
+      reportOnly(
+        bar('wrong end events (where one is named)', endEvents.unjudged > 0 || judgedEnds === 0 ? null : endEvents.wrong, 0, 'atMost'),
+        END_EVENT_REPORT_ONLY,
+      ),
       bar('false re-centers', negatives.length === 0 ? null : falseRecenters, 0, 'atMost'),
       bar('near misses joined', answered.length === 0 ? null : nearMissesJoined, 0, 'atMost'),
       bar('proposals whose own judgments broke the anchor', proposals.length === 0 ? null : anchorBreaks, 0, 'atMost'),

@@ -92,6 +92,13 @@ export const bar = (name: string, value: number | null, target: number, directio
   met: value === null ? null : direction === 'atLeast' ? value >= target : value <= target,
 })
 
+/**
+ * The end-event bar, report only (the owner, 2026-11-24): an end event only marks a turning point and
+ * never closes an overview (ADR-0072), so a wrong one is listed for the owner and never blocks the gate.
+ */
+export const END_EVENT_REPORT_ONLY = 'report only: an end event only marks a turning point'
+export const reportOnly = (b: Bar, why: string): Bar => ({ ...b, met: null, forOwner: why })
+
 /** A rate's bar from the judgments behind it (all runs together): below `MIN_RATE_SAMPLE` it is reported for the owner, not decided. */
 export function rateBar(name: string, value: number | null, target: number, judgments: number, direction: Bar['direction'] = 'atLeast'): Bar {
   const b = bar(name, value, target, direction)
@@ -436,7 +443,7 @@ export function scoreLinking(
         ),
         share: true,
       },
-      bar('wrong end events (where one is named)', wrongEnds, 0, 'atMost'),
+      reportOnly(bar('wrong end events (where one is named)', wrongEnds, 0, 'atMost'), END_EVENT_REPORT_ONLY),
     ],
     role: [bar('roles agreeing', mean(scored.map(s => ratio(s.rolesAgreeing, s.rolesJudged))), 0.65)],
   }
