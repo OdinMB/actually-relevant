@@ -2,21 +2,23 @@
  * The `stands` bars (`.context/model-eval.md`, "Overview evals"; plan "Evals and bars"), scored on the
  * stands written at each development's checkpoints (`stands.ts`), over the checkpoints with at least
  * `minStandsFacts` offerable facts only: lines the strong judge finds unsupported after production's
- * checks (none); each figure's latest key value as of the checkpoint stated when an offered fact holds
- * it (≥90%); "What's being done" present where the key has a sourced response by then that an offered
- * fact reports (≥70%), and never unsupported. Below `STANDS_MIN_CHECKPOINTS` such checkpoints the
- * bars report "not enough evidence" and none is met. The two rates decide only on `MIN_RATE_SAMPLE`
- * judgments over all runs; below it they are reported for the owner (`rateBar`): one run on the
- * judged half gives the latest value at most 21 (its three developments with figures), and the
- * keys list no responses yet, so neither decides on its own today. Pure.
+ * checks, judged against their facts as the write was shown them (at most `UNSUPPORTED_LINES_BAR` of
+ * the sentences, and of the lines of "What's being done"); each figure's latest key value as of the
+ * checkpoint stated when an offered fact holds it (reported against 90% and deciding nothing: the
+ * owner, 2026-11-24); "What's being done" present where the key has a sourced response by then that
+ * an offered fact reports (≥70%). Below `STANDS_MIN_CHECKPOINTS` such checkpoints the bars report
+ * "not enough evidence" and none is met. "What's being done present" decides only on
+ * `MIN_RATE_SAMPLE` judgments over all runs; below it, it is reported for the owner (`rateBar`): one
+ * run on the judged half gives at most 15, so the gate runs three. Pure.
  */
 import type { StandsOutcome } from '../../../services/overviewStands.js'
 import type { AnswerKey } from './keySchema.js'
-import { mean, rateBar, ratio, shareBar, UNSUPPORTED_LINES_BAR, type Bar } from './linkScore.js'
+import { bar, mean, rateBar, ratio, reportOnly, shareBar, UNSUPPORTED_LINES_BAR, type Bar } from './linkScore.js'
 import type { CheckpointName } from './replayScore.js'
 
 export const STANDS_MIN_CHECKPOINTS = 15
 export const LATEST_VALUE_BAR = 0.9
+export const LATEST_VALUE_REPORT_ONLY = 'report only: a missing figure leaves the stands thinner, never wrong'
 export const DOING_PRESENT_BAR = 0.7
 
 export interface StandsCheckpointRun {
@@ -35,6 +37,8 @@ export interface StandsCheckpointRun {
   /** The key has a response by then, sourced by an entry, that a current offered fact of that entry reports. */
   responseDue: boolean
   doingPresent: boolean
+  /** Lines the write gave that a check dropped before anyone saw them, with the check and its reason: for a read, never scored. */
+  dropped?: { label: string; cause: string; problem?: string; text: string }[]
   costUsd: number
 }
 
@@ -100,12 +104,8 @@ export function scoreStands(runs: readonly StandsCheckpointRun[], minCheckpoints
   const present = mean(byRun.map(rs => ratio(rs.filter(r => r.responseDue && r.doingPresent).length, rs.filter(r => r.responseDue).length)))
   const bars = [
     unsupported('unsupported sentences', 'sentence'),
-    rateBar(
-      'latest value stated',
-      latest,
-      LATEST_VALUE_BAR,
-      enoughRuns.reduce((s, r) => s + r.latest.length, 0),
-    ),
+    // Report only (the owner, 2026-11-24): a stands without its newest figure is thinner, never wrong, and no blocker
+    reportOnly(bar('latest value stated', latest, LATEST_VALUE_BAR), LATEST_VALUE_REPORT_ONLY),
     rateBar("what's being done present", present, DOING_PRESENT_BAR, enoughRuns.filter(r => r.responseDue).length),
     unsupported("what's being done unsupported", 'doing'),
   ]

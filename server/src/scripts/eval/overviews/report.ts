@@ -163,7 +163,14 @@ const counted = (values: string[]) => {
 const listedLine = (l: Listed) =>
   `- ${l.kind}: ${quoted(l.text)}${l.change ? ` (${cell(l.change)})` : ''}; sentence ${quoted(l.sentence)} (${cell(l.outlet)})${l.runs > 1 ? `; in ${l.times} of ${l.runs} runs` : ''}`
 
-function armLines(s: ArmScore, kinds: readonly VariantKind[]): string[] {
+/**
+ * On the stands' lines the false-rejection bar is report only (the owner, 2026-11-24): a correct line
+ * wrongly rejected is a sentence readers do not get, never a wrong one they do, and the check is
+ * research's, already in use. Research's and context's own samples keep the bar.
+ */
+const STANDS_FALSE_REJECTION = 'report only on the stands (a correct line dropped, never a wrong one shown)'
+
+function armLines(s: ArmScore, kinds: readonly VariantKind[], reportOnlyFalseRejection = false): string[] {
   return [
     `### ${s.arm}`,
     '',
@@ -174,7 +181,7 @@ function armLines(s: ArmScore, kinds: readonly VariantKind[]): string[] {
     ...s.perKind.filter(k => kinds.includes(k.kind)).map(k => `| ${k.kind} | ${k.expected} | ${k.items} | ${k.judged} | ${k.unsupported} | ${pct(k.rate)} |`),
     '',
     `- **Catch rate** (planted errors judged unsupported): ${pct(s.catchRate)}; bar at least ${pct(CATCH_BAR)}: ${metText(s.catchMet)}.`,
-    `- **False rejection** (faithful and reworded judged unsupported): ${pct(s.falseRejection)}; bar at most ${pct(FALSE_REJECTION_BAR)}: ${metText(s.falseRejectionMet)}.`,
+    `- **False rejection** (faithful and reworded judged unsupported): ${pct(s.falseRejection)}; bar at most ${pct(FALSE_REJECTION_BAR)}: ${reportOnlyFalseRejection ? STANDS_FALSE_REJECTION : metText(s.falseRejectionMet)}.`,
     `- **Unjudged:** ${s.unjudged} verdicts missing (no entry in the answer, a failed call, or the budget).`,
     ...(s.spread
       ? [
@@ -239,7 +246,7 @@ function factCheckLines(r: FactCheckReport): string[] {
     ...kinds.map(kind => `| ${kind} | ${expectedSupported(kind) ? 'supported' : 'unsupported'} | ${r.variants.filter(v => v.kind === kind).length} |`),
     '',
     ...(r.stoppedArms ? [`No arm ran: ${cell(r.stoppedArms)}.`, ''] : []),
-    ...r.scores.flatMap(s => armLines(s, kinds)),
+    ...r.scores.flatMap(s => armLines(s, kinds, r.sample.source === 'stands')),
     `### Statements their evidence does not support (sentence, what it measures, source date): ${Math.min(unsupported.length, MAX_LISTED)} of ${unsupported.length}`,
     '',
     "Not an extraction-fidelity measure: the judge never sees the source's full text, so a statement that rightly carries scope or period from elsewhere in the article lands here too.",

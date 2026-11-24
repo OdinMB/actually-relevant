@@ -249,10 +249,10 @@ describe('the stands bars', () => {
       ["what's being done present", 1, null],
       ["what's being done unsupported", 0, true],
     ])
-    expect(full.bars.map(b => b.forOwner ?? null)).toEqual([null, expect.stringMatching(/2 judgments/), expect.stringMatching(/1 judgment/), null])
+    expect(full.bars.map(b => b.forOwner ?? null)).toEqual([null, expect.stringMatching(/^report only/), expect.stringMatching(/1 judgment/), null])
   })
 
-  it('decides a rate on its own once it rests on enough judgments across the runs', () => {
+  it('reports the latest values and never decides on them, however many judgments it rests on', () => {
     const latest = (stated: number) => Array.from({ length: 5 }, (_, i) => ({ figure: `f${i}`, value: i, stated: i < stated }))
     // 2 checkpoints × 2 runs × 5 values: 20 judgments, 19 stated
     const runs = [1, 2].flatMap(run => [
@@ -260,8 +260,8 @@ describe('the stands bars', () => {
       point('a', run, { day: '2026-05-09', latest: latest(run === 1 ? 4 : 5) }),
     ])
     const bar = scoreStands(runs, 1).bars.find(b => b.name === 'latest value stated')!
-    expect(bar).toMatchObject({ value: 0.95, met: true })
-    expect(bar.forOwner).toBeUndefined()
+    expect(bar).toMatchObject({ value: 0.95, met: null })
+    expect(bar.forOwner).toMatch(/^report only/)
   })
 })
 
@@ -405,7 +405,7 @@ describe('the upkeep report sections', () => {
       costUsd: 0,
     }
     const forOwner = standsLines({ half: 'judge', repeat: 1, keys: ['ebola'], runs: [read], kept: [], score: scoreStands([read], 1), costUsd: 0 }).join('\n')
-    expect(forOwner).toContain('| latest value stated | at least 90% | 50.0% | for the owner: 2 judgments')
+    expect(forOwner).toContain('| latest value stated | at least 90% | 50.0% | for the owner: report only')
     expect(forOwner).toContain('- ebola 2026-05-09 run 1: cases 320 not stated')
     expect(forOwner).toContain('- ebola 2026-05-09 run 1: unsupported: Cases passed 300.')
     // A story's cost is over the stories run, never the ones the budget left

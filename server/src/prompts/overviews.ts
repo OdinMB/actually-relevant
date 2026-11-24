@@ -294,18 +294,36 @@ Say where the development in <DEVELOPMENT> stands today and what is being done a
 <RULES>
 <STANDS>
 - Lead with the development's present state: the latest figures, and who or where it affects now; then the most recent turn it took.
+- Where the facts count something over time (cases, deaths, people displaced, ships stranded, a share or a level), one sentence states the newest value of each such count, with its date when it is past.
+- Use the sentences you are allowed whenever the facts support them: each sentence is checked and dropped on its own, so a summary of one sentence can leave the page with none. One point a sentence, resting on one or two facts, so a dropped sentence takes nothing else with it.
 - Every sentence rests on its cited facts alone: no number, place, date, cause or trend they do not state, nothing from <TIMELINE>, nothing you know from elsewhere.
+- Keep each fact's own strength and scope: "at least", "more than", "about" and "confirmed" stay with their numbers ("more than 1,600" is never "1,600"); what a fact gives for a period or a place ("since the outbreak began", "before the conflict", "in the DRC") is stated for that period or place, never as the present or the whole ("carried a fifth of the world's oil before the war" is never "carries a fifth"; "in its fourth week" is never "has lasted four weeks"; "65% below" is never "65% of").
+- A fact's date attribute is when it was reported or counted, not when the event in it happened: use it for "as of" a count, and give an event a day only when the fact's own text does.
+- Keep what the fact says happened, no further: announced is not given, proposed is not agreed, began on a date is not still going, "will be asked to consider" is not "will be asked to".
 - A fact marked current="yes" may be stated as how things are now. A fact marked current="no" is past: state it only as a past value with its date written out ("As of May 12, 34 cases had been confirmed"), never as the present.
 - When facts disagree, give the newer one, or both with who reported each; never average or reconcile them.
-- Name who counted or said something when the fact credits it ("according to the health ministry").
+- Name who counted or said something when the fact's own text credits it ("according to the health ministry"), with the name as the fact gives it. The outlet attribute is only where the fact was published: never credit a count or a statement to the outlet ("Bloomberg reported 1,850 deaths") unless the fact's text names that outlet as its origin, and never credit one fact's figure to the body another fact names.
 </STANDS>
 <DOING>
 - What is being done: responses under way, such as aid, a vaccination campaign, a ceasefire mission, a court case or a funding pledge, with who is doing them and where.
 - Only from facts marked current="yes"; the facts marked response="yes" were found for this, but any current fact that reports a response counts. A response that has ended belongs, if anywhere, in the summary, in the past tense.
+- State a response as far as its fact does: one that began or was announced on a date is given with that date and verb ("began vaccinating on September 18", "announced AUD 11.2 million"), not as still under way or already in hand; one act someone did once (demanded, condemned, searched a ship) stays in the past tense; and its purpose is given only as the fact words it.
+- "According to X" in a fact names who reported it, not who did it: keep X as the one who said so ("28 contacts are being observed, officials said"), never as the actor unless the fact says X acts. What a fact gives as someone's statement stays their statement ("Africa CDC's director said authorities had decided to widen vaccination"), never a settled fact.
+- When a current fact reports a response, write its line: an appeal, a mediation effort, a meeting called or a demand for an inquiry counts, as does aid or a campaign.
 - When no current fact reports a response, return no line: an empty list, never a sentence saying that nothing is known.
 </DOING>
 - <TIMELINE> lists our stories so you know what the development is: never cite it and never state anything only it says.
-- Write in your own words: never copy more than a few words in a row from a fact, and never quote anyone.
+<OWN_WORDS>
+- Write in your own words and your own sentence order, and never quote anyone. A sentence that repeats 12 or more words in a row from a fact, names and figures counted, or follows one fact's wording clause by clause with a few words swapped, is dropped before anyone sees it. This is the most common reason a sentence is lost: a sentence about one fact tends to come out as that fact's sentence.
+- So break every long run: put the date, the place or the number first when the fact puts the actor first; split a long fact into two short sentences; say a long name once and briefly ("the UN rights office", "Amnesty", "Iran's navy").
+- Keep exactly only names, figures, dates and the qualifiers the rules above protect. Change the rest: start from a different element than the fact does, choose other verbs, and where two facts bear on one point, merge them.
+- Bad (the fact's own run of words): "Victoria is considering removing threatened bird species from the wild for protection as H5 avian influenza spreads."
+- Good (same fact, own order and words): "With H5 bird flu spreading, Victoria may take threatened birds into care to protect them."
+- Bad: "The U.S. Navy began enforcing a blockade of Iranian ports in the Strait of Hormuz on April 13."
+- Good: "Iranian ports have been under a U.S. naval blockade since April 13."
+- Bad: "Amnesty International says the RSF committed crimes against humanity and ethnic cleansing during its campaign to capture El Fasher."
+- Good: "In taking El Fasher, the RSF carried out ethnic cleansing and crimes against humanity, Amnesty International has concluded."
+</OWN_WORDS>
 - Plain words and American spelling; no headline style, no rhetorical questions, no em dashes.
 - Each sentence stands on its own: no "this", "these" or "it" pointing to another sentence's subject, since a reader may see one sentence alone.
 </RULES>

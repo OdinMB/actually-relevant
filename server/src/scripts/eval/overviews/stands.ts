@@ -190,13 +190,28 @@ async function writeAndJudge(
   run: number,
   kept: KeptLine[],
 ): Promise<void> {
+  // The write's own lines, kept only to show what each dropped line said
+  let drafted: Awaited<ReturnType<typeof stands.write>>['parsed'] = null
   const result = await refreshStands(
     { title: inForce.title, entries: members.map(m => ({ title: m.story.title, date: m.story.date, role: m.role })) },
     offered,
     day,
-    stands,
+    {
+      ...stands,
+      write: async input => {
+        const written = await stands.write(input)
+        drafted = written.parsed
+        return written
+      },
+    },
   )
   record.outcome = result.outcome
+  const draft = drafted as Awaited<ReturnType<typeof stands.write>>['parsed']
+  record.dropped = result.drops.map(d => {
+    const [part, n] = d.label.split(' ')
+    const line = (part === 'Doing' ? draft?.doing : draft?.sentences)?.[Number(n) - 1]
+    return { ...d, text: line?.text ?? '' }
+  })
   const byId = new Map(offered.map(f => [f.id, f]))
   const lines = [...result.sentences.map(l => ({ part: 'sentence' as const, ...l })), ...result.doing.map(l => ({ part: 'doing' as const, ...l }))]
   const judged =
@@ -215,7 +230,9 @@ async function writeAndJudge(
               text: l.text,
               facts: l.facts.flatMap(id =>
                 byId.has(id)
-                  ? [{ text: renderFact(byId.get(id)!.fact), date: byId.get(id)!.fact.asOf ?? byId.get(id)!.fact.source.date, current: byId.get(id)!.current }]
+                  ? // The fact as the write was shown it, never its source sentence: this step's eval asks whether a line
+                    // repeats its facts rightly (the owner, 2026-11-24); whether a fact repeats its source is research's eval
+                    [{ text: renderFact(byId.get(id)!.fact), date: byId.get(id)!.fact.asOf ?? byId.get(id)!.fact.source.date, current: byId.get(id)!.current }]
                   : [],
               ),
             })),

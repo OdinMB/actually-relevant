@@ -306,14 +306,19 @@ const sourceNumber = (id: string) => Number(/^S(\d+)$/.exec(id)?.[1] ?? -1)
 
 /**
  * The structured fields as stored: an as-of read only when valid, nobody credited as null, and a
- * range whose ends are equal as a single value (a chart draws no range).
+ * range whose ends are equal as a single value (a chart draws no range). The model fills the nullable
+ * numbers instead of leaving them null (0, -1, a day of the month; measured 2026-11-24: no null among
+ * 1,205 extracted facts), so code reads them: a number with neither a unit nor a thing counted is no
+ * figure, and a range's upper end counts only above its lower one. Kept as given, they rendered as
+ * "at least 800,000 to 0 people" or "(0, according to …)", and the fact check rejected the fact.
  */
 export function structured(
   a: StructuredFact,
 ): Pick<ContextFactData, 'value' | 'valueHigh' | 'unit' | 'approx' | 'provisional' | 'counted' | 'place' | 'asOf' | 'credited' | 'creditedKind' | 'validity'> {
+  const value = a.unit.trim() || a.counted.trim() ? a.value : null
   return {
-    value: a.value,
-    valueHigh: a.value !== null && a.valueHigh !== a.value ? a.valueHigh : null,
+    value,
+    valueHigh: value !== null && a.valueHigh !== null && a.valueHigh > value ? a.valueHigh : null,
     unit: a.unit.trim(),
     approx: a.approx,
     provisional: a.provisional,

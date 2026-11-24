@@ -35,6 +35,17 @@ function standsMisses(r: StandsStepReport): string[] {
   return misses.length === 0 ? [] : ['', '### Latest values not stated, lines judged unsupported', '', ...misses]
 }
 
+/** The lines the write gave and a check dropped, each with the check and its reason, then the lines kept: what the stands lost and why, for a read. */
+function standsDrops(r: StandsStepReport): string[] {
+  const at = (x: StandsStepReport['runs'][number]) => `${x.key} ${x.day} run ${x.run}`
+  const drops = r.runs.flatMap(x => (x.dropped ?? []).map(d => `- ${at(x)}: ${d.label} (${d.cause}${d.problem ? `: ${cell(d.problem)}` : ''}): ${cell(d.text)}`))
+  const kept = r.runs.flatMap(x => x.lines.map(l => `- ${at(x)}: ${l.part}: ${cell(l.text)}`))
+  return [
+    ...(drops.length > 0 ? ['', '### Lines written and dropped by a check', '', ...drops] : []),
+    ...(kept.length > 0 ? ['', '### Lines kept', '', ...kept] : []),
+  ]
+}
+
 export function standsLines(r: StandsStepReport): string[] {
   const written = r.runs.filter(x => x.outcome === 'written').length
   return [
@@ -54,6 +65,7 @@ export function standsLines(r: StandsStepReport): string[] {
         `| ${x.key} | ${x.day} | ${x.run} | ${x.offered}${x.enough ? '' : ' (too few)'} | ${x.outcome ?? 'not written'} | ${x.lines.length} (${x.lines.filter(l => l.supported === false).length}) | ${x.latest.filter(l => l.stated).length} of ${x.latest.length} | ${x.responseDue ? 'yes' : 'no'} / ${x.doingPresent ? 'yes' : 'no'} |`,
     ),
     ...standsMisses(r),
+    ...standsDrops(r),
   ]
 }
 
