@@ -164,7 +164,7 @@ export interface PublicStory extends Story {
 /** One cited source of a paragraph or bullet (a sentence in versions applied before 2026-11-13), with the source's supporting sentence for the card. */
 export interface ResearchCitation {
   sourceId: string
-  /** The source's own sentence, in its original language; null when only its date is cited. */
+  /** The source's own words, in its original language: one sentence, or two adjacent ones for a fact extracted since 2026-11-25; null when only its date is cited. */
   sentence: string | null
 }
 

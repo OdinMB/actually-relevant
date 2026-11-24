@@ -61,6 +61,18 @@ export function periodStart(asOf: string): string {
   return asOf.length === 4 ? `${asOf}-01-01` : asOf.length === 7 ? `${asOf}-01` : asOf
 }
 
+/**
+ * An as-of no later than its source's publication day, else null: a source cannot date a state or
+ * event after it was published, so a later as-of is a forecast or a deadline the model wrote in, and
+ * the fact falls back to its source's day (`factDate`). The two are compared at the as-of's own
+ * precision, so `2026-11` and `2026` hold the day `2026-11-24` and are kept. Without a source day the
+ * as-of is kept as given.
+ */
+export function pastAsOf(asOf: string | null, sourceDay: string | null): string | null {
+  if (asOf === null || sourceDay === null) return asOf
+  return asOf > sourceDay.slice(0, asOf.length) ? null : asOf
+}
+
 /** An as-of as the database keeps it: the period's first day and its precision. */
 export function asOfColumns(asOf: string | null): { date: Date | null; precision: AsOfPrecision | null } {
   return asOf === null ? { date: null, precision: null } : { date: new Date(`${periodStart(asOf)}T00:00:00Z`), precision: precisionOf(asOf) }
@@ -118,11 +130,30 @@ export function spelledNumber(v: number): string {
 const PREFIX_UNITS: Record<string, string> = { usd: '$', us$: '$', $: '$', eur: '€', '€': '€', gbp: '£', '£': '£' }
 const SUFFIX_UNITS = new Set(['%', '°c', '°f'])
 
-/** A number with its unit where the unit is a symbol ("$1.2bn", "63%"); other units are the label's, so the number goes alone. */
+/**
+ * A unit as the formatters read it: what one of the value is (`base`) and, for a rate, the period
+ * after it (`rate`: " per year"; empty otherwise). The fields' schema has a rate keep its period in
+ * its unit ("USD per year", `schemas/factFields.ts`), and the symbol is the base's.
+ */
+function unitParts(unit: string): { base: string; rate: string } {
+  const u = unit.trim()
+  const at = u.toLowerCase().indexOf(' per ')
+  return at < 0 ? { base: u, rate: '' } : { base: u.slice(0, at).trim(), rate: u.slice(at) }
+}
+
+const prefixOf = (base: string) => (Object.hasOwn(PREFIX_UNITS, base.toLowerCase()) ? PREFIX_UNITS[base.toLowerCase()] : undefined)
+
+const isSymbol = (base: string) => prefixOf(base) !== undefined || SUFFIX_UNITS.has(base.toLowerCase())
+
+/**
+ * A number with its unit where the unit, or a rate's unit before its period, is a symbol ("$1.2bn",
+ * "63%"); other units and a rate's period are the label's, so the number goes alone.
+ */
 function withSymbol(n: string, unit: string): string {
-  const u = unit.trim().toLowerCase()
-  if (PREFIX_UNITS[u]) return `${PREFIX_UNITS[u]}${n}`
-  if (SUFFIX_UNITS.has(u)) return `${n}${unit.trim()}`
+  const { base } = unitParts(unit)
+  const prefix = prefixOf(base)
+  if (prefix !== undefined) return `${prefix}${n}`
+  if (SUFFIX_UNITS.has(base.toLowerCase())) return `${n}${base}`
   return n
 }
 
@@ -143,17 +174,18 @@ export function formatFigure(f: Figure): { text: string; estimate: boolean } | n
 
 /**
  * A fact's number in words for the checks, with its qualifier and unit: "about 2.88 million hectares",
- * "at least 63%". Null without one. A unit that is only a filler ("none", stored before 2026-11-24)
- * is left out (`fieldText`).
+ * "at least 63%", a rate with its period, "$52 million per year". Null without one. A unit that is
+ * only a filler ("none", stored before 2026-11-24) is left out (`fieldText`).
  */
 export function spelledFigure(f: Figure): string | null {
   if (f.value === null) return null
   const unit = fieldText(f.unit)
-  const symbol = PREFIX_UNITS[unit.toLowerCase()] || SUFFIX_UNITS.has(unit.toLowerCase())
+  const { base, rate } = unitParts(unit)
+  const symbol = isSymbol(base)
   const one = (v: number) => (symbol ? withSymbol(spelledNumber(v), unit) : spelledNumber(v))
   const n = f.valueHigh !== null && f.valueHigh !== f.value ? `${one(f.value)} to ${one(f.valueHigh)}` : one(f.value)
   const qualifier = f.approx === 'about' ? 'about ' : f.approx === 'at_least' ? 'at least ' : f.approx === 'under' ? 'under ' : ''
-  return `${qualifier}${n}${!symbol && unit ? ` ${unit}` : ''}`
+  return `${qualifier}${n}${symbol ? rate : unit ? ` ${unit}` : ''}`
 }
 
 /** Most authoritative first: a tile's headline comes from the first kind present. */

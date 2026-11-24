@@ -160,7 +160,11 @@ export class WorkingPool {
       )
       // A fact the extraction gave its fields is structured already: no structure call follows for it
       for (const f of s.facts)
-        this.add(source, { ...researchFact(f), ...(f.structured ? { structured: { ...structuredFields(f.structured), by: extractedBy } } : {}), extractedBy })
+        this.add(source, {
+          ...researchFact(f),
+          ...(f.structured ? { structured: { ...structuredFields(f.structured, s.date), by: extractedBy } } : {}),
+          extractedBy,
+        })
     }
     for (const e of r.earlier) {
       const source = this.source(

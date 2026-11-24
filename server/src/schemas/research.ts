@@ -30,10 +30,14 @@ const factSchema = z.object({
   statement: z
     .string()
     .describe(
-      'One fact in one plain English sentence, true to the source: a figure keeps its unit, its scope and its period, and a claim keeps who makes it. ' +
+      'One fact in one plain English sentence, true to the source: a figure keeps its unit, its scope and its period, and a claim keeps who makes it and how strongly. ' +
         'A neutral restatement in your own order and phrasing, never a translation or a rewording of the supporting sentence.',
     ),
-  supportingSentence: z.string().describe('The sentence of the source text that states the fact, copied character for character in its original language.'),
+  supportingSentence: z
+    .string()
+    .describe(
+      'The sentence of the source text that states the fact, or that sentence with the one adjacent sentence that names its speaker, subject or period, copied character for character in its original language as one unbroken stretch.',
+    ),
   measures: z
     .string()
     .describe(

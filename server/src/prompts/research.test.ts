@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { PoolFact } from '../services/researchChecks.js'
 import {
   buildDerivePrompt,
+  buildExtractionPromptParts,
   buildFactCheckPrompt,
   buildRepairPrompt,
   buildWritePrompt,
@@ -64,6 +65,19 @@ describe('the newest information leads', () => {
     expect(buildRepairPrompt(repair)).toContain(LATEST_STATE)
     expect(LATEST_STATE).toMatch(/latest state/)
     expect(buildDerivePrompt({ titleLabel: 'Trade', paragraphs: ['The plan was dropped.'] })).toMatch(/latest state/)
+  })
+})
+
+describe("the extraction is shown its source's publication day", () => {
+  const extraction = (date: string | null) =>
+    buildExtractionPromptParts({
+      story: { title: 'Pakistan bans imports', summary: 'Pakistan banned panel imports.' },
+      source: { outlet: 'Dawn', url: 'https://dawn.com/ban', date, title: 'Ban', text: 'The import ban was announced on Wednesday.' },
+    })
+
+  it('with its weekday, so a weekday in the source is read as a day and not counted, and as unknown without a date', () => {
+    expect(extraction('2026-11-12').data).toContain('<DATE>2026-11-12 (Thursday)</DATE>')
+    expect(extraction(null).data).toContain('<DATE>unknown</DATE>')
   })
 })
 

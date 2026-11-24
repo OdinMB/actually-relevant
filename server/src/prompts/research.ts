@@ -6,6 +6,7 @@
  * Every fetched or stored text sits in escaped XML behind the line the podcast prompts use.
  */
 import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
+import { AS_OF_RULE, CREDIT_RULE, FIGURE_SCOPE_RULE, publishedWithWeekday, STATEMENT_LIMITS } from './factRules.js'
 import { buildGuidelinesXml, EMOTION_TAGS_PROMPT_BLOCK, escapeXml } from './shared.js'
 import type { AssessPromptInput } from '../services/promptInputs.js'
 import { factsOfItems, publishedDay, type PoolFact, type QuoteCheck } from '../services/researchChecks.js'
@@ -114,16 +115,20 @@ Judge whether <SOURCE> is usable for <STORY>, classify it, and extract its facts
 - A fact with a figure records exactly what the figure measures: its unit, its scope (what is counted, and where) and its period. Two sources' figures often differ because they count different things; the scope is what shows a reader why.
 - A claim the source attributes to someone stays attributed to them ('the ministry says …').
 - Facts are about the development of <STORY>, or background that explains it. Leave out what else the page carries: other stories, advertising, author notes.
-- A fact's statement restates the fact neutrally in plain English: who did what, with the figure, its scope and period, and who claims it. It is never a translation or a rewording of the supporting sentence: its order and phrasing are your own, while names, figures and scope stay exact.
-- The supporting sentence is copied character for character from <TEXT>, so that code can find it there.`
+- A fact's statement restates the fact neutrally in plain English: who did what, with the figure, its scope and period, and who claims it. It is never a translation or a rewording of the supporting sentence: its order and phrasing are your own, while what it claims stays exactly the source's: names, figures, scope, period, strength and who says it.
+${STATEMENT_LIMITS}
+- The supporting sentence is copied character for character from <TEXT>, so that code can find it there. It is the one sentence that states the fact. Where that sentence leaves open who is speaking, what is counted or which period is meant ("It said …", "in the same period", a quotation whose speaker the sentence before names), it is that sentence with the one directly before or after it that says so, copied as one unbroken stretch: never more than two sentences, never two that are not adjacent.
+- A statement holds one fact. What a further sentence adds is a fact of its own.`
 
 /**
  * The structure step's rules for a fact's structured fields (`buildStructurePrompt`), for a research
- * pass's extraction, which returns the fields itself (`coverageExtractionSchema`).
+ * pass's extraction, which returns the fields itself (`coverageExtractionSchema`); the three they
+ * share word for word are `prompts/factRules.ts`'s.
  */
 const STRUCTURED_RULES = `- Every structured field comes from <SOURCE> alone. Never add knowledge of your own: a field the fact does not give is empty, null or the schema's default.
-- A figure keeps exactly what it counts: its scope, its place and its period, as the source gives them.
-- The as-of date is the date the fact describes, never the date its source was published, and only as precise as the fact says: a figure "for 2015" is "2015".`
+- ${FIGURE_SCOPE_RULE}
+- ${AS_OF_RULE}
+- ${CREDIT_RULE}`
 
 export interface ExtractionOptions {
   /** A research pass's extraction: each fact also carries its structured fields (`coverageExtractionSchema`), so no structure call follows. */
@@ -136,8 +141,9 @@ export interface ExtractionOptions {
  * Cache: on. The rules come to over 1,024 tokens with the output schema, and a run extracts each
  * of its sources, several calls within the cache's 30 minutes (the first parallel batch on a cold
  * cache all write). The story, fixed for the run, and the source follow the breakpoint. A
- * research pass's extraction (`structured`) adds the structure step's rules, about 2,050 tokens
- * with its schema, still one stable part for every source of the pass.
+ * research pass's extraction (`structured`) adds the structure step's rules, about 2,800 tokens
+ * with its schema (estimated from its length since the fact rules of 2026-11-25, not counted),
+ * still one stable part for every source of the pass.
  */
 export function buildExtractionPromptParts(input: ExtractionInput, options: ExtractionOptions = {}): PromptParts {
   const s = input.source
@@ -154,7 +160,7 @@ ${tag('SUMMARY', input.story.summary)}
 ${UNTRUSTED}
 ${tag('OUTLET', s.outlet)}
 ${tag('URL', s.url)}
-${tag('DATE', s.date ?? 'unknown')}
+${tag('DATE', publishedWithWeekday(s.date))}
 ${tag('TITLE', s.title)}
 ${tag('TEXT', s.text)}
 </SOURCE>`,

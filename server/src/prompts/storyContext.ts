@@ -8,6 +8,7 @@
  */
 import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
 import { CONTEXT_SLOTS, type ContextSlot } from '../schemas/storyContext.js'
+import { AS_OF_RULE, CREDIT_RULE, FIGURE_SCOPE_RULE, publishedWithWeekday, STATEMENT_LIMITS } from './factRules.js'
 import { escapeXml } from './shared.js'
 import { FACT_RECORD, RECORD_GOVERNS, tag, UNTRUSTED } from './research.js'
 
@@ -60,14 +61,15 @@ export interface StructureFact {
 }
 
 /**
- * Cache: on. The rules come to about 1,050 tokens with the output schema, just over the 1,024-token
- * minimum, and the structure call runs for each story of a daily-edition pass within the cache's 30
+ * Cache: on. The rules come to about 1,450 tokens with the output schema (estimated from its length
+ * since the fact rules of 2026-11-25, not counted; about 1,050 before, just over the 1,024-token
+ * minimum), and the structure call runs for each story of a daily-edition pass within the cache's 30
  * minutes. The facts follow the breakpoint.
  */
 export function buildStructurePromptParts(input: { facts: StructureFact[] }): PromptParts {
   const facts = input.facts
     .map(
-      f => `<FACT id="${escapeXml(f.id)}" outlet="${escapeXml(f.source.outlet)}" published="${escapeXml(f.source.date ?? 'unknown')}" kind="${escapeXml(f.source.kind)}">
+      f => `<FACT id="${escapeXml(f.id)}" outlet="${escapeXml(f.source.outlet)}" published="${escapeXml(publishedWithWeekday(f.source.date))}" kind="${escapeXml(f.source.kind)}">
 ${tag('STATEMENT', f.statement)}
 ${tag('SUPPORT', f.supportingSentence)}${f.measures ? `\n${tag('MEASURES', f.measures)}` : ''}
 </FACT>`,
@@ -96,8 +98,9 @@ For every fact in <FACTS>, return its structured fields: its figure and unit, wh
 
 <REQUIREMENTS>
 - Every field comes from the fact's SUPPORT and STATEMENT alone. Never add knowledge of your own: a field the fact does not give is empty, null or the schema's default.
-- A figure keeps exactly what it counts: its scope, its place and its period, as the source gives them.
-- The as-of date is the date the fact describes, never the date its source was published, and only as precise as the fact says: a figure "for 2015" is "2015".
+- ${FIGURE_SCOPE_RULE}
+- ${AS_OF_RULE}
+- ${CREDIT_RULE}
 - Answer each fact by its id, once, and only the ids in <FACTS>.
 </REQUIREMENTS>`
 
@@ -192,7 +195,7 @@ ${wanted}
 ${UNTRUSTED}
 ${tag('OUTLET', s.outlet)}
 ${tag('URL', s.url)}
-${tag('DATE', s.date ?? 'unknown')}
+${tag('DATE', publishedWithWeekday(s.date))}
 ${tag('TITLE', s.title)}
 ${tag('TEXT', s.text)}
 </SOURCE>`,
@@ -217,8 +220,9 @@ Judge whether <SOURCE> is usable, classify it, and extract the facts it states t
 - A fact with a figure records exactly what the figure measures: its unit, its scope (what is counted, and where) and its period.
 - A claim the source attributes to someone stays attributed to them.
 - A fact's statement restates the fact in plain English in your own order and phrasing, never a translation of the supporting sentence; names, figures and scope stay exact.
+${STATEMENT_LIMITS}
 - The supporting sentence is copied character for character from <TEXT>, so that code can find it there.
-- The as-of date is the date the fact describes, never the date the source was published.
+- ${AS_OF_RULE}
 </REQUIREMENTS>`
 
 // ---------------------------------------------------------------------------
@@ -278,7 +282,7 @@ A figure is given when SOURCE itself states the number for that thing, in any fo
 <NOT_GIVEN>
 - computed: SOURCE does not state the number, and it can only be reached by counting or calculating: the items of a list counted ("Kenya, Uganda and Rwanda" as 3 countries), two numbers added, subtracted or divided, the named few of a larger group taken as the group ("11 countries, including five named" as 5 countries).
 - other-thing: SOURCE states the number, but for something other than COUNTS names: another measure, group, place or period (deaths for cases, a proposed share for a share in force, the national total for one province, this week's count for the total since the start, the three weeks a report covers for how long the fighting has lasted), or a year or a date taken as an amount ("by 2027" as 2,027 years).
-- not-stated: SOURCE states no number for this thing ("a series of actions" as 1 series, "several villages" as any number), or states a different one.
+- not-stated: SOURCE states no number for this thing ("a series of actions" as 1 series, "several villages" as any number, "thousands of homes" as 2,000 to 9,999, "the second phase" as 2 phases), or states a different one.
 </NOT_GIVEN>
 
 <REQUIREMENTS>

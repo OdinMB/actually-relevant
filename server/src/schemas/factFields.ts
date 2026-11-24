@@ -45,12 +45,15 @@ export const structuredFactFields = {
     .number()
     .nullable()
     .describe(
-      'The figure the fact states, as a plain number in its unit: 12.5 million people is 12500000, 63% is 63, $1.2 billion is 1200000000. The low end of a range. Null for a fact without a figure.',
+      'The figure the fact states, as a plain number in its unit: 12.5 million people is 12500000, 63% is 63, $1.2 billion is 1200000000. The low end of a range. Null for a fact without a figure. ' +
+        'Null too when the source gives no number for it: a vague amount ("hundreds", "dozens", "several"), an ordinal ("the second phase", "a third term"), a calendar year, a date or a time.',
     ),
   valueHigh: z.number().nullable().describe('The high end of a range ("5,000 to 5,400 dead" gives 5400). Null otherwise.'),
   unit: z
     .string()
-    .describe('What one of the value is, short and in English: "people", "hectares", "%", "USD", "GW", "°C". Empty string for a fact without a figure.'),
+    .describe(
+      'What one of the value is, short and in English: "people", "hectares", "%", "USD", "GW", "°C". Empty string for a fact without a figure. A rate keeps its period: "tonnes per day", "USD per year".',
+    ),
   approx: z
     .enum(APPROX)
     .describe(
@@ -62,18 +65,26 @@ export const structuredFactFields = {
   counted: z
     .string()
     .describe(
-      'For a fact with a figure: what the figure counts or measures, with its scope, as a short noun phrase ("area burned in Indonesia", "people under hazardous smoke in Southeast Asia"). Empty string for a fact without a figure.',
+      'For a fact with a figure: what the figure counts or measures, with its scope, as a short noun phrase ("area burned in Indonesia", "people under hazardous smoke in Southeast Asia"). Empty string for a fact without a figure. It names the one thing the value counts, never a second figure.',
     ),
-  place: z.string().describe('The country, region or city the fact is about, as the source names it in English. Empty string when it names none.'),
+  place: z
+    .string()
+    .describe(
+      'The country, region or city the fact is about, as the source names it in English and no wider: "southern Norway" stays "southern Norway", never "Norway". Empty string when it names none.',
+    ),
   asOf: z
     .string()
     .describe(
-      'The date the fact describes, which is not the date the source was published: "YYYY-MM-DD", "YYYY-MM" or "YYYY", only as precise as the source says ("in 2015" gives "2015"). Empty string when the source dates the fact only by its own publication.',
+      'The day, month or year at which the fact\'s figure or state stood, or on which its event or statement took place, as the source dates it: "YYYY-MM-DD", "YYYY-MM" or "YYYY", only as precise as the source says ("4,300 homes without power as of July 9" gives the day, "burned in 2015" gives "2015"). ' +
+        'A weekday or "yesterday" is the calendar day it names, counted from the source\'s publication date. ' +
+        'Empty string when the source dates the fact only by its own publication, and whenever the only date at hand is something else: the start of a period ("since August", "since 1995", "from September to November"), the year of an earlier event the fact follows ("after the 2019 floods"), a date still in the future (the date a forecast is for, a deadline, a scheduled meeting), or the date of another thing the sentence mentions (when a law was adopted, in a fact about what the law requires).',
     ),
   credited: z
     .string()
     .describe(
-      'Who the source credits the fact to, by name ("Indonesia\'s disaster agency", "the World Health Organization"). Empty string when the source states it on its own authority.',
+      'The person or body the source says this information comes from, by name: who reported, said, counted or estimated it ("Indonesia\'s disaster agency", "the World Health Organization"). ' +
+        'Never who acts in the fact, owns the thing described or adopted it: "the regulator fined the airline" credits nobody, "the regulator said it had fined the airline" credits the regulator. ' +
+        'In a sentence with several claims, only the body credited with this one. Empty string when the source states it in its own voice.',
     ),
   creditedKind: z
     .enum([...CREDITED_KINDS, 'none'])

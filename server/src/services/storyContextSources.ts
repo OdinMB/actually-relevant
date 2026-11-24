@@ -8,6 +8,7 @@
 import { createHash } from 'node:crypto'
 import { config } from '../config.js'
 import type { TavilyResult, TavilySearch } from '../lib/tavily.js'
+import { supportFound } from './researchChecks.js'
 import { BLOCKED_DOMAINS, domainOf, normalizedUrl, selectedText } from './researchFilter.js'
 
 export interface ContextSearchRequest {
@@ -134,15 +135,57 @@ const SENTENCE = /[^.!?]+(?:[.!?]+["'”’)\]]*|$)\s*/g
 const squashed = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
 
 /**
- * The supporting sentence with one sentence either side, as it stands in the fetched text, at most
- * `max` characters; the sentence alone (cut to size) when it is not found or the three are longer.
+ * A text's sentences in order, each with its trailing space (the text with whitespace runs as one
+ * space). `SENTENCE` cuts at every stop, so a part that ends without whitespace was cut inside a token
+ * ("$1." of "$1.5 million", "U." of "U.S."): it is joined to the part after it. An abbreviation
+ * followed by a space still ends a part.
+ */
+function sentenceParts(text: string): string[] {
+  const parts: string[] = []
+  for (const part of text.replace(/\s+/g, ' ').trim().match(SENTENCE) ?? []) {
+    const cut = parts.at(-1)
+    if (cut !== undefined && !cut.endsWith(' ')) parts[parts.length - 1] = cut + part
+    else parts.push(part)
+  }
+  return parts
+}
+
+/** The index of the part that holds character `offset` of the parts joined, the last part past their end. */
+function partAt(parts: string[], offset: number): number {
+  let end = 0
+  for (const [i, p] of parts.entries()) {
+    end += p.length
+    if (offset < end) return i
+  }
+  return parts.length - 1
+}
+
+/**
+ * A search fact's support with one sentence either side, as it stands in the fetched text, at most
+ * `max` characters: the words the figure check and the fact check read for it. The support is found
+ * by its first 40 characters (case and whitespace aside) anywhere in the text, and the passage runs
+ * from the sentence before the one it starts in to the sentence after the one it ends in. Its end is
+ * where `supportFound` first finds the whole support, so the passage holds all of a support that
+ * check finds, whatever the sentence split makes of it: story context's extraction asks for one
+ * sentence, but a sentence with an abbreviation in it is several parts, and a copy may take two
+ * sentences. A copy that strays after its first 40 characters ends where they do. The support alone,
+ * cut to size, when it is not found or the passage is longer.
  */
 export function passageAround(text: string, sentence: string, max = 600): string {
-  const parts = text.match(SENTENCE)?.map(p => p.trim()) ?? []
+  const parts = sentenceParts(text)
+  // Searched in the parts lower-cased one by one, so each offset maps back to its part
+  const lower = parts.map(p => p.toLowerCase())
   const needle = squashed(sentence).slice(0, 40)
-  const i = needle === '' ? -1 : parts.findIndex(p => squashed(p).includes(needle))
-  if (i >= 0) {
-    const passage = parts.slice(Math.max(0, i - 1), i + 2).join(' ')
+  const start = needle === '' ? -1 : lower.join('').indexOf(needle)
+  if (start >= 0) {
+    const first = partAt(lower, start)
+    const needleEnd = partAt(lower, start + needle.length - 1)
+    const whole = parts.findIndex((_, i) => i >= needleEnd && supportFound(sentence, parts.slice(first, i + 1).join('')))
+    const last = whole >= 0 ? whole : needleEnd
+    const passage = parts
+      .slice(Math.max(0, first - 1), last + 2)
+      .join('')
+      .trim()
     if (passage.length <= max) return passage
   }
   return sentence.slice(0, max)

@@ -19,7 +19,9 @@ const citationSchema = z.object({
   sentence: z
     .string()
     .nullable()
-    .describe("The source's own sentence that supports the text, in its original language; null when the text cites only the source's date."),
+    .describe(
+      "The source's own words that support the text, in its original language: one sentence, or two adjacent ones for a fact extracted since 2026-11-25; null when the text cites only the source's date.",
+    ),
 })
 
 /** Exported for story context's view, which cites in the same shape (`storyContextView.ts`). */

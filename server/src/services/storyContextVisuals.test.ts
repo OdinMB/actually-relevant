@@ -5,6 +5,7 @@ import {
   formatFigure,
   isCurrent,
   normalizeAsOf,
+  pastAsOf,
   spelledFigure,
   tileDisplay,
   validChart,
@@ -76,6 +77,33 @@ describe('as-of dates', () => {
   })
 })
 
+describe('pastAsOf', () => {
+  const PUBLISHED = '2026-11-24'
+
+  it("drops an as-of later than its source's publication day, compared at the as-of's own precision", () => {
+    expect(pastAsOf('2026-11-25', PUBLISHED)).toBeNull()
+    expect(pastAsOf('2026-12', PUBLISHED)).toBeNull()
+    expect(pastAsOf('2027', PUBLISHED)).toBeNull()
+  })
+
+  it("keeps an as-of on or before its source's day, a month or year that holds the day included", () => {
+    expect(['2026-11-24', '2026-11-23', '2026-11', '2026-10', '2026', '2015'].map(asOf => pastAsOf(asOf, PUBLISHED))).toEqual([
+      '2026-11-24',
+      '2026-11-23',
+      '2026-11',
+      '2026-10',
+      '2026',
+      '2015',
+    ])
+  })
+
+  it('keeps the as-of when the source has no date, and keeps no as-of as none', () => {
+    expect(pastAsOf('2027-03-01', null)).toBe('2027-03-01')
+    expect(pastAsOf(null, PUBLISHED)).toBeNull()
+    expect(pastAsOf(null, null)).toBeNull()
+  })
+})
+
 describe('formatFigure', () => {
   it('writes millions and billions short, thousands in full', () => {
     expect(formatFigure(fact({ ref: 'a', value: 12_500_000 }))).toEqual({ text: '12.5m', estimate: false })
@@ -104,6 +132,15 @@ describe('formatFigure', () => {
   it('spells a figure whose stored unit is only a filler without it', () => {
     expect(spelledFigure(fact({ ref: 'a', value: 12, unit: 'none' }))).toBe('12')
     expect(spelledFigure(fact({ ref: 'a', value: 12, unit: 'N/A' }))).toBe('12')
+  })
+
+  it("keeps a rate's currency or percent sign: the number takes the symbol, and the period is the label's or follows in words", () => {
+    expect(formatFigure(fact({ ref: 'a', value: 52_000_000, unit: 'USD per year' }))?.text).toBe('$52m')
+    expect(formatFigure(fact({ ref: 'a', value: 3, unit: '% per year', approx: 'about' }))?.text).toBe('about 3%')
+    expect(formatFigure(fact({ ref: 'a', value: 1200, unit: 'tonnes per day' }))?.text).toBe('1,200')
+    expect(spelledFigure(fact({ ref: 'a', value: 52_000_000, unit: 'USD per year' }))).toBe('$52 million per year')
+    expect(spelledFigure(fact({ ref: 'a', value: 3, valueHigh: 4, unit: '% per year' }))).toBe('3% to 4% per year')
+    expect(spelledFigure(fact({ ref: 'a', value: 1200, unit: 'tonnes per day' }))).toBe('1,200 tonnes per day')
   })
 })
 

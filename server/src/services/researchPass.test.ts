@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ZERO_USAGE } from '../lib/llmUsage.js'
 import { promptText } from '../lib/promptCache.js'
+import { AS_OF_RULE } from '../prompts/factRules.js'
 import { coverageExtractionSchema, type Draft, type Extraction, type FactCheck } from '../schemas/research.js'
 import type { FigureAnswer, FigureCheck, GapList } from '../schemas/storyContext.js'
 import { articleOf } from './articleVersions.js'
@@ -226,10 +227,17 @@ describe('runResearchPass, a first pass', () => {
 
   it("takes each fact's structured fields from its extraction and makes no structure call for them", async () => {
     const schemas: unknown[] = []
+    // The original article is dated 2026-11-12: its first fact's as-of is a day later, its others' that day
     const fake = fakeDeps({
       extract: () => ({
         ...extraction(),
-        facts: extraction().facts.map((f, i) => ({ ...f, ...fields, value: i === 0 ? 22 : null, unit: i === 0 ? 'GW' : '' })),
+        facts: extraction().facts.map((f, i) => ({
+          ...f,
+          ...fields,
+          value: i === 0 ? 22 : null,
+          unit: i === 0 ? 'GW' : '',
+          asOf: i === 0 ? '2026-11-13' : '2026-11-12',
+        })),
       }),
     })
     const call = fake.deps.call
@@ -242,7 +250,7 @@ describe('runResearchPass, a first pass', () => {
     expect(result).toMatchObject({ kind: 'first', status: 'completed', outcome: 'written' })
     expect(fake.stepsCalled()).not.toContain('structure')
     expect(schemas.every(s => s === coverageExtractionSchema)).toBe(true)
-    expect(fake.calls.find(c => c.step === 'extract')!.prompt).toContain('The as-of date is the date the fact describes')
+    expect(fake.calls.find(c => c.step === 'extract')!.prompt).toContain(AS_OF_RULE)
     const s0f1 = result.pool.facts.find(f => f.ref === 'S0F1')!
     expect(s0f1.structured).toMatchObject({
       value: 22,
@@ -251,6 +259,8 @@ describe('runResearchPass, a first pass', () => {
       creditedKind: null,
       by: { model: 'model-extract', promptVersion: 'research-extract' },
     })
+    // An as-of later than the day its source was published is not stored; one on that day is
+    expect(result.pool.facts.filter(f => f.sourceRef === 'S0').map(f => f.structured?.asOf)).toEqual([null, '2026-11-12'])
     expect(result.record.context.facts.research).toBe(0)
   })
 

@@ -496,6 +496,23 @@ describe('supportFound', () => {
     expect(supportFound('We have added 32GW of solar.', page)).toBe(false)
     expect(supportFound('   ', page)).toBe(false)
   })
+
+  describe('of two sentences copied as one stretch', () => {
+    const text =
+      'Pakistan imported 17 GW of panels last year. The grid lost paying customers as a result. Officials called it "a quiet revolution." The minister promised net-metering reform.'
+
+    it('finds two adjacent sentences, also across a line or paragraph break and with other quote marks', () => {
+      const two = 'The grid lost paying customers as a result. Officials called it “a quiet revolution.”'
+      expect(supportFound(two, text)).toBe(true)
+      expect(supportFound(two, text.replace('result. ', 'result.\n'))).toBe(true)
+      expect(supportFound(two, text.replace('result. ', 'result.\n\n  '))).toBe(true)
+    })
+
+    it('does not find two sentences the text does not hold side by side, nor two adjacent ones in the wrong order', () => {
+      expect(supportFound('Pakistan imported 17 GW of panels last year. The minister promised net-metering reform.', text)).toBe(false)
+      expect(supportFound('The grid lost paying customers as a result. Pakistan imported 17 GW of panels last year.', text)).toBe(false)
+    })
+  })
 })
 
 describe('decideGate', () => {

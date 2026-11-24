@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { StructuredFact } from '../schemas/factFields.js'
-import { structured } from './storyContextPipeline.js'
+import { structured as structuredFrom, structureFacts, type ContextStepCall, type FactToStructure } from './storyContextPipeline.js'
+
+/** The cases on the fields alone have no source date, so no as-of is dropped as later than it. */
+const structured = (a: StructuredFact) => structuredFrom(a, null)
 
 /** The model's answer for one fact: it never leaves the nullable numbers null, so the defaults are its junk. */
 const answer = (over: Partial<StructuredFact>): StructuredFact =>
@@ -87,5 +90,36 @@ describe('structured', () => {
     expect(structured(answer({ ...people, value: 1029, valueHigh: -1 })).valueHigh).toBeNull()
     expect(structured(answer({ ...people, value: 8000, valueHigh: 8000 })).valueHigh).toBeNull()
     expect(structured(answer({ ...people, value: 400, valueHigh: 500 })).valueHigh).toBe(500)
+  })
+})
+
+describe("structured: an as-of later than its source's publication day", () => {
+  const asOfOn = (asOf: string, sourceDate: string | null) => structuredFrom(answer({ asOf }), sourceDate).asOf
+
+  // The rule's own cases are `pastAsOf`'s (`storyContextVisuals.test.ts`); here, that the source's date is read as its day
+  it("reads as no as-of, the source's date taken as its day in the form search gives it", () => {
+    expect(asOfOn('2026-11-13', 'Thu, 12 Nov 2026 08:00:00 GMT')).toBeNull()
+    expect(asOfOn('2026-11-12', 'Thu, 12 Nov 2026 08:00:00 GMT')).toBe('2026-11-12')
+  })
+})
+
+describe('structureFacts', () => {
+  const toStructure = (id: string, date: string | null): FactToStructure => ({
+    id,
+    statement: `Statement of ${id}.`,
+    supportingSentence: `Sentence of ${id}.`,
+    measures: '',
+    source: { outlet: 'Dawn', date, kind: 'news-report' },
+  })
+
+  it("drops an as-of later than the publication day of each fact's own source, and keeps one on or before it", async () => {
+    const asOf: Record<string, string> = { S1F1: '2026-11-20', S1F2: '2026-11-12', S2F1: '2026-11-20' }
+    const call: ContextStepCall = async (_step, schema) => ({
+      parsed: schema.parse({ facts: Object.entries(asOf).map(([id, a]) => ({ id, ...answer({ asOf: a }) })) }),
+      outcome: 'ok',
+      model: 'm',
+    })
+    const { answers } = await structureFacts([toStructure('S1F1', '2026-11-12'), toStructure('S1F2', '2026-11-12'), toStructure('S2F1', '2026-11-20')], call)
+    expect(Object.fromEntries([...answers].map(([id, a]) => [id, a.asOf]))).toEqual({ S1F1: null, S1F2: '2026-11-12', S2F1: '2026-11-20' })
   })
 })

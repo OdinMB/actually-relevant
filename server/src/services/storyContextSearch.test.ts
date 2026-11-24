@@ -142,4 +142,85 @@ describe('passageAround', () => {
     expect(passageAround(text, 'Not in the text.')).toBe('Not in the text.')
     expect(passageAround(`${'a'.repeat(500)}. The key sentence. ${'b'.repeat(500)}.`, 'The key sentence.')).toBe('The key sentence.')
   })
+
+  const FLOOD =
+    'Rain fell all week in the north. Rivers rose above their banks in three provinces. About 12,000 people left their homes by Friday. Shelters opened in schools and churches. The army sent boats.'
+  const TWO = 'Rivers rose above their banks in three provinces. About 12,000 people left their homes by Friday.'
+
+  it('keeps a support of two adjacent sentences with one sentence either side', () => {
+    expect(passageAround(FLOOD, TWO)).toBe(
+      'Rain fell all week in the north. Rivers rose above their banks in three provinces. About 12,000 people left their homes by Friday. Shelters opened in schools and churches.',
+    )
+  })
+
+  it('finds two sentences a line or paragraph break parts in the text, and gives the passage with single spaces', () => {
+    const broken =
+      'Rain fell all week in the north.\nRivers rose above their banks in three provinces.\n\n  About 12,000 people left their homes by Friday.\nShelters opened.'
+    expect(passageAround(broken, TWO)).toBe(
+      'Rain fell all week in the north. Rivers rose above their banks in three provinces. About 12,000 people left their homes by Friday. Shelters opened.',
+    )
+  })
+
+  it('finds a support whose first sentence is shorter than the 40 characters it is found by', () => {
+    const text =
+      'Engineers had warned for years. The dam held for a week. Then it broke. Water reached the town by noon on Sunday. Nobody was hurt. Repairs take a year.'
+    expect(passageAround(text, 'Then it broke. Water reached the town by noon on Sunday.')).toBe(
+      'The dam held for a week. Then it broke. Water reached the town by noon on Sunday. Nobody was hurt.',
+    )
+  })
+
+  it('keeps a sentence with a decimal or an abbreviation whole, with a neighbour either side', () => {
+    const aid =
+      'Aid groups asked for more help. The U.S. pledged $1.5 million in emergency aid to the flooded provinces on Monday. Other donors followed. The UN welcomed it.'
+    expect(passageAround(aid, 'The U.S. pledged $1.5 million in emergency aid to the flooded provinces on Monday.')).toBe(
+      'Aid groups asked for more help. The U.S. pledged $1.5 million in emergency aid to the flooded provinces on Monday. Other donors followed.',
+    )
+    const food =
+      'The rains stopped on Sunday. Officials in the flooded northern provinces said that 1.5 million people need food aid. Roads remain closed. Schools too.'
+    expect(passageAround(food, 'Officials in the flooded northern provinces said that 1.5 million people need food aid.')).toBe(
+      'The rains stopped on Sunday. Officials in the flooded northern provinces said that 1.5 million people need food aid. Roads remain closed.',
+    )
+  })
+
+  it('keeps a neighbour with a decimal whole too, never from the middle of its number', () => {
+    const text = 'Aid worth $1.5 million arrived on Sunday. Officials said 12,000 people left their homes. Roads remain closed.'
+    expect(passageAround(text, 'Officials said 12,000 people left their homes.')).toBe(text)
+  })
+
+  it('holds the whole of a support the page writes with other quote marks, as far as `supportFound` finds it', () => {
+    const page =
+      'The rains stopped on Sunday. Officials in the flooded northern provinces said the region’s displaced families, now sheltering near the U.S. base and the U.N. depot, need aid worth $1.5 million. Roads remain closed. Schools too.'
+    const copied =
+      "Officials in the flooded northern provinces said the region's displaced families, now sheltering near the U.S. base and the U.N. depot, need aid worth $1.5 million."
+    expect(passageAround(page, copied)).toBe(
+      'The rains stopped on Sunday. Officials in the flooded northern provinces said the region’s displaced families, now sheltering near the U.S. base and the U.N. depot, need aid worth $1.5 million. Roads remain closed.',
+    )
+  })
+
+  it('gives a support at the very start or the very end of the text its one neighbour', () => {
+    expect(passageAround(FLOOD, 'Rain fell all week in the north. Rivers rose above their banks in three provinces.')).toBe(
+      'Rain fell all week in the north. Rivers rose above their banks in three provinces. About 12,000 people left their homes by Friday.',
+    )
+    expect(passageAround(FLOOD, 'Shelters opened in schools and churches. The army sent boats.')).toBe(
+      'About 12,000 people left their homes by Friday. Shelters opened in schools and churches. The army sent boats.',
+    )
+  })
+
+  it('places a copy that strays after its first 40 characters where those characters stand', () => {
+    expect(passageAround(FLOOD, 'Rivers rose above their banks in three provinces after storms. About 15,000 people left.')).toBe(
+      'Rain fell all week in the north. Rivers rose above their banks in three provinces. About 12,000 people left their homes by Friday.',
+    )
+  })
+
+  it('places two sentences the text does not hold side by side where the first stands, or gives the support alone', () => {
+    expect(passageAround(FLOOD, 'Rivers rose above their banks in three provinces. The army sent boats.')).toBe(
+      'Rain fell all week in the north. Rivers rose above their banks in three provinces. About 12,000 people left their homes by Friday.',
+    )
+    expect(passageAround(FLOOD, 'The army sent boats. Rain fell all week in the north.')).toBe('The army sent boats. Rain fell all week in the north.')
+  })
+
+  it('gives the support alone, cut to size, when the passage is longer than allowed', () => {
+    expect(passageAround(`${'a'.repeat(550)}. ${TWO} ${'b'.repeat(550)}.`, TWO)).toBe(TWO)
+    expect(passageAround(FLOOD, TWO, 40)).toBe(TWO.slice(0, 40))
+  })
 })

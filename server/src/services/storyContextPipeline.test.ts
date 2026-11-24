@@ -384,6 +384,40 @@ describe('buildStoryContext', () => {
     expect(out.facts.filter(f => f.origin === 'search').map(f => [f.ref, f.source.outlet])).toEqual([['S2F1', 'two.example']])
   })
 
+  it("shows the structure and extraction steps each source's publication day with its weekday", async () => {
+    const { deps, prompts } = fakeDeps({ gap: gap('yes', { searches: [search('compared', 'q')] }) })
+    await buildStoryContext(input(), deps)
+    // Research's source is dated 2026-11-12, the search result 2026-11-10 (`result`)
+    expect(prompts.structure![0]).toContain('published="2026-11-12 (Thursday)"')
+    expect(prompts.extract![0]).toContain('<DATE>2026-11-10 (Tuesday)</DATE>')
+  })
+
+  it("stores a search fact's as-of later than its page's publication day as none, and keeps one on that day", async () => {
+    const searchFact = (statement: string, asOf: string) => ({
+      statement,
+      supportingSentence: 'Officials say a moratorium on peat drainage has cut fires by half since 2016.',
+      slot: 'response' as const,
+      ...fields,
+      asOf,
+    })
+    const { deps } = fakeDeps({
+      gap: gap('yes', { searches: [search('compared', 'q')] }),
+      answers: { q: { results: [result('https://one.example/a')], credits: 1, cached: false } },
+      extract: () => ({
+        usable: true,
+        kind: 'official-body',
+        outlet: 'Agency',
+        facts: [searchFact('Fires peak next week.', '2026-11-11'), searchFact('A moratorium cut fires.', '2026-11-10')],
+      }),
+    })
+    const out = await buildStoryContext(input(), deps)
+    // The page is dated 2026-11-10 (`result`)
+    expect(out.facts.filter(f => f.origin === 'search').map(f => [f.ref, f.asOf])).toEqual([
+      ['S1F1', null],
+      ['S1F2', '2026-11-10'],
+    ])
+  })
+
   it('ends a story as a technical failure on a Tavily error, with what it spent', async () => {
     const { deps } = fakeDeps({ gap: responseGap(), searchError: new TavilyError('Tavily search failed: HTTP 502', 502) })
     const out = await buildStoryContext(input(), deps)

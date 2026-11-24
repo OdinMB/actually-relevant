@@ -103,7 +103,7 @@ export const contextExtractionSchema = z.object({
         statement: z
           .string()
           .describe(
-            'One fact in one plain English sentence, true to the source: a figure keeps its unit, its scope and its period, and a claim keeps who makes it. Your own order and phrasing, never a translation of the supporting sentence.',
+            'One fact in one plain English sentence, true to the source: a figure keeps its unit, its scope and its period, and a claim keeps who makes it and how strongly. Your own order and phrasing, never a translation of the supporting sentence.',
           ),
         supportingSentence: z
           .string()

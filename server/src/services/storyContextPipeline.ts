@@ -64,7 +64,7 @@ import { judgeFigures, type RemovedFigure } from './storyContextFigures.js'
 import { layoutSpots, type StoryLayout } from './storyContextLayout.js'
 import { boxRefs, factKey } from './storyContextRecords.js'
 import { normalizedQuery, passageAround, pickNewSources, type ContextSearchAnswer, type ContextSearchRequest, type SourceDrop } from './storyContextSources.js'
-import { isCurrent, normalizeAsOf, type ValidityWindows } from './storyContextVisuals.js'
+import { isCurrent, normalizeAsOf, pastAsOf, type ValidityWindows } from './storyContextVisuals.js'
 
 export const CONTEXT_STEPS = ['structure', 'gap-list', 'extract', 'figure-check', 'fact-check', 'write', 'box-check'] as const
 export type ContextStep = (typeof CONTEXT_STEPS)[number]
@@ -321,10 +321,13 @@ const sourceNumber = (id: string) => Number(/^S(\d+)$/.exec(id)?.[1] ?? -1)
  * figure, and a range's upper end counts only above its lower one. Kept as given, they rendered as
  * "at least 800,000 to 0 people" or "(0, according to …)", and the fact check rejected the fact. It
  * fills the text fields with "none", "unknown" or "n/a" in the same way, so a field that is only
- * such a filler reads as empty (`fieldText`), before either rule.
+ * such a filler reads as empty (`fieldText`), before either rule. An as-of later than the source's
+ * publication day (`sourceDate`, in any form `publishedDay` reads) reads as none (`pastAsOf`): a
+ * source cannot date a state after it was published, and the fact falls back to the source's day.
  */
 export function structured(
   a: StructuredFact,
+  sourceDate: string | null,
 ): Pick<ContextFactData, 'value' | 'valueHigh' | 'unit' | 'approx' | 'provisional' | 'counted' | 'place' | 'asOf' | 'credited' | 'creditedKind' | 'validity'> {
   const unit = fieldText(a.unit)
   const counted = fieldText(a.counted)
@@ -338,7 +341,7 @@ export function structured(
     provisional: a.provisional,
     counted,
     place: fieldText(a.place),
-    asOf: normalizeAsOf(a.asOf),
+    asOf: pastAsOf(normalizeAsOf(a.asOf), publishedDay(sourceDate)),
     credited,
     creditedKind: credited && a.creditedKind !== 'none' ? a.creditedKind : null,
     validity: a.validity,
@@ -501,9 +504,12 @@ export async function structureFacts(
 ): Promise<{ answers: Map<string, ReturnType<typeof structured>>; model: string }> {
   const answers = new Map<string, ReturnType<typeof structured>>()
   if (facts.length === 0) return { answers, model: '' }
-  const asked = new Set(facts.map(f => f.id))
+  const sourceDate = new Map(facts.map(f => [f.id, f.source.date]))
   const res = await call('structure', structureSchema, buildStructurePromptParts({ facts }))
-  for (const a of required(res, 'structure').facts) if (asked.has(a.id) && !answers.has(a.id)) answers.set(a.id, structured(a))
+  for (const a of required(res, 'structure').facts) {
+    const date = sourceDate.get(a.id)
+    if (date !== undefined && !answers.has(a.id)) answers.set(a.id, structured(a, date))
+  }
   return { answers, model: res.model }
 }
 
@@ -630,7 +636,7 @@ export async function gapStage(
         passage: passageAround(p.result.text, f.supportingSentence),
         supportFound: supportFound(f.supportingSentence, p.result.text),
         statement: f.statement,
-        ...structured(f),
+        ...structured(f, source.date),
         ...unverified,
         model: res.model,
         promptVersion: CONTEXT_PROMPT_VERSIONS.extract,
