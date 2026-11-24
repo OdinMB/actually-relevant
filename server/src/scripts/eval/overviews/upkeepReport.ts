@@ -38,7 +38,9 @@ function standsMisses(r: StandsStepReport): string[] {
 /** The lines the write gave and a check dropped, each with the check and its reason, then the lines kept: what the stands lost and why, for a read. */
 function standsDrops(r: StandsStepReport): string[] {
   const at = (x: StandsStepReport['runs'][number]) => `${x.key} ${x.day} run ${x.run}`
-  const drops = r.runs.flatMap(x => (x.dropped ?? []).map(d => `- ${at(x)}: ${d.label} (${d.cause}${d.problem ? `: ${cell(d.problem)}` : ''}): ${cell(d.text)}`))
+  const drops = r.runs.flatMap(x =>
+    (x.dropped ?? []).map(d => `- ${at(x)}: ${d.label} (${d.cause}${d.problem ? `: ${cell(d.problem)}` : ''}): ${cell(d.text)}`),
+  )
   const kept = r.runs.flatMap(x => x.lines.map(l => `- ${at(x)}: ${l.part}: ${cell(l.text)}`))
   return [
     ...(drops.length > 0 ? ['', '### Lines written and dropped by a check', '', ...drops] : []),
