@@ -258,9 +258,9 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * Every step, in the order a run takes them: `context` and `stands` before `fact-check`, which
- * `--facts context` and `--facts stands` sample from; `pass-pool` before `stands` and `replay`,
- * which take its pools.
+ * Every step, in the order a run takes them: `context`, `pass-pool` and `stands` before `fact-check`,
+ * which `--facts context`, `--facts pool` and `--facts stands` sample from; `pass-pool` before
+ * `stands` and `replay`, which take its pools.
  */
 export const OVERVIEW_STEPS = [
   'keys',
@@ -294,9 +294,22 @@ export const LINKING_STEPS: readonly OverviewStep[] = ['link', 'found', 'role']
  * automated re-center on planted and real cases, and `replay` replays the whole module.
  */
 export const OVERVIEW_DEFAULT_STEPS: readonly OverviewStep[] = ['keys', 'fact-check', 'baseline']
-/** Which facts the fact check plants errors in: research's extracted statements, module 1's rendered facts, or the stands' lines. */
-export const OVERVIEW_FACT_SOURCES = ['research', 'context', 'stands'] as const
-export type OverviewFactSource = (typeof OVERVIEW_FACT_SOURCES)[number]
+/**
+ * Which facts the fact check plants errors in (`--facts`). For each: the step whose run 1 it samples,
+ * named beside `fact-check` in `--steps` (null for research's extracted statements, sampled from the
+ * database); what that step leaves to sample; and whether the sample is module-1 facts as production's
+ * `renderFact` renders them, with their structured fields, so the field kinds are planted in them and
+ * the label pass measures the rendering (`scoreFidelity`). Each sample is built by its entry in
+ * `overviews/factSources.ts`.
+ */
+export const OVERVIEW_FACT_SOURCES = {
+  research: { step: null, samples: "research's extracted statements", rendered: false },
+  context: { step: 'context', samples: 'the facts the context step keeps', rendered: true },
+  stands: { step: 'stands', samples: 'the lines the stands step keeps', rendered: false },
+  pool: { step: 'pass-pool', samples: "the facts the pass-pool step's first passes keep", rendered: true },
+} as const satisfies Record<string, { step: OverviewStep | null; samples: string; rendered: boolean }>
+export type OverviewFactSource = keyof typeof OVERVIEW_FACT_SOURCES
+const isFactSource = (s: string): s is OverviewFactSource => Object.hasOwn(OVERVIEW_FACT_SOURCES, s)
 const OVERVIEW_HALVES = ['tune', 'judge', 'all'] as const
 export type OverviewHalf = (typeof OVERVIEW_HALVES)[number]
 export const OVERVIEW_DEFAULT_BUDGET_USD = 3
@@ -333,7 +346,11 @@ export interface OverviewOptions {
   /** The fact-check arms scored. */
   arms: Arm[]
   refreshFixtures: boolean
-  /** `context`: the fact check samples the facts the `context` step's run 1 kept, so both steps run; `stands`: the lines the `stands` step's run 1 kept. */
+  /**
+   * What the fact check samples (`OVERVIEW_FACT_SOURCES`): research's statements from the database, or
+   * what run 1 of a step named beside it kept: the `context` step's facts (`context`), the `pass-pool`
+   * step's first passes' facts (`pool`), the `stands` step's lines (`stands`).
+   */
   facts: OverviewFactSource
   /** The gap keys the `context` step runs on, and the answer keys' stories the `update` and linking steps run on: prompts are tuned on `tune`, the gate is read on `judge`. */
   half: OverviewHalf
@@ -392,15 +409,13 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
   if (steps.includes('key-draft') && steps.length > 1) {
     throw new Error('--steps key-draft runs on its own: it writes the answer keys the other steps read; review its drafts, then run the others')
   }
-  const facts = OVERVIEW_FACT_SOURCES.find(f => f === (values.facts ?? 'research'))
-  if (!facts) throw new Error(`--facts must be one of ${OVERVIEW_FACT_SOURCES.join(', ')}`)
-  if (facts === 'context' && !(steps.includes('context') && steps.includes('fact-check'))) {
+  const facts = values.facts ?? 'research'
+  if (!isFactSource(facts)) throw new Error(`--facts must be one of ${Object.keys(OVERVIEW_FACT_SOURCES).join(', ')}`)
+  const { step: sampled, samples } = OVERVIEW_FACT_SOURCES[facts]
+  if (sampled && !(steps.includes(sampled) && steps.includes('fact-check'))) {
     throw new Error(
-      "--facts context samples the facts the context step keeps: name both context and fact-check in --steps (the context step's calls and searches are cached, so a repeated run costs nothing more)",
+      `--facts ${facts} samples ${samples}: name both ${sampled} and fact-check in --steps (the ${sampled} step's calls are cached, so a repeated run costs nothing more)`,
     )
-  }
-  if (facts === 'stands' && !(steps.includes('stands') && steps.includes('fact-check'))) {
-    throw new Error("--facts stands samples the lines the stands step keeps: name both stands and fact-check in --steps (the stands step's calls are cached)")
   }
   const half = OVERVIEW_HALVES.find(h => h === (values.half ?? 'all'))
   if (!half) throw new Error(`--half must be one of ${OVERVIEW_HALVES.join(', ')}`)

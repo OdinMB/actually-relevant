@@ -3,6 +3,7 @@ import type { MemberFact } from '../../../services/overviewStands.js'
 import type { LinkStory } from '../../../services/overviewTypes.js'
 import type { PoolFact, PoolSource } from '../../../services/researchPool.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
+import { passInput, researchStory } from '../../../test/passFixtures.js'
 import type { KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
 import { runPassPool } from './passPool.js'
@@ -374,7 +375,11 @@ describe('runReplayStep', () => {
 
 describe('runPassPool', () => {
   it('leaves out the stories with no first-pass input and runs no pass for them', async () => {
-    const { report, facts: pools } = await runPassPool({
+    const {
+      report,
+      facts: pools,
+      stories: researched,
+    } = await runPassPool({
       ctx: fakeEvalContext(() => null),
       tavily: { search: async () => ({ results: [] }) } as never,
       files: FILES,
@@ -389,12 +394,29 @@ describe('runPassPool', () => {
     expect(report).toMatchObject({ stories: 0, withFacts: 0, facts: 0 })
     expect(report.left.map(l => l.what)).toEqual(['e1', 'e2'])
     expect(pools.size).toBe(0)
+    expect(researched).toEqual([])
+  })
+
+  it('returns each story whose pass ran under its slug, in the order researched, and none that had no input', async () => {
+    const { stories: researched } = await runPassPool({
+      ctx: fakeEvalContext(() => null),
+      tavily: { search: async () => ({ results: [] }) } as never,
+      files: FILES,
+      half: 'judge',
+      inputs: async slugs => new Map(slugs.map(s => [s, s === 'e1' ? null : passInput(researchStory({ id: `id-${s}` }))])),
+      relevanceMin: 5,
+      concurrency: 2,
+      budgetUsd: 5,
+      spentUsd: () => 0,
+      limit: 3,
+    })
+    expect(researched.map(s => s.slug)).toEqual(['e2', 'e3'])
   })
 
   it("asks only for the stories the stands' checkpoints read, and says of how many must entries", async () => {
     const many: AnswerKey = { ...KEY, entries: Array.from({ length: 12 }, (_, i) => entry(`m${i + 1}`, `2026-05-${String(i + 1).padStart(2, '0')}`)) }
     let asked: string[] = []
-    const { report } = await runPassPool({
+    const { report, stories: researched } = await runPassPool({
       ctx: fakeEvalContext(() => null),
       tavily: { search: async () => ({ results: [] }) } as never,
       files: [{ file: `${ID}.json`, key: many, errors: [] }],
@@ -411,5 +433,6 @@ describe('runPassPool', () => {
     expect(asked).toEqual(['m2', 'm3', 'm4', 'm6', 'm7', 'm8', 'm10', 'm11', 'm12'])
     expect(report).toMatchObject({ mustEntries: 12, stories: 0 })
     expect(report.left).toHaveLength(9)
+    expect(researched).toEqual([])
   })
 })

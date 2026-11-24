@@ -1,14 +1,14 @@
 /**
- * The planted-error fact check on module-1 facts (`eval:overviews --facts context`): the sample is
- * the facts the `context` step's run 1 kept on each story (supported by production's check, none
- * reused), each rendered by production's `renderFact` as the check reads it, with the story's
- * places and credited bodies for the field-level kinds. A fact's variants are the text kinds planted
- * in its rendering and the field kinds planted in its fields and rendered again; each item reaches
- * the check with production's evidence and number hints (`factCheckItems`). Pure.
+ * The planted-error fact check on module-1 facts (`eval:overviews --facts context`, `--facts pool`):
+ * the sample is the facts run 1 kept on each story, of the `context` step (`--facts context`) or of
+ * the `pass-pool` step's first passes (`--facts pool`), supported by production's check and none
+ * reused, each rendered by production's `renderFact` as the check reads it, with the story's places
+ * and credited bodies for the field-level kinds. A fact's variants are the text kinds planted in its
+ * rendering and the field kinds planted in its fields and rendered again; each item reaches the check
+ * with production's evidence and number hints (`factCheckItems`). Pure.
  */
 import { numberHints, publishedFact } from '../../../services/researchChecks.js'
 import { factCheckItems, renderFact, type ContextFactData } from '../../../services/storyContextChecks.js'
-import type { StoryContextResult } from '../../../services/storyContextPipeline.js'
 import type { CheckedItem } from '../../../prompts/research.js'
 import type { FactFixture } from './factFixtures.js'
 import { plantFieldVariants, plantVariants, type VariantKind } from './plant.js'
@@ -33,11 +33,17 @@ const distinct = (values: string[]) => {
 
 const evidenceOf = (f: ContextFactData) => f.passage ?? f.supportingSentence
 
-/** Each story's own supported facts, taken in turn from each story, at most `size`. */
-export function contextFactFixtures(stories: { slug: string; result: StoryContextResult }[], size: number): ContextFacts {
-  const lists = stories.map(({ slug, result }) => {
-    const peers = { places: distinct(result.facts.map(f => f.place)), credits: distinct(result.facts.map(f => f.credited)) }
-    return result.facts
+/** One story's facts as context reads them: a `context` run's, or a first pass's pool's (`cardFacts`). */
+export interface StoryFacts {
+  slug: string
+  facts: ContextFactData[]
+}
+
+/** Each story's own supported facts, taken in turn from each story, at most `size`; the peers are from all of the story's facts. */
+export function contextFactFixtures(stories: readonly StoryFacts[], size: number): ContextFacts {
+  const lists = stories.map(({ slug, facts: all }) => {
+    const peers = { places: distinct(all.map(f => f.place)), credits: distinct(all.map(f => f.credited)) }
+    return all
       .filter(f => f.verdict === 'supported' && f.reusedFromId === null)
       .map((f): FactFixture => ({
         key: `${slug}:${f.ref}`,
@@ -60,7 +66,7 @@ export function contextFactFixtures(stories: { slug: string; result: StoryContex
     stories: lists.filter(l => l.length > 0).length,
     size,
     facts,
-    shortfalls: facts.length < size ? [`${facts.length} of ${size} facts: the context step kept no more`] : [],
+    shortfalls: facts.length < size ? [`${facts.length} of ${size} facts: run 1 kept no more`] : [],
   }
 }
 

@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { contextFact, contextResult } from '../../../test/contextFixtures.js'
+import { contextFact } from '../../../test/contextFixtures.js'
 import { OVERVIEW_DEFAULT_ARMS, OVERVIEW_DEFAULT_SIZE, OVERVIEW_DEFAULT_STEPS, OVERVIEW_STEPS } from '../options.js'
 import { summarizeBaseline } from './baseline.js'
 import { contextFactFixtures } from './contextFacts.js'
 import { resultDates, scoreContext, scoreFields } from './contextScore.js'
 import { variantItems, type CheckItem, type Verdict } from './factCheck.js'
 import { FACT_FIXTURES_VERSION, type FactFixture, type FactFixtures } from './factFixtures.js'
-import { scoreArm } from './factCheckScore.js'
+import { MAX_LISTED, scoreArm, scoreFidelity } from './factCheckScore.js'
 import type { KeyDraftReport } from './keyDraft.js'
+import { rows } from './linkReport.js'
 import { overviewReportName, renderOverviewReport, type OverviewReportInput, type ReportNameInput } from './report.js'
 
 const name = (o: Partial<ReportNameInput> = {}) =>
@@ -73,6 +74,13 @@ const input = (extra: Partial<OverviewReportInput>): OverviewReportInput => ({
 })
 
 const headings = (md: string) => md.split('\n').filter(l => l.startsWith('## '))
+
+/** The label pass's verdict on a fact it rejected. */
+const rejectedBy = (fact: FactFixture): Verdict => ({
+  item: { id: `${fact.key}#faithful`, fact, kind: 'faithful', text: fact.statement, change: '' },
+  supported: false,
+  problem: 'p',
+})
 
 describe('renderOverviewReport', () => {
   it('has a section for each step that ran, then the spend', () => {
@@ -149,8 +157,10 @@ describe('renderOverviewReport', () => {
   })
 
   it("shows module-1 facts' sample with the field-level kinds", () => {
-    const result = contextResult({ facts: [contextFact('S1F1', { origin: 'search' }), contextFact('S2F1', { verdict: 'rejected' })] })
-    const facts = contextFactFixtures([{ slug: 'story-a', result }], 300)
+    const facts = contextFactFixtures(
+      [{ slug: 'story-a', facts: [contextFact('S1F1', { origin: 'search' }), contextFact('S2F1', { verdict: 'rejected' })] }],
+      300,
+    )
     const md = renderOverviewReport(
       input({
         steps: ['context', 'fact-check'],
@@ -169,6 +179,116 @@ describe('renderOverviewReport', () => {
     expect(md).toContain('| wrong-place | unsupported | 0 |')
     expect(md).toContain('as rendered against their evidence')
     expect(md).not.toContain('Fact fixtures sampled')
+  })
+
+  it("shows the label pass as a measure of the rendering for a rendered sample, with each group's counts", () => {
+    const facts = contextFactFixtures(
+      [
+        {
+          slug: 'story-a',
+          facts: [contextFact('S1F1'), contextFact('S2F1'), contextFact('S3F1'), contextFact('S4F1', { value: null }), contextFact('S5F1', { value: null })],
+        },
+      ],
+      300,
+    )
+    const [fig1, fig2, fig3, plain1, plain2] = facts.facts
+    const labels = { accepted: [fig1!, plain1!], unsupported: [rejectedBy(fig2!), rejectedBy(plain2!)], unlabeled: [fig3!] }
+    const fidelity = scoreFidelity(labels)
+    const md = renderOverviewReport(
+      input({
+        steps: ['context', 'fact-check'],
+        factCheck: {
+          sample: { source: 'context', facts, half: 'judge' },
+          labeled: 5,
+          labels,
+          variants: [],
+          scores: [scoreArm({ arm: 'gpt-6-luna@low', runs: [[]] })],
+          fidelity,
+        },
+      }),
+    )
+    for (const row of rows(fidelity.bars)) expect(md).toContain(row)
+    expect(rows(fidelity.bars).map(r => r.split(' | ')[2])).toEqual(['50.0%', '50.0%'])
+    expect(md).toContain('- With a figure: 1 of 2 judged facts accepted; 1 without a verdict.')
+    expect(md).toContain('- Without a figure: 1 of 2 judged facts accepted; 0 without a verdict.')
+    // It closes the section, after the variants table and the arms, so neither reads as part of it
+    const measure = md.indexOf(rows(fidelity.bars)[0]!)
+    expect(md.indexOf('| Kind | Expected | Variants |')).toBeLessThan(measure)
+    expect(md.indexOf('#### False rejections')).toBeGreaterThan(-1)
+    expect(md.indexOf('#### False rejections')).toBeLessThan(measure)
+  })
+
+  it('says so when the judge rejected no fact of a group', () => {
+    const facts = contextFactFixtures([{ slug: 'story-a', facts: [contextFact('S1F1'), contextFact('S2F1', { value: null })] }], 300)
+    const labels = { accepted: [facts.facts[0]!], unsupported: [rejectedBy(facts.facts[1]!)], unlabeled: [] }
+    const md = renderOverviewReport(
+      input({
+        steps: ['context', 'fact-check'],
+        factCheck: { sample: { source: 'context', facts, half: 'judge' }, labeled: 2, labels, variants: [], scores: [], fidelity: scoreFidelity(labels) },
+      }),
+    )
+    const lines = md.split('\n')
+    const [withFigure, without] = lines.flatMap((l, i) => (l.startsWith('#### ') ? [i] : []))
+    expect(lines.slice(withFigure!, without!).filter(Boolean)).toHaveLength(2)
+    expect(lines.slice(withFigure!, without!).some(l => l.startsWith('- '))).toBe(false)
+    expect(lines.slice(without!, lines.indexOf('## Spend')).filter(l => l.startsWith('- "'))).toHaveLength(1)
+  })
+
+  it('lists every fact the judge rejected under its group, a figure first, past the cap of the statements list it replaces', () => {
+    const figures = Array.from({ length: MAX_LISTED + 2 }, (_, i) => contextFact(`S${i + 1}F1`))
+    const facts = contextFactFixtures([{ slug: 'story-a', facts: [...figures, contextFact('S99F1', { value: null })] }], 300)
+    const labels = { accepted: [], unsupported: facts.facts.map(rejectedBy), unlabeled: [] }
+    const md = renderOverviewReport(
+      input({
+        steps: ['pass-pool', 'fact-check'],
+        factCheck: {
+          sample: { source: 'pool', facts, half: 'judge' },
+          labeled: facts.facts.length,
+          labels,
+          variants: [],
+          scores: [],
+          fidelity: scoreFidelity(labels),
+        },
+      }),
+    )
+    const lines = md.split('\n')
+    const groups = lines.flatMap((l, i) => (l.startsWith('#### ') ? [{ heading: l, at: i }] : []))
+    expect(groups.map(g => /\((\d+)\)$/.exec(g.heading)?.[1])).toEqual([String(MAX_LISTED + 2), '1'])
+    const listed = (from: number, to: number) => lines.slice(from, to).filter(l => l.startsWith('- "'))
+    expect(listed(groups[0]!.at, groups[1]!.at)).toHaveLength(MAX_LISTED + 2)
+    expect(listed(groups[1]!.at, lines.indexOf('## Spend'))).toEqual([expect.stringContaining('Statement of S99F1.')])
+    expect(md).not.toContain('### Statements their evidence does not support')
+  })
+
+  it('shows no rendering measure for a sample of statements', () => {
+    const md = renderOverviewReport(
+      input({
+        steps: ['fact-check'],
+        factCheck: { sample: { source: 'research', fixtures }, labeled: 0, labels: { accepted: [], unsupported: [], unlabeled: [] }, variants: [], scores: [] },
+      }),
+    )
+    expect(md).not.toContain('judged facts accepted')
+    expect(md).not.toContain('| Measure |')
+  })
+
+  it("checks a first pass's pool facts as rendered, with the field-level kinds", () => {
+    const facts = contextFactFixtures([{ slug: 'story-a', facts: [contextFact('S1F1'), contextFact('S2F1', { value: null })] }], 300)
+    const md = renderOverviewReport(
+      input({
+        steps: ['pass-pool', 'fact-check'],
+        factCheck: {
+          sample: { source: 'pool', facts, half: 'judge' },
+          labeled: 2,
+          labels: { accepted: facts.facts, unsupported: [], unlabeled: [] },
+          variants: [],
+          scores: [scoreArm({ arm: 'gpt-6-luna@low', runs: [[]] })],
+        },
+      }),
+    )
+    expect(md).toContain('`--facts pool`):** 2 facts (of 300 asked for)')
+    expect(md).toContain('from 1 stories (half judge)')
+    expect(md).toContain('| wrong-place | unsupported | 0 |')
+    expect(md).toContain('as rendered against their evidence')
   })
 
   it('places the story-context sections between the answer keys and the fact check', () => {

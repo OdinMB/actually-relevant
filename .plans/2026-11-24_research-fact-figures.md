@@ -1,7 +1,7 @@
 ---
 plan-id: 2026-11-24_research-fact-figures
 title: Research facts are shown by their statement, and a model checks that each figure is in its source
-status: draft
+status: in-progress
 created: 2026-11-24
 author: claude-code (AI)
 repo: OdinMB/actually-relevant
@@ -377,6 +377,13 @@ No migration. No column and no stored shape changes meaning.
 | `server/src/scripts/eval/overviews/factCheckScore.ts` | New `scoreFidelity(labels)` and `FIDELITY_REFERENCE`: the two shares and their report-only bars. |
 | `server/src/scripts/eval/overviews/report.ts` | `factCheckLines` prints the two bars (`rows` of `linkReport.ts`) for module-1 samples; `sampleLines` names the pool source. |
 | `.context/model-eval.md` | The `--facts` flag row, "`--facts pool`", the bar and what it does and does not measure, under "`fact-check`: planted errors". |
+
+**As built (phase 1, implemented 2026-11-24), where it differs from the table above; phase 2 builds on this:**
+
+- **Two tables, no `FACT_SOURCES`.** `OVERVIEW_FACT_SOURCES` in `options.ts` holds each source's vocabulary (the step it needs, what it samples, `rendered` for module-1 facts), and `FACT_SAMPLERS` in `overviews/factSources.ts` builds each sample; both are keyed by `OverviewFactSource`. One map read by `options.ts` would have made the flags module load the step modules. `factSources.ts` also holds `FactSample` and `sampledFacts`. Phase 2's `figure-check` refusal ("without `--facts pool` or `context`") reads `rendered`.
+- **`runPassPool` returns `stories: StoryFacts[]`** (`{ slug, facts }`, `contextFacts.ts`) without the context record. Phase 2 adds the record to that per-story entry, with the `figure-check` sample that reads it.
+- **The fact check's report section is `overviews/factCheckReport.ts`,** moved out of `report.ts`. Phase 2's "Figure check against its source" section goes in a module of its own beside it, not into `report.ts`.
+- **The measure lists every rejected fact, by group.** The list this plan called "already listed" stopped at 30 and did not say which facts carry a figure, so for a rendered sample the section now ends with the two shares, the counts and every rejected fact, those with a figure first.
 
 ### Phase 2: the fix
 

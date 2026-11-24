@@ -235,7 +235,7 @@ describe('parseOverviewOptions', () => {
     expect(parseOverviewOptions(['--out', 'x', '--half', 'tune']).half).toBe('tune')
     expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'context'])).toThrow(/name both context and fact-check/)
     expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'context', '--facts', 'context'])).toThrow(/--facts context/)
-    expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'news'])).toThrow(/--facts must be one of research, context, stands/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'news'])).toThrow(/--facts must be one of research, context, stands, pool/)
     expect(() => parseOverviewOptions(['--out', 'x', '--half', 'holdout'])).toThrow(/--half must be one of tune, judge, all/)
   })
 
@@ -261,6 +261,12 @@ describe('parseOverviewOptions', () => {
     expect(parseOverviewOptions(['--out', 'x', '--steps', 'stands,fact-check', '--facts', 'stands']).facts).toBe('stands')
     expect(() => parseOverviewOptions(['--out', 'x', '--facts', 'stands'])).toThrow(/name both stands and fact-check/)
     expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'stands', '--facts', 'stands'])).toThrow(/--facts stands/)
+  })
+
+  it("takes --facts pool only with the pass-pool and fact-check steps: it samples the first passes' pools", () => {
+    expect(parseOverviewOptions(['--out', 'x', '--steps', 'pass-pool,fact-check', '--facts', 'pool', '--half', 'judge']).facts).toBe('pool')
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'fact-check', '--facts', 'pool'])).toThrow(/name both pass-pool and fact-check/)
+    expect(() => parseOverviewOptions(['--out', 'x', '--steps', 'pass-pool', '--facts', 'pool'])).toThrow(/--facts pool/)
   })
 
   it("defaults to production's research fact-check arm, production's small tier as configured by default", () => {

@@ -6,16 +6,19 @@
  * offer once passes have run on those stories. Its searches end on each story's day, as the `context`
  * step's do; it writes nothing. The resulting pools' usable, structured page facts go to those steps
  * as members' facts, each with an id of its own (a fact a pass found in memory has none); the members
- * not researched offer none. Run 1 only: the pools are the steps' input, not a measure. Stories start
- * only while the budget covers one more first pass.
+ * not researched offer none. The same pools, as context reads them (`cardFacts`), are what
+ * `--facts pool` samples for the fact check. Run 1 only: the pools are the steps' input, not a
+ * measure. Stories start only while the budget covers one more first pass.
  */
 import type { PassInput } from '../../../services/researchPass.js'
 import type { MemberFact } from '../../../services/overviewStands.js'
+import { cardFacts } from '../../../services/researchPool.js'
 import type { SearchClient } from '../research/pipeline.js'
 import { passInEval } from '../research/pipeline.js'
 import { runStories, type SkippedStory } from '../research/storyQueue.js'
 import type { SuiteContext } from '../types.js'
 import { FIRST_PASS_RESERVE_USD } from './context.js'
+import type { StoryFacts } from './contextFacts.js'
 import { inDevelopmentHalf } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
 import { mustEntriesOn, type AnswerKey } from './keySchema.js'
@@ -84,7 +87,11 @@ export function passPoolStories(files: readonly KeyFile[], half: PassPoolOptions
   }
 }
 
-export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoolReport; facts: Map<string, MemberFact[]> }> {
+/**
+ * The step's run: the report, each researched story's members' facts by story id, and each story's
+ * facts as context reads them by slug, in the order researched (`--facts pool`).
+ */
+export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoolReport; facts: Map<string, MemberFact[]>; stories: StoryFacts[] }> {
   const { slugs, mustEntries } = passPoolStories(o.files, o.half, o.limit)
   const inputs = await o.inputs(slugs)
   const left = slugs.filter(s => !inputs.get(s)).map(s => ({ what: s, reason: 'no first-pass input: not published here, or no text' }))
@@ -98,14 +105,15 @@ export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoo
     budgetUsd: o.budgetUsd,
     spentUsd: o.spentUsd,
     storyUsd: () => FIRST_PASS_RESERVE_USD,
-    run: async ({ input }) => {
+    run: async ({ id, input }) => {
       const pass = await passInEval(input, { ctx: o.ctx, tavily: o.tavily, relevanceMin: o.relevanceMin, latestDate: input.storyDay, run: 1 })
-      return { storyId: input.story.id, facts: poolMemberFacts(input.story.id, pass.pool) }
+      return { storyId: input.story.id, facts: poolMemberFacts(input.story.id, pass.pool), story: { slug: id, facts: cardFacts(pass.pool) } }
     },
   })
   const facts = new Map(done.results.map(r => [r.storyId, r.facts]))
   return {
     facts,
+    stories: done.results.map(r => r.story),
     report: {
       mustEntries,
       stories: queued.length,

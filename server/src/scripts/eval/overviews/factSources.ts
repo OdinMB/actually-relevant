@@ -1,0 +1,50 @@
+/**
+ * The fact check's sample (`eval:overviews`, step `fact-check`): what one is, and for each `--facts`
+ * value (`OVERVIEW_FACT_SOURCES`) how it is built from what the run's earlier steps left: research's
+ * statements loaded from the database, run 1's kept facts of the `context` step or of the `pass-pool`
+ * step's first passes (both through `contextFactFixtures`), or the lines the `stands` step's run 1
+ * kept. Kept apart from the flags module, which names the step each source needs, so that parsing
+ * the flags never loads the step modules. Pure.
+ */
+import type { OverviewFactSource, OverviewHalf } from '../options.js'
+import type { ContextStepRun } from './context.js'
+import { contextFactFixtures, type ContextFacts, type StoryFacts } from './contextFacts.js'
+import type { FactFixture, FactFixtures } from './factFixtures.js'
+import { standsFactFixtures, type StandsStepReport } from './stands.js'
+
+/**
+ * The facts the fact check plants errors in: research's sample from the database, or run 1 of the
+ * `context` step, of the `pass-pool` step's first passes (`pool`), or of the `stands` step.
+ */
+export type FactSample =
+  | { source: 'research'; fixtures: FactFixtures }
+  | { source: 'context'; facts: ContextFacts; half: OverviewHalf }
+  | { source: 'pool'; facts: ContextFacts; half: OverviewHalf }
+  | { source: 'stands'; facts: ContextFacts; half: OverviewHalf }
+
+/** What a run left for the fact check to sample: research's facts from the database, and each step's run; null for one that did not run (or was not asked for). */
+export interface SampledRuns {
+  research: FactFixtures | null
+  context: ContextStepRun | null
+  stands: StandsStepReport | null
+  pool: StoryFacts[] | null
+}
+
+/** Each source's sample, at most `size` facts; null when what it samples from is missing. */
+export const FACT_SAMPLERS: Record<OverviewFactSource, (runs: SampledRuns, size: number, half: OverviewHalf) => FactSample | null> = {
+  research: runs => runs.research && { source: 'research', fixtures: runs.research },
+  context: (runs, size, half) =>
+    runs.context && {
+      source: 'context',
+      facts: contextFactFixtures(
+        runs.context.runs.filter(r => r.run === 1).map(r => ({ slug: r.slug, facts: r.result.facts })),
+        size,
+      ),
+      half,
+    },
+  stands: (runs, size, half) => runs.stands && { source: 'stands', facts: standsFactFixtures(runs.stands.kept, size), half },
+  pool: (runs, size, half) => runs.pool && { source: 'pool', facts: contextFactFixtures(runs.pool, size), half },
+}
+
+/** A sample's facts, in sample order. */
+export const sampledFacts = (s: FactSample): FactFixture[] => (s.source === 'research' ? s.fixtures.facts : s.facts.facts)

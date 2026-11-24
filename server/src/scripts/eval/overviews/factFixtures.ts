@@ -39,8 +39,8 @@ export interface FactFixture {
   /** The source's sentence, verbatim, in its own language. */
   sentence: string
   /**
-   * Only for a module-1 fact (`--facts context`, `contextFacts.ts`): the fact as the context step
-   * kept it, which production renders, and the story's places and credited bodies.
+   * Only for a module-1 fact (`--facts context` or `--facts pool`, `contextFacts.ts`): the fact as
+   * run 1 kept it, which production renders, and the story's places and credited bodies.
    */
   context?: { fact: ContextFactData; peers: FieldPeers }
 }

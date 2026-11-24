@@ -1,12 +1,16 @@
 /**
- * Scores one arm of the fact check under planted errors: per variant kind the share judged
+ * Scores the fact check. One arm under planted errors: per variant kind the share judged
  * unsupported, the catch rate on the planted errors and the false rejections on the faithful
  * variants, each pooled over the runs and held against the design's first bars (shown as met or
  * not, never as a gate); with repeated runs the spread across runs and how often a verdict flips;
- * and the misses and false rejections to read. Unjudged items count in no rate. Pure.
+ * and the misses and false rejections to read. Unjudged items count in no rate. And, for a sample
+ * of rendered module-1 facts, the label pass as a measure of the rendering itself (`scoreFidelity`):
+ * the share of facts with a figure, and of those without, the strong judge accepts. Pure.
  */
 import { disagreement, spread, type Disagreement, type Spread } from '../repeats.js'
-import type { ArmRuns, Verdict } from './factCheck.js'
+import type { ArmRuns, Labels, Verdict } from './factCheck.js'
+import type { FactFixture } from './factFixtures.js'
+import { bar, ratio, reportOnly, type Bar } from './linkScore.js'
 import { expectedSupported, VARIANT_KINDS, type VariantKind } from './plant.js'
 
 /** The design's first bars (`2026-11-16_ebola-lifecycle.md`, "Evals"): the overview check's targets. */
@@ -126,5 +130,64 @@ export function scoreArm({ arm, runs }: ArmRuns): ArmScore {
     falseRejections: falseRejections.slice(0, MAX_LISTED),
     missCount: misses.length,
     falseRejectionCount: falseRejections.length,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The label pass as a measure of the rendering
+// ---------------------------------------------------------------------------
+
+/** The level the two fidelity shares are shown against until the owner sets their bars: the neighboring `FIELDS_BAR`'s (`contextScore.ts`). */
+export const FIDELITY_REFERENCE = 0.95
+export const FIDELITY_REPORT_ONLY = 'report only: first measurement, the owner sets the bar'
+
+export interface FidelityGroup {
+  /** Facts the judge gave a verdict for. */
+  judged: number
+  /** Of those, the facts it accepted as rendered. */
+  accepted: number
+  /** The rest of them: each fact it rejected, with its reason, in the labels' order. Every one is listed for a read. */
+  rejected: Verdict[]
+  /** Facts it gave no verdict for: in neither count, and in no share. */
+  unlabeled: number
+  /** accepted / judged; null with none judged. */
+  share: number | null
+}
+
+export interface Fidelity {
+  withFigure: FidelityGroup
+  withoutFigure: FidelityGroup
+  /** Two report-only bars, with a figure first. */
+  bars: Bar[]
+}
+
+/** A module-1 fact whose record holds a value; a fact with no record carries none. */
+const hasFigure = (f: FactFixture) => f.context !== undefined && f.context.fact.value !== null
+
+function fidelityGroup(labels: Labels, inGroup: (f: FactFixture) => boolean): FidelityGroup {
+  const accepted = labels.accepted.filter(inGroup).length
+  const rejected = labels.unsupported.filter(v => inGroup(v.item.fact))
+  const judged = accepted + rejected.length
+  return { judged, accepted, rejected, unlabeled: labels.unlabeled.filter(inGroup).length, share: ratio(accepted, judged) }
+}
+
+/**
+ * The strong judge's label pass read as a measure of the rendering: each sampled fact as `renderFact`
+ * shows it to writers and checks, against its source's sentence or passage and the source's date,
+ * before any error is planted; split by whether the fact carries a figure. A fact with a figure is
+ * shown from its fields alone where it names what the figure counts, and as its statement with the
+ * figure beside it where it does not; both are in the one group. Both bars are report only until the
+ * owner sets them.
+ */
+export function scoreFidelity(labels: Labels): Fidelity {
+  const withFigure = fidelityGroup(labels, hasFigure)
+  const withoutFigure = fidelityGroup(labels, f => !hasFigure(f))
+  return {
+    withFigure,
+    withoutFigure,
+    bars: [
+      reportOnly(bar('facts with a figure the judge accepts as rendered', withFigure.share, FIDELITY_REFERENCE), FIDELITY_REPORT_ONLY),
+      reportOnly(bar('facts without a figure the judge accepts as rendered', withoutFigure.share, FIDELITY_REFERENCE), FIDELITY_REPORT_ONLY),
+    ],
   }
 }

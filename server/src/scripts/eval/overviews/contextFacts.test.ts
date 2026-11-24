@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { buildFactCheckPromptParts } from '../../../prompts/research.js'
 import { factsOfItems, numberHints, publishedFact } from '../../../services/researchChecks.js'
 import { factCheckItems, renderFact } from '../../../services/storyContextChecks.js'
-import { contextFact, contextResult } from '../../../test/contextFixtures.js'
+import { contextFact } from '../../../test/contextFixtures.js'
 import { contextCheckedItem, contextFactFixtures, contextVariants } from './contextFacts.js'
 import { checkedItem, variantItems } from './factCheck.js'
 
@@ -25,8 +25,8 @@ describe('contextFactFixtures', () => {
   it("samples each story's own supported facts, rendered as production renders them, in turn from each story", () => {
     const sample = contextFactFixtures(
       [
-        { slug: 'story-a', result: contextResult({ facts: [fire, smoke, rejected, reused] }) },
-        { slug: 'story-b', result: contextResult({ facts: [contextFact('S0F1')] }) },
+        { slug: 'story-a', facts: [fire, smoke, rejected, reused] },
+        { slug: 'story-b', facts: [contextFact('S0F1')] },
       ],
       10,
     )
@@ -36,16 +36,16 @@ describe('contextFactFixtures', () => {
     expect(first!.sentence).toBe(fire.supportingSentence)
     expect(first!.context?.peers).toEqual({ places: ['Indonesia', 'Malaysia'], credits: ["Indonesia's disaster agency", 'Greenpeace'] })
     expect(sample.stories).toBe(2)
-    expect(sample.shortfalls).toEqual(['3 of 10 facts: the context step kept no more'])
+    expect(sample.shortfalls).toEqual(['3 of 10 facts: run 1 kept no more'])
   })
 
   it('stops at the size asked for', () => {
-    expect(contextFactFixtures([{ slug: 'a', result: contextResult({ facts: [fire, smoke] }) }], 1).facts).toHaveLength(1)
+    expect(contextFactFixtures([{ slug: 'a', facts: [fire, smoke] }], 1).facts).toHaveLength(1)
   })
 })
 
 describe('contextVariants', () => {
-  const [fx] = contextFactFixtures([{ slug: 'story-a', result: contextResult({ facts: [fire, smoke] }) }], 1).facts
+  const [fx] = contextFactFixtures([{ slug: 'story-a', facts: [fire, smoke] }], 1).facts
 
   it('plants the text kinds in the rendering and the field kinds in the fields, rendered again', () => {
     const variants = contextVariants(fx!)
@@ -89,7 +89,7 @@ describe('contextCheckedItem', () => {
   })
 
   it('is what checkedItem builds for a module-1 variant', () => {
-    const [fx] = contextFactFixtures([{ slug: 'story-a', result: contextResult({ facts: [fire, smoke] }) }], 1).facts
+    const [fx] = contextFactFixtures([{ slug: 'story-a', facts: [fire, smoke] }], 1).facts
     const [item] = variantItems([fx!]).filter(i => i.kind === 'wrong-place')
     expect(checkedItem(item!, 2)).toEqual(contextCheckedItem({ ...fire, place: 'Malaysia' }, item!.text, 2))
   })
