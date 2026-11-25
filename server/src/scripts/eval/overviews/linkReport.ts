@@ -2,13 +2,15 @@
  * The overview linking steps' report sections (`link.ts`): what was replayed, then the bars of each
  * step that ran (`link`, `found`, `role`) and the runs' details, and the diagnostics
  * (`linkDiagnostics.ts`): the missed must entries with why, the role disagreements, the founded
- * charters. Pure.
+ * charters. The sections both replays report alike (what was replayed, the runs, the wrong joins and
+ * foundings, the missed must entries, the charters) are exported for the whole-step replay's report
+ * (`upkeepReport.ts`). Pure.
  */
 import type { OverviewStep } from '../options.js'
 import { cell, usd } from './reportText.js'
 import type { LinkStepReport } from './link.js'
 import { MISS_CAUSES, missesByDevelopment } from './linkDiagnostics.js'
-import type { Bar } from './linkScore.js'
+import type { Bar, LinkRunScore, LinkScore } from './linkScore.js'
 
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`
 const value = (b: Bar) => (b.value === null ? 'n/a' : b.direction === 'atMost' && !b.share ? b.value.toFixed(2) : pct(b.value))
@@ -37,15 +39,15 @@ function signalLines(r: LinkStepReport): string[] {
   ]
 }
 
-/** Every must entry not found in its development's overview, by development and cause, then one line each. */
-function missedLines(r: LinkStepReport): string[] {
+/** Every must entry not found in its development's overview, by development and cause, then one line each: the linking steps' and the whole-step replay's. */
+export function missedLines(r: Pick<LinkStepReport, 'diagnostics'>): string[] {
   if (r.diagnostics.every(d => d.missed.length === 0)) return []
   const table = missesByDevelopment(r.diagnostics)
   const causes = MISS_CAUSES.filter(c => table.some(t => t.causes.has(c)))
   return [
     '### Missed must entries (diagnostics; no bar)',
     '',
-    `Summed over the ${r.diagnostics.length} run${r.diagnostics.length === 1 ? '' : 's'}. **no candidate**: the story was shown nothing and no call was made; **held for a re-center**: it points past an open overview and waits for that overview's re-center, founding nothing (ADR-0078; the overview, and whether it is its own development's, are given); **not offered**: its development's overview or a partner of its development was not among the candidates shown; **refused by code**: the model said yes and the quote checks refused it (the rule is given); **founding blocked**: a partner of its development passed, but the model's yes to another development's overview, refused by code, kept the story from founding; **founding refused: partner reported no occurrence**: a founding with a partner of its development was refused only because the check judged the partner to report no occurrence, and no further partner founded; **founding not agreed**: a founding with a partner of its development was drafted and refused or not agreed by the check; **model no / unsure**: the model's answer for its development's candidates (confidence, and scope when not inside; the link answer gives no reason). "Before … was founded" marks a story linked before its development had an overview.`,
+    `Summed over the ${r.diagnostics.length} run${r.diagnostics.length === 1 ? '' : 's'}. **detached**: it had joined and the upkeep took it out again, by a review or a re-center (the whole-step replay only); **no candidate**: the story was shown nothing and no call was made; **held for a re-center**: it points past an open overview and waits for that overview's re-center, founding nothing (ADR-0078; the overview, and whether it is its own development's, are given); **not offered**: its development's overview or a partner of its development was not among the candidates shown; **refused by code**: the model said yes and the quote checks refused it (the rule is given); **founding blocked**: a partner of its development passed, but the model's yes to another development's overview, refused by code, kept the story from founding; **founding refused: partner reported no occurrence**: a founding with a partner of its development was refused only because the check judged the partner to report no occurrence, and no further partner founded; **founding not agreed**: a founding with a partner of its development was drafted and refused or not agreed by the check; **model no / unsure**: the model's answer for its development's candidates (confidence, and scope when not inside; the link answer gives no reason). "Before … was founded" marks a story linked before its development had an overview.`,
     '',
     `| Development | ${causes.join(' | ')} | All |`,
     `|---|${causes.map(() => '---|').join('')}---|`,
@@ -163,8 +165,8 @@ function heldLines(r: LinkStepReport): string[] {
   ]
 }
 
-/** Every founded overview's charter, per run. */
-function charterLines(r: LinkStepReport): string[] {
+/** Every founded overview's charter, per run: the linking steps' and the whole-step replay's. */
+export function charterLines(r: Pick<LinkStepReport, 'diagnostics'>): string[] {
   if (r.diagnostics.every(d => d.charters.length === 0)) return []
   return [
     '### Founded charters (diagnostics; no bar)',
@@ -181,8 +183,8 @@ function charterLines(r: LinkStepReport): string[] {
   ]
 }
 
-/** What was replayed: the half's stories and, in a judged run, the background stories beside them (`backgroundOf`). */
-function replayed(r: LinkStepReport): string {
+/** What was replayed: the half's stories and, in a judged run, the background stories beside them (`backgroundOf`); the linking steps' and the whole-step replay's. */
+export function storiesReplayed(r: Pick<LinkStepReport, 'keys' | 'half' | 'limit' | 'stories' | 'background'>): string {
   const half = `${r.keys.length} answer keys (half ${r.half}: ${r.keys.join(', ') || 'none'}${r.limit !== undefined ? `; the first ${r.limit} stories only, a smoke run, not evidence` : ''})`
   if (r.background.stories === 0) return `${r.stories} stories (entries and near misses) of ${half}`
   return `${r.stories} stories: ${r.stories - r.background.stories} (entries and near misses) of ${half}, and ${r.background.stories} background stories of ${r.background.keys.join(', ')}, unscored unless they join a judged development's overview`
@@ -214,10 +216,46 @@ function rescoredLine(r: LinkStepReport): string[] {
   ]
 }
 
+/** Each run's joins, finds, foundings and roles, and what a repeat is: the linking steps' and the whole-step replay's. */
+export function perRunLines(score: LinkScore): string[] {
+  return [
+    '### Per run',
+    '',
+    '| Run | Joins right / wrong | Must entries found | Overviews founded (with a judged story) | Of those, not one development / repeat (wrong share) | Roles agreeing (of them, the key accepting either) |',
+    '|---|---|---|---|---|---|',
+    ...score.runs.map(
+      s =>
+        `| ${s.run} | ${s.right} / ${s.wrong} | ${s.found} of ${s.must} | ${s.foundings} (${s.judgedFoundings}) | ${s.wrongFoundings} / ${s.repeatFoundings} (${s.judgedFoundings === 0 ? 'n/a' : pct(s.foundingsWrong / s.judgedFoundings)}) | ${s.rolesAgreeing} of ${s.rolesJudged} (${s.rolesEither}) |`,
+    ),
+    '',
+    'A repeat founds a development that already has an open overview in the run (joining that one was the right move); a founding both not of one development and a repeat counts once in the share.',
+    '',
+  ]
+}
+
+/** Each run's wrong joins and foundings, and the repeats of two background stories no bar counts: the linking steps' and the whole-step replay's. */
+export function mistakeLines(runs: readonly LinkRunScore[]): string[] {
+  return [
+    ...(runs.some(s => s.mistakes.length > 0)
+      ? ['### Wrong joins and foundings', '', ...runs.flatMap(s => s.mistakes.map(m => `- Run ${s.run}: ${cell(m)}`)), '']
+      : []),
+    ...(runs.some(s => s.backgroundRepeats.length > 0)
+      ? [
+          '### Background repeat foundings (unscored; diagnostics)',
+          '',
+          'Foundings of two background stories whose development already had an open overview in the run: no bar counts them.',
+          '',
+          ...runs.flatMap(s => s.backgroundRepeats.map(m => `- Run ${s.run}: ${cell(m)}`)),
+          '',
+        ]
+      : []),
+  ]
+}
+
 export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): string[] {
   const shown = (step: OverviewStep) => steps.includes(step)
   return [
-    `**Replay:** ${replayed(r)}, ${r.repeat} run${r.repeat === 1 ? '' : 's'} through production's linking against the in-memory sandbox, oldest first${mergedCount(r) > 0 ? `, after ${mergedCount(r)} duplicate stor${mergedCount(r) === 1 ? 'y was' : 'ies were'} merged into ${r.merged.length === 1 ? 'its keep' : 'their keeps'} (below)` : ''}. The replay's calls as made (cached ones at what they cost then) and the end-event judge's: ${usd(r.costUsd)}${r.perStoryUsd !== null ? `, ${usd(r.perStoryUsd)} a story` : ''}.`,
+    `**Replay:** ${storiesReplayed(r)}, ${r.repeat} run${r.repeat === 1 ? '' : 's'} through production's linking against the in-memory sandbox, oldest first${mergedCount(r) > 0 ? `, after ${mergedCount(r)} duplicate stor${mergedCount(r) === 1 ? 'y was' : 'ies were'} merged into ${r.merged.length === 1 ? 'its keep' : 'their keeps'} (below)` : ''}. The replay's calls as made (cached ones at what they cost then) and the end-event judge's: ${usd(r.costUsd)}${r.perStoryUsd !== null ? `, ${usd(r.perStoryUsd)} a story` : ''}.`,
     ...rescoredLine(r),
     ...(r.unanswered > 0
       ? [
@@ -239,17 +277,7 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
     ...(shown('found') ? rows(r.score.found) : []),
     ...(shown('role') ? rows(r.score.role) : []),
     '',
-    '### Per run',
-    '',
-    '| Run | Joins right / wrong | Must entries found | Overviews founded (with a judged story) | Of those, not one development / repeat (wrong share) | Roles agreeing (of them, the key accepting either) |',
-    '|---|---|---|---|---|---|',
-    ...r.score.runs.map(
-      s =>
-        `| ${s.run} | ${s.right} / ${s.wrong} | ${s.found} of ${s.must} | ${s.foundings} (${s.judgedFoundings}) | ${s.wrongFoundings} / ${s.repeatFoundings} (${s.judgedFoundings === 0 ? 'n/a' : pct(s.foundingsWrong / s.judgedFoundings)}) | ${s.rolesAgreeing} of ${s.rolesJudged} (${s.rolesEither}) |`,
-    ),
-    '',
-    'A repeat founds a development that already has an open overview in the run (joining that one was the right move); a founding both not of one development and a repeat counts once in the share.',
-    '',
+    ...perRunLines(r.score),
     ...(shown('found') && r.endEvents.length > 0
       ? [
           '### End events',
@@ -262,19 +290,7 @@ export function linkLines(r: LinkStepReport, steps: readonly OverviewStep[]): st
       : []),
     ...signalLines(r),
     ...mergedLines(r),
-    ...(r.score.runs.some(s => s.mistakes.length > 0)
-      ? ['### Wrong joins and foundings', '', ...r.score.runs.flatMap(s => s.mistakes.map(m => `- Run ${s.run}: ${cell(m)}`)), '']
-      : []),
-    ...(r.score.runs.some(s => s.backgroundRepeats.length > 0)
-      ? [
-          '### Background repeat foundings (unscored; diagnostics)',
-          '',
-          'Foundings of two background stories whose development already had an open overview in the run: no bar counts them.',
-          '',
-          ...r.score.runs.flatMap(s => s.backgroundRepeats.map(m => `- Run ${s.run}: ${cell(m)}`)),
-          '',
-        ]
-      : []),
+    ...mistakeLines(r.score.runs),
     ...(shown('link') ? missedLines(r) : []),
     ...(shown('role') ? roleLines(r) : []),
     ...(shown('found') || shown('link') ? foundingDateLines(r) : []),

@@ -8,7 +8,7 @@ Ongoing-story overviews are built and switched off: each night, after publishing
 
 All commands run from the repository root on the computer with the local database copy (`DATABASE_URL`, holding the published stories the answer keys name), `OPENAI_API_KEY` and, for steps 4 to 6, `TAVILY_API_KEY`. `--budget` caps everything a folder has spent over all its runs, not one run, so a later command in the same folder names the folder's running total; no budget above $20 is accepted. A rerun in the same folder answers from its cache and costs nothing again. Only step 2 has had paid runs (its costs below are measured); the others' costs are desk estimates, and the first run of each sets the baseline.
 
-Expected total: **about $15.50–18** (about $11–26 if the desk figures are off), and never more than **$29**, the four folders' caps. Most of it is researching 37 stories for the summaries (step 4, about $6), one replay of the whole step (step 6, about $3.70–4.10) and the re-centers (step 3b, about $2.25–3.75). Your own time: about 30–45 minutes in step 1, reviewing the drafted answer-key items (`2026-11-19_overviews-key-review.md`, beside this file), and, if you draft Colorado's center (step 1b, optional), about 30–60 minutes more.
+Expected total: **about $15.50–18** (about $11–26 if the desk figures are off), and never more than **$29**, the four folders' caps. Most of it is researching 37 stories for the summaries (step 4, about $6), one replay of the whole step (step 6, about $3.70) and the re-centers (step 3b, about $2.25–3.75). Your own time: about 30–45 minutes in step 1, reviewing the drafted answer-key items (`2026-11-19_overviews-key-review.md`, beside this file), and, if you draft Colorado's center (step 1b, optional), about 30–60 minutes more.
 
 | Step | What | Runs | Expected | Folder budget |
 |---|---|---|---|---|
@@ -19,7 +19,7 @@ Expected total: **about $15.50–18** (about $11–26 if the desk figures are of
 | 3b | Re-centers on planted cases | 3 (1 for the negatives) | about $2.25–3.75 (+$0.30–0.50 with Colorado's center) | 6 (review folder, running total) |
 | 4 | Research the summaries' 37 stories | once | about $6 | 11 (upkeep folder) |
 | 5 | "Where this stands" and its fact check | 1 | about $1.20 more | 13 (upkeep folder, running total) |
-| 6 | The whole step replayed | 1 | about $3.70–4.10 more | 18 (upkeep folder, running total) |
+| 6 | The whole step replayed, among step 2's background stories | 1 | about $3.70 more | 18 (upkeep folder, running total) |
 
 The reports mark a bar **"for the owner"** when it rests on fewer than 20 judgments, too few for the eval to decide (with 20, one judgment moves the rate by 5 points). The report lists those judgments; read them, and the bar counts as met when you say so.
 
@@ -166,19 +166,26 @@ One run as first planned; since 2026-11-24 three (`--repeat 3`, about $0.30 a ru
 - **Found beside it, research's own issue:** judged against the source sentences instead, 13.9% of the sentences were unsupported. Three readers went through the 22 lines: 12 repeat a research fact that misstates its source (10 would mislead a reader), 8 are fine, 2 are the writer's. The cause and the two fixes you chose are in `.plans/2026-11-24_research-fact-figures.md`.
 - **Fails, "not enough evidence":** too few facts at some checkpoints. Read which developments, and whether research found nothing or found facts that were not usable; this is research's side, not the overview's.
 
-## 6. The whole step replayed (about $3.70–4.10 more, budget 18)
+## 6. The whole step replayed (about $3.70 more, budget 18)
 
 ```bash
+npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,replay --half judge --budget 18 --dry-run   # the stories, the reviews and the estimate, no call
 npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,replay --half judge --budget 18
 ```
 
-One run: the whole step replayed night by night (linking, the status machine, reviews, re-centers, summaries) on the same research, again from the cache. Most of its cost is the strong model's reviews, about 45 over the run; re-center attempts, fired by the flags step 2 counts, add about $0.20–0.60.
+One run: the whole step replayed night by night (linking, the status machine, reviews, re-centers, summaries) on the same research, again from the cache.
+
+- **What it replays, since 2026-11-25** (your decision of that day, ADR-0081): the same stories as step 2. The judged half's 201 stories are replayed among the 272 background stories of the Iran war and the Strait of Hormuz, 473 in all, so a look-alike of a neighbouring development has that development's own page to join, as in production. Until then it replayed the 201 alone, and Lebanon's page took in 5 to 6 stories that were not its own. The background developments get pages and reviews like any other. Nothing of theirs is scored, except where one of their stories ends up on a judged development's page or starts a development together with a judged story. They get no summaries: only the judged half's 37 stories were researched in step 4, and a summary with no facts is never attempted, at no cost.
+- **What it costs:** the dry run prints the stories and an estimate from the answer keys alone, with no call: about $3.70. Most of it is the strong model's reviews: about 44 for the five judged developments and about 26 more for the two background ones. Those 26 are the dear ones, about $2 of the $3.70, because a review reads every story on its page and the two background pages would hold about 115 and 235. None of them is skipped: a review makes a page public, takes stories off it, narrows its description and lifts a freeze after a burst of joins, and the judged stories' later link calls read all of that. The estimate assumes each development forms one page; it is high where one never forms and low where one splits. A re-center attempt adds about $0.05. The first run on 2026-11-24, of the judged half alone, cost $1.27 with 32 reviews.
+- **The report says what it counts**, as step 2's does: every wrong join by the story's title, the page it joined and what the story really is (another development's, background, a look-alike); every wrongly started development with its two stories and why; every must story not found with its cause, among them "detached" (it had joined, and a review or a re-center took it off again); and at each checkpoint the wrong members by title.
+- **It overwrites the 2026-11-24 report**, `overview-eval-steps-pass-pool-replay-half-judge.md` in the folder (the name carries the steps and the half, nothing else): rename that one first to keep it.
+- **Needs** the local database running (it reads the stories and each one's neighbours), `OPENAI_API_KEY`, and `TAVILY_API_KEY` for `pass-pool`; the dry run needs none of them.
 
 - **Bars** (since 2026-11-22 no closing bar: overviews close only by fading or an editor's Close, ADR-0072):
   - re-centers: those of a development that never moved at most 10% of the re-centers made, and look-alikes at most 10% of the stories they took in (your ruling of 2026-11-24; none until then);
   - the whole replay: the linking bars of step 2 hold on its end state, and its cost per story fits the plan's estimate of about $4-8 a month once switched on.
 - **For you to read:** whether the stories held for a re-center in step 2 (ADR-0078) end up filed: this is the only step that runs re-centers, so found on the end state is where a hold that never resolves shows; how many re-centers happened and the most on one development (never more than 2: after that only an editor may), each one's day against the day Colorado's center began (if you wrote it), and "splits": a new development started from two of the center's stories instead of the old one re-centering.
-- **Rests on:** one run of the 5 developments and 201 stories. The cost per story is a little low, since the replay writes summaries only where it has researched stories (summaries are about a tenth of the step's monthly cost).
+- **Rests on:** one run of the 5 developments: their 201 stories among the 272 background stories. The cost per story is over all 473, and a little low, since the replay writes summaries only where it has researched stories (summaries are about a tenth of the step's monthly cost).
 - **Expect:** if the budget stopped it, the report says where, and its bars are no evidence: run the line again with a higher `--budget` (what it did costs nothing again).
 
 ## 7. The switch (after every bar above is met; the end-event bars are report only since 2026-11-24)

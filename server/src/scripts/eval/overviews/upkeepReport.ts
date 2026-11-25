@@ -1,13 +1,17 @@
 /**
  * The overview upkeep steps' report sections: the `pass-pool` step's research, the `stands` bars, the
  * `review` bars under planted errors, the `recenter` bars on planted and real cases, and the whole
- * module's replay (`replay`) with its linking bars, checkpoints, re-centers, safeguards and cost. Pure.
+ * module's replay (`replay`): what it replayed (the background's stories beside the half's), its linking
+ * bars, runs, wrong joins and foundings by name, checkpoints with their wrong members by name, missed
+ * must entries and charters (the linking report's own sections, `linkReport.ts`), safeguards,
+ * re-centers (a background overview's marked unscored) and cost. Pure.
  */
 import type { Role } from '../../../services/overviewTypes.js'
-import { rows } from './linkReport.js'
+import { charterLines, missedLines, mistakeLines, perRunLines, rows, storiesReplayed } from './linkReport.js'
 import { MEMBERS_PER_CHECKPOINT, type PassPoolReport } from './passPool.js'
 import type { RecenterStepReport } from './recenter.js'
 import type { ReplayStepReport } from './replay.js'
+import type { CheckpointState } from './replayScore.js'
 import { cell, usd } from './reportText.js'
 import type { ReviewStepReport } from './review.js'
 import type { StandsStepReport } from './stands.js'
@@ -136,8 +140,17 @@ export function recenterLines(r: RecenterStepReport): string[] {
 
 export function replayLines(r: ReplayStepReport): string[] {
   const s = r.score
+  const costs = [
+    ...(s.costPerStoryUsd !== null ? [`${usd(s.costPerStoryUsd)} a story`] : []),
+    ...(s.costPerOverviewUsd !== null ? [`${usd(s.costPerOverviewUsd)} an overview`] : []),
+  ]
   return [
-    `**Replay:** ${r.stories} stories of ${r.keys.length} answer keys (half ${r.half}${r.limit !== undefined ? `; the first ${r.limit} stories only, a smoke run, not evidence` : ''}), linked and kept day by day through production's upkeep, ${r.repeat} run${r.repeat === 1 ? '' : 's'}. Spend ${usd(r.costUsd)}${s.costPerStoryUsd !== null ? `, ${usd(s.costPerStoryUsd)} a story` : ''}${s.costPerOverviewUsd !== null ? `, ${usd(s.costPerOverviewUsd)} an overview` : ''}. Checkpoints with enough evidence for the stands: ${s.evidenceShare === null ? 'n/a' : `${(s.evidenceShare * 100).toFixed(0)}%`}.`,
+    `**Replay:** ${storiesReplayed(r)}, linked and kept day by day through production's upkeep, ${r.repeat} run${r.repeat === 1 ? '' : 's'}. Spend ${usd(r.costUsd)}${costs.length > 0 ? `, ${costs.join(', ')} (over every story and overview replayed, the background's too)` : ''}. Checkpoints with enough evidence for the stands: ${s.evidenceShare === null ? 'n/a' : `${(s.evidenceShare * 100).toFixed(0)}%`}.`,
+    ...(r.background.stories > 0
+      ? [
+          "- The background developments get overviews, reviews and stands as any other, and no bar scores them: a background story counts only as a wrong join in a judged development's overview, a founding only with a judged story in its pair.",
+        ]
+      : []),
     ...(r.stopped ? [`- Stopped: ${cell(r.stopped)}`] : []),
     ...r.left.map(x => `- Left out: ${x.what}: ${cell(x.reason)}`),
     '',
@@ -146,18 +159,14 @@ export function replayLines(r: ReplayStepReport): string[] {
     ...rows(s.link.found),
     ...rows(s.link.role),
     '',
-    '### Checkpoints',
-    '',
-    '| Run | Development | At | Day | Status | Scope | Must found | Wrong members | Facts offerable | Stands (lines / doing) |',
-    '|---|---|---|---|---|---|---|---|---|---|',
-    ...r.runs.flatMap(run =>
-      run.checkpoints.map(
-        c =>
-          `| ${run.run} | ${c.key} | ${c.at} | ${c.day} | ${c.overview?.status ?? 'none'}${c.overview?.frozen ? ' (frozen)' : ''} | ${c.overview?.scope ?? ''} | ${c.mustFound} of ${c.mustByThen} | ${c.wrongMembers} | ${c.offerable} | ${c.stands ? `${c.stands.sentences} / ${c.stands.doing}` : 'none'} |`,
-      ),
-    ),
-    '',
+    ...perRunLines(s.link),
+    ...mistakeLines(s.link.runs),
+    ...checkpointLines(r),
+    ...missedLines(r),
+    ...charterLines(r),
     '### Safeguards fired (per run)',
+    '',
+    "Counted over every overview, the background developments' too.",
     '',
     ...(Object.keys(s.safeguards).length === 0 ? ['None fired.'] : Object.entries(s.safeguards).map(([name, n]) => `- ${name}: ${n.toFixed(1)}`)),
     '',
@@ -165,9 +174,42 @@ export function replayLines(r: ReplayStepReport): string[] {
   ]
 }
 
+/** A checkpoint's status, and whose overview it is when it stands for another development than the checkpoint's own. */
+function checkpointStatus(c: CheckpointState): string {
+  if (!c.overview) return 'none'
+  const { development } = c.overview
+  const whose = development === c.key ? '' : ` (${development === null ? 'an overview of no development' : `${development}'s overview`})`
+  return `${c.overview.status}${c.overview.frozen ? ' (frozen)' : ''}${whose}`
+}
+
+/** Each development's checkpoints, then the wrong members of each by name. */
+function checkpointLines(r: ReplayStepReport): string[] {
+  const wrong = r.runs.flatMap(run =>
+    run.checkpoints
+      .filter(c => c.wrongMembers.length > 0)
+      .map(c => `- Run ${run.run}, ${c.key} at ${c.at} (${c.day}), "${cell(c.overview?.title ?? '')}": ${c.wrongMembers.map(cell).join('; ')}`),
+  )
+  return [
+    '### Checkpoints',
+    '',
+    '| Run | Development | At | Day | Status | Scope | Must found | Wrong members | Facts offerable | Stands (lines / doing) |',
+    '|---|---|---|---|---|---|---|---|---|---|',
+    ...r.runs.flatMap(run =>
+      run.checkpoints.map(
+        c =>
+          `| ${run.run} | ${c.key} | ${c.at} | ${c.day} | ${checkpointStatus(c)} | ${c.overview?.scope ?? ''} | ${c.mustFound} of ${c.mustByThen} | ${c.wrongMembers.length} | ${c.offerable} | ${c.stands ? `${c.stands.sentences} / ${c.stands.doing}` : 'none'} |`,
+      ),
+    ),
+    '',
+    ...(wrong.length > 0 ? ["The wrong members of each development's overview at its checkpoints, as the joins bar reads them:", '', ...wrong, ''] : []),
+  ]
+}
+
 /** The replay's automated re-centers: the bars, then for the owner the counts, each re-center's day against its center's from, and each one. */
 function replayRecenterLines(r: ReplayStepReport): string[] {
   const s = r.score.recentering
+  const perRun = (v: number | null) => (v === null ? 'n/a' : v.toFixed(1))
+  const unscored = (development: string | null) => development !== null && !r.keys.includes(development)
   const each = r.runs.flatMap(run => run.recenters.map(x => ({ run: run.run, ...x })))
   return [
     '### Automated re-centers',
@@ -175,11 +217,11 @@ function replayRecenterLines(r: ReplayStepReport): string[] {
     ...table,
     ...rows(s.bars),
     '',
-    `Applied per run: ${s.applied === null ? 'n/a' : s.applied.toFixed(1)}; the most on one overview in a run: ${s.mostPerOverview} (the limit is 2). Splits (an overview founded by two center entries of one key; for the owner, never a right founding): ${s.splits === null ? 'n/a' : s.splits.toFixed(1)} per run. Attempts by what fired them, and refusals by rule, are among the safeguards above.`,
+    `Applied per run: ${perRun(s.applied)} scored (of the half's developments' overviews, or of one standing for none), and ${perRun(s.unscored)} of background developments' overviews, unscored: no bar counts them. The most on one overview in a run, of every overview: ${s.mostPerOverview} (the limit is 2). Splits (an overview founded by two center entries of one key; for the owner, never a right founding): ${perRun(s.splits)} per run. Attempts by what fired them, and refusals by rule, are among the safeguards above.`,
     ...s.timing.map(t => `- Run ${t.run}: ${t.key} re-centered on ${t.day}, its center from ${t.from}`),
     ...each.map(
       x =>
-        `- Run ${x.run}, ${x.day}: ${cell(x.title)} (${x.development ?? 'no development'}), ${x.joined.length} joined${x.nearMissesJoined.length > 0 ? `, near misses ${x.nearMissesJoined.join(', ')}` : ''}`,
+        `- Run ${x.run}, ${x.day}: ${cell(x.title)} (${x.development ?? 'no development'}), ${x.joined.length} joined${x.nearMissesJoined.length > 0 ? `, near misses ${x.nearMissesJoined.join(', ')}` : ''}${unscored(x.development) ? ', unscored' : ''}`,
     ),
   ]
 }

@@ -1,13 +1,15 @@
 /**
  * The `replay` bars (`.context/model-eval.md`, "Overview evals"; plan "Evals and bars"), scored on the
  * sandbox's replay of the whole module per development (`replay.ts`): linking and the upkeep day by
- * day. The linking bars on the end state, the
- * three checkpoints of each development (at a third, two thirds and the last of its must entries)
- * with its overview's status, scope, members and stands, the share of checkpoints with enough
- * offerable facts for the stands, how often each safeguard fired, and the cost per story and per
- * overview; and the automated re-centers: none of a development whose key has no center and no near
- * miss joined by one (bars), re-centers per overview, splits (an overview founded by two center
- * entries) and each re-center's day against its center's `from` (for the owner). Means over runs. Pure.
+ * day, the half's stories and, in a judged run, the background's. The linking bars on the end state (a
+ * background story scored only as a wrong join in a judged development's overview, as `scoreLinking`
+ * reads it), the three checkpoints of each development (at a third, two thirds and the last of its must
+ * entries) with its overview's title, status, scope, wrong members by name and stands, the share of
+ * checkpoints with enough offerable facts for the stands, how often each safeguard fired, and the cost
+ * per story and per overview, the background's included; and the automated re-centers: none of a
+ * development whose key has no center and no near miss joined by one (bars, which leave out a background
+ * development's re-centers, counted apart), re-centers per overview, splits (an overview founded by two
+ * center entries) and each re-center's day against its center's `from` (for the owner). Means over runs. Pure.
  */
 import type { OverviewScope, OverviewStatus } from '../../../services/overviewTypes.js'
 import type { AnswerKey } from './keySchema.js'
@@ -39,19 +41,35 @@ export interface CheckpointState {
   key: string
   at: CheckpointName
   day: string
-  /** Null when no overview held its must entries yet. */
-  overview: { id: string; status: OverviewStatus; scope: OverviewScope; frozen: boolean } | null
+  /** Null when no overview held its must entries yet; `development`: the one it stands for (`linkKeys`' `standsFor`), which may be another key's. */
+  overview: { id: string; title: string; development: string | null; status: OverviewStatus; scope: OverviewScope; frozen: boolean } | null
   /** Its must entries published by then, and those active in its overview. */
   mustByThen: number
   mustFound: number
-  /** Members that are no must or optional entry of it. */
-  wrongMembers: number
+  /**
+   * While its overview stands for it, the active members the joins bar reads as wrong there (`linkKeys`'
+   * `verdict`), each by name (`named`); none when the overview stands for another development.
+   */
+  wrongMembers: string[]
   /** The facts its stands could be written from then, and the stands then current. */
   offerable: number
   stands: { sentences: number; doing: number } | null
 }
 
-/** An applied automated re-center in a replay: its overview, its day and the development it stood for then, and the stories it joined, by slug. */
+/**
+ * The development an overview stood for when a re-center was decided: what its members stand for
+ * without the stories the re-center took in. Read from its members afterwards, a judged overview that
+ * swallowed more of a neighbouring development's stories than it holds must entries would stand for the
+ * neighbour, and its re-center, the false one the bars exist for, would go unscored. Null when the
+ * members left stand for none.
+ */
+export const developmentBefore = (
+  members: readonly string[],
+  joined: readonly string[],
+  standsFor: (members: readonly string[]) => string | null,
+): string | null => standsFor(members.filter(m => !joined.includes(m)))
+
+/** An applied automated re-center in a replay: its overview, its day and the development it stood for then (`developmentBefore`), and the stories it joined, by slug. */
 export interface ReplayRecenter {
   overviewId: string
   day: string
@@ -86,10 +104,12 @@ export interface ReplayScore {
 }
 
 export interface ReplayRecenterScore {
-  /** No re-center of an overview whose development's key has no center, and no near miss joined by one (means over runs). */
+  /** No re-center of an overview whose development's key has no center, and no near miss joined by one (shares pooled over runs). */
   bars: Bar[]
-  /** Applied re-centers and splits per run, averaged; the most any one overview had in a run (never more than the limit). */
+  /** Applied re-centers the bars score and splits per run, averaged; the most any one overview had in a run, of every re-center (never more than the limit). */
   applied: number | null
+  /** Applied re-centers of an overview standing for a development the half's keys do not score (the background's): in no bar, per run, averaged. */
+  unscored: number | null
   splits: number | null
   mostPerOverview: number
   /** Each re-center of a development whose key has a center: its day against the center's `from`. */
@@ -103,16 +123,25 @@ export function splitsOf(keys: readonly AnswerKey[], overviews: readonly { id: s
   return overviews.filter(o => centerKey.has(o.foundedFrom[0]) && centerKey.get(o.foundedFrom[0]) === centerKey.get(o.foundedFrom[1])).map(o => o.id)
 }
 
+/**
+ * The re-centers' bars and counts. A re-center of an overview standing for a development the half's
+ * keys do not score (a background one) is no evidence on the half: it counts in neither bar and apart
+ * from `applied`; one of an overview standing for no development is still a false one. The most per
+ * overview is over every re-center, since the code's limit holds for all.
+ */
 export function scoreReplayRecenters(keys: readonly AnswerKey[], runs: readonly ReplayRunResult[]): ReplayRecenterScore {
   const from = new Map(keys.flatMap(k => (k.centers[0] ? [[k.id, k.centers[0].from] as const] : [])))
+  const scored = new Set(keys.map(k => k.id))
   const perRun = runs.map(r => {
     const counts = new Map<string, number>()
     for (const x of r.recenters) counts.set(x.overviewId, (counts.get(x.overviewId) ?? 0) + 1)
+    const judged = r.recenters.filter(x => x.development === null || scored.has(x.development))
     return {
-      applied: r.recenters.length,
-      wrong: r.recenters.filter(x => x.development === null || !from.has(x.development)).length,
-      nearMisses: r.recenters.reduce((s, x) => s + x.nearMissesJoined.length, 0),
-      joined: r.recenters.reduce((s, x) => s + x.joined.length, 0),
+      applied: judged.length,
+      unscored: r.recenters.length - judged.length,
+      wrong: judged.filter(x => x.development === null || !from.has(x.development)).length,
+      nearMisses: judged.reduce((s, x) => s + x.nearMissesJoined.length, 0),
+      joined: judged.reduce((s, x) => s + x.joined.length, 0),
       most: Math.max(0, ...counts.values()),
       splits: r.splits.length,
     }
@@ -131,6 +160,7 @@ export function scoreReplayRecenters(keys: readonly AnswerKey[], runs: readonly 
       ),
     ],
     applied: mean(perRun.map(p => p.applied)),
+    unscored: mean(perRun.map(p => p.unscored)),
     splits: mean(perRun.map(p => p.splits)),
     mostPerOverview: Math.max(0, ...perRun.map(p => p.most)),
     timing: runs.flatMap(r =>
@@ -141,7 +171,7 @@ export function scoreReplayRecenters(keys: readonly AnswerKey[], runs: readonly 
   }
 }
 
-/** The bars over every run, and the replay's figures; `others`, the other half's keys, only judge foundings (`scoreLinkRun`). */
+/** The bars over every run, and the replay's figures; `others`, the keys outside the half, are never scored: they say what an overview stands for and what a background story is (`linkKeys`). */
 export function scoreReplay(
   keys: readonly AnswerKey[],
   runs: readonly ReplayRunResult[],

@@ -6,8 +6,10 @@ import type { Charter, LinkStory, Role } from '../../../services/overviewTypes.j
 import { runUpkeep } from '../../../services/overviewUpkeep.js'
 import type { PoolFact, PoolSource } from '../../../services/researchPool.js'
 import type { AnswerKey } from './keySchema.js'
-import { createSandbox, type Sandbox, type SandboxEntry, type SandboxOverview } from './overviewSandbox.js'
+import { linkKeys } from './linkScore.js'
+import { createSandbox, type Sandbox, type SandboxDecision, type SandboxEntry, type SandboxOverview } from './overviewSandbox.js'
 import { checkpointStories, poolMemberFacts } from './passPool.js'
+import { recentersOf } from './replay.js'
 import { PLANTED_JOINS, plantedCase } from './review.js'
 import { keyRole, standsFactFixtures } from './stands.js'
 import { sandboxUpkeep } from './upkeepSandbox.js'
@@ -308,7 +310,7 @@ describe('the upkeep over the sandbox', () => {
     const sandbox = createSandbox()
     const members = [story('a', '2026-05-01'), story('b', '2026-05-03'), story('c', '2026-05-05'), story('d', '2026-05-07')]
     const overview = seed(sandbox, 'Ebola in eastern DR Congo', { in: 'The outbreak.', out: [], endEvent: 'Declared over.' }, members)
-    const now = new Date('2026-05-07T12:00:00Z')
+    let now = new Date('2026-05-07T12:00:00Z')
     const io = sandboxUpkeep(
       sandbox,
       () => [] as MemberFact[],
@@ -350,6 +352,63 @@ describe('the upkeep over the sandbox', () => {
     expect(overview.lastSignature).not.toBeNull()
     expect(Object.fromEntries(io.safeguards())).toEqual({ 'review detached an entry': 1 })
     expect(sandbox.decisions.map(d => `${d.kind}:${d.outcome}`)).toEqual(['review:reviewed'])
+
+    // The next night nothing it is made of has changed: an overview whose members have no facts is tried once, at no call, and not again
+    const reviewedAt = overview.reviewedAt
+    now = new Date('2026-05-08T12:00:00Z')
+    const next = await runUpkeep({ ...io, review, stands }, { clock: now, now, today: '2026-05-08' })
+    expect(next.errors).toEqual([])
+    expect(next).toMatchObject({ reviews: 0, standsRefreshes: 0, failed: 0 })
+    expect(overview.reviewedAt).toBe(reviewedAt)
+  })
+
+  it('records an applied re-center with the development its overview stood for before it: the entries it detached counted, the stories it took in left out', () => {
+    const sandbox = createSandbox()
+    // The kept development's overview: two of its must entries and two of the war's from earlier wrong joins
+    const before = [story('b', '2026-05-01'), story('k2', '2026-05-02'), story('w1', '2026-05-03'), story('w2', '2026-05-04')]
+    const taken = [story('i1', '2026-05-05'), story('i2', '2026-05-06'), story('i3', '2026-05-07')]
+    const o = seed(sandbox, 'Kept, widened', { in: 'In.', out: [], endEvent: null }, [...before, ...taken])
+    // The re-center detached k2 and took in three more of the war's: by its members now, the overview stands for the war
+    Object.assign(o.entries[1]!, { status: 'detached', detachedBy: 'recenter', detachReason: 'recenter' })
+    const key = (id: string, slugs: string[], nearMisses: string[] = []): AnswerKey => ({
+      schemaVersion: 1,
+      id,
+      title: id,
+      charter: { in: 'In.', out: [], endEvent: null },
+      figures: [],
+      entries: slugs.map(s => entry(s, '2026-05-01')),
+      nearMisses: nearMisses.map(slug => ({ slug, date: '2026-05-01', title: slug, why: 'looks alike' })),
+      responses: [],
+      centers: [],
+      notes: '',
+    })
+    const index = linkKeys([key('kept', ['b', 'k2'], ['i3'])], [key('war', ['w1', 'w2', 'i1', 'i2', 'i3'])])
+    const decision = (over: Partial<SandboxDecision>): SandboxDecision => ({
+      id: 'd1',
+      kind: 'recenter',
+      outcome: 'recentered',
+      overviewId: o.id,
+      storyId: null,
+      inputs: { joined: taken.map(s => s.id), detached: [o.entries[1]!.id] },
+      answer: null,
+      model: null,
+      promptVersion: null,
+      confidence: null,
+      costUsd: 0,
+      actor: 'recenter',
+      undone: false,
+      ...over,
+    })
+    const recorded = recentersOf(
+      [decision({}), decision({ outcome: 'refused' }), decision({ kind: 'review' })],
+      sandbox,
+      { index, slugOf: id => id },
+      '2026-05-07',
+    )
+    // Scored as the kept development's, a false re-center, with the kept key's near miss among the stories it took in
+    expect(recorded).toEqual([
+      { overviewId: o.id, day: '2026-05-07', development: 'kept', title: 'Kept, widened', joined: ['i1', 'i2', 'i3'], nearMissesJoined: ['i3'] },
+    ])
   })
 
   it("applies each upkeep write by the lifecycle's rules and counts the safeguards that fired", async () => {

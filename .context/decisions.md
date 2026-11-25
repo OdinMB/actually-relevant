@@ -82,3 +82,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0078 · A story that points past an established open overview waits for its re-center and founds nothing while it waits](decisions/0078-linking-wait-for-established-overview-recenter.md)
 - [ADR-0079 · A founding whose partner comes later in the run's order waits for that partner's own result](decisions/0079-linking-founding-waits-for-later-partner.md)
 - [ADR-0080 · A research fact is its statement, and its figure stays only when a model finds it in the source](decisions/0080-fact-statement-governs-model-judges-figures.md)
+- [ADR-0081 · The whole-step replay replays the linking step's story set, background included, and skips no review](decisions/0081-replay-replays-linking-story-set.md)

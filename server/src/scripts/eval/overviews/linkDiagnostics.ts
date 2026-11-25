@@ -1,19 +1,20 @@
 /**
  * The linking replay's diagnostics (`link.ts`; `.context/model-eval.md`, "Overview evals"): what lets a
- * rerun from the cache confirm why a bar failed. For each run: every must entry not found in its
- * development's overview, with why (not replayed, in another overview, no candidate, held for an
- * overview's re-center (ADR-0078), its development not offered, refused by code with the rule, the
- * founding not agreed, or the model's no or unsure with its confidence and scope; the link answer gives
- * no reason); the roles of found must entries that disagree with the key; every founded charter; and
+ * rerun from the cache confirm why a bar failed; the whole-step replay (`replay.ts`) reads its runs the
+ * same way. For each run: every must entry not found in its development's overview, with why (not
+ * replayed, in another overview, detached again by the upkeep's review or re-center (the whole-step
+ * replay only), no candidate, held for an overview's re-center (ADR-0078), its development not offered,
+ * refused by code with the rule, the founding not agreed, or the model's no or unsure with its
+ * confidence and scope; the link answer gives no reason); the roles of found must entries that disagree with the key; every founded charter; and
  * the stories waiting for a re-center, with the partners their waits left out. The keys are read as the bars read them
  * (`linkKeys`): an overview stands for a development of any key, and a must entry is found in an
  * overview whose key holds it as must. No bars: the owner reads them. Pure.
  */
+import type { Neighbour } from '../../../services/overviewCandidates.js'
 import { onlyPartnerSilent, type LinkResult } from '../../../services/overviewLink.js'
 import type { Charter, FoundingOutcome, LinkOutcome, Role } from '../../../services/overviewTypes.js'
-import { isLabelDevelopment } from './developmentHalves.js'
 import type { AnswerKey } from './keySchema.js'
-import { linkKeys, type KeyRole } from './linkScore.js'
+import { linkKeys, overviewTitled, type KeyRole } from './linkScore.js'
 
 /** A story's neighbours as the replay read them: production's (`read`, `near` of them within the distance) and those kept to the replayed stories. */
 export interface NeighbourCount {
@@ -21,6 +22,13 @@ export interface NeighbourCount {
   near: number
   kept: number
 }
+
+/** The counts of one read of a story's neighbours: all production gave, and those kept to the replayed stories. */
+export const neighbourCount = (read: readonly Neighbour[], kept: readonly Neighbour[]): NeighbourCount => ({
+  read: read.length,
+  near: read.filter(n => n.via === 'near').length,
+  kept: kept.length,
+})
 
 /** A candidate a link call was shown, and the model's answer for it. */
 export interface CandidateTrace {
@@ -148,6 +156,7 @@ export const MISS_CAUSES = [
   'not replayed',
   'not linked',
   'in another overview',
+  'detached',
   'no candidate',
   'held for a re-center',
   'not offered',
@@ -245,6 +254,12 @@ export interface DiagnoseInput {
   neighbourLimit: number
   /** Why a slug was not replayed, where the replay knows another reason than that it is not published (a rescore: the keys name it since the run). */
   absent?: ReadonlyMap<string, string>
+  /**
+   * Why a story that had joined is in no overview at the run's end, by slug: only the whole-step replay
+   * passes it, where a review or a re-center can take a story out again, which its last link result
+   * would otherwise misread (a yes not taken).
+   */
+  detached?: ReadonlyMap<string, string>
 }
 
 const pctOf = (v: number | null) => (v === null ? '?' : v.toFixed(2))
@@ -252,8 +267,7 @@ const pctOf = (v: number | null) => (v === null ? '?' : v.toFixed(2))
 /** One run's diagnostics. */
 export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
   const k = linkKeys(d.keys, d.others)
-  const { entry, nearMiss, entryKeys: anyEntry } = k
-  const otherIds = new Set(d.others.map(x => x.id))
+  const { entry, entryKeys: anyEntry } = k
   const devOf = new Map(d.overviews.map(o => [o.id, k.standsFor(o.members)]))
   /** Every key a must entry of the half is a must of, the outside keys included: an overview of any of them is its own. */
   const mustKeys = (slug: string) => k.all.get(slug)?.musts ?? new Map<string, KeyRole>()
@@ -261,17 +275,10 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
   for (const o of d.overviews) for (const m of o.members) overviewOf.set(m, o)
   const titled = (id: string) => {
     const o = d.overviews.find(x => x.id === id)
-    return o ? `"${o.title}" (${devOf.get(id) ?? 'no development'})` : id
+    return o ? overviewTitled(o.title, devOf.get(id) ?? null) : id
   }
-  /** What the keys make of a story: an entry, a near miss, or neither. */
-  const what = (slug: string): string => {
-    const e = entry.get(slug)
-    if (e) return `${e.join} entry of ${e.join === 'must' ? [...e.musts.keys()].join(' and ') : e.key}`
-    const outside = [...(anyEntry.get(slug) ?? [])].filter(id => otherIds.has(id))
-    if (outside.length > 0) return `entry of ${outside.map(id => `${id} (${isLabelDevelopment(id) ? 'label key' : 'other half'})`).join(', ')}`
-    const near = nearMiss.get(slug)
-    return near ? `near miss of ${near.join(', ')}` : 'in no key'
-  }
+  /** What the keys make of a story, in the bars' own wording (`linkKeys`' `as`). */
+  const what = k.as
   /** The first overview of each development, by the day it was founded. */
   const firstOf = new Map<string, FoundedOverview>()
   for (const o of [...d.overviews].sort((a, b) => a.foundedOn.localeCompare(b.foundedOn))) {
@@ -305,6 +312,11 @@ export function diagnoseRun(d: DiagnoseInput): RunDiagnostics {
     if (placedIn && isOurs(placedIn.id)) continue
     if (placedIn) {
       miss('in another overview', `in ${titled(placedIn.id)}${t?.outcome ? `, ${t.outcome}` : ''}`)
+      continue
+    }
+    const detached = d.detached?.get(slug)
+    if (detached) {
+      miss('detached', detached)
       continue
     }
     if (!t) {

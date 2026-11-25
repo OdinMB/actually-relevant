@@ -308,6 +308,22 @@ describe('diagnoseRun', () => {
     ])
   })
 
+  it('reads a must entry the upkeep took out of every overview as detached, whatever its last link said, and never one that sits in an overview', () => {
+    const why = 'from "Ebola in DRC" (ebola) by a review on 2026-05-08'
+    const detached = new Map([
+      ['e7', why],
+      ['e1', why],
+      ['e5', why],
+    ])
+    const d = diagnoseRun({ ...diagnoseInput(), detached })
+    const by = new Map(d.missed.map(m => [m.slug, m]))
+    // e7's last link left it unsure; the whole-step replay knows it had joined and was taken out again
+    expect(by.get('e7')).toMatchObject({ cause: 'detached', detail: why })
+    // e1 sits in its own development's overview, e5 in another's: the map is not read for them
+    expect(by.has('e1')).toBe(false)
+    expect(by.get('e5')).toMatchObject({ cause: 'in another overview' })
+  })
+
   it('gives a must entry not replayed the reason the replay was given for it, and with none, that it is not published', () => {
     expect(diagnose().missed.find(m => m.slug === 'gone')!.detail).toBe('not published in this database')
     const reason = 'not in the saved replay: the keys name it since the run'
@@ -355,7 +371,7 @@ describe('diagnoseRun', () => {
     const [ebola, , strait] = diagnose().charters
     expect(ebola).toMatchObject({ development: 'ebola', members: { right: 3, wrong: 1, ignored: 0, unscored: 0 } })
     expect(strait!.foundedFrom).toEqual([
-      { slug: 's1', as: 'entry of strait (other half)' },
+      { slug: 's1', as: 'background: entry of strait' },
       { slug: 'uganda', as: 'near miss of ebola' },
     ])
     expect(strait).toMatchObject({ development: 'strait', members: { right: 0, wrong: 0, ignored: 0, unscored: 2 } })
@@ -382,8 +398,8 @@ describe('diagnoseRun', () => {
       development: label,
       members: { right: 0, wrong: 1, ignored: 0, unscored: 3 },
       foundedFrom: [
-        { slug: 'l1', as: `entry of ${label} (label key)` },
-        { slug: 'l2', as: `entry of ${label} (label key)` },
+        { slug: 'l1', as: `background: entry of ${label} (label key)` },
+        { slug: 'l2', as: `background: entry of ${label} (label key)` },
       ],
     })
     expect(d.missed.find(m => m.slug === 'e1')).toMatchObject({ cause: 'in another overview' })

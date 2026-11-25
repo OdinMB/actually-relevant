@@ -12,10 +12,13 @@
  * charters naming an end event other than the key's (the strong judge's verdicts, passed in; one naming
  * none is never wrong). `role`: turning point or routine against the key of the overview a `must` entry
  * was found in, any answer agreeing with an entry that accepts either (`eitherRole`), counted apart so
- * the bar's meaning stays visible. Means over runs. And how often the link calls flagged the re-center signals
- * (`scoreSignals`), with no bar. Pure.
+ * the bar's meaning stays visible. Means over runs. Each wrong join and wrong founding is kept in words
+ * for the report, its stories by title and as the keys make them out (`linkKeys`' `named`), the overview
+ * by its title. And how often the link calls flagged the re-center signals (`scoreSignals`), with no
+ * bar. Pure.
  */
 import type { Role } from '../../../services/overviewTypes.js'
+import { isLabelDevelopment } from './developmentHalves.js'
 import type { AnswerKey } from './keySchema.js'
 
 /**
@@ -75,7 +78,11 @@ export interface LinkRunScore {
   rolesEither: number
   /** The half's development id → its overview's id in this run, for the end-event judge. */
   developments: Map<string, string>
-  /** What each wrong join was, for the report. */
+  /**
+   * Each wrong founding and wrong join in words, for the report: the stories by title and as the keys
+   * make them out (`named`), the overview by its title (its id and founding day for a founding), with
+   * the development it stands for.
+   */
   mistakes: string[]
 }
 
@@ -270,6 +277,11 @@ export type JoinVerdict = 'right' | 'wrong' | 'ignored' | null
  *   the keys list every story that belongs. In any other overview only the half's `must` entries are
  *   scored: right where the overview's key holds one as `must` too, ignored as its other entry, wrong
  *   otherwise.
+ * - `as(slug)`: what the keys make of a story, the one wording the bars' mistakes, the diagnostics and
+ *   the reports share: the half's entry it is (a center's reads as optional, as `keyIndex` files it),
+ *   the half's near miss, and the outside keys it is an entry of, a label key marked as one
+ *   (`background:` when the half names nothing of it); `in no key` with none. `named(slug)`: the story
+ *   by the first title any key gives it, with its slug and `as`; by its slug alone when no key titles it.
  */
 export function linkKeys(keys: readonly AnswerKey[], others: readonly AnswerKey[] = []) {
   const { entry, nearMiss } = keyIndex(keys)
@@ -287,34 +299,48 @@ export function linkKeys(keys: readonly AnswerKey[], others: readonly AnswerKey[
     if (dev !== null && scored.has(dev)) return inDevelopment(slug, dev)
     return entry.get(slug)?.join === 'must' ? inDevelopment(slug, dev) : null
   }
-  return { entry, nearMiss, all, entryKeys, scored, judged, standsFor, verdict }
+  const as = (slug: string): string => {
+    const e = entry.get(slug)
+    const near = nearMiss.get(slug) ?? []
+    const parts = [
+      ...(e ? [e.join === 'must' ? `must entry of ${[...e.musts.keys()].join(' or ')}` : `optional entry of ${e.key}`] : []),
+      ...(near.length > 0 ? [`near miss of ${near.join(', ')}`] : []),
+    ]
+    const outside = [...(entryKeys.get(slug) ?? [])].filter(id => !scored.has(id)).map(id => (isLabelDevelopment(id) ? `${id} (label key)` : id))
+    // A story the half's keys name nothing of is only there as background
+    if (outside.length > 0) parts.push(`${parts.length > 0 ? '' : 'background: '}entry of ${outside.join(', ')}`)
+    return parts.join('; ') || 'in no key'
+  }
+  const titles = new Map<string, string>()
+  for (const x of every.flatMap(k => [...k.entries, ...k.nearMisses, ...k.centers.flatMap(c => [...c.entries, ...c.nearMisses])]))
+    if (x.title && !titles.has(x.slug)) titles.set(x.slug, x.title)
+  const named = (slug: string): string => {
+    const title = titles.get(slug)
+    return title ? `"${title}" (${slug}; ${as(slug)})` : `${slug} (${as(slug)})`
+  }
+  return { entry, nearMiss, all, entryKeys, scored, judged, standsFor, verdict, as, named }
 }
 export type LinkKeys = ReturnType<typeof linkKeys>
 
-/** What a wrong join was, for the report: the story as the keys make it out, and where it went. */
-function wrongJoin(k: LinkKeys, slug: string, dev: string | null): string {
-  const where = dev ?? 'an overview of no development'
-  const e = k.entry.get(slug)
-  if (e?.join === 'must') return `${slug} (${[...e.musts.keys()].join(' or ')}) joined ${where}`
-  const near = k.nearMiss.get(slug) ?? []
-  if (dev !== null && near.includes(dev)) return `near miss ${slug} joined ${dev}`
-  if (e) return `${slug} (optional entry of ${e.key}) joined ${where}`
-  if (near.length > 0) return `${slug} (near miss of ${near.join(', ')}) joined ${where}`
-  const of = [...(k.entryKeys.get(slug) ?? [])]
-  return `${slug} (${of.length > 0 ? `background: entry of ${of.join(', ')}` : 'in no key'}) joined ${where}`
+/** An overview as the reports name it: its title and the development it stands for. */
+export const overviewTitled = (title: string, dev: string | null): string => `"${title}" (${dev ?? 'no development'})`
+
+/** What a wrong join was, for the report: the story by its title and as the keys make it out (`named`), and the overview it joined by its title and development. */
+function wrongJoin(k: LinkKeys, slug: string, where: { dev: string | null; title?: string | undefined }): string {
+  return `${k.named(slug)} joined ${where.title ? overviewTitled(where.title, where.dev) : (where.dev ?? 'an overview of no development')}`
 }
 
-/** An overview as the report names it: its title and id, when and from what it was founded. */
-const named = (o: ReplayRun['overviews'][number]): string => {
+/** An earlier overview as a repeat line names it: its title and id, when and from which stories (by slug) it was founded. */
+const foundedAs = (o: ReplayRun['overviews'][number]): string => {
   const founded = `founded ${o.foundedOn ? `${o.foundedOn} ` : ''}from ${o.foundedFrom[0]} and ${o.foundedFrom[1]}`
   return o.title ? `"${o.title}" (${o.id}, ${founded})` : `${o.id} (${founded})`
 }
 
-/** A repeat founding in words: the development, the founding, and the earlier overviews of it it repeats. */
-function repeatLine(dev: string, o: ReplayRun['overviews'][number], earlier: readonly ReplayRun['overviews'][number][]): string {
+/** A repeat founding in words: the development, the founding with its two stories by name (`named`), and the earlier overviews of it it repeats. */
+function repeatLine(k: LinkKeys, dev: string, o: ReplayRun['overviews'][number], earlier: readonly ReplayRun['overviews'][number][]): string {
   const [a, b] = o.foundedFrom
   const which = o.title ? `"${o.title}", ${o.id}` : o.id
-  return `founded ${dev} again from ${a} and ${b}${o.foundedOn ? ` on ${o.foundedOn}` : ''} (${which}), repeating ${earlier.map(named).join(' and ')}`
+  return `founded ${dev} again from ${k.named(a)} and ${k.named(b)}${o.foundedOn ? ` on ${o.foundedOn}` : ''} (${which}), repeating ${earlier.map(foundedAs).join(' and ')}`
 }
 
 /**
@@ -332,7 +358,7 @@ function repeatLine(dev: string, o: ReplayRun['overviews'][number], earlier: rea
  */
 export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others: readonly AnswerKey[] = []): LinkRunScore {
   const k = linkKeys(keys, others)
-  const placed = new Map<string, string | null>() // slug → its overview's development
+  const placed = new Map<string, { dev: string | null; title?: string | undefined }>() // slug → its overview's development and title
   const developments = new Map<string, string>()
   const opened = new Map<string, ReplayRun['overviews']>() // development → its overviews founded so far, all still open
   const mistakes: string[] = []
@@ -341,11 +367,11 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others:
   for (const o of run.overviews) {
     const dev = k.standsFor(o.members)
     if (dev && k.scored.has(dev) && !developments.has(dev)) developments.set(dev, o.id)
-    for (const m of o.members) placed.set(m, dev)
+    for (const m of o.members) placed.set(m, { dev, title: o.title })
     const [a, b] = o.foundedFrom
     const earlier = dev ? (opened.get(dev) ?? []) : []
     if (dev) opened.set(dev, [...earlier, o])
-    const repeat = dev !== null && earlier.length > 0 ? repeatLine(dev, o, earlier) : null
+    const repeat = dev !== null && earlier.length > 0 ? repeatLine(k, dev, o, earlier) : null
     if (!k.judged(a) && !k.judged(b)) {
       if (repeat) backgroundRepeats.push(repeat)
       continue
@@ -354,7 +380,9 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others:
     const notOne = !oneDevelopment(k.entryKeys, a, b)
     if (notOne) {
       wrongFoundings++
-      mistakes.push(`founded from ${a} and ${b}, not two entries of one development`)
+      mistakes.push(
+        `${o.title ? `"${o.title}" (${o.id}) ` : ''}founded${o.foundedOn ? ` on ${o.foundedOn}` : ''} from ${k.named(a)} and ${k.named(b)}, not two entries of one development`,
+      )
     }
     if (repeat) {
       repeatFoundings++
@@ -364,17 +392,17 @@ export function scoreLinkRun(keys: readonly AnswerKey[], run: ReplayRun, others:
   }
   let right = 0
   let wrong = 0
-  for (const [slug, dev] of placed) {
-    const v = k.verdict(slug, dev)
+  for (const [slug, where] of placed) {
+    const v = k.verdict(slug, where.dev)
     if (v === 'right') right++
     else if (v === 'wrong') {
       wrong++
-      mistakes.push(wrongJoin(k, slug, dev))
+      mistakes.push(wrongJoin(k, slug, where))
     }
   }
   const musts = [...k.entry].filter(([, e]) => e.join === 'must').map(([slug]) => slug)
   /** The role the key of the overview a must entry joined gives it; undefined when that key does not hold it as must. */
-  const roleWhere = (slug: string) => k.all.get(slug)?.musts.get(placed.get(slug) ?? '')
+  const roleWhere = (slug: string) => k.all.get(slug)?.musts.get(placed.get(slug)?.dev ?? '')
   const found = musts.filter(slug => roleWhere(slug) !== undefined)
   const judged = found.filter(slug => run.roles.has(slug))
   return {

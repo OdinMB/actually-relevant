@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AnswerKey } from './keySchema.js'
-import { checkpointsOf, scoreReplay, splitsOf, type CheckpointState, type ReplayRunResult } from './replayScore.js'
+import { linkKeys } from './linkScore.js'
+import { checkpointsOf, developmentBefore, scoreReplay, splitsOf, type CheckpointState, type ReplayRunResult } from './replayScore.js'
 import { scoreReviewRun, scoreReviews, type ReviewCaseRun } from './reviewScore.js'
 import { latestValues, numbersIn, scoreStands, statesValue, type StandsCheckpointRun } from './standsScore.js'
 import { passPoolLines, replayLines, reviewLines, standsLines } from './upkeepReport.js'
@@ -91,7 +92,7 @@ describe('the replay score', () => {
       overview: null,
       mustByThen: 1,
       mustFound: 0,
-      wrongMembers: 0,
+      wrongMembers: [],
       offerable,
       stands: null,
     })
@@ -166,6 +167,44 @@ describe("the replay's re-centers", () => {
       { run: 1, key: 'moved', day: '2026-05-08', from: '2026-05-05' },
       { run: 1, key: 'moved', day: '2026-05-20', from: '2026-05-05' },
     ])
+  })
+
+  it("leaves a re-center of a development the half's keys do not score out of both bars and their applied count, counting it apart, and still holds every overview to the limit", () => {
+    const s = scoreReplay(
+      KEYS,
+      [
+        replayRun({ recenters: [recenter('o1', 'moved', '2026-05-08'), recenter('o9', 'iran-war-2026', '2026-05-09', ['n1'])] }),
+        replayRun({ run: 2, recenters: [recenter('o9', 'iran-war-2026', '2026-05-09'), recenter('o9', 'iran-war-2026', '2026-05-20')] }),
+      ],
+      3,
+      4,
+    ).recentering
+    // Only moved's re-center is scored: of a key with a center, and none of the stories it took in a near miss
+    expect(s.bars.map(b => [b.name, b.value])).toEqual([
+      ['false re-centers', 0],
+      ['near misses joined by a re-center', 0],
+    ])
+    expect(s).toMatchObject({ applied: 0.5, unscored: 1.5, mostPerOverview: 2 })
+    // An overview standing for no development is still scored: a false re-center
+    const none = scoreReplay(KEYS, [replayRun({ recenters: [recenter('o2', null, '2026-05-09')] })], 3, 4).recentering
+    expect(none).toMatchObject({ applied: 1, unscored: 0 })
+    expect(none.bars[0]!.value).toBe(1)
+  })
+
+  it("reads a re-center's development from the members it had before the stories it took in, so one that swallows a neighbour's stories is still its own", () => {
+    const war = key('war', [entry('i1', '2026-05-02'), entry('i2', '2026-05-03'), entry('i3', '2026-05-04')])
+    const { standsFor } = linkKeys([KEYS[1]!], [war])
+    // The kept development's overview, one must entry, took in three of the war's: by its members now it would stand for the war
+    const members = ['b', 'i1', 'i2', 'i3']
+    expect(standsFor(members)).toBe('war')
+    const development = developmentBefore(members, ['i1', 'i2', 'i3'], standsFor)
+    expect(development).toBe('kept')
+    // So the bars score it, as a false re-center, where the war's own would be unscored
+    const s = scoreReplay([KEYS[1]!], [replayRun({ recenters: [recenter('o1', development, '2026-05-05')] })], 3, 4, [war]).recentering
+    expect(s).toMatchObject({ applied: 1, unscored: 0 })
+    expect(s.bars[0]!.value).toBe(1)
+    // An overview made only of the stories taken in stood for nothing before
+    expect(developmentBefore(['i1', 'i2'], ['i1', 'i2'], standsFor)).toBeNull()
   })
 
   it('takes a founding by two center entries of one key for a split, and one with a base entry for none', () => {
@@ -422,9 +461,18 @@ describe('the upkeep report sections', () => {
     expect(pool).toContain('Spend this run $4.50, $0.1500 a story')
     const review = reviewLines({ half: 'all', repeat: 1, keys: ['ebola'], cases: [], score: scoreReviews([]), costUsd: 0 }).join('\n')
     expect(review).toContain('| planted errors caught | at least 90% | n/a | no data |')
-    const replay = replayLines({ half: 'all', repeat: 1, keys: ['ebola'], stories: 0, runs: [], score: scoreReplay([], [], 3, 0), costUsd: 0, left: [] }).join(
-      '\n',
-    )
+    const replay = replayLines({
+      half: 'all',
+      repeat: 1,
+      keys: ['ebola'],
+      stories: 0,
+      background: { keys: [], stories: 0 },
+      runs: [],
+      score: scoreReplay([], [], 3, 0),
+      diagnostics: [],
+      costUsd: 0,
+      left: [],
+    }).join('\n')
     expect(replay).toContain('| wrong foundings (share) | at most 10% |')
   })
 })

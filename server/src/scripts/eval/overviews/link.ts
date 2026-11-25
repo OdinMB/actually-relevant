@@ -6,7 +6,8 @@
  * production's prompts on the eval's cached calls at the step tiers. A judged run replays background
  * beside them (`backgroundOf`, ADR-0073): the entries of each key outside the half that shares an entry
  * with its replay, so a neighbouring development has its own stories, as in production, and its
- * look-alikes among the judged stories found no overview it would not. Neighbours come from
+ * look-alikes among the judged stories found no overview it would not. The whole-step replay
+ * (`replay.ts`) links the same stories (`linkReplayStories`, `loadReplayed`). Neighbours come from
  * production's candidate query, read-only and as of each story's date, kept to the replayed stories;
  * the stories as linking reads them. Then the strong judge compares each development's founded end
  * event with the key's, and `linkScore.ts` scores the bars (a background story only where it joins a
@@ -33,7 +34,7 @@ import { JUDGE_ARM } from './contextJudge.js'
 import { config } from '../../../config.js'
 import { keysOfHalf } from './developmentHalves.js'
 import { keepOf, mergedGroups, runAsKeeps, type DuplicateGroup, type MergedGroup } from './duplicates.js'
-import { diagnoseRun, traceOf, type NeighbourCount, type RunDiagnostics } from './linkDiagnostics.js'
+import { diagnoseRun, neighbourCount, traceOf, type NeighbourCount, type RunDiagnostics } from './linkDiagnostics.js'
 import { linkInputs, readInputs } from '../../../services/overviewDecisions.js'
 import type { KeyFile } from './keyFiles.js'
 import { awaitingReview, centerSlugs, type AnswerKey } from './keySchema.js'
@@ -159,16 +160,47 @@ export function backgroundOf(keys: readonly AnswerKey[], others: readonly Answer
 }
 
 /**
- * What a linking replay of the half loads: its keys and the others with the duplicate groups merged
+ * What a replay of the half loads: its keys and the others with the duplicate groups merged
  * (`keysOfHalf`), the half's slugs (`replaySlugs`), in a judged run its background (`backgroundOf`), and
- * the groups merged among the keys it replays, as they were written (`mergedGroups`).
+ * the groups merged among the keys it replays, as they were written (`mergedGroups`). `asked` is every
+ * slug a replay loads, the half's then the background's: the linking steps and the whole-step replay
+ * (`replay.ts`) both load it (`loadReplayed`), so neither can leave the background out; the dry run's
+ * estimates read it too.
  */
 export function linkReplayStories(files: readonly KeyFile[], half: LinkStepOptions['half'], groups: readonly DuplicateGroup[] = []) {
   const { keys, others } = keysOfHalf(files, half, groups)
   const background = half === 'judge' ? backgroundOf(keys, others) : { keys: [], slugs: [] }
   const replayedKeys = new Set([...keys, ...background.keys].map(k => k.id))
   const written = files.flatMap(f => (f.key && f.errors.length === 0 && replayedKeys.has(f.key.id) ? [f.key] : []))
-  return { keys, others, slugs: replaySlugs(keys), background, merged: mergedGroups(groups, written) }
+  const slugs = replaySlugs(keys)
+  return { keys, others, slugs, asked: [...slugs, ...background.slugs], background, merged: mergedGroups(groups, written) }
+}
+/** What a replay of a half loads and scores against (`linkReplayStories`). */
+export type ReplayStorySet = ReturnType<typeof linkReplayStories>
+
+/**
+ * The stories a replay links, read once for all its runs: those of the slugs asked that are published,
+ * in date order (then by id), the first `limit` when one is set; each one's slug by its id; and the
+ * slugs not published.
+ */
+export async function loadReplayed(
+  stories: LinkStepOptions['stories'],
+  asked: readonly string[],
+  limit?: number,
+): Promise<{ replayed: LinkStory[]; slugOf: Map<string, string>; notPublished: string[] }> {
+  const loaded = await stories([...asked])
+  const notPublished: string[] = []
+  const slugOf = new Map<string, string>()
+  const published: LinkStory[] = []
+  for (const [slug, story] of loaded) {
+    if (!story) notPublished.push(slug)
+    else {
+      slugOf.set(story.id, slug)
+      published.push(story)
+    }
+  }
+  published.sort((a, b) => a.datePublished.getTime() - b.datePublished.getTime() || a.id.localeCompare(b.id))
+  return { replayed: limit !== undefined ? published.slice(0, limit) : published, slugOf, notPublished }
 }
 
 /**
@@ -258,7 +290,7 @@ async function replayRun(run: number, r: ReplayInput): Promise<SavedLinkRun> {
     neighbours: async s => {
       const all = await r.neighbours(s)
       const kept = all.filter(n => ids.has(n.id))
-      counts.set(s.id, { read: all.length, near: all.filter(n => n.via === 'near').length, kept: kept.length })
+      counts.set(s.id, neighbourCount(all, kept))
       return kept
     },
     memberships: sandbox.memberships,
@@ -302,25 +334,12 @@ async function replayRun(run: number, r: ReplayInput): Promise<SavedLinkRun> {
  * `scoreSavedReplay` as a rescore scores it; `replay` is null when the step refused.
  */
 export async function runLinkStep(o: LinkStepOptions): Promise<{ report: LinkStepReport; replay: SavedLinkReplay | null }> {
-  const { keys, slugs, background } = linkReplayStories(o.files, o.half, o.groups)
+  const { keys, asked } = linkReplayStories(o.files, o.half, o.groups)
   // A center's stories are replayed and its entries scored: none may be a draft no one checked
   const refused = awaitingReview(keys, 'centers')
   if (refused) return { report: refusedReport(o, keys, refused), replay: null }
   // The half's stories and the background together, in one date order: a background story is a neighbour as in production
-  const asked = [...slugs, ...background.slugs]
-  const loaded = await o.stories(asked)
-  const notPublished: string[] = []
-  const slugOf = new Map<string, string>()
-  const stories: LinkStory[] = []
-  for (const [slug, story] of loaded) {
-    if (!story) notPublished.push(slug)
-    else {
-      slugOf.set(story.id, slug)
-      stories.push(story)
-    }
-  }
-  stories.sort((a, b) => a.datePublished.getTime() - b.datePublished.getTime() || a.id.localeCompare(b.id))
-  const replayed = o.limit !== undefined ? stories.slice(0, o.limit) : stories
+  const { replayed, slugOf, notPublished } = await loadReplayed(o.stories, asked, o.limit)
   const { ctx, meter } = metered(o.ctx)
   const input: ReplayInput = {
     replayed,
@@ -394,10 +413,9 @@ export async function scoreSavedReplay(
   stored: SavedLinkReplay,
   o: { ctx: SuiteContext; files: readonly KeyFile[]; half: LinkStepOptions['half']; groups?: readonly DuplicateGroup[] },
 ): Promise<LinkStepReport> {
-  const { keys, others, slugs, background, merged } = linkReplayStories(o.files, o.half, o.groups)
+  const { keys, others, asked, background, merged } = linkReplayStories(o.files, o.half, o.groups)
   const keep = keepOf(o.groups ?? [])
   const saved: SavedLinkReplay = { ...stored, replayed: [...new Set(stored.replayed.map(keep))], runs: stored.runs.map(r => runAsKeeps(r, keep)) }
-  const asked = [...slugs, ...background.slugs]
   const { added } = replayDrift(saved, asked)
   const stillAsked = new Set(asked)
   const left = [
@@ -467,7 +485,7 @@ export async function scoreSavedReplay(
  * key of the half holds a center no one has reviewed, and for a file missing or of another version.
  */
 export async function rescoreLinkStep(o: RescoreOptions): Promise<LinkStepReport> {
-  const { keys, slugs, background } = linkReplayStories(o.files, o.half, o.groups)
+  const { keys, asked } = linkReplayStories(o.files, o.half, o.groups)
   const refused = awaitingReview(keys, 'centers')
   if (refused) return refusedReport(o, keys, refused)
   const read = readSavedReplay(o.file)
@@ -480,5 +498,5 @@ export async function rescoreLinkStep(o: RescoreOptions): Promise<LinkStepReport
     },
   }
   const report = await scoreSavedReplay(read.replay, { ctx, files: o.files, half: o.half, groups: o.groups })
-  return { ...report, rescored: { file: basename(o.file), savedAt: read.replay.savedAt, ...replayDrift(read.replay, [...slugs, ...background.slugs]) } }
+  return { ...report, rescored: { file: basename(o.file), savedAt: read.replay.savedAt, ...replayDrift(read.replay, asked) } }
 }

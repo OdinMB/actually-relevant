@@ -77,6 +77,7 @@ import { verdict } from './overviews/linkReport.js'
 import { replayNotSaved, savedReplayName, writeSavedReplay } from './overviews/savedLinkReplay.js'
 import { MEMBERS_PER_CHECKPOINT, passPoolStories, runPassPool } from './overviews/passPool.js'
 import { runReplayStep } from './overviews/replay.js'
+import { estimateReplay, replayEstimateLines } from './overviews/replayEstimate.js'
 import { runRecenterStep } from './overviews/recenter.js'
 import { runReviewStep } from './overviews/review.js'
 import { runSamplingSteps } from './overviews/samplingSteps.js'
@@ -325,7 +326,7 @@ async function main(): Promise<void> {
       }
       if (linking) {
         const r = linkReplayStories(keyFiles, opts.half, groups)
-        const all = r.slugs.length + r.background.slugs.length
+        const all = r.asked.length
         const stories = opts.limit !== undefined ? Math.min(opts.limit, all) : all
         const background =
           r.background.slugs.length > 0 ? ` and ${r.background.slugs.length} background stories of ${r.background.keys.map(k => k.id).join(', ')}` : ''
@@ -338,6 +339,11 @@ async function main(): Promise<void> {
         console.log(
           `pass-pool: ${slugs.length} of the half's ${mustEntries} must entries (the newest ${MEMBERS_PER_CHECKPOINT} at each stands checkpoint), one first pass each; at most ${usd(slugs.length * FIRST_PASS_RESERVE_USD)} at a first pass's ceiling`,
         )
+      }
+      if (runs('replay')) {
+        // The linking steps' story set: the whole-step replay links exactly these
+        const estimate = estimateReplay(linkReplayStories(keyFiles, opts.half, groups), { repeat: opts.repeat, ...limit })
+        for (const line of replayEstimateLines(estimate, opts.half)) console.log(line)
       }
       if (runs('figure-check')) {
         console.log(

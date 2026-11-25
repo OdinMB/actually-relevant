@@ -93,7 +93,20 @@ describe('scoreLinkRun', () => {
     expect(s.right).toBe(3)
     expect(s.wrong).toBe(3)
     expect(s.wrongFoundings).toBe(1)
-    expect(s.mistakes).toEqual(expect.arrayContaining(['near miss uganda joined ebola', 'c1 (cholera) joined ebola']))
+    expect(s.mistakes).toEqual(expect.arrayContaining(['"uganda" (uganda; near miss of ebola) joined ebola', '"c1" (c1; must entry of cholera) joined ebola']))
+  })
+
+  it('names a wrong join by its story as the keys make it out and the overview by its title and development, and a wrong founding by its overview and day', () => {
+    const s = scoreLinkRun(KEYS, run([{ id: 'o1', title: 'Ebola in DRC', members: ['e1', 'e2', 'uganda'], foundedFrom: ['e1', 'e2'], endEvent: null }]))
+    expect(s.mistakes).toEqual(['"uganda" (uganda; near miss of ebola) joined "Ebola in DRC" (ebola)'])
+    const mixed = scoreLinkRun(
+      KEYS,
+      run([{ id: 'o2', title: 'Mixed', foundedOn: '2026-05-03', members: ['e3', 'c1'], foundedFrom: ['e3', 'c1'], endEvent: null }]),
+    )
+    expect(mixed.mistakes).toEqual([
+      '"Mixed" (o2) founded on 2026-05-03 from "e3" (e3; must entry of ebola) and "c1" (c1; must entry of cholera), not two entries of one development',
+      '"c1" (c1; must entry of cholera) joined "Mixed" (ebola)',
+    ])
   })
 
   it("skips a center's entries as optional, a base entry of any key taking precedence, and counts its near misses as the key's", () => {
@@ -210,7 +223,7 @@ describe('scoreLinkRun', () => {
     it("is wrong in a third development's overview, naming both its keys", () => {
       const s = scoreLinkRun([...both, KEYS[1]!], run([{ id: 'o1', members: ['c1', 'c2', 'deal'], foundedFrom: ['c1', 'c2'], endEvent: null }]))
       expect(s).toMatchObject({ right: 2, wrong: 1 })
-      expect(s.mistakes).toEqual(['deal (war or strait) joined cholera'])
+      expect(s.mistakes).toEqual(['"deal" (deal; must entry of war or strait) joined cholera'])
     })
 
     it('counts for both developments when deciding which one an overview stands for', () => {
@@ -238,7 +251,7 @@ describe('scoreLinkRun', () => {
         [iran, strait],
       )
       expect(s).toMatchObject({ foundings: 2, wrongFoundings: 1 })
-      expect(s.mistakes).toContain('founded from i2 and c1, not two entries of one development')
+      expect(s.mistakes).toContain('founded from "i2" (i2; background: entry of iran) and "c1" (c1; must entry of cholera), not two entries of one development')
     })
 
     it("counts a background story in a judged development's overview as a wrong join, and keeps the developments to the half's keys", () => {
@@ -251,7 +264,7 @@ describe('scoreLinkRun', () => {
         [iran],
       )
       expect(s).toMatchObject({ right: 2, wrong: 1 })
-      expect(s.mistakes).toEqual(['i3 (background: entry of iran) joined ebola'])
+      expect(s.mistakes).toEqual(['"i3" (i3; background: entry of iran) joined ebola'])
       expect([...s.developments.keys()]).toEqual(['ebola'])
     })
 
@@ -343,6 +356,42 @@ describe('linkKeys', () => {
     expect(k.standsFor(['e1', 'i1', 'i2', 'e3'])).toBe('iran')
     expect(k.standsFor(['e1', 'e2', 'i1'])).toBe('ebola')
     expect(['e1', 'e4', 'w1', 'uganda', 'cnm', 'i1'].map(k.judged)).toEqual([true, true, true, true, true, false])
+  })
+
+  it("says what the keys make of a story: the half's entry, a near miss, an outside key's entry, background, or nothing", () => {
+    const war = key('war', [
+      ['cnm', 'must', 'routine'],
+      ['deal', 'must', 'routine'],
+    ])
+    const strait = key('strait', [['deal', 'must', 'routine']])
+    const keys = linkKeys([ebola, cholera], [iran, war])
+    expect(['e1', 'e4', 'w1', 'uganda', 'cnm', 'e3', 'i1', 'nowhere'].map(keys.as)).toEqual([
+      'must entry of ebola',
+      'optional entry of ebola',
+      // A center's entry, as `keyIndex` files it
+      'optional entry of ebola',
+      'near miss of ebola',
+      'near miss of cholera; entry of war',
+      'must entry of ebola; entry of iran',
+      'background: entry of iran',
+      'in no key',
+    ])
+    expect(linkKeys([war, strait]).as('deal')).toBe('must entry of war or strait')
+  })
+
+  it('names a story by the first title a key of either half gives it, with what the keys make of it, and one in no key by its slug', () => {
+    const titled = (x: AnswerKey, titles: Record<string, string>): AnswerKey => ({
+      ...x,
+      entries: x.entries.map(e => ({ ...e, title: titles[e.slug] ?? e.title })),
+      nearMisses: x.nearMisses.map(n => ({ ...n, title: titles[n.slug] ?? n.title })),
+    })
+    const keys = linkKeys([titled(KEYS[0]!, { e1: 'Ebola reaches Goma', uganda: 'Ebola in Uganda' })], [titled(iran, { i1: 'Strikes on Tehran' })])
+    expect(['e1', 'uganda', 'i1', 'nowhere'].map(keys.named)).toEqual([
+      '"Ebola reaches Goma" (e1; must entry of ebola)',
+      '"Ebola in Uganda" (uganda; near miss of ebola)',
+      '"Strikes on Tehran" (i1; background: entry of iran)',
+      'nowhere (in no key)',
+    ])
   })
 })
 
@@ -478,7 +527,7 @@ describe('scoreLinking', () => {
       const s = scoreLinkRun(KEYS, repeated)
       expect(s).toMatchObject({ foundings: 3, judgedFoundings: 3, wrongFoundings: 0, repeatFoundings: 1, foundingsWrong: 1, backgroundRepeats: [] })
       expect(s.mistakes).toEqual([
-        'founded ebola again from e3 and e4 on 2026-07-16 ("Ebola again", o3), repeating "Ebola in DRC" (o1, founded 2026-05-23 from e1 and e2)',
+        'founded ebola again from "e3" (e3; must entry of ebola) and "e4" (e4; optional entry of ebola) on 2026-07-16 ("Ebola again", o3), repeating "Ebola in DRC" (o1, founded 2026-05-23 from e1 and e2)',
       ])
       expect(s.developments.get('ebola')).toBe('o1')
       expect(scoreLinking(KEYS, [repeated]).found[0]).toMatchObject({ value: 1 / 3, met: false })
@@ -504,7 +553,7 @@ describe('scoreLinking', () => {
       ).join('\n')
       expect(text).toContain('| wrong foundings (share) | at most 10% | 33.3% | not met |')
       expect(text).toContain('| 1 | 5 / 0 | 5 of 5 | 3 (3) | 0 / 1 (33.3%) |')
-      expect(text).toContain('- Run 1: founded ebola again from e3 and e4')
+      expect(text).toContain(`- Run 1: ${s.mistakes[0]}`)
     })
 
     it('counts a founding that is both not one development and a repeat once in the share', () => {
@@ -528,7 +577,9 @@ describe('scoreLinking', () => {
       ])
       const s = scoreLinkRun(KEYS, twice, [iran])
       expect(s).toMatchObject({ foundings: 2, judgedFoundings: 0, repeatFoundings: 0, foundingsWrong: 0, mistakes: [] })
-      expect(s.backgroundRepeats).toEqual(['founded iran again from i3 and i4 (o2), repeating o1 (founded from i1 and i2)'])
+      expect(s.backgroundRepeats).toEqual([
+        'founded iran again from "i3" (i3; background: entry of iran) and "i4" (i4; background: entry of iran) (o2), repeating o1 (founded from i1 and i2)',
+      ])
       const text = linkLines(
         {
           half: 'judge',
@@ -550,7 +601,7 @@ describe('scoreLinking', () => {
         ['found'],
       ).join('\n')
       expect(text).toContain('### Background repeat foundings (unscored; diagnostics)')
-      expect(text).toContain('- Run 1: founded iran again from i3 and i4 (o2), repeating o1 (founded from i1 and i2)')
+      expect(text).toContain(`- Run 1: ${s.backgroundRepeats[0]}`)
       expect(text).toContain('| wrong foundings (share) | at most 10% | n/a | no data |')
     })
   })

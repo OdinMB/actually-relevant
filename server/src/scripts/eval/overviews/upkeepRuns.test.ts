@@ -341,6 +341,200 @@ describe('runReplayStep', () => {
     expect(none.left.filter(l => l.reason === 'not published in this database').map(l => l.what)).toEqual(['e1', 'e2', 'e3', 'n1'])
   })
 
+  describe("over the linking steps' stories", () => {
+    // The war's key, in the other half, holds the judged near miss n1 as its own entry: its other entries are the background
+    const WAR: AnswerKey = {
+      ...KEY,
+      id: 'iran-war-2026',
+      title: 'War with Iran',
+      entries: [entry('n1', DAYS[1]!), entry('b1', '2026-05-02'), entry('b2', '2026-05-04')],
+    }
+    const WITH_WAR: KeyFile[] = [...FILES, { file: 'iran-war-2026.json', key: WAR, errors: [] }]
+    const ALL = new Map([...STORIES, ['b1', story('b1', '2026-05-02')] as const, ['b2', story('b2', '2026-05-04')] as const])
+    const replayWith = async (files: KeyFile[], half: 'judge' | 'tune' | 'all', limit?: number) => {
+      const asked: string[][] = []
+      const linked: string[] = []
+      const report = await runReplayStep({
+        ctx: fakeEvalContext(() => null),
+        files,
+        half,
+        stories: async slugs => {
+          asked.push(slugs)
+          return new Map(slugs.map(s => [s, ALL.get(s) ?? null]))
+        },
+        // No neighbour: each story is linked alone, once, in the order replayed
+        neighbours: async id => {
+          linked.push(id)
+          return []
+        },
+        facts: async () => [],
+        repeat: 1,
+        concurrency: 1,
+        budgetUsd: 5,
+        ...(limit !== undefined ? { limit } : {}),
+      })
+      return { report, asked, linked }
+    }
+
+    it("asks for the half's stories and the background's, replays them in one date order, and counts the background apart", async () => {
+      const { report, asked, linked } = await replayWith(WITH_WAR, 'judge')
+      expect(asked).toEqual([['e1', 'e2', 'e3', 'n1', 'b1', 'b2']])
+      expect(linked).toEqual(['id-e1', 'id-b1', 'id-e2', 'id-n1', 'id-b2', 'id-e3'])
+      expect(report).toMatchObject({ keys: [ID], stories: 6, background: { keys: ['iran-war-2026'], stories: 2 } })
+      // --limit takes the first stories of all of them by date
+      expect((await replayWith(WITH_WAR, 'judge', 3)).report).toMatchObject({ stories: 3, background: { keys: ['iran-war-2026'], stories: 1 } })
+    })
+
+    it('replays no background in a judged run with no outside key that shares a story, nor in a run of every key', async () => {
+      expect((await replayWith(FILES, 'judge')).report).toMatchObject({ stories: 4, background: { keys: [], stories: 0 } })
+      expect((await replayWith(WITH_WAR, 'all')).report).toMatchObject({ stories: 6, background: { keys: [], stories: 0 } })
+    })
+  })
+
+  describe('a background development beside a judged one', () => {
+    const routine = { role: 'routine' as const, roleKind: null }
+    const blank = { story: '', other: '' }
+    const labelOf = (block: string, tag: string) => new RegExp(`<${tag} [^>]*>[\\s\\S]*?<LABEL>([^<]*)</LABEL>`).exec(block)?.[1] ?? ''
+    /**
+     * A model that links by label: yes, quoting the story's own label on both sides, to each candidate
+     * whose block holds that label, no to the rest; founds "<label> development"; every founding check
+     * agrees; a review keeps the charter and every entry but one whose block holds `detach`; the stands
+     * as `standsAnswer` writes them.
+     */
+    const byLabel =
+      (detach?: string) =>
+      (schemaName: string, prompt: string): unknown => {
+        const name = base(schemaName)
+        if (name === 'overview-link') {
+          const label = labelOf(prompt, 'NEW')
+          return {
+            candidates: [...prompt.matchAll(/<(OVERVIEW|CANDIDATE) id="([OF]\d+)"[^>]*>([\s\S]*?)<\/\1>/g)].map(m => {
+              const yes = label !== '' && (m[3] ?? '').includes(label)
+              const quote = yes ? { story: label, other: label } : blank
+              return {
+                id: m[2] ?? '',
+                belongs: yes ? 'yes' : 'no',
+                cause: quote,
+                place: quote,
+                end: blank,
+                reportsEndEvent: false,
+                scope: yes ? 'inside' : 'unrelated',
+                centerMoved: false,
+                signalQuote: '',
+                confidence: yes ? 0.9 : 0.1,
+              }
+            }),
+            ...routine,
+          }
+        }
+        if (name === 'overview-found') {
+          const label = labelOf(prompt, 'STORY_A')
+          return { title: `${label} development`, charter: { in: `The ${label} development.`, out: [], endEvent: '' }, roles: { a: routine, b: routine } }
+        }
+        if (name === 'overview-found-check') {
+          const fits = { fits: 'yes', reason: 'It fits.', occurred: 'yes' }
+          return { a: fits, b: fits, endEventConcrete: 'none' }
+        }
+        if (name === 'overview-review') {
+          return {
+            entries: [...prompt.matchAll(/<ENTRY id="(E\d+)"[^>]*>([\s\S]*?)<\/ENTRY>/g)].map(m => ({
+              id: m[1] ?? '',
+              belongs: detach && (m[2] ?? '').includes(detach) ? 'no' : 'yes',
+              reason: 'Judged.',
+              ...routine,
+            })),
+            charter: { in: /<IN>([^<]*)<\/IN>/.exec(prompt)?.[1] ?? '', out: [], endEvent: '' },
+            title: '',
+            clearFreeze: false,
+          }
+        }
+        return standsAnswer(schemaName)
+      }
+
+    // x1 is an entry of the war's key that reads like an Ebola story: a look-alike; n1, the judged key's near miss, is the war's entry
+    const STORY_OF: [string, string, number, string, string][] = [
+      ['e1', '2026-05-01', 8, 'Ebola', 'Cases rise in Kivu'],
+      ['w1', '2026-05-02', 8, 'Hormuz', 'Strikes near the strait'],
+      ['e2', '2026-05-03', 8, 'Ebola', 'Clinics fill in Beni'],
+      ['n1', '2026-05-03', 9, 'Hormuz', 'Tankers turn back'],
+      ['w2', '2026-05-04', 8, 'Hormuz', 'Insurers raise premiums'],
+      ['x1', '2026-05-04', 9, 'Ebola', 'Fever scare at the port'],
+      ['e3', '2026-05-05', 8, 'Ebola', 'Vaccines reach Butembo'],
+      ['w3', '2026-05-06', 8, 'Hormuz', 'Navies escort convoys'],
+    ]
+    const BY_SLUG = new Map(
+      STORY_OF.map(([slug, date, hour, label, title]): [string, LinkStory] => [
+        slug,
+        { ...story(slug, date), title, label, datePublished: new Date(`${date}T0${hour}:00:00Z`) },
+      ]),
+    )
+    const titled = (slug: string) => ({ title: BY_SLUG.get(slug)!.title })
+    const EBOLA: AnswerKey = {
+      ...KEY,
+      entries: ['e1', 'e2', 'e3'].map(s => entry(s, BY_SLUG.get(s)!.date, titled(s))),
+      nearMisses: [{ slug: 'n1', date: '2026-05-03', ...titled('n1'), why: 'same week' }],
+    }
+    const WAR: AnswerKey = {
+      ...KEY,
+      id: 'iran-war-2026',
+      title: 'War with Iran',
+      entries: ['n1', 'w1', 'w2', 'w3', 'x1'].map(s => entry(s, BY_SLUG.get(s)!.date, titled(s))),
+    }
+    const X1 = '"Fever scare at the port" (x1; background: entry of iran-war-2026)'
+    // Facts for the judged must entries only, as the pass-pool step researches them
+    const judgedFacts = async (ids: string[]): Promise<MemberFact[]> =>
+      ids.flatMap(id => {
+        const s = [...BY_SLUG.values()].find(x => x.id === id)!
+        return ['id-e1', 'id-e2', 'id-e3'].includes(id)
+          ? [1, 2, 3].map(n => ({ storyId: id, published: true, fact: fact(id, n, s.date), source: source(id, s.date) }))
+          : []
+      })
+
+    const replayBoth = (ctx: ReturnType<typeof fakeEvalContext>) =>
+      runReplayStep({
+        ctx,
+        files: [EBOLA, WAR].map(k => ({ file: `${k.id}.json`, key: k, errors: [] })),
+        half: 'judge',
+        stories: async slugs => new Map(slugs.map(s => [s, BY_SLUG.get(s) ?? null])),
+        // Every earlier story, as production's neighbours of a story as of its date
+        neighbours: async (id, asOf) =>
+          [...BY_SLUG.values()]
+            .filter(s => s.id !== id && s.datePublished < asOf)
+            .map(s => ({ id: s.id, datePublished: s.datePublished, distance: 0.2, via: 'near' as const })),
+        facts: judgedFacts,
+        repeat: 1,
+        concurrency: 1,
+        budgetUsd: 5,
+      })
+
+    it("links, reviews and keeps the background's overview as any other, and scores a background story only as a wrong join in the judged one", async () => {
+      const ctx = fakeEvalContext(byLabel())
+      const report = await replayBoth(ctx)
+      expect(report).toMatchObject({ stories: 8, background: { keys: ['iran-war-2026'], stories: 4 } })
+      const [scored] = report.score.link.runs
+      expect(scored!.wrong).toBe(1)
+      expect(scored!.mistakes).toEqual([`${X1} joined "Ebola development" (ebola-drc-2026)`])
+      // Founded from the background's w1 and the judged near miss n1: judged, and rightly two entries of one development
+      expect(report.runs[0]!.overviews.find(o => o.title === 'Hormuz development')!.foundedFrom).toEqual(['w1', 'n1'])
+      expect(scored).toMatchObject({ judgedFoundings: 2, wrongFoundings: 0, foundingsWrong: 0 })
+      const end = report.runs[0]!.checkpoints.find(c => c.at === 'end')!
+      expect(end).toMatchObject({ overview: { title: 'Ebola development', development: ID }, mustFound: 3, wrongMembers: [X1] })
+      const called = (step: string, text: string) => ctx.calls.some(c => base(c.schemaName) === step && c.prompt.includes(text))
+      expect(called('overview-review', 'Hormuz development')).toBe(true)
+      expect(called('overview-stands', 'Hormuz development')).toBe(false)
+      expect(called('overview-stands', 'Ebola development')).toBe(true)
+      expect(report.diagnostics.map(d => [d.run, d.missed])).toEqual([[1, []]])
+    })
+
+    it('reads a must entry a review took out again as detached, naming the overview it left, the review and the day', async () => {
+      // The first review of Ebola's overview, the night x1 makes it three, says e2 does not belong
+      const report = await replayBoth(fakeEvalContext(byLabel(BY_SLUG.get('e2')!.title)))
+      expect(report.diagnostics[0]!.missed).toEqual([
+        { slug: 'e2', key: ID, date: '2026-05-03', cause: 'detached', detail: 'from "Ebola development" (ebola-drc-2026) by a review on 2026-05-04' },
+      ])
+    })
+  })
+
   it('refuses, before reading a story or making a call, while a center of a development of its half is a draft no one reviewed', async () => {
     const ctx = fakeEvalContext(() => null)
     let asked = 0
