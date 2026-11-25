@@ -28,7 +28,7 @@ Run on branch `claude/project-thread-egeer5` against a local copy of production 
 | | latest value stated | report only | 24.4% | report only |
 | | fact check: planted errors caught | ≥ 90% | 96.7% | met |
 | | fact check: correct lines rejected | report only | 2.5% | report only |
-| 6 Whole step replayed with the background (1 run, ADR-0081, commit ee305c2d) | joins right | ≥ 97% | 97.0% (just under: 3 wrong joins) | **missed by a hair** |
+| 6 Whole step replayed with the background (1 run, ADR-0081, commit ee305c2d) | joins right | ≥ 97% | 97.0% (just under: 3 wrong joins) | **met: the owner accepted it, 2026-11-25** |
 | | true joins found | ≥ 85% | 88.1% | met |
 | | wrong foundings (share) | ≤ 10% | 0.0% | met |
 | | roles agreeing | ≥ 65% | 81.3% | met |
