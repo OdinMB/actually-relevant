@@ -24,6 +24,7 @@ import { structuredCall } from './structuredCall.js'
 const STEP_OUTPUT_TOKENS: Record<PassStep, number> = {
   confirm: 500,
   queries: 500,
+  // Measured at effort `low` on a pass's extraction (2026-11-25, 146 calls): 1,039 on average, 209 of them reasoning; 2,119 at most
   extract: 2000,
   earlier: 500,
   write: 4500,

@@ -70,6 +70,19 @@ describe('buildResearchedStory', () => {
     expect(story.paragraphs[0]!.sentences[0]!.citations).toEqual([{ sourceId: 'S1', sentence: 'Sentence 2 of S1.' }])
   })
 
+  it('quotes readers the one sentence of a two-sentence support that states the fact', () => {
+    const flooding = {
+      id: 'S1F1',
+      statement: 'Flooding destroyed 300 homes in the valley.',
+      supportingSentence: 'Governor Alicia Park toured the region on Sunday. Flooding had destroyed 300 homes in the valley, she said.',
+      measures: '',
+      found: true,
+    }
+    const sources = [source('S0', { origin: 'original' }), source('S1', { facts: [flooding] })]
+    const story = buildResearchedStory(run({ story: [cited('Floods took homes.', ['S1F1'])] }, sources))
+    expect(story.paragraphs[0]!.sentences[0]!.citations).toEqual([{ sourceId: 'S1', sentence: 'Flooding had destroyed 300 homes in the valley, she said.' }])
+  })
+
   it('cites a source by its publication date alone, with no sentence for the card', () => {
     const story = buildResearchedStory(run({ story: [cited('On Monday.', ['S1F0'])] }))
     expect(story.paragraphs[0]!.sentences[0]!.citations).toEqual([{ sourceId: 'S1', sentence: null }])

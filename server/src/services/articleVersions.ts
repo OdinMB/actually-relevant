@@ -10,6 +10,7 @@
  */
 import { EMOTION_TAGS } from '../schemas/llm.js'
 import type { Draft } from '../schemas/research.js'
+import { quotedSentence } from './readerQuotes.js'
 import { draftItems, LABELS } from './researchChecks.js'
 import type { Citation, CitedText, ResearchedSource, ResearchedStory } from './researchedStory.js'
 import type { ArticleText } from './researchPipeline.js'
@@ -45,15 +46,20 @@ function merged(parts: CitedText[]): CitedText {
 }
 
 /**
- * The facts a legacy section's citations name: per citation, the source's fact whose supporting
- * sentence it shows, or its date fact (`S2F0`) for one that shows none. Readers see one citation per
+ * The facts a legacy section's citations name: per citation, the source's fact that quotes exactly
+ * the sentence it shows (`quotedSentence`), else the first whose support holds it; or its date fact
+ * (`S2F0`) for one that shows none, null or empty. The support is asked too because a projection
+ * keeps what it stored: a whole support when applied before 2026-11-25, and the sentence of its day's
+ * rule since, which a later change to that rule would no longer pick. Readers see one citation per
  * source, so a section's other facts of that source are not known; a citation the pool lacks names
  * none (less evidence, never a failure).
  */
 function citedFacts(citations: Citation[], facts: Pool['facts']): string[] {
   return citations.flatMap(c => {
-    if (c.sentence === null) return [`${c.sourceId}F0`]
-    return facts.find(f => f.sourceRef === c.sourceId && f.supportingSentence === c.sentence)?.ref ?? []
+    const sentence = c.sentence
+    if (!sentence) return [`${c.sourceId}F0`]
+    const ofSource = facts.filter(f => f.sourceRef === c.sourceId)
+    return (ofSource.find(f => quotedSentence(f) === sentence) ?? ofSource.find(f => f.supportingSentence.includes(sentence)))?.ref ?? []
   })
 }
 

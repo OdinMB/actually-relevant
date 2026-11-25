@@ -108,7 +108,7 @@ export function getLLMByTier(tier: 'small' | 'medium' | 'large'): ChatOpenAI {
 
 const _atEffort = new Map<string, ChatOpenAI>()
 
-/** A tier's model at another effort (a step that asks for less, `config.research.extractionEffort`); the tier's own client at its own. */
+/** A tier's model at another effort (a step with a setting of its own, `config.research.extractionEffort`); the tier's own client at its own. */
 export function getLLMAtEffort(tier: 'small' | 'medium' | 'large', effort: ReasoningEffort): ChatOpenAI {
   const spec = config.llm.models[tier]
   if (effort === spec.reasoningEffort) return getLLMByTier(tier)

@@ -79,10 +79,15 @@ const version = (over: Partial<ArticleVersionData> = {}): ArticleVersionData => 
   ...over,
 })
 
-const fact = (ref: string, supportingSentence: string): Pick<PoolFact, 'ref' | 'sourceRef' | 'supportingSentence'> => ({
+const fact = (
+  ref: string,
+  supportingSentence: string,
+  statement = `Fact ${ref}.`,
+): Pick<PoolFact, 'ref' | 'sourceRef' | 'supportingSentence' | 'statement'> => ({
   ref,
   sourceRef: ref.replace(/F\d+$/, ''),
   supportingSentence,
+  statement,
 })
 
 describe('versionArticle', () => {
@@ -108,6 +113,51 @@ describe('versionArticle', () => {
     expect(a.whyThisMatters).toEqual([{ text: 'Smoke reaches millions.', factIds: ['S1F1'] }])
     expect(a.quoteSourceId).toBe('S1')
     expect(a.emotionTag).toBeUndefined()
+  })
+
+  it('names the fact a legacy citation quotes one sentence of, and still the fact whose whole support a citation shows', () => {
+    const support = 'Governor Alicia Park toured the region on Sunday. Flooding had destroyed 300 homes in the valley, she said.'
+    const legacy = version({
+      kind: 'legacy',
+      article: null,
+      research: projection({
+        paragraphs: [
+          {
+            sentences: [{ text: 'Floods took homes.', citations: [{ sourceId: 'S1', sentence: 'Flooding had destroyed 300 homes in the valley, she said.' }] }],
+          },
+        ],
+        whyThisMatters: [{ text: 'Families lost their homes.', citations: [{ sourceId: 'S1', sentence: support }] }],
+        caveats: [],
+      }),
+    })
+    const facts = [fact('S1F1', 'Something else.'), fact('S1F2', support, 'Flooding destroyed 300 homes in the valley.')] as PoolFact[]
+    const a = versionArticle(legacy, { facts })
+    expect(a.story).toEqual([{ text: 'Floods took homes.', factIds: ['S1F2'] }])
+    expect(a.whyThisMatters).toEqual([{ text: 'Families lost their homes.', factIds: ['S1F2'] }])
+  })
+
+  it('names the fact whose support holds the sentence a legacy citation shows, whichever of its sentences that is, the fact that quotes it first', () => {
+    const support = 'Governor Alicia Park toured the region on Sunday. Flooding had destroyed 300 homes in the valley, she said.'
+    const shows = (sentence: string) =>
+      version({
+        kind: 'legacy',
+        article: null,
+        research: projection({
+          paragraphs: [{ sentences: [{ text: 'Floods took homes.', citations: [{ sourceId: 'S1', sentence }] }] }],
+          whyThisMatters: [],
+          caveats: [],
+        }),
+      })
+    const facts = [
+      fact('S1F1', support, 'Flooding destroyed 300 homes in the valley.'),
+      fact('S1F2', 'Governor Alicia Park toured the region on Sunday.', 'The governor toured the region on Sunday.'),
+    ] as PoolFact[]
+    // A sentence of S1F1's support that the rule would not quote today: only the support itself tells whose it is
+    expect(versionArticle(shows('Governor Alicia Park toured the region on Sunday.'), { facts: facts.slice(0, 1) }).story[0]!.factIds).toEqual(['S1F1'])
+    // The same sentence where another fact of the source quotes exactly it
+    expect(versionArticle(shows('Governor Alicia Park toured the region on Sunday.'), { facts }).story[0]!.factIds).toEqual(['S1F2'])
+    // A stored citation with an empty sentence shows none: the source's date fact, never whichever fact comes first
+    expect(versionArticle(shows(''), { facts }).story[0]!.factIds).toEqual(['S1F0'])
   })
 })
 

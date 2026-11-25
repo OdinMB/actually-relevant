@@ -115,7 +115,7 @@ No budget stops the step (owner decision 2026-11-16, ADR-0060). A story's calls 
     heading: string
     teaser: string             // the phone's one-line note (unused for a short card, shown in full)
     place: string              // 'P<n>' | 'W<n>' | 'section'
-    sentences: { text: string; citations: { sourceId: string; sentence: string | null }[] }[]   // research's CitedText
+    sentences: { text: string; citations: { sourceId: string; sentence: string | null }[] }[]   // research's CitedText; `sentence`: one sentence of the source (below)
     visual:
       | { kind: 'tiles'; tiles: { label: string /* may be '' (tileLabel) */; values: { text: string; estimate: boolean; sourceId: string }[] }[] }
       | { kind: 'bars' | 'line'; caption: string; unit: string
@@ -133,6 +133,8 @@ No budget stops the step (owner decision 2026-11-16, ADR-0060). A story's calls 
   aiGenerated: { fields: ('heading' | 'teaser' | 'sentences' | 'visual')[]; model: string; digitalSourceType: string }
 }
 ```
+
+**A citation quotes one sentence of its source** (the owner's decision, 2026-11-25): one citation per source in a card's sentence, each with one sentence of that source's first cited fact, and where a fact's support holds more than one (a research fact's may hold two, and an extraction sometimes copies more), the one that states the fact (`citationsOf`, `services/readerQuotes.ts`; the rule and its limits: `.context/story-research.md`, "Reader format", "What a card quotes"). The checks and the admin's views read the whole support, and a search fact's passage is never served.
 
 `aiGenerated.fields` is empty without boxes; `model` is the model recorded with the boxes (`contextAiMarker`, `lib/aiProvenance.ts`). The page carries `data-ai-generated="context"` on each note and on the section, and no visible label of its own: the story's "Researched and written by AI" line covers the cards (owner decision 2026-11-16), and on a story whose research run was never applied its "Summary and analysis by AI." line does (owner decision 2026-11-17; `.context/ai-transparency.md`). How the page lays the cards out is the client's (`.context/public-website.md`).
 
@@ -202,6 +204,7 @@ That change also sets `.context/ai-transparency.md` (the story-context row) and 
 | `server/src/services/storyCards.ts` | Which records a story's cards come from: the newest research pass's boxes and the pool's facts, else the context runs' (`cardRecords`, the view's and the admin's read) |
 | `server/src/services/storyContextServed.ts` | Which boxes the page serves and what each shows, placed: the one entry point of the view, the admin and the eval |
 | `server/src/services/storyContextView.ts` | The public route's answer |
+| `server/src/services/readerQuotes.ts` | The one sentence of a source a citation quotes (`citationsOf`), shared with researched stories and overview pages |
 | `server/src/services/storyContextAdmin.ts`, `server/src/routes/admin/storyContext.ts` | The admin's view and edits |
 | `server/src/prompts/storyContext.ts`, `server/src/schemas/storyContext.ts`, `server/src/schemas/factFields.ts` | Prompts; output, stored and request schemas; the structured fields and how a text field the model filled with "none" or "unknown" is read (`fieldText`) |
 | `server/src/prompts/factRules.ts` | The fact rules these prompts share with research's extraction, one wording each (the statement's limits, the as-of, the credit, a figure's scope), and a source's date shown with its weekday |

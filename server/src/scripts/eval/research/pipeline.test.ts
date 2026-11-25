@@ -57,7 +57,7 @@ describe('passCall', () => {
       const effort = passStepEffort(step as keyof typeof PASS_STEP_TIERS) ?? production.reasoningEffort
       expect(STEP_ARMS[step as keyof typeof PASS_STEP_TIERS], step).toEqual({ model: production.name, effort })
     }
-    // The extraction steps run below their tier's effort
+    // The extraction steps run at their own setting, whatever their tier's effort
     for (const step of ['extract', 'gap-extract', 'structure'] as const) expect(STEP_ARMS[step].effort, step).toBe(config.research.extractionEffort)
   })
 

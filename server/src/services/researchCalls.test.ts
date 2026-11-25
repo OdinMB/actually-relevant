@@ -71,9 +71,8 @@ describe('createRunMeter: reasoning effort', () => {
     expect(mocks.getLLMAtEffort).toHaveBeenCalledTimes(3)
   })
 
-  it('defaults the extraction effort to none, which the small tier’s model takes', async () => {
+  it('defaults the extraction effort to one the small tier’s model takes', async () => {
     const { effortSupported } = await vi.importActual<typeof import('./llm.js')>('./llm.js')
-    expect(config.research.extractionEffort).toBe('none')
     expect(effortSupported(config.llm.models.small.name, config.research.extractionEffort)).toBe(true)
   })
 })

@@ -15,6 +15,7 @@ import { utcDay } from '../lib/days.js'
 import prisma from '../lib/prisma.js'
 import { SOURCE_KINDS } from '../schemas/research.js'
 import type { ContextSlot } from '../schemas/storyContext.js'
+import { citationsOf } from './readerQuotes.js'
 import { hostOf, type CitedText, type ResearchedSource } from './researchedStory.js'
 import { normalizedUrl } from './researchFilter.js'
 import { tileLabel } from './storyContextLabels.js'
@@ -137,14 +138,11 @@ export async function getStoryContext(slug: string): Promise<StoryContextView> {
   const idOf = (ref: string) => book.idOf(facts.get(ref)!)
   const boxes = placed.map(({ box, sentences, visual: shown, place }): ContextBoxView => {
     const asOf = asOfFromColumns(box.asOf, box.asOfPrecision)
-    const cited = sentences.map((s): CitedText => {
-      const bySource = new Map<string, { sourceId: string; sentence: string | null }>()
-      for (const ref of s.factIds) {
-        const sourceId = idOf(ref)
-        if (!bySource.has(sourceId)) bySource.set(sourceId, { sourceId, sentence: facts.get(ref)!.supportingSentence || null })
-      }
-      return { text: s.text, citations: [...bySource.values()] }
-    })
+    // `idOf` numbers the sources as they are first cited, so it runs once per ref, in order
+    const cited = sentences.map((s): CitedText => ({
+      text: s.text,
+      citations: citationsOf(s.factIds.map(ref => ({ sourceId: idOf(ref), fact: facts.get(ref)! }))),
+    }))
     const visual: ContextBoxView['visual'] =
       shown === null
         ? null

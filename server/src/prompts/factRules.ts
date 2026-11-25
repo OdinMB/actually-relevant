@@ -34,9 +34,9 @@ export const CREDIT_RULE =
 /**
  * A source's publication date as a prompt that asks for a fact's as-of date shows it: its day with
  * the weekday, "2026-11-12 (Thursday)", for any date `publishedDay` reads. The `asOf` description has
- * a weekday or "yesterday" in a source counted from this date, and the extraction runs without
- * reasoning, so it is given the weekday instead of working it out. A date that cannot be read is
- * shown as given, and no date as "unknown".
+ * a weekday or "yesterday" in a source counted from this date, and the extraction runs with little
+ * reasoning or none (`config.research.extractionEffort`), so it is given the weekday instead of
+ * working it out. A date that cannot be read is shown as given, and no date as "unknown".
  */
 export function publishedWithWeekday(date: string | null): string {
   const day = publishedDay(date)

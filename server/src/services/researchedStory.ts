@@ -8,6 +8,7 @@
  */
 import { z } from 'zod'
 import { SOURCE_KINDS, type Draft } from '../schemas/research.js'
+import { citationsOf, type QuotedFact } from './readerQuotes.js'
 import { publishedFact } from './researchChecks.js'
 import type { ResearchEarlier, ResearchSource } from './researchPipeline.js'
 
@@ -20,7 +21,7 @@ const citationSchema = z.object({
     .string()
     .nullable()
     .describe(
-      "The source's own words that support the text, in its original language: one sentence, or two adjacent ones for a fact extracted since 2026-11-25; null when the text cites only the source's date.",
+      "The source's own words that support the text, in its original language: one sentence, the one of the fact's support that states it; null when the text cites only the source's date.",
     ),
 })
 
@@ -94,29 +95,24 @@ export interface ResearchRunForReaders {
 const sourceIdOf = (factId: string) => factId.replace(/F\d+$/, '')
 
 /**
- * Every fact id the writer could cite, with its supporting sentence: the sources' and earlier
- * stories' facts, and each one's publication date (`S2F0`, `publishedFact`), which has none.
+ * Every fact id the writer could cite, with its fact: the sources' and earlier stories' facts, and
+ * each one's publication date (`S2F0`, `publishedFact`), which has no support.
  */
-function factPool(run: ResearchRunForReaders): Map<string, string> {
+function factPool(run: ResearchRunForReaders): Map<string, QuotedFact> {
   const facts = [
     ...run.sources.flatMap(s => [...s.facts, ...publishedFact(s.id, s.outlet, s.date)]),
     ...run.earlier.flatMap(e => [...e.facts, ...publishedFact(e.id, OUR_OUTLET, e.date)]),
   ]
-  return new Map(facts.map(f => [f.id, f.supportingSentence]))
+  return new Map(facts.map(f => [f.id, { statement: f.statement, supportingSentence: f.supportingSentence }]))
 }
 
-/** One citation per source, in first-cited order, each with that source's first supporting sentence. */
-function cite(item: { text: string; factIds: string[] }, pool: ReadonlyMap<string, string>): CitedText {
-  const bySource = new Map<string, Citation>()
-  for (const factId of item.factIds) {
-    const sentence = pool.get(factId)
-    if (sentence === undefined) continue
-    const sourceId = sourceIdOf(factId)
-    const known = bySource.get(sourceId)
-    if (!known) bySource.set(sourceId, { sourceId, sentence: sentence || null })
-    else if (known.sentence === null && sentence) known.sentence = sentence
-  }
-  return { text: item.text, citations: [...bySource.values()] }
+/** One citation per source, in first-cited order, each quoting the stating sentence of that source's first fact with a support (`citationsOf`); ids the pool lacks cite nothing. */
+function cite(item: { text: string; factIds: string[] }, pool: ReadonlyMap<string, QuotedFact>): CitedText {
+  const cited = item.factIds.flatMap(factId => {
+    const fact = pool.get(factId)
+    return fact ? [{ sourceId: sourceIdOf(factId), fact }] : []
+  })
+  return { text: item.text, citations: citationsOf(cited) }
 }
 
 /** The host of an http(s) address, without `www.`; null for any other address. */

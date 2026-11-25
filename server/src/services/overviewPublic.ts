@@ -22,6 +22,7 @@ import { servedStands, type ServedFact } from './overviewStands.js'
 import type { OverviewStatus, StandsLine } from './overviewTypes.js'
 import { loadMemberFacts, publicVersionsOf } from './passRecords.js'
 import { publicUpdates } from './publicUpdates.js'
+import { citationsOf } from './readerQuotes.js'
 import { hostOf, type CitedText, type ResearchedSource } from './researchedStory.js'
 import { normalizedUrl } from './researchFilter.js'
 import { contextFact, usable, type PoolSource } from './researchPool.js'
@@ -270,16 +271,16 @@ async function standsForReaders(overviewId: string, members: ReadonlyMap<string,
   const served = servedStands(stored, facts, today)
   if (served.sentences.length === 0 && served.doing.length === 0) return { stands: null, sources: [], model: null, writtenAt: row.writtenAt }
   const book = sourceBook(members)
-  // One citation per source, in first-cited order, with its first fact's supporting sentence
-  const cite = (line: StandsLine): CitedText => {
-    const bySource = new Map<string, { sourceId: string; sentence: string | null }>()
-    for (const id of line.facts) {
-      const f = facts.get(id)!
-      const sourceId = book.idOf(f.source, f.storyId)
-      if (!bySource.has(sourceId)) bySource.set(sourceId, { sourceId, sentence: f.fact.supportingSentence || null })
-    }
-    return { text: line.text, citations: [...bySource.values()] }
-  }
+  // One citation per source, in first-cited order (`book.idOf` numbers them, so once per fact, in order), quoting its stating sentence
+  const cite = (line: StandsLine): CitedText => ({
+    text: line.text,
+    citations: citationsOf(
+      line.facts.map(id => {
+        const f = facts.get(id)!
+        return { sourceId: book.idOf(f.source, f.storyId), fact: f.fact }
+      }),
+    ),
+  })
   const sentences = served.sentences.map(cite)
   const doing = served.doing.map(cite)
   return { stands: { asOf: utcDay(row.asOf), writtenAt: row.writtenAt, sentences, doing }, sources: book.sources, model: row.model, writtenAt: row.writtenAt }

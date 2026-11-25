@@ -340,10 +340,13 @@ export const config = {
     /**
      * The reasoning effort of the steps that only copy what a source states into fields (research's
      * extraction, a pass's gap-search extraction and its structure call), on their tier's model in
-     * place of the tier's own effort (2026-11-18, a research cost change; `passStepEffort`). The
-     * other steps keep their tier's. GPT-6 Luna takes `none`; a model that does not fails the call.
+     * place of the tier's own effort (`passStepEffort`). The other steps keep their tier's. `low`
+     * since 2026-11-25: on the eval's tune half, facts the judge called changed against their source
+     * fell from 79 of 300 at `none` to 57 at `low`, and a pass's extraction call cost $0.00063
+     * instead of $0.00047 (.context/prompting.md). It was `none` from 2026-11-18, a research cost
+     * change. A model that does not take the effort set here fails the call.
      */
-    extractionEffort: parseEffort(process.env.RESEARCH_EXTRACTION_EFFORT, 'none', 'RESEARCH_EXTRACTION_EFFORT'),
+    extractionEffort: parseEffort(process.env.RESEARCH_EXTRACTION_EFFORT, 'low', 'RESEARCH_EXTRACTION_EFFORT'),
     /**
      * The copying check flags a run of this many consecutive words or more that a draft's item shares
      * with one outside source's wording or with one of its fact statements (`checkCopying`). Shorter
