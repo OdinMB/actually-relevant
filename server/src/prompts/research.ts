@@ -100,6 +100,8 @@ export interface StoryBrief {
 export interface ExtractionInput {
   story: StoryBrief
   source: { outlet: string; url: string; date: string | null; title: string; text: string }
+  /** The facts the source may give (`config.research.sourceLimits`): more for the story's own article. */
+  maxFacts: number
 }
 
 const EXTRACTION_RULES = `<ROLE>
@@ -140,10 +142,12 @@ export interface ExtractionOptions {
  *
  * Cache: on. The rules come to over 1,024 tokens with the output schema, and a run extracts each
  * of its sources, several calls within the cache's 30 minutes (the first parallel batch on a cold
- * cache all write). The story, fixed for the run, and the source follow the breakpoint. A
- * research pass's extraction (`structured`) adds the structure step's rules, about 2,800 tokens
- * with its schema (estimated from its length since the fact rules of 2026-11-25, not counted),
- * still one stable part for every source of the pass.
+ * cache all write). House order (`.context/prompting.md`): the rules, then the story (fixed for the
+ * run), the source, and the facts cap last in `<REQUEST>`. The cap is a per-source value since
+ * 2026-11-25 (the story's own article may give more facts), so it sits after the breakpoint, and the
+ * stable part and the schema stay one for every source. A research pass's extraction (`structured`)
+ * adds the structure step's rules, about 2,800 tokens with its schema (estimated from its length
+ * since the fact rules of 2026-11-25, not counted), still one stable part for every source of the pass.
  */
 export function buildExtractionPromptParts(input: ExtractionInput, options: ExtractionOptions = {}): PromptParts {
   const s = input.source
@@ -163,7 +167,11 @@ ${tag('URL', s.url)}
 ${tag('DATE', publishedWithWeekday(s.date))}
 ${tag('TITLE', s.title)}
 ${tag('TEXT', s.text)}
-</SOURCE>`,
+</SOURCE>
+
+<REQUEST>
+Facts: at most ${input.maxFacts}
+</REQUEST>`,
   )
 }
 

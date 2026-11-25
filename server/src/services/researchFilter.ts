@@ -5,6 +5,7 @@
  * country domains, raw-content use), and the rule after it (unusable, off-topic, opinion and press
  * releases when a news report exists). No I/O of its own.
  */
+import { config } from '../config.js'
 
 /** Sources a story keeps, the original article (S0) included. */
 export const MAX_SOURCES = 6
@@ -12,9 +13,6 @@ export const MAX_CLUSTER_SOURCES = 2
 export const MAX_NEIGHBOUR_SOURCES = 2
 /** Below this many characters of content passages, a source's raw content is read instead. */
 export const PASSAGE_MIN_CHARS = 800
-export const RAW_CONTENT_MAX_CHARS = 4000
-/** Every source text the extraction reads is cut to this length. */
-export const SOURCE_TEXT_MAX_CHARS = 4000
 /** Share of the shorter text's word shingles found in the other: above it, the two are one syndicated text. */
 export const SYNDICATION_THRESHOLD = 0.5
 const SHINGLE_WORDS = 5
@@ -63,7 +61,7 @@ export interface CandidateSource {
 }
 
 export interface SelectedSource extends Omit<CandidateSource, 'passages' | 'rawContent'> {
-  /** What the extraction reads, cut to `SOURCE_TEXT_MAX_CHARS`. */
+  /** What the extraction reads, cut to `config.research.sourceLimits.other.textChars`. */
   text: string
   usedRawContent: boolean
 }
@@ -218,11 +216,15 @@ function pickSearch(search: CandidateSource[], slots: number, coveredTlds: Set<s
   return chosen
 }
 
-/** What the extraction reads of a source: its passages, or a search result's raw text when the passages are short, cut to size. Story context chooses its text the same way. */
+/**
+ * What the extraction reads of a source: its passages, or a search result's raw text when the
+ * passages are short, cut to size at the limit itself (our own texts come cut at a sentence end
+ * already, `researchInput.ts`). Story context chooses its text the same way.
+ */
 export function selectedText(c: CandidateSource): SelectedSource {
   const { passages, rawContent, ...rest } = c
   const useRaw = c.origin === 'search' && passages.length < PASSAGE_MIN_CHARS && Boolean(rawContent)
-  const text = useRaw && rawContent ? rawContent.slice(0, RAW_CONTENT_MAX_CHARS) : passages.slice(0, SOURCE_TEXT_MAX_CHARS)
+  const text = (useRaw && rawContent ? rawContent : passages).slice(0, config.research.sourceLimits.other.textChars)
   return { ...rest, text, usedRawContent: useRaw }
 }
 

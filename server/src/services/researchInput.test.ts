@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { config } from '../config.js'
 import { CLUSTER_MEMBERS_PER_STORY, researchStoriesByIds, type ResearchDb } from './researchInput.js'
-import { SOURCE_TEXT_MAX_CHARS } from './researchFilter.js'
 
 // How the rows become a ResearchStory. Which rows the SQL returns (statuses, windows, clusters) is
 // researchInput.db.test.ts's: no test here replays the SQL.
@@ -73,8 +72,43 @@ describe('researchStoriesByIds', () => {
     expect(stories[0]?.assess.guidelines).toEqual({ factors: 'own factors', antifactors: 'own anti', ratings: 'own ratings' })
     expect(stories[1]?.assess.guidelines).toEqual({ factors: 'feed factors', antifactors: 'feed antifactors', ratings: 'feed ratings' })
     expect(stories[0]?.assess.content).toHaveLength(config.assess.contentMaxLength)
-    expect(stories[0]?.original.content).toHaveLength(SOURCE_TEXT_MAX_CHARS)
     expect(stories[0]?.assess.emotionTag).toBe('calm')
+  })
+
+  describe('how much of each article the extraction reads', () => {
+    const { original, other } = config.research.sourceLimits
+    /** Running text of whole sentences, longer than `chars`. */
+    const prose = (seed: string, chars: number) =>
+      Array.from({ length: Math.ceil(chars / 30) }, (_, i) => `Sentence ${i} of the ${seed} report adds a detail.`).join(' ')
+    /** That `cut` is the start of `whole` up to a sentence's stop, no longer than `maxChars`, with the next sentence after it. */
+    const expectCutAtSentenceEnd = (cut: string, whole: string, maxChars: number) => {
+      expect(cut.length).toBeLessThanOrEqual(maxChars)
+      expect(whole.startsWith(cut)).toBe(true)
+      expect(whole.slice(cut.length)).toMatch(/^ Sentence \d+ of/)
+    }
+
+    it("reads the story's own article further than any other source, ending at a sentence end", async () => {
+      const long = prose('own', original.textChars + 2000)
+      const [s] = await researchStoriesByIds(fakeDb({ stories: [storyRow('a', { source_content: long })] }), ['a'])
+      const content = s?.original.content ?? ''
+      expectCutAtSentenceEnd(content, long, original.textChars)
+      expect(content.length).toBeGreaterThan(other.textChars)
+    })
+
+    it("reads the story's own article whole when it fits", async () => {
+      const fits = prose('own', other.textChars + 1000).slice(0, original.textChars)
+      const [s] = await researchStoriesByIds(fakeDb({ stories: [storyRow('a', { source_content: fits })] }), ['a'])
+      expect(s?.original.content).toBe(fits)
+    })
+
+    it("reads a cluster member's and a neighbour's article to the other sources' length, ending at a sentence end", async () => {
+      const long = prose('member', original.textChars)
+      const members = [{ story_id: 'a', ...article('m1', { source_content: long }) }]
+      const neighbours = [{ story_id: 'a', ...article('n1', { source_content: long }), title: 'n1 title', summary: 'n1 summary', distance: 0.1 }]
+      const [s] = await researchStoriesByIds(fakeDb({ stories: [storyRow('a')], members, neighbours }), ['a'])
+      expectCutAtSentenceEnd(s?.clusterMembers[0]?.content ?? '', long, other.textChars)
+      expectCutAtSentenceEnd(s?.neighbours[0]?.content ?? '', long, other.textChars)
+    })
   })
 
   it('groups cluster members, neighbours and earlier stories under their story, capping members', async () => {

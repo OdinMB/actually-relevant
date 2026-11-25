@@ -4,7 +4,8 @@
  * story (its text and places, its newest research run with facts, the reusable facts of the earlier
  * stories research linked) in `.cache/context-inputs.json`; `context`'s first-pass input
  * (`loadFirstPassInput`: research's story, the story's own places, the earlier stories' reusable
- * facts) in `.cache/pass-inputs.json`; and `update`'s researched story (its day, the pool and
+ * facts) in `.cache/pass-inputs.json`, which holds the story's own article as read since 2026-11-25
+ * (`PASS_INPUTS_VERSION`); and `update`'s researched story (its day, the pool and
  * version the legacy import makes) in `.cache/update-inputs.json`. The cache keeps the prompts, and
  * with them the call cache's keys, stable while the database changes; a slug it does not hold is loaded and added, and
  * `--refresh-fixtures` loads every slug again. A story with no input is cached as null.
@@ -19,7 +20,11 @@ import type { SelectDb } from '../readOnlyDb.js'
 import type { UpdateStory } from './updateFixtures.js'
 
 export const CONTEXT_INPUTS_VERSION = 1
-export const PASS_INPUTS_VERSION = 1
+/**
+ * Version 1 held the story's own article cut at 4,000 characters, so a folder's `pass-inputs.json`
+ * from before 2026-11-25 is loaded again from the database on the next run that needs it.
+ */
+export const PASS_INPUTS_VERSION = 2
 export const UPDATE_INPUTS_VERSION = 1
 
 export interface InputCache<T> {

@@ -348,6 +348,20 @@ export const config = {
      */
     extractionEffort: parseEffort(process.env.RESEARCH_EXTRACTION_EFFORT, 'low', 'RESEARCH_EXTRACTION_EFFORT'),
     /**
+     * What an extraction reads of a source, and how many of the facts it answers are kept. The story's
+     * own article (S0) is read further and may give more facts (owner decision 2026-11-25): two thirds
+     * of own articles are longer than 4,000 characters (median 5,416, 90th percentile 12,477); of
+     * those cut, 31% already gave 8 facts, and in 69% the last fact came from the final quarter of the
+     * text read. `other` is every other source: cluster members, neighbours and search results, whose
+     * search service already returns the matched passages. Our own stored texts end at a sentence end
+     * (`cutAtSentenceEnd`), a search result's text keeps its hard cut (`selectedText`). See
+     * `.context/story-research.md`, "What the extraction records".
+     */
+    sourceLimits: {
+      original: { textChars: 12_000, facts: 12 },
+      other: { textChars: 4_000, facts: 8 },
+    },
+    /**
      * The copying check flags a run of this many consecutive words or more that a draft's item shares
      * with one outside source's wording or with one of its fact statements (`checkCopying`). Shorter
      * runs collide with the scope rule, which has a figure repeated exactly as its fact states it; a

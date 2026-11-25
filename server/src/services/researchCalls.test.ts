@@ -191,7 +191,7 @@ describe('createRunMeter: Tavily', () => {
 })
 
 describe('createRunMeter: batches', () => {
-  // 4,000 input tokens and the 2,000-token output estimate each: about $0.0015 a call on gpt-6-luna
+  // 4,000 input tokens and the 3,000-token output estimate each: about $0.002 a call on gpt-6-luna
   const batch = (n: number) => Array.from({ length: n }, () => ({ step: 'extract' as const, prompt: 'x'.repeat(16_000) }))
 
   it("admits a batch whose estimate fits the run's room, and refuses one that does not", async () => {

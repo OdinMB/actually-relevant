@@ -8,9 +8,12 @@ import {
   searchWindow,
   MAX_SOURCES,
   PASSAGE_MIN_CHARS,
-  RAW_CONTENT_MAX_CHARS,
   type CandidateSource,
 } from './researchFilter.js'
+import { config } from '../config.js'
+
+/** What an extraction reads of a source other than the story's own article, at most. */
+const TEXT_CHARS = config.research.sourceLimits.other.textChars
 
 /** Text of `n` words unique to `seed`, so two sources only overlap where a test makes them. */
 const text = (seed: string, n = 120) => Array.from({ length: n }, (_, i) => `${seed}word${i}`).join(' ')
@@ -127,7 +130,7 @@ describe('filterCandidates', () => {
 
   it('uses raw content, cut, only when the passages are short', () => {
     const long = 'p'.repeat(PASSAGE_MIN_CHARS)
-    const raw = `${text('raw', 400)} ${'r'.repeat(RAW_CONTENT_MAX_CHARS)}`
+    const raw = `${text('raw', 400)} ${'r'.repeat(TEXT_CHARS)}`
     const r = run([
       source('https://short.example/x', { passages: 'Only a short passage.', rawContent: raw }),
       source('https://long.example/x', { passages: long, rawContent: text('rawlong', 400) }),
@@ -135,7 +138,7 @@ describe('filterCandidates', () => {
     ])
     const [short, longKept, none] = r.selected
     expect(short).toMatchObject({ usedRawContent: true })
-    expect(short?.text).toHaveLength(RAW_CONTENT_MAX_CHARS)
+    expect(short?.text).toHaveLength(TEXT_CHARS)
     expect(longKept).toMatchObject({ usedRawContent: false, text: long })
     expect(none).toMatchObject({ usedRawContent: false, text: 'Only a short passage too.' })
     expect(r.rawContentUsed).toBe(1)

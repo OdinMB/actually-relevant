@@ -9,8 +9,16 @@ import type { ReadOnlyDb } from '../readOnlyDb.js'
 
 export type { EarlierStory, ResearchDb, ResearchStory, SourceText } from '../../../services/researchInput.js'
 
+/**
+ * 2: the stories hold their own article as research reads it since 2026-11-25 (up to 12,000
+ * characters; `config.research.sourceLimits`). A cached sample of another version is resampled:
+ * it holds the stories as the loader then cut them, so a run on it would measure the old input.
+ * Raise it with any change to what `researchStoriesByIds` returns.
+ */
+export const RESEARCH_FIXTURES_VERSION = 2
+
 export interface ResearchFixtures {
-  version: 1
+  version: typeof RESEARCH_FIXTURES_VERSION
   createdAt: string
   /** The newest `date_published` in the copy: the sample is the `size` stories published last. */
   anchor: string
@@ -38,7 +46,7 @@ export async function sampleResearchStories(db: ResearchDb, size: number): Promi
 export async function loadResearchFixtures(db: ReadOnlyDb, size: number): Promise<ResearchFixtures> {
   const { stories, shortfalls } = await db.read(q => sampleResearchStories(q, size))
   return {
-    version: 1,
+    version: RESEARCH_FIXTURES_VERSION,
     createdAt: new Date().toISOString(),
     anchor: stories[0]?.datePublished ?? new Date().toISOString(),
     size,
@@ -47,4 +55,10 @@ export async function loadResearchFixtures(db: ReadOnlyDb, size: number): Promis
     stories,
     shortfalls,
   }
+}
+
+/** A cached sample (`.cache/research-fixtures.json`, as parsed) when it is of this version and the size asked for; null to resample. */
+export function reusableResearchFixtures(cached: unknown, size: number): ResearchFixtures | null {
+  const fx = cached as Partial<ResearchFixtures> | null
+  return fx?.version === RESEARCH_FIXTURES_VERSION && fx.size === size ? (fx as ResearchFixtures) : null
 }

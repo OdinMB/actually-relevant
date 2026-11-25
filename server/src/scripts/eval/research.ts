@@ -21,7 +21,7 @@ import { createEvalContext } from './models.js'
 import { parseResearchOptions, type ResearchOptions } from './options.js'
 import { classifyDb, openReadOnlyDb, readOnlyStatus } from './readOnlyDb.js'
 import { deskEstimateUsd, expectedCredits, storyBudgetUsd } from './research/costs.js'
-import { loadResearchFixtures, type ResearchFixtures, type ResearchStory } from './research/fixtures.js'
+import { loadResearchFixtures, reusableResearchFixtures, type ResearchFixtures, type ResearchStory } from './research/fixtures.js'
 import { researchStoryInEval, STEP_ESTIMATES, STEPS } from './research/pipeline.js'
 import { renderDrafts, renderResearchReport, researchFileNames } from './research/report.js'
 import { runStories } from './research/storyQueue.js'
@@ -33,12 +33,12 @@ const presence = (value: string | undefined) => (value ? 'present' : 'missing')
 async function getFixtures(opts: ResearchOptions, cacheDir: string): Promise<ResearchFixtures> {
   const file = join(cacheDir, 'research-fixtures.json')
   if (existsSync(file) && !opts.refreshFixtures) {
-    const fx = JSON.parse(readFileSync(file, 'utf8')) as ResearchFixtures
-    if (fx.size === opts.size) {
+    const fx = reusableResearchFixtures(JSON.parse(readFileSync(file, 'utf8')), opts.size)
+    if (fx) {
       console.log(`fixtures: cached from ${fx.createdAt} (database ${fx.dbClass}, read-only ${fx.readOnlyMode} mode); pass --refresh-fixtures to resample`)
       return fx
     }
-    console.log(`fixtures: the cached sample has ${fx.size} stories, not ${opts.size}; resampling`)
+    console.log('fixtures: the cached sample is of another size or version; resampling')
   }
   console.log(`database: ${classifyDb(process.env.DATABASE_URL ?? '')}`)
   const db = await openReadOnlyDb()

@@ -73,11 +73,30 @@ describe("the extraction is shown its source's publication day", () => {
     buildExtractionPromptParts({
       story: { title: 'Pakistan bans imports', summary: 'Pakistan banned panel imports.' },
       source: { outlet: 'Dawn', url: 'https://dawn.com/ban', date, title: 'Ban', text: 'The import ban was announced on Wednesday.' },
+      maxFacts: 8,
     })
 
   it('with its weekday, so a weekday in the source is read as a day and not counted, and as unknown without a date', () => {
     expect(extraction('2026-11-12').data).toContain('<DATE>2026-11-12 (Thursday)</DATE>')
     expect(extraction(null).data).toContain('<DATE>unknown</DATE>')
+  })
+})
+
+describe("the extraction's facts cap is the call's own value", () => {
+  const extraction = (maxFacts: number) =>
+    buildExtractionPromptParts({
+      story: { title: 'Pakistan bans imports', summary: 'Pakistan banned panel imports.' },
+      source: { outlet: 'Dawn', url: 'https://dawn.com/ban', date: null, title: 'Ban', text: 'The import ban was announced on Wednesday.' },
+      maxFacts,
+    })
+
+  it('given in a closing <REQUEST> after the source, so the stable part stays one for every source', () => {
+    const [few, more] = [extraction(8), extraction(12)]
+    expect(more.stable).toBe(few.stable)
+    expect(block(few.data, 'REQUEST')).toMatch(/\b8\b/)
+    expect(block(more.data, 'REQUEST')).toMatch(/\b12\b/)
+    expect(more.data.indexOf('\n<REQUEST>\n')).toBeGreaterThan(more.data.indexOf('</SOURCE>'))
+    expect(more.data.trimEnd().endsWith('</REQUEST>')).toBe(true)
   })
 })
 

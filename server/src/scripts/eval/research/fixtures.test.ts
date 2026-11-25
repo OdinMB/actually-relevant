@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sampleResearchStories, type ResearchDb } from './fixtures.js'
+import { RESEARCH_FIXTURES_VERSION, reusableResearchFixtures, sampleResearchStories, type ResearchDb, type ResearchFixtures } from './fixtures.js'
 
 // The loader's assembly is services/researchInput.test.ts's; this is the eval's sampling around it.
 
@@ -65,5 +65,28 @@ describe('sampleResearchStories', () => {
   it('reports a short sample', async () => {
     expect((await sampleResearchStories(fakeDb(['a'], ['a']), 3)).shortfalls).toEqual(['1 of 3 published stories'])
     expect(await sampleResearchStories(fakeDb([], []), 3)).toEqual({ stories: [], shortfalls: ['0 of 3 published stories'] })
+  })
+})
+
+describe('reusableResearchFixtures', () => {
+  const cached = (over: Record<string, unknown>): unknown => {
+    const fx: ResearchFixtures = {
+      version: RESEARCH_FIXTURES_VERSION,
+      createdAt: '',
+      anchor: '',
+      size: 30,
+      dbClass: 'local',
+      readOnlyMode: 'session',
+      stories: [],
+      shortfalls: [],
+    }
+    return { ...fx, ...over }
+  }
+
+  it('reuses a cached sample of this version and size, and resamples any other: an older one holds the stories as the loader then cut them', () => {
+    expect(reusableResearchFixtures(cached({}), 30)?.size).toBe(30)
+    expect(reusableResearchFixtures(cached({}), 20)).toBeNull()
+    expect(reusableResearchFixtures(cached({ version: RESEARCH_FIXTURES_VERSION - 1 }), 30)).toBeNull()
+    expect(reusableResearchFixtures(null, 30)).toBeNull()
   })
 })

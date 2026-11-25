@@ -139,16 +139,18 @@ function wording() {
 }
 
 function extraction(structured: boolean): Case[] {
-  const input = (title: string) => ({
+  // The story's own article may give more facts than another source: the cap is a per-call value
+  const input = (title: string, maxFacts: number) => ({
     story: { title, summary: `${title} summary` },
     source: { outlet: `${title} Times`, url: `https://${title}.example`, date: null, title: `${title} page`, text: `${title} text` },
+    maxFacts,
   })
   return [
     {
       name: structured ? 'extraction, structured' : 'extraction',
-      first: research.buildExtractionPromptParts(input('Solar'), { structured }),
-      second: research.buildExtractionPromptParts(input('Polio'), { structured }),
-      text: research.buildExtractionPrompt(input('Solar'), { structured }),
+      first: research.buildExtractionPromptParts(input('Solar', 12), { structured }),
+      second: research.buildExtractionPromptParts(input('Polio', 8), { structured }),
+      text: research.buildExtractionPrompt(input('Solar', 12), { structured }),
       callValues: ['Solar', 'Polio'],
     },
   ]

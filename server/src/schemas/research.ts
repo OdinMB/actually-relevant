@@ -72,7 +72,7 @@ export const extractionSchema = z.object({
   facts: z
     .array(factSchema)
     .describe(
-      'At most 8 facts about the development of <STORY> or background that explains it, most important first. Empty when the source is unusable or off-topic.',
+      'The facts about the development of <STORY> or background that explains it, most important first, at most as many as <REQUEST> allows. Empty when the source is unusable or off-topic.',
     ),
   voices: z
     .array(

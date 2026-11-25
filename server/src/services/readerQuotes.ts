@@ -7,72 +7,28 @@
  * keep the whole support; everything a reader sees quotes one sentence (owner, 2026-11-25). The
  * splitter is cautious: a false split cuts a one-sentence quote short, which is worse than showing
  * two sentences once in a while, and nine supports in ten are one sentence
- * (`.context/story-research.md`, "What a card quotes").
+ * (`.context/story-research.md`, "What a card quotes"). Where a sentence ends is `lib/sentences.ts`'s.
  */
+import { sentenceEnds } from '../lib/sentences.js'
 
 export interface QuotedFact {
   statement: string
   supportingSentence: string
 }
 
-const listed = (...lines: string[]): ReadonlySet<string> => new Set(lines.flatMap(line => line.split(' ')))
-
-/**
- * Titles, company forms and months that a name or a noun follows, so the stop after one ends no
- * sentence. Only where they are capitalized: in lower case the same letters are words that end
- * sentences in other languages (Swedish "hon", Spanish "mar").
- */
-const CAPITALIZED_ABBREVIATIONS = listed(
-  'mr mrs ms dr drs prof sr jr st mt ft messrs mme mlle sra srta dra sig dott hr fr nr',
-  'gen lt col sgt cpl pvt capt cmdr adm maj brig sen sens rep reps gov govs pres rev hon atty asst sec amb det supt',
-  'inc corp co ltd bros ee uu',
-  'jan feb mar apr jun jul aug sep sept oct nov dec',
-)
-
-/** Abbreviations written in either case that a noun follows. */
-const ABBREVIATIONS = listed('vs mio mrd tsd sog bzw inkl ggf ehem stellv')
-
 /** Where a search engine joined two passages of a page ("[...]"): never inside a sentence, so always a break, and never quoted. */
 const JOINED = /\s*\[(?:\.{3}|…)\]\s*/u
-
-/**
- * Where a sentence may end inside a passage: a stop, its closing marks and the space after it, before a
- * capital or caseless letter (an opening mark may come first); or a CJK stop with its closing marks,
- * which needs no space after it, before anything but a closing mark it left behind.
- */
-const STOP = /([.!?…]+)(["'”’»)\]]*)\s+(?=["'“‘«([]?[\p{Lu}\p{Lt}\p{Lo}])|([。！？]+)(["”’」』）]*)\s*(?=[^\s"”’」』）])/gu
-
-/** Whether the sentence goes on past the stop a match found. */
-function goesOn(passage: string, m: RegExpExecArray): boolean {
-  const quoted = /["'”’»」』]/.test(m[2] ?? m[4] ?? '')
-  // '“我们准备好了。”他说。' is one sentence: a quotation that ends at a CJK stop goes on with who said it
-  if (m[3] !== undefined) return quoted
-  const stop = m[1] ?? ''
-  // '"We are all on board!" Mayor Ruiz wrote.' is one sentence too: a quoted question or exclamation
-  if (quoted && /[!?]$/.test(stop)) return true
-  // '"We are close ... I think so"': after words left out, the one word that takes a capital inside a sentence
-  if (/…|\.\./.test(stop) && /^["'“‘«([]?I\b/u.test(passage.slice(m.index + m[0].length))) return true
-  if (stop !== '.') return false
-  const before = /(\p{L}+|\d+)$/u.exec(passage.slice(0, m.index))?.[1] ?? ''
-  // An initial or a dotted abbreviation ("J. D. Vance", "U.S. Navy", "10 a.m. EDT"), or a day or an ordinal ("am 12. November")
-  if (before.length === 1 || /^\d{1,2}$/.test(before)) return true
-  // A title, company form or month ("Gen. …", "Inc. …", "Nov. …")
-  const lower = before.toLowerCase()
-  return ABBREVIATIONS.has(lower) || (before !== lower && CAPITALIZED_ABBREVIATIONS.has(lower))
-}
 
 /** A support's sentences in order, each trimmed; where in doubt, two stay together. A piece without a letter or a digit is none. */
 function sentencesOf(text: string): string[] {
   return text.split(JOINED).flatMap(passage => {
     const sentences: string[] = []
     let from = 0
-    for (const m of passage.matchAll(STOP)) {
-      if (goesOn(passage, m)) continue
-      const end = m.index + m[0].length
+    for (const end of [...sentenceEnds(passage), passage.length]) {
       sentences.push(passage.slice(from, end).trim())
       from = end
     }
-    return [...sentences, passage.slice(from).trim()].filter(sentence => /[\p{L}\p{N}]/u.test(sentence))
+    return sentences.filter(sentence => /[\p{L}\p{N}]/u.test(sentence))
   })
 }
 

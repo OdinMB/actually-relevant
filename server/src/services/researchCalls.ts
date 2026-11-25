@@ -24,8 +24,10 @@ import { structuredCall } from './structuredCall.js'
 const STEP_OUTPUT_TOKENS: Record<PassStep, number> = {
   confirm: 500,
   queries: 500,
-  // Measured at effort `low` on a pass's extraction (2026-11-25, 146 calls): 1,039 on average, 209 of them reasoning; 2,119 at most
-  extract: 2000,
+  // Measured at effort `low` on a pass's extraction (2026-11-25, 146 calls): 1,039 on average, 209 of them reasoning; 2,119 at most,
+  // with at most 8 facts a source. An S0 call may now give 12 at about 160 output tokens a fact, so 2,119 + 4 × 160 ≈ 2,760 at most,
+  // not yet measured. Every extraction call reserves this much, the other sources' more than they need
+  extract: 3000,
   earlier: 500,
   write: 4500,
   'fact-check': 1000,

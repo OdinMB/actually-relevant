@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { config } from '../config.js'
 import { promptText, type Prompt } from '../lib/promptCache.js'
 import type { TavilySearch } from '../lib/tavily.js'
 import { EMOTION_TAGS_PROMPT_BLOCK } from '../prompts/shared.js'
@@ -1181,5 +1182,64 @@ describe('researchStory', () => {
     const r = await researchStory(story({ neighbours: [neighbour(1), neighbour(2)] }), d)
     expect(fake.steps[0]).toBe('confirm')
     expect(r.sources.map(s => s.outlet)).toEqual(['Pakistan Today', 'Dawn', 'Neighbour 2'])
+  })
+
+  describe("how much of each source an extraction reads and keeps: more of the story's own article", () => {
+    const { original, other } = config.research.sourceLimits
+    /** The extraction prompts a run sends, each answered with the fakes' extraction. */
+    const recorded = () => {
+      const prompts: string[] = []
+      const extract = (p: string) => {
+        prompts.push(p)
+        return extraction()
+      }
+      return { prompts, extract, own: () => prompts.find(p => !p.includes('Dawn')), dawn: () => prompts.find(p => p.includes('Dawn')) }
+    }
+    const longOriginal = (n: number) => `Pakistan has added 22GW of rooftop solar in just two years. ${words('original', n)}`
+
+    it('keeps at most its own cap of the facts each extraction answers', async () => {
+      const many = Math.max(original.facts, other.facts) + 3
+      const facts = Array.from({ length: many }, (_, i) => ({
+        statement: `Fact ${i + 1} of the boom.`,
+        supportingSentence: `Sentence ${i + 1}.`,
+        measures: '',
+      }))
+      const { deps: d } = deps({ responders: baseResponders({ extract: () => extraction({ facts }) }) })
+      const r = await researchStory(story(), d)
+      const ids = (source: string, n: number) => Array.from({ length: n }, (_, i) => `${source}F${i + 1}`)
+      expect(r.sources[0]?.facts.map(f => f.id)).toEqual(ids('S0', original.facts))
+      expect(r.sources[1]?.facts.map(f => f.id)).toEqual(ids('S1', other.facts))
+    })
+
+    it("asks each extraction for at most its own source's cap of facts", async () => {
+      const rec = recorded()
+      const { deps: d } = deps({ responders: baseResponders({ extract: rec.extract }) })
+      await researchStory(story(), d)
+      const capOf = (prompt: string | undefined) => Number(/\n<REQUEST>\n[^<]*?(\d+)[^<]*\n<\/REQUEST>/.exec(prompt ?? '')?.[1])
+      expect(capOf(rec.own())).toBe(original.facts)
+      expect(capOf(rec.dawn())).toBe(other.facts)
+    })
+
+    it("gives the story's own article to its extraction as loaded, longer than any other source's text", async () => {
+      const content = longOriginal(700)
+      expect(content.length).toBeGreaterThan(other.textChars)
+      expect(content.length).toBeLessThanOrEqual(original.textChars)
+      const rec = recorded()
+      const { deps: d } = deps({ responders: baseResponders({ extract: rec.extract }) })
+      await researchStory(story({ original: { ...story().original, content } }), d)
+      expect(rec.own()).toContain(content)
+    })
+
+    it("tells syndicated copies by the original's first part alone, as before it was read further: a report repeating only its later text is kept", async () => {
+      const lead = longOriginal(600)
+      expect(lead.length).toBeGreaterThan(other.textChars)
+      const later = words('later', 300)
+      const base = story()
+      const s = story({ original: { ...base.original, content: `${lead} ${later}` }, clusterMembers: [{ ...base.clusterMembers[0]!, content: later }] })
+      const { deps: d } = deps()
+      const r = await researchStory(s, d)
+      expect(r.drops.syndicated).toBeUndefined()
+      expect(r.sources.map(x => x.origin)).toEqual(['original', 'cluster'])
+    })
   })
 })

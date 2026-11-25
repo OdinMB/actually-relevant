@@ -6,8 +6,8 @@
  * read-only session. Prompt input is built with production's `assessPromptInput`.
  */
 import { config } from '../config.js'
+import { cutAtSentenceEnd } from '../lib/sentences.js'
 import { assessPromptInput, type AssessPromptInput } from './promptInputs.js'
-import { SOURCE_TEXT_MAX_CHARS } from './researchFilter.js'
 
 /** The statuses research runs on (the owner's list); any other is refused. */
 export const RESEARCHABLE_STATUSES = ['analyzed', 'selected', 'published'] as const
@@ -30,7 +30,11 @@ export interface SourceText {
   /** The article's own date as the crawl found it (ISO), or null. */
   datePublished: string | null
   dateCrawled: string
-  /** Cut to `SOURCE_TEXT_MAX_CHARS`: only what is sent. */
+  /**
+   * Only what the extraction reads, cut at a sentence end (`cutAtSentenceEnd`): the story's own
+   * article to `config.research.sourceLimits.original.textChars`, a cluster member's or a
+   * neighbour's to `.other.textChars` (owner decision 2026-11-25).
+   */
   content: string
 }
 
@@ -145,7 +149,7 @@ interface EarlierRow {
   distance: number
 }
 
-function sourceText(id: string, r: ArticleColumns): SourceText {
+function sourceText(id: string, r: ArticleColumns, maxChars: number): SourceText {
   return {
     storyId: id,
     title: r.source_title,
@@ -154,11 +158,12 @@ function sourceText(id: string, r: ArticleColumns): SourceText {
     language: r.feed_language,
     datePublished: r.source_date_published?.toISOString() ?? null,
     dateCrawled: r.date_crawled.toISOString(),
-    content: r.source_content.substring(0, SOURCE_TEXT_MAX_CHARS),
+    content: cutAtSentenceEnd(r.source_content, maxChars),
   }
 }
 
 function story(r: StoryRow, members: MemberRow[], neighbours: NeighbourRow[], earlier: EarlierRow[]): ResearchStory {
+  const { original, other } = config.research.sourceLimits
   const issue = r.issue_id ? { promptFactors: r.issue_factors ?? '', promptAntifactors: r.issue_antifactors ?? '', promptRatings: r.issue_ratings ?? '' } : null
   const input = assessPromptInput({
     sourceTitle: r.source_title,
@@ -175,7 +180,7 @@ function story(r: StoryRow, members: MemberRow[], neighbours: NeighbourRow[], ea
     id: r.id,
     slug: r.slug,
     datePublished: r.date_published.toISOString(),
-    original: sourceText(r.id, r),
+    original: sourceText(r.id, r, original.textChars),
     assess: { ...input, content: input.content.substring(0, config.assess.contentMaxLength) },
     published: {
       titleLabel: r.title_label,
@@ -189,8 +194,12 @@ function story(r: StoryRow, members: MemberRow[], neighbours: NeighbourRow[], ea
       quoteAttribution: r.quote_attribution,
       marketingBlurb: r.marketing_blurb,
     },
-    clusterMembers: members.slice(0, CLUSTER_MEMBERS_PER_STORY).map(m => sourceText(m.id, m)),
-    neighbours: neighbours.map(n => ({ ...sourceText(n.id, n), assessed: { title: n.title, summary: n.summary }, distance: Number(n.distance) })),
+    clusterMembers: members.slice(0, CLUSTER_MEMBERS_PER_STORY).map(m => sourceText(m.id, m, other.textChars)),
+    neighbours: neighbours.map(n => ({
+      ...sourceText(n.id, n, other.textChars),
+      assessed: { title: n.title, summary: n.summary },
+      distance: Number(n.distance),
+    })),
     earlier: earlier.map(e => ({
       id: e.id,
       slug: e.slug,

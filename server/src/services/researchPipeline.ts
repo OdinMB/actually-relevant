@@ -100,7 +100,6 @@ export type StepUsage = LlmTokenUsage
 
 /** The article text the queries prompt reads. */
 const QUERY_CONTENT_CHARS = 2000
-const MAX_FACTS_PER_SOURCE = 8
 const MAX_VOICES_PER_SOURCE = 4
 const MAX_FACTS_PER_EARLIER = 3
 
@@ -403,6 +402,8 @@ interface ExtractInput {
   favicon: string | null
   usedRawContent: boolean
   text: string
+  /** The facts kept of its extraction, and asked for (`config.research.sourceLimits`): more for the original. */
+  maxFacts: number
 }
 
 /** Longest outlet name a search source takes from its extraction; a longer answer is taken for a misreading. */
@@ -432,7 +433,7 @@ function researchSource(s: ExtractInput & { extraction: Extraction }, id: string
     kind: e.kind,
     country: e.country,
     relation: e.relation,
-    facts: e.facts.slice(0, MAX_FACTS_PER_SOURCE).map((f, j) => ({
+    facts: e.facts.slice(0, s.maxFacts).map((f, j) => ({
       id: `${id}F${j + 1}`,
       statement: f.statement,
       supportingSentence: f.supportingSentence,
@@ -488,7 +489,7 @@ async function buildPool(
     story: { ...brief, date: story.datePublished.slice(0, 10) },
     candidates: candidates.map(c => ({ ...c, date: c.datePublished.slice(0, 10) })),
   })
-  const extractPrompts = inputs.map(s => buildExtractionPromptParts({ story: brief, source: s }, { structured }))
+  const extractPrompts = inputs.map(s => buildExtractionPromptParts({ story: brief, source: s, maxFacts: s.maxFacts }, { structured }))
   const extractSchema: z.ZodType<Extraction | CoverageExtraction> = structured ? coverageExtractionSchema : extractionSchema
   const batch: PlannedStep[] = [
     ...extractPrompts.map(prompt => ({ step: 'extract' as const, prompt })),
@@ -726,7 +727,11 @@ export async function extractCoverage(
   const knownCount = own.length + found.length - fresh.own.length - fresh.search.length
   if (knownCount > 0) r.drops.known = knownCount
   const allowed = await dropOptedOut(fresh, deps.sourcePolicy)
-  const filtered = filterCandidates({ original: { url: o.url, text: o.content }, own: allowed.own, search: allowed.search, window })
+  const limits = config.research.sourceLimits
+  // The syndication comparison, like the queries prompt (`QUERY_CONTENT_CHARS`), keeps the length it
+  // read before the original was read further (2026-11-25): its first `other.textChars` characters
+  const compared = o.content.slice(0, limits.other.textChars)
+  const filtered = filterCandidates({ original: { url: o.url, text: compared }, own: allowed.own, search: allowed.search, window })
   r.candidates = own.length + found.length
   for (const d of [...allowed.dropped, ...filtered.dropped]) r.drops[d.reason] = (r.drops[d.reason] ?? 0) + 1
   if (filtered.selected.length === 0 && !options.since) throw new Stop('no usable source', 'no_other_coverage')
@@ -742,8 +747,12 @@ export async function extractCoverage(
     favicon: null,
     usedRawContent: false,
     text: o.content,
+    maxFacts: limits.original.facts,
   }
-  const inputs: ExtractInput[] = [...(options.since ? [] : [original]), ...filtered.selected.map(s => ({ ...s, isOriginal: false }))]
+  const inputs: ExtractInput[] = [
+    ...(options.since ? [] : [original]),
+    ...filtered.selected.map(s => ({ ...s, isOriginal: false, maxFacts: limits.other.facts })),
+  ]
   const used = new Set([story.id, ...filtered.selected.flatMap(s => (s.storyId ? [s.storyId] : []))])
   await buildPool(story, inputs, used, call, deps, r, options.structured === true)
   return { articleDate, window }
