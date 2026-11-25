@@ -93,7 +93,8 @@ describeDb('story context runs', () => {
     const { story } = await publishedStory()
     const first = (await runStoryContext(story.id, deps({ writeError: 'transient' })))!
     const firstRow = await prisma.storyContextRun.findUniqueOrThrow({ where: { id: first.runId } })
-    expect(firstRow.costUsd).toBeCloseTo(0.006, 10)
+    // Four calls at 0.002 before the failed write: structure, gap list, figure check (S0F1 has a figure, ADR-0080), fact check
+    expect(firstRow.costUsd).toBeCloseTo(0.008, 10)
 
     const secondStart = new Date()
     const second = await runStoryContext(story.id, deps(), { runId: first.runId })

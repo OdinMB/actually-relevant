@@ -6,80 +6,20 @@ import type { LinkCandidateAnswer } from '../schemas/overviews.js'
 import { membershipsOf } from './overviewCandidates.js'
 import { candidateOverviews, linkStories } from './overviewInput.js'
 import { applyLink, applyStatus } from './overviewLifecycle.js'
-import { linkInOrder, linkStory as linkOne, type LinkDeps, type LinkResult } from './overviewLink.js'
+import { linkInOrder, linkStory as linkOne, type LinkDeps } from './overviewLink.js'
 import { owedStories } from './overviewQueue.js'
 import { nextState } from './overviewStatus.js'
 import { overviewStates } from './overviewUpkeepInput.js'
-import type { LinkStory, Shared } from './overviewTypes.js'
+// Link results with every field linking returns: shared with the unit tests, and type-checked, as this file is not
+import { fixtureCharter as charter, fixtureShared as shared, foundResult, joinResult, linkResult as result, linkStory } from '../test/db/overviewFixtures.js'
 
 const DAY = 86_400_000
 const NOW = new Date('2026-06-02T06:00:00Z')
 const daysFrom = (days: number) => new Date(NOW.getTime() + days * DAY)
-const charter = { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda'], endEvent: 'The ministry declares it over' }
-const shared: Shared = { cause: { story: 'Ebola', other: 'Ebola' }, place: { story: 'Ituri', other: 'Ituri' }, end: { story: 'over', other: 'over' } }
-
-const linkStory = (s: { id: string; datePublished: Date | null }, issueId: string | null = null): LinkStory => ({
-  id: s.id,
-  title: 'Title',
-  label: '',
-  summary: 'Summary.',
-  datePublished: s.datePublished!,
-  date: s.datePublished!.toISOString().slice(0, 10),
-  issueId,
-  facts: [],
-})
-
-const result = (story: LinkStory, over: Partial<LinkResult> = {}): LinkResult => ({
-  story,
-  outcome: 'none',
-  role: { role: 'routine', roleKind: null },
-  join: null,
-  founding: null,
-  shown: { overviews: [], partners: [] },
-  answer: null,
-  proposed: 0,
-  refusals: [],
-  signals: [],
-  heldBy: null,
-  model: 'small-model',
-  promptVersion: 'v1',
-  costUsd: 0.001,
-  ...over,
-})
 
 const overviewRow = (over: Partial<{ status: 'open' | 'quiet' | 'closed'; closedReason: string | null; frozen: boolean }> = {}) =>
   prisma.overview.create({
     data: { title: 'Ebola in Ituri', charter, charterModel: 'm', charterPromptVersion: 'v', foundedAt: daysFrom(-20), lastEntryAt: daysFrom(-5), ...over },
-  })
-
-const joinResult = (story: LinkStory, overviewId: string): LinkResult =>
-  result(story, {
-    outcome: 'joined',
-    role: { role: 'turning_point', roleKind: 'spread' },
-    join: {
-      candidate: { id: overviewId, title: 'Ebola in Ituri', charter, entries: [], ref: 'O1', distance: 0.2, frozen: false },
-      answer: { id: 'O1', belongs: 'yes', ...shared, reportsEndEvent: false, scope: 'inside', centerMoved: false, signalQuote: '', confidence: 0.8 },
-      shared,
-      reportsEndEvent: false,
-    },
-    shown: { overviews: [{ ref: 'O1', id: overviewId, distance: 0.2 }], partners: [] },
-  })
-
-const foundResult = (story: LinkStory, partner: LinkStory, shownPartners = [{ ref: 'F1', id: partner.id, distance: 0.2 }]): LinkResult =>
-  result(story, {
-    outcome: 'founded',
-    role: { role: 'routine', roleKind: null },
-    founding: {
-      partner,
-      outcome: 'founded',
-      draft: { title: 'Ebola in Ituri', charter, roles: { a: { role: 'turning_point', roleKind: 'spread' }, b: { role: 'routine', roleKind: null } } },
-      answers: { draft: null, check: null },
-      shared,
-      confidence: 0.85,
-      costUsd: 0.04,
-      model: 'large-model',
-    },
-    shown: { overviews: [], partners: shownPartners },
   })
 
 describeDb('the overview lifecycle', () => {
@@ -295,7 +235,16 @@ describeDb('the overview lifecycle', () => {
 
     const got = await owedStories(NOW)
     // The held story's overview is gone: it is due again, after the stories new to linking
-    expect(got).toEqual({ backlog: [backlogA.id, backlogB.id], retries: [held.id], night: [night.id], backlogTotal: 2, lastTries: [], frozenWaiting: 0 })
+    // No story here waits for a re-center (ADR-0078)
+    expect(got).toEqual({
+      backlog: [backlogA.id, backlogB.id],
+      retries: [held.id],
+      night: [night.id],
+      backlogTotal: 2,
+      lastTries: [],
+      frozenWaiting: 0,
+      recenterWaiting: 0,
+    })
     expect(got.backlog).not.toContain(old.id)
     // While older new stories remain owed beyond the slice, the night's stories wait in the backlog, and the retries have no room
     expect(await owedStories(NOW, { ...config.overviews, backfillPerRun: 1 })).toEqual({
@@ -305,6 +254,7 @@ describeDb('the overview lifecycle', () => {
       backlogTotal: 2,
       lastTries: [],
       frozenWaiting: 0,
+      recenterWaiting: 0,
     })
   })
 

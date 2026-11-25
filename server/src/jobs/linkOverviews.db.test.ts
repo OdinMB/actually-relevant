@@ -228,6 +228,8 @@ describeDb('the overview step, end to end and against the eval sandbox', () => {
             memberships: sandbox.memberships,
             overviews: sandbox.candidateOverviews,
             stories: ids => linkStories(prisma, ids),
+            // The sandbox's clock, as the replay gives it (a story's re-center wait, ADR-0078)
+            now: () => clock,
             ...linkCalls,
           },
           apply: sandbox.apply,
