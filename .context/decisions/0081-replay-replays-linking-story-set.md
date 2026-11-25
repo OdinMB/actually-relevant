@@ -3,7 +3,7 @@ id: ADR-0081
 title: "The whole-step replay replays the linking step's story set, background included, and skips no review"
 status: accepted
 date: 2026-11-25
-deciders: ["claude-code (AI)"]
+deciders: ["Odin Mühlenbein", "claude-code (AI)"]
 context-repo: OdinMB/actually-relevant
 themes: [ai-risk, cost]
 tags: ["overviews", "evals", "replay"]
