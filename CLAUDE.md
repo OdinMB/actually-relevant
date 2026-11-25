@@ -143,6 +143,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `feed-management.md` | Feed CRUD and soft delete, crawl due rule, crawl-health counters, quality metrics, favicons |
 | `llm-analysis.md` | Model tiers (GPT-6 defaults; prompts and models change together), prompt directory, schema-driven format, analysis stages |
 | `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration and the phase-2 ship checks; `eval:overviews` (answer keys of past developments, the fact check under planted errors, the figure check against a strong judge, a later research pass's updates against their bars, overview linking and upkeep replayed in a sandbox) |
+| `eval-baselines.md` | The measured eval results a later change is compared against (overview bars, research facts against their sources, the figure check, costs), each with its commit and command; update it when a paid run replaces a number |
 | `prompting.md` | Prompt conventions for the GPT-5/GPT-6 reasoning models and calibration lessons (read before modifying prompts) |
 | `scheduler.md` | Job registry, overlap prevention (job lease), catch-up, `SCHEDULER_ENABLED`, chains, run costs, the spending overview and warning levels (no caps), concurrency, admin API |
 | `task-queue.md` | Bulk LLM operations, polling, processing indicators |
