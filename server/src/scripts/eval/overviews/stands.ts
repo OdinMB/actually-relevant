@@ -216,6 +216,7 @@ async function writeAndJudge(
     const line = (part === 'Doing' ? draft?.doing : draft?.sentences)?.[Number(n) - 1]
     return { ...d, text: line?.text ?? '' }
   })
+  record.doingWritten = draft?.doing.length ?? 0
   const byId = new Map(offered.map(f => [f.id, f]))
   const lines = [...result.sentences.map(l => ({ part: 'sentence' as const, ...l })), ...result.doing.map(l => ({ part: 'doing' as const, ...l }))]
   const judged =

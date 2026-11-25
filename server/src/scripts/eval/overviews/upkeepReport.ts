@@ -15,6 +15,7 @@ import type { CheckpointState } from './replayScore.js'
 import { cell, usd } from './reportText.js'
 import type { ReviewStepReport } from './review.js'
 import type { StandsStepReport } from './stands.js'
+import { doingAbsence, doingAbsences } from './standsScore.js'
 
 const table = ['| Measure | Bar | Mean | Verdict |', '|---|---|---|---|']
 
@@ -52,6 +53,24 @@ function standsDrops(r: StandsStepReport): string[] {
   ]
 }
 
+/** Each checkpoint that counts against "What's being done present" and shows none, with why, and the causes tallied: for a read, deciding nothing. */
+function doingMisses(r: StandsStepReport): string[] {
+  const { due, missing, byCause } = doingAbsences(r.runs)
+  if (missing === 0) return []
+  const at = (x: StandsStepReport['runs'][number]) => `${x.key} ${x.day} run ${x.run}`
+  return [
+    '',
+    `### Why "What's being done" is missing where a response is due`,
+    '',
+    `${missing} of the ${due} checkpoints with a response due show none (over all runs). ${byCause.map(([c, n]) => `${c}: ${n}`).join('; ')}.`,
+    '',
+    ...r.runs.flatMap(x => {
+      const why = doingAbsence(x)
+      return why ? [`- ${at(x)}: ${why.join('; ')}`] : []
+    }),
+  ]
+}
+
 export function standsLines(r: StandsStepReport): string[] {
   const written = r.runs.filter(x => x.outcome === 'written').length
   return [
@@ -70,6 +89,7 @@ export function standsLines(r: StandsStepReport): string[] {
       x =>
         `| ${x.key} | ${x.day} | ${x.run} | ${x.offered}${x.enough ? '' : ' (too few)'} | ${x.outcome ?? 'not written'} | ${x.lines.length} (${x.lines.filter(l => l.supported === false).length}) | ${x.latest.filter(l => l.stated).length} of ${x.latest.length} | ${x.responseDue ? 'yes' : 'no'} / ${x.doingPresent ? 'yes' : 'no'} |`,
     ),
+    ...doingMisses(r),
     ...standsMisses(r),
     ...standsDrops(r),
   ]

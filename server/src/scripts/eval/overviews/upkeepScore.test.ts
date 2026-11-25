@@ -3,7 +3,8 @@ import type { AnswerKey } from './keySchema.js'
 import { linkKeys } from './linkScore.js'
 import { checkpointsOf, developmentBefore, scoreReplay, splitsOf, type CheckpointState, type ReplayRunResult } from './replayScore.js'
 import { scoreReviewRun, scoreReviews, type ReviewCaseRun } from './reviewScore.js'
-import { latestValues, numbersIn, scoreStands, statesValue, type StandsCheckpointRun } from './standsScore.js'
+import { checkCopying } from '../../../services/researchCopying.js'
+import { doingAbsence, doingAbsences, dropAbsence, latestValues, numbersIn, scoreStands, statesValue, type StandsCheckpointRun } from './standsScore.js'
 import { passPoolLines, replayLines, reviewLines, standsLines } from './upkeepReport.js'
 
 type Entry = AnswerKey['entries'][number]
@@ -289,6 +290,53 @@ describe('the stands bars', () => {
       ["what's being done unsupported", 0, true],
     ])
     expect(full.bars.map(b => b.forOwner ?? null)).toEqual([null, expect.stringMatching(/^report only/), expect.stringMatching(/1 judgment/), null])
+  })
+
+  it("tells apart the copying drops as checkCopying words them: against a fact's statement, the source's wording, a quoted span", () => {
+    const words = 'the health ministry began vaccinating front line workers in Bunia on September 18 this year'
+    const source = { id: 'S1', title: '', facts: [{ id: 'S1F1', statement: words, supportingSentence: `Officials said ${words}` }], voices: [] }
+    const item = (label: string, text: string) => ({ part: 'story' as const, label, text, cited: true, factIds: ['S1F1'] })
+    const problems = checkCopying([item('Doing 1', words), item('Doing 2', 'Aid "reached the camps by boat on Monday"')], [source], 12).problems
+    expect(problems.map(p => dropAbsence({ cause: 'copying', problem: p.problem }))).toEqual([
+      'copying: code, source wording',
+      'copying: code, fact statement',
+      'copying: code, quoted span',
+    ])
+    expect(dropAbsence({ cause: 'copying', problem: 'renders S1F1 ("…") closely' })).toBe('copying: judge')
+    expect(dropAbsence({ cause: 'check' })).toBe('fact check')
+    expect(dropAbsence({ cause: 'expired' })).toBe('not current')
+  })
+
+  it("says why What's being done is missing where a response is due, and only there", () => {
+    const due = (over: Partial<StandsCheckpointRun>) => point('a', 1, { responseDue: true, ...over })
+    expect(doingAbsence(due({ doingPresent: true, doingWritten: 1 }))).toBeNull()
+    expect(doingAbsence(point('a', 1, { doingWritten: 0 }))).toBeNull()
+    expect(doingAbsence(due({ doingWritten: 0 }))).toEqual(['no line written'])
+    expect(doingAbsence(due({ outcome: 'failed' }))).toEqual(['a call failed'])
+    const copied = { label: 'Doing 1', cause: 'copying', problem: 'repeats 13 words in a row from the fact statements of S2: "…"', text: 'x' }
+    expect(doingAbsence(due({ doingWritten: 1, dropped: [copied, { label: 'Sentence 1', cause: 'check', text: 'y' }] }))).toEqual([
+      'copying: code, fact statement',
+    ])
+    // A kept line of what is being done goes with a summary whose every sentence was dropped
+    expect(doingAbsence(due({ outcome: 'none_kept', doingWritten: 2, dropped: [copied] }))).toEqual(['copying: code, fact statement', 'every sentence dropped'])
+    const tally = doingAbsences([
+      due({ doingWritten: 0 }),
+      due({ doingWritten: 1, dropped: [copied] }),
+      due({ doingPresent: true, doingWritten: 1 }),
+      point('b', 1),
+    ])
+    expect(tally).toEqual({
+      due: 3,
+      missing: 2,
+      byCause: [
+        ['no line written', 1],
+        ['copying: code, fact statement', 1],
+      ],
+    })
+    const missing = due({ doingWritten: 1, dropped: [copied] })
+    const text = standsLines({ half: 'judge', repeat: 1, keys: ['a'], runs: [missing], kept: [], score: scoreStands([missing], 1), costUsd: 0 }).join('\n')
+    expect(text).toContain('1 of the 1 checkpoints with a response due show none (over all runs). copying: code, fact statement: 1.')
+    expect(text).toContain('- a 2026-05-01 run 1: copying: code, fact statement')
   })
 
   it('reports the latest values and never decides on them, however many judgments it rests on', () => {

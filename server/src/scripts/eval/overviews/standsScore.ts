@@ -39,7 +39,73 @@ export interface StandsCheckpointRun {
   doingPresent: boolean
   /** Lines the write gave that a check dropped before anyone saw them, with the check and its reason: for a read, never scored. */
   dropped?: { label: string; cause: string; problem?: string; text: string }[]
+  /** Lines of "What's being done" the write gave, kept or not: for a read (`doingAbsence`), never scored. */
+  doingWritten?: number
   costUsd: number
+}
+
+/**
+ * Why a checkpoint where a response is due shows no "What's being done" (`doingAbsence`): a call
+ * failed; the write gave no line; every sentence of the summary was dropped, which leaves the
+ * stands unwritten and takes its kept lines of what is being done with it (`refreshStands`); or a
+ * check dropped the lines it gave, the copying drops split by who flagged them and against what.
+ * For a read, deciding nothing.
+ */
+export const DOING_ABSENCES = [
+  'a call failed',
+  'no line written',
+  'every sentence dropped',
+  'copying: code, fact statement',
+  'copying: code, source wording',
+  'copying: code, quoted span',
+  'copying: judge',
+  'fact check',
+  'unjudged',
+  'not current',
+  'structure',
+] as const
+export type DoingAbsence = (typeof DOING_ABSENCES)[number]
+
+/**
+ * A dropped line's cause as `DOING_ABSENCES` names it. The copying drops are told apart by their
+ * problem's wording, which `checkCopying` (code) and `judgedProblems` (the fact check's judge) write;
+ * a test holds the two to these patterns.
+ */
+export function dropAbsence(d: { cause: string; problem?: string }): DoingAbsence {
+  if (d.cause === 'copying') {
+    const problem = d.problem ?? ''
+    if (/^repeats \d+ words in a row from the fact statements of /.test(problem)) return 'copying: code, fact statement'
+    if (/^repeats \d+ words in a row from /.test(problem)) return 'copying: code, source wording'
+    if (/^quotes a source/.test(problem)) return 'copying: code, quoted span'
+    return 'copying: judge'
+  }
+  if (d.cause === 'check') return 'fact check'
+  if (d.cause === 'expired') return 'not current'
+  return d.cause === 'unjudged' ? 'unjudged' : 'structure'
+}
+
+/** Why "What's being done" is missing at a checkpoint that counts against it (enough facts, a response due, none shown); null at any other. */
+export function doingAbsence(r: StandsCheckpointRun): DoingAbsence[] | null {
+  if (!r.enough || !r.responseDue || r.doingPresent) return null
+  if (r.outcome === 'failed') return ['a call failed']
+  const written = r.doingWritten ?? 0
+  if (written === 0) return ['no line written']
+  const drops = (r.dropped ?? []).filter(d => d.label.startsWith('Doing '))
+  const causes = new Set(drops.map(dropAbsence))
+  if (r.outcome === 'none_kept' && drops.length < written) causes.add('every sentence dropped')
+  return [...causes]
+}
+
+/** The checkpoints that count against "What's being done present", those missing it, and how often each cause was behind a miss (a miss with two causes counts under each). */
+export function doingAbsences(runs: readonly StandsCheckpointRun[]): { due: number; missing: number; byCause: [DoingAbsence, number][] } {
+  const due = runs.filter(r => r.enough && r.responseDue)
+  const misses = due.flatMap(r => doingAbsence(r) ?? [])
+  const missing = due.filter(r => doingAbsence(r) !== null).length
+  return {
+    due: due.length,
+    missing,
+    byCause: DOING_ABSENCES.map(c => [c, misses.filter(m => m === c).length] as [DoingAbsence, number]).filter(([, n]) => n > 0),
+  }
 }
 
 /** Each figure's latest value in the key as of `day`: among values that match their figure, from entries published by then, the newest as-of. */
