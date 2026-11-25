@@ -28,15 +28,15 @@ Run on branch `claude/project-thread-egeer5` against a local copy of production 
 | | latest value stated | report only | 24.4% | report only |
 | | fact check: planted errors caught | ≥ 90% | 96.7% | met |
 | | fact check: correct lines rejected | report only | 2.5% | report only |
-| 6 Whole step replayed (1 run) | joins right | ≥ 97% | 89.8% | **missed** |
-| | true joins found | ≥ 85% | 89.0% | met |
-| | wrong foundings (share) | ≤ 10% | 14.3% | **missed** |
-| | roles agreeing | ≥ 65% | 81.4% | met |
+| 6 Whole step replayed with the background (1 run, ADR-0081, commit ee305c2d) | joins right | ≥ 97% | 97.0% (just under: 3 wrong joins) | **missed by a hair** |
+| | true joins found | ≥ 85% | 88.1% | met |
+| | wrong foundings (share) | ≤ 10% | 0.0% | met |
+| | roles agreeing | ≥ 65% | 81.3% | met |
 | | false re-centers, look-alikes joined | ≤ 10% | 0%, 0% | met |
 
 - **Step 5** is the run after ADR-0080 (a fact shown as its statement with a record; the figure check). Before it, on the same stories: unsupported sentences 0.9%, "What's being done" unsupported 2.7%, present 66.7%, latest value 28.2%, caught 100%, correct lines rejected 16.0%. The strong judge reads each line against its facts as the write was shown them (the owner, 2026-11-24). Read against the source sentences instead, it accepted 22 of 46 lines before ADR-0080 and 38 of 49 after.
-- **Step 6** ran without step 2's background stories (the Iran war and Hormuz keys), which is the likely cause of both misses: step 2 read 89.8% joins right before the background was added and 97.1% after. Not confirmed: the step 6 report does not name the wrongly filed stories. Open with the owner: replay it with the background. Cost $0.0063 a story. No re-center was applied (one attempted, refused by the join rule). Colorado formed only by its last checkpoint and never reached three stories.
-- **The gate stays closed** (`OVERVIEW_EVAL_GATE`): step 6 and "What's being done present" are unmet.
+- **Step 6** first ran without step 2's background stories (2026-11-24: joins right 89.8%, wrong foundings 14.3%, both missed). Replayed with them (2026-11-26, 473 stories: 201 judged, 272 of the Iran war and Hormuz keys; $2.15), the foundings share fell to 0 and joins right rose to 97.0%, a fraction under the bar. The three wrong joins: a Lebanon entry ("Iran facility struck amid mass civilian casualties in Lebanon") filed in the Iran war's overview, and two El Niño near misses about record sea warmth filed in El Niño's. Misses are mostly Colorado (no candidate before its overview formed on 2026-08-18) and four Ebola stories the link call answered no. One re-center was applied, to a background overview (the Iran war's), unscored. Background developments split into several overviews (the Iran war three times), unscored.
+- **The gate stays closed** (`OVERVIEW_EVAL_GATE`): joins right in step 6 a fraction under 97%, and "What's being done present" at 53.3%.
 
 ### Research facts against their sources
 
@@ -53,6 +53,7 @@ Run on branch `claude/project-thread-egeer5` against a local copy of production 
 | judge | the end state: rules, effort `low`, longer own article (46ab57b2) | 83.6% | 73.0% | 64 |
 
 - **The current baseline is the last two rows** (commit 46ab57b2). On the judged half the end state reads no better than straight after ADR-0080 (64 changed against 61); on the tune half the longer own article took back the gain of effort `low` (57 to 79, at the edge of two runs' noise), with the rise in credit (13 to 24) and period (15 to 21). Nobody has read these two samples by hand, so how much of the rise is real and how much is the judge seeing one sentence of a longer article (a speaker or date named paragraphs earlier) is open. The longer text gave 21% more facts on the tune half (668 to 806 over 29 stories).
+- **The hand-read of 2026-11-25** (`.plans/2026-11-25_longer-text-hand-read.md`) read all 200 changed facts of the last three rows against the whole article: real errors 11, 15 and 11 of 300 (3.7%, 5.0%, 3.7%), the rest right by the article (14, 20, 9), the judge counting an omission as a change (29, 41, 41) or unclear (3 each). None of the 37 sampled facts from beyond character 4,000 is a real error; the rise from 57 to 79 is 4 real errors, 6 right by the article and 12 strict verdicts. Real errors are a floor: only flagged facts were read.
 - **Never run:** the judged half with the rules and effort `low` on the 4,000-character text, so no arm separates the three changes there. The rules were written from the judged half's errors, so that half is no held-out test of them; the tune half is the cleaner reading.
 - **The judge is strict.** Read by hand twice (the second reader trying to overturn the first), the judged half's 61 were 26 real errors (8.7% of 300; 18 in a record field with the statement right, 8 in the statement; one clearly misleading), 6 that the texts cannot settle and 29 the judge's strictness. 8.7% is a floor: the judge named record errors only where it looked. With this judge the share cannot fall much below 10 to 12%.
 - **Changed by kind**, judge half before ADR-0080 → after it → the end state: period 50 → 24 → 19, credit 20 → 14 → 13, figure 15 → 3 → 3, scope 15 → 7 → 4, flag and other 10 → 13 → 25. Tune half, after ADR-0080 → rules at `none` → rules at `low` → longer own article: period 30 → 22 → 15 → 21, credit 15 → 10 → 13 → 24, strength 3 → 0 → 2 → 3, figure 6 → 6 → 5 → 2, scope 5 → 8 → 3 → 5, flag 5 → 5 → 2 → 4, other 33 → 28 → 17 → 20.
