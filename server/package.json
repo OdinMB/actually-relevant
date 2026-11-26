@@ -32,6 +32,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:jobs": "tsx src/scripts/seed-jobs.ts",
     "db:seed:synthetic": "tsx src/scripts/synthetic-data/index.ts",
+    "db:export:eval": "tsx src/scripts/eval-db/export.ts",
+    "db:import:eval": "tsx src/scripts/eval-db/import.ts",
     "admin:create": "tsx src/scripts/create-admin.ts",
     "backup:plunk-contacts": "tsx src/scripts/backup-plunk-contacts.ts",
     "restore:plunk-contacts": "tsx src/scripts/restore-plunk-contacts.ts",

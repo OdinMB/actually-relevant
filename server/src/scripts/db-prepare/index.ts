@@ -12,16 +12,14 @@
  * the dev server from starting. See .context/database-migrations.md.
  */
 import dotenv from 'dotenv'
-import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { decidePreparation } from './gate.js'
+import { runPrisma, SERVER_DIR } from './prismaCli.js'
 import { classifyGenerateFailure, classifyMigrateFailure, summarizeMigrateSuccess } from './prismaOutput.js'
 import { needsGenerate, schemaHash } from './schemaStamp.js'
 
-const SERVER_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
-const PRISMA_CLI = path.join(SERVER_DIR, 'node_modules/prisma/build/index.js')
 const SCHEMA_FILE = path.join(SERVER_DIR, 'prisma/schema.prisma')
 const CLIENT_DIR = path.join(SERVER_DIR, 'node_modules/.prisma/client')
 const STAMP_FILE = path.join(CLIENT_DIR, '.db-prepare-schema.sha256')
@@ -37,17 +35,6 @@ const fail = (message: string, output?: string): never => {
 
 function lastLines(text: string, count: number): string {
   return text.trim().split(/\r?\n/).slice(-count).join('\n')
-}
-
-function runPrisma(args: string[]): { ok: boolean; output: string } {
-  // The project's own CLI, run with this Node: never a registry download via npx.
-  const result = spawnSync(process.execPath, [PRISMA_CLI, ...args], {
-    cwd: SERVER_DIR,
-    encoding: 'utf8',
-    env: process.env,
-  })
-  if (result.error) return { ok: false, output: String(result.error) }
-  return { ok: result.status === 0, output: `${result.stdout ?? ''}\n${result.stderr ?? ''}` }
 }
 
 function migrate(): void {
