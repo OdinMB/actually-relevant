@@ -260,8 +260,9 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
 /**
  * Every step, in the order a run takes them: `context`, `pass-pool` and `stands` before `fact-check`,
  * which `--facts context`, `--facts pool` and `--facts stands` sample from, and before `figure-check`,
- * which samples the figures of `--facts context` or `--facts pool`; `pass-pool` before `stands` and
- * `replay`, which take its pools.
+ * which samples the figures of `--facts context` or `--facts pool`; `pass-pool` before `update`,
+ * `stands` and `replay`, which take its pools (`update` its first passes' versions too, whenever both
+ * run).
  */
 export const OVERVIEW_STEPS = [
   'keys',
@@ -269,11 +270,11 @@ export const OVERVIEW_STEPS = [
   'gap-keys',
   'gap-draft',
   'context',
-  'update',
   'link',
   'found',
   'role',
   'pass-pool',
+  'update',
   'stands',
   'review',
   'recenter',

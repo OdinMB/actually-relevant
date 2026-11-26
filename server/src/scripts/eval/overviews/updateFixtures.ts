@@ -1,8 +1,10 @@
 /**
  * The `update` step's fixtures (`.plans/2026-11-17_research-passes.md`, "Evals and the gate",
  * "Update judgment"): a later pass's article step on our researched stories from the development
- * answer keys, each story's current version as the legacy import makes it (`readLegacyImport`), with
- * the facts a pass would have found since added to its pool as fresh facts. Four cases a story:
+ * answer keys, each story's version and pool from one of two sources: the legacy import of its
+ * stored research (`readLegacyImport`), or the `pass-pool` step's first pass in the same run (its
+ * version 1 and pool), with the facts a pass would have found since added to its pool as fresh facts.
+ * Four cases a story:
  *
  * - `key`: the later must entries within `UPDATE_WINDOW_DAYS` (at most `MAX_LATER_ENTRIES`) give
  *   their figure values and turning points as new facts. A section stating a figure value of the
@@ -14,9 +16,9 @@
  *   fact is expected flagged, and the old fact demoted.
  * - `benign`: the key's first near miss as a new fact on another subject: nothing expected.
  *
- * The facts the version cites count as supported, as a later pass's own fact check would have
- * judged the legacy pool's facts before its article step; the eval measures that step, not the check.
- * Pure.
+ * The unjudged facts the version cites (the legacy import's) count as supported, as a later pass's
+ * own fact check would have judged them before its article step; the eval measures that step, not the
+ * check. A first pass's pool carries its own check's verdicts, which stand as they are. Pure.
  */
 import { versionArticle } from '../../../services/articleVersions.js'
 import { draftItems, type DraftItem } from '../../../services/researchChecks.js'
@@ -82,7 +84,8 @@ export function updateSlugs(keys: AnswerKey[], half: Half | 'all'): string[] {
   return [...new Set(keys.flatMap(k => k.entries.filter(e => e.join === 'must' && inHalf(e.slug, half)).map(e => e.slug)))]
 }
 
-interface NewFact {
+/** A fact a later pass would find, before it goes into the pool. */
+export interface NewFact {
   url: string
   title: string
   outlet: string
@@ -172,10 +175,47 @@ function sectionOf(items: DraftItem[], quote: string): string | null {
   return items.find(i => normalizeQuote(i.text).toLowerCase().includes(q))?.label ?? null
 }
 
+/**
+ * What a later pass on the key's entry at `index` would find: the later must entries within
+ * `UPDATE_WINDOW_DAYS` (at most `MAX_LATER_ENTRIES`), the new facts their matching figure values and
+ * turning points give, and each turning point's index in those facts. Pure.
+ */
+export function laterFacts(key: AnswerKey, index: number): { later: AnswerKey['entries']; add: NewFact[]; turning: { at: number; why: string }[] } {
+  const entry = key.entries[index]!
+  const figures = new Map(key.figures.map(f => [f.key, f]))
+  const until = plusDays(entry.date, UPDATE_WINDOW_DAYS)
+  const later = key.entries
+    .slice(index + 1)
+    .filter(e => e.join === 'must' && e.date > entry.date && e.date <= until)
+    .slice(0, MAX_LATER_ENTRIES)
+  const add: NewFact[] = []
+  const turning: { at: number; why: string }[] = []
+  for (const e of later) {
+    const base = { url: storyUrl(e.slug), title: e.title, outlet: 'Actually Relevant', date: e.date, relation: 'same-development' }
+    for (const v of e.values.filter(v => v.matches)) {
+      const f = figures.get(v.figure)
+      if (!f) continue
+      add.push({
+        ...base,
+        statement: `${f.name} (${f.definition}): ${APPROX_WORDS[v.approx]}${v.value.toLocaleString('en-US')} ${f.unit} as of ${v.asOf}.`,
+        sentence: v.quote,
+        measures: `${f.name}: ${f.definition}`,
+        asOf: v.asOf,
+        value: { value: v.value, unit: f.unit, approx: v.approx },
+      })
+    }
+    if (e.role === 'turning_point') {
+      turning.push({ at: add.length, why: `${e.kind ?? 'turning point'}: ${e.title}` })
+      add.push({ ...base, statement: e.title, sentence: e.title, measures: '', asOf: null })
+    }
+  }
+  return { later, add, turning }
+}
+
 /** A story's cases, in `UPDATE_CASE_KINDS` order; none for a story without a researched version. */
 function storyCases(key: AnswerKey, index: number, story: UpdateStory): { fixtures: UpdateFixture[]; reason: string | null } {
   const entry = key.entries[index]!
-  // The version's cited facts as the pass's own check would have left them: supported
+  // The version's unjudged cited facts (the legacy import's) as the pass's own check would have left them: supported
   const article0 = versionArticle(story.version, story.pool)
   const cited = new Set(draftItems(article0).flatMap(i => i.factIds))
   const pool = {
@@ -198,34 +238,8 @@ function storyCases(key: AnswerKey, index: number, story: UpdateStory): { fixtur
   const out: UpdateFixture[] = []
 
   // The later entries' figure values and turning points
-  const figures = new Map(key.figures.map(f => [f.key, f]))
-  const until = plusDays(entry.date, UPDATE_WINDOW_DAYS)
-  const later = key.entries
-    .slice(index + 1)
-    .filter(e => e.join === 'must' && e.date > entry.date && e.date <= until)
-    .slice(0, MAX_LATER_ENTRIES)
-  if (later.length > 0) {
-    const add: NewFact[] = []
-    const turning: { at: number; why: string }[] = []
-    for (const e of later) {
-      const base = { url: storyUrl(e.slug), title: e.title, outlet: 'Actually Relevant', date: e.date, relation: 'same-development' }
-      for (const v of e.values.filter(v => v.matches)) {
-        const f = figures.get(v.figure)
-        if (!f) continue
-        add.push({
-          ...base,
-          statement: `${f.name} (${f.definition}): ${APPROX_WORDS[v.approx]}${v.value.toLocaleString('en-US')} ${f.unit} as of ${v.asOf}.`,
-          sentence: v.quote,
-          measures: `${f.name}: ${f.definition}`,
-          asOf: v.asOf,
-          value: { value: v.value, unit: f.unit, approx: v.approx },
-        })
-      }
-      if (e.role === 'turning_point') {
-        turning.push({ at: add.length, why: `${e.kind ?? 'turning point'}: ${e.title}` })
-        add.push({ ...base, statement: e.title, sentence: e.title, measures: '', asOf: null })
-      }
-    }
+  const { later, add, turning } = laterFacts(key, index)
+  if (add.length > 0) {
     const sections = new Map<string, string>()
     const unplaced: string[] = []
     for (const v of entry.values.filter(v => v.matches)) {
@@ -236,21 +250,19 @@ function storyCases(key: AnswerKey, index: number, story: UpdateStory): { fixtur
       if (label === null) unplaced.push(why)
       else if (!sections.has(label)) sections.set(label, why)
     }
-    if (add.length > 0) {
-      out.push(
-        fixture(
-          'key',
-          add,
-          refs => ({
-            sections: [...sections].map(([label, why]) => ({ label, why })),
-            facts: turning.map(t => ({ ref: refs[t.at]!, why: t.why })),
-            demote: [],
-            strict: turning.length === 0,
-          }),
-          unplaced,
-        ),
-      )
-    }
+    out.push(
+      fixture(
+        'key',
+        add,
+        refs => ({
+          sections: [...sections].map(([label, why]) => ({ label, why })),
+          facts: turning.map(t => ({ ref: refs[t.at]!, why: t.why })),
+          demote: [],
+          strict: turning.length === 0,
+        }),
+        unplaced,
+      ),
+    )
   }
 
   // A correction of a fact the story cites, for the same measure and moment
@@ -317,27 +329,67 @@ function storyCases(key: AnswerKey, index: number, story: UpdateStory): { fixtur
   return { fixtures: out, reason: out.length === 0 ? 'no case: no later entry in the window, no plantable cited fact and no near miss' : null }
 }
 
-/** Every case of every researched must entry of the keys in the half, the first `limit` stories only. */
-export function updateFixtures(keys: AnswerKey[], stories: ReadonlyMap<string, UpdateStory | null>, o: { half: Half | 'all'; limit?: number }): UpdateFixtures {
+/** Which must entries a run reads: the keys' in the half, only the stories its source covers when it names them. */
+interface UpdateScope {
+  half: Half | 'all'
+  /** The stories the source covers; the rest are not this run's, so they are neither cases nor left out. */
+  only?: ReadonlySet<string>
+}
+
+/** Each must entry of the keys in the scope, once per slug, in key order. */
+function mustEntries(keys: AnswerKey[], o: UpdateScope): { key: AnswerKey; index: number; entry: AnswerKey['entries'][number] }[] {
+  const seen = new Set<string>()
+  return keys.flatMap(key =>
+    [...key.entries.entries()].flatMap(([index, entry]) => {
+      if (entry.join !== 'must' || !inHalf(entry.slug, o.half) || seen.has(entry.slug)) return []
+      seen.add(entry.slug)
+      return !o.only || o.only.has(entry.slug) ? [{ key, index, entry }] : []
+    }),
+  )
+}
+
+/** Every case of every researched must entry of the keys in the scope, the first `limit` stories only. */
+export function updateFixtures(
+  keys: AnswerKey[],
+  stories: ReadonlyMap<string, UpdateStory | null>,
+  o: UpdateScope & {
+    limit?: number
+    /** Why a story in scope has no version. */
+    missing?: string
+  },
+): UpdateFixtures {
   const fixtures: UpdateFixture[] = []
   const left: UpdateFixtures['left'] = []
-  const seen = new Set<string>()
   let taken = 0
-  for (const key of keys) {
-    for (const [index, entry] of key.entries.entries()) {
-      if (entry.join !== 'must' || !inHalf(entry.slug, o.half) || seen.has(entry.slug)) continue
-      seen.add(entry.slug)
-      if (o.limit !== undefined && taken >= o.limit) continue
-      const story = stories.get(entry.slug) ?? null
-      if (!story) {
-        left.push({ slug: entry.slug, reason: 'no researched version: not found, or never researched' })
-        continue
-      }
-      const cases = storyCases(key, index, story)
-      if (cases.reason) left.push({ slug: entry.slug, reason: cases.reason })
-      else taken++
-      fixtures.push(...cases.fixtures)
+  for (const { key, index, entry } of mustEntries(keys, o)) {
+    if (o.limit !== undefined && taken >= o.limit) continue
+    const story = stories.get(entry.slug) ?? null
+    if (!story) {
+      left.push({ slug: entry.slug, reason: o.missing ?? 'no researched version: not found, or never researched' })
+      continue
     }
+    const cases = storyCases(key, index, story)
+    if (cases.reason) left.push({ slug: entry.slug, reason: cases.reason })
+    else taken++
+    fixtures.push(...cases.fixtures)
   }
   return { fixtures, left }
+}
+
+/**
+ * The most cases each must entry in scope can give before its version exists (a dry run on stories a
+ * pass has yet to research), the first `limit` stories only: a key case when later entries give new
+ * facts, one correction case of each kind (whether a cited fact can be planted depends on the
+ * article), a benign case when the key has a near miss. Pure.
+ */
+export function updateCaseCeiling(keys: AnswerKey[], o: UpdateScope & { limit?: number }): { stories: number; cases: Record<UpdateCaseKind, number> } {
+  const entries = mustEntries(keys, o).slice(0, o.limit)
+  const cases: Record<UpdateCaseKind, number> = { key: 0, 'wrong-number': 0, 'wrong-year': 0, benign: 0 }
+  for (const { key, index } of entries) {
+    if (laterFacts(key, index).add.length > 0) cases.key++
+    cases['wrong-number']++
+    cases['wrong-year']++
+    if (key.nearMisses[0]) cases.benign++
+  }
+  return { stories: entries.length, cases }
 }

@@ -4,7 +4,9 @@
  * research's real cost; and story context's gate: the gap keys drafted and checked, production's
  * first research pass replayed on their stories against the bars (its cards judged), and the fact
  * check on its facts; and a later pass's article step replayed on the answer keys' researched
- * stories with the facts found since and planted corrections (`update`), its notes judged; and the
+ * stories with the facts found since and planted corrections (`update`; each story's version and pool
+ * from its stored research, or from the `pass-pool` step's first passes when it runs beside it), its
+ * notes judged; and the
  * overview linking replayed on the answer keys' stories in an in-memory sandbox (`link`, `found`,
  * `role`), the founded end events judged; and the overview upkeep (`pass-pool`, `stands`, `review`,
  * `recenter`, `replay`): production's first pass run in memory on the developments' must
@@ -25,6 +27,7 @@
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps gap-draft
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_story-context-eval --steps context,fact-check --facts context --half judge --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_update-eval --steps update --half judge --repeat 3
+ *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool,update --half judge --repeat 3 --dry-run
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --repeat 3
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-18_linking-eval --steps link,found,role --half tune --repeat 3 --rescore
  *   npm run eval:overviews --prefix server -- --out ../DOCS/2026-11-19_upkeep-eval --steps pass-pool --half judge --dry-run
@@ -70,8 +73,9 @@ import { readDuplicateGroups } from './overviews/duplicates.js'
 import { runKeyDraftStep, type KeyDraftStepOptions } from './overviews/keyDraft.js'
 import { KEYS_DIR, readGapKeyFiles, readKeyFiles } from './overviews/keyFiles.js'
 import { overviewReportName, renderOverviewReport, type OverviewReportInput } from './overviews/report.js'
-import { runUpdateStep, type UpdateStepOptions } from './overviews/update.js'
+import { runUpdateStep, type UpdateSource, type UpdateStepOptions } from './overviews/update.js'
 import type { UpdateStory } from './overviews/updateFixtures.js'
+import { updateEstimateLine } from './overviews/updateReport.js'
 import { LINK_DESK_USD_PER_STORY, linkReplayStories, rescoreLinkStep, runLinkStep } from './overviews/link.js'
 import { verdict } from './overviews/linkReport.js'
 import { replayNotSaved, savedReplayName, writeSavedReplay } from './overviews/savedLinkReplay.js'
@@ -275,12 +279,17 @@ async function main(): Promise<void> {
       budgetUsd: opts.budget,
       onDone: r => console.log(`context: ${r.slug} run ${r.run}: ${r.result.status}, ${r.result.outcome ?? 'no outcome'}, ${r.result.boxes.length} cards`),
     })
-    const updateOptions = (dryRun: boolean): UpdateStepOptions => ({
+    /** The `update` step's stories: the `pass-pool` step's first passes whenever it runs beside it (null before they ran), else the legacy import. */
+    const updateSource = (pooled: ReadonlyMap<string, UpdateStory | null> | null): UpdateSource =>
+      runs('pass-pool')
+        ? { kind: 'pool', slugs: passPoolStories(keyFiles, opts.half, opts.limit).slugs, stories: pooled }
+        : { kind: 'legacy', stories: updateStories }
+    const updateOptions = (dryRun: boolean, source: UpdateSource): UpdateStepOptions => ({
       ctx,
       files: keyFiles,
       half: opts.half,
       ...limit,
-      stories: updateStories,
+      source,
       canCall,
       dryRun,
       repeat: opts.repeat,
@@ -317,13 +326,6 @@ async function main(): Promise<void> {
           `context: ${report.stories} stories of ${report.keys} keys × ${report.repeat} run(s); desk estimate up to ${usd(report.deskUsd ?? 0)} (the pipeline's bound and the strong judge)`,
         )
       }
-      if (runs('update')) {
-        const { report } = await runUpdateStep(updateOptions(true))
-        const cases = Object.values(report.cases).reduce((a, b) => a + b, 0)
-        console.log(
-          `update: ${cases} cases from ${report.stories} stories × ${report.repeat} run(s); desk estimate up to ${usd(report.deskUsd ?? 0)} (each case's reserve and the note judge)`,
-        )
-      }
       if (linking) {
         const r = linkReplayStories(keyFiles, opts.half, groups)
         const all = r.asked.length
@@ -339,6 +341,9 @@ async function main(): Promise<void> {
         console.log(
           `pass-pool: ${slugs.length} of the half's ${mustEntries} must entries (the newest ${MEMBERS_PER_CHECKPOINT} at each stands checkpoint), one first pass each; at most ${usd(slugs.length * FIRST_PASS_RESERVE_USD)} at a first pass's ceiling`,
         )
+      }
+      if (runs('update')) {
+        console.log(updateEstimateLine((await runUpdateStep(updateOptions(true, updateSource(null)))).report))
       }
       if (runs('replay')) {
         // The linking steps' story set: the whole-step replay links exactly these
@@ -426,24 +431,6 @@ async function main(): Promise<void> {
         }
       }
     }
-    if (runs('update')) {
-      if (!canCall) {
-        skipped.push({
-          step: 'update',
-          reason: "needs OPENAI_API_KEY: each step's calls depend on the answers before them, so whether the cache holds them all is known only by running",
-        })
-      } else {
-        try {
-          const u = await runUpdateStep(updateOptions(false))
-          report.update = u.report
-          if (u.report.judge?.stopped) skipped.push({ step: 'update (note judge)', reason: u.report.judge.stopped })
-          for (const b of u.report.score.bars)
-            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no verdicts' : b.met ? 'met' : 'not met'})`)
-        } catch (err) {
-          failed('update', err)
-        }
-      }
-    }
     if (linking) {
       const steps = LINKING_STEPS.filter(runs).join(', ')
       if (!canCall) {
@@ -500,6 +487,8 @@ async function main(): Promise<void> {
     let pooled: Map<string, MemberFact[]> | null = null
     /** The same pools as context reads them, by slug: what `--facts pool` samples. */
     let poolStories: StoryFacts[] | null = null
+    /** Each researched story's version 1 and pool, by slug: what `update` replays a later pass on beside `pass-pool`. */
+    let poolUpdates: Map<string, UpdateStory | null> | null = null
     if (runs('pass-pool')) {
       if (!canCall || !process.env.TAVILY_API_KEY)
         skipped.push({ step: 'pass-pool', reason: 'needs OPENAI_API_KEY and TAVILY_API_KEY: it runs research passes' })
@@ -519,10 +508,31 @@ async function main(): Promise<void> {
           })
           pooled = p.facts
           poolStories = p.stories
+          poolUpdates = p.updates
           report.passPool = p.report
           console.log(`pass-pool: ${p.report.withFacts} of ${p.report.stories} stories gave offerable facts`)
         } catch (err) {
           failed('pass-pool', err)
+        }
+      }
+    }
+    if (runs('update')) {
+      if (!canCall) {
+        skipped.push({
+          step: 'update',
+          reason: "needs OPENAI_API_KEY: each step's calls depend on the answers before them, so whether the cache holds them all is known only by running",
+        })
+      } else if (runs('pass-pool') && !poolUpdates) {
+        skipped.push({ step: 'update', reason: "its stories are the pass-pool step's first passes, and pass-pool did not run (its line says why)" })
+      } else {
+        try {
+          const u = await runUpdateStep(updateOptions(false, updateSource(poolUpdates)))
+          report.update = u.report
+          if (u.report.judge?.stopped) skipped.push({ step: 'update (note judge)', reason: u.report.judge.stopped })
+          for (const b of u.report.score.bars)
+            console.log(`  ${b.name}: ${b.value === null ? 'n/a' : b.value.toFixed(3)} (${b.met === null ? 'no verdicts' : b.met ? 'met' : 'not met'})`)
+        } catch (err) {
+          failed('update', err)
         }
       }
     }

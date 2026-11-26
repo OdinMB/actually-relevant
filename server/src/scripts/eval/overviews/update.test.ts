@@ -4,7 +4,7 @@ import { researchView, type Article, type ArticleVersionData, type PoolFact, typ
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
 import { LABEL_DEVELOPMENTS } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
-import { runUpdateStep, type UpdateStepOptions } from './update.js'
+import { runUpdateStep, type UpdateSource, type UpdateStepOptions } from './update.js'
 import type { UpdateStory } from './updateFixtures.js'
 
 const source: PoolSource = {
@@ -142,11 +142,26 @@ function answer(schemaName: string, prompt: string): unknown {
   return null
 }
 
+const legacy: UpdateSource = { kind: 'legacy', stories: async slugs => new Map(slugs.map(s => [s, s === 'floods-a' ? story : null])) }
+
+/** The key with two more must entries, after floods-a's: routine, so they give floods-a no key case. */
+const threeFile: KeyFile = {
+  ...keyFile,
+  key: {
+    ...keyFile.key!,
+    entries: [
+      ...keyFile.key!.entries,
+      { ...keyFile.key!.entries[0]!, slug: 'floods-b', date: '2026-10-03', title: 'Rain goes on' },
+      { ...keyFile.key!.entries[0]!, slug: 'floods-c', date: '2026-10-04', title: 'Rain stops' },
+    ],
+  },
+}
+
 const options = (over: Partial<UpdateStepOptions> = {}): UpdateStepOptions => ({
   ctx: fakeEvalContext(answer),
   files: [keyFile],
   half: 'all',
-  stories: async slugs => new Map(slugs.map(s => [s, s === 'floods-a' ? story : null])),
+  source: legacy,
   canCall: true,
   dryRun: false,
   repeat: 1,
@@ -159,7 +174,13 @@ describe('runUpdateStep', () => {
   it('estimates on a dry run without a call', async () => {
     const ctx = fakeEvalContext(answer)
     const { report, runs } = await runUpdateStep(options({ ctx, dryRun: true, repeat: 2 }))
-    expect(report).toMatchObject({ keys: 1, stories: 1, cases: { key: 0, 'wrong-number': 1, 'wrong-year': 0, benign: 1 } })
+    expect(report).toMatchObject({
+      keys: 1,
+      stories: 1,
+      cases: { key: 0, 'wrong-number': 1, 'wrong-year': 0, benign: 1 },
+      source: { kind: 'legacy' },
+      ceiling: false,
+    })
     expect(report.deskUsd).toBeCloseTo(2 * 2 * 0.12)
     expect(runs).toEqual([])
     expect(ctx.calls).toEqual([])
@@ -202,5 +223,69 @@ describe('runUpdateStep', () => {
     expect(runs.every(r => r.note === null)).toBe(true)
     expect(ctx.calls.some(c => c.schemaName.startsWith('pass-judge') && c.schemaName.endsWith('~run2'))).toBe(true)
     expect(report.score.runs).toHaveLength(2)
+  })
+})
+
+describe("runUpdateStep on the pass-pool step's first passes", () => {
+  const pooled = (stories: ReadonlyMap<string, UpdateStory | null> | null, slugs: readonly string[] = ['floods-a']): UpdateSource => ({
+    kind: 'pool',
+    slugs,
+    stories,
+  })
+
+  it('runs the same cases as from the legacy import, and says how many of the must entries its passes cover', async () => {
+    const ctx = fakeEvalContext(answer)
+    const { report, runs } = await runUpdateStep(options({ ctx, source: pooled(new Map([['floods-a', story]]), ['floods-a', 'not-a-must-entry']) }))
+    expect(runs.map(r => [r.fixture.id, r.result.outcome])).toEqual([
+      ['floods-a:wrong-number', 'updated'],
+      ['floods-a:benign', 'unchanged'],
+    ])
+    expect(report).toMatchObject({ stories: 1, source: { kind: 'pool', covered: 1, mustEntries: 1 }, ceiling: false })
+  })
+
+  it("leaves out silently the must entries its passes did not research, and names an in-scope story without a version by the pool's own reason", async () => {
+    const files = [threeFile]
+    const { report } = await runUpdateStep(options({ files, dryRun: true, source: pooled(new Map([['floods-a', story]]), ['floods-a', 'floods-b']) }))
+    expect(report.left.map(l => l.what)).toEqual(['floods-b'])
+    expect(report).toMatchObject({ stories: 1, source: { kind: 'pool', covered: 2, mustEntries: 3 } })
+    // The legacy import leaves floods-b out for a reason of its own
+    const { report: fromLegacy } = await runUpdateStep(options({ files, dryRun: true }))
+    expect(report.left[0]!.reason).not.toBe(fromLegacy.left.find(l => l.what === 'floods-b')!.reason)
+  })
+
+  it("estimates a dry run before the passes ran at the cases' ceiling, without a call", async () => {
+    const ctx = fakeEvalContext(answer)
+    const { report, runs } = await runUpdateStep(options({ ctx, files: [threeFile], dryRun: true, repeat: 2, source: pooled(null, ['floods-a', 'floods-b']) }))
+    expect(report).toMatchObject({
+      stories: 2,
+      cases: { key: 0, 'wrong-number': 2, 'wrong-year': 2, benign: 2 },
+      unplaced: 0,
+      ceiling: true,
+      left: [],
+      source: { kind: 'pool', covered: 2, mustEntries: 3 },
+    })
+    expect(report.deskUsd).toBeCloseTo(6 * 2 * 0.12)
+    expect(runs).toEqual([])
+    expect(ctx.calls).toEqual([])
+  })
+
+  it('refuses to run before the passes ran', async () => {
+    const ctx = fakeEvalContext(answer)
+    await expect(runUpdateStep(options({ ctx, source: pooled(null) }))).rejects.toThrow()
+    expect(ctx.calls).toEqual([])
+  })
+
+  it("builds the cases from a first pass's own article", async () => {
+    // No projection to fall back on: the cited facts come only from the version's article
+    const first: ArticleVersionData = {
+      ...version,
+      kind: 'first',
+      passId: 'pass-1',
+      research: { paragraphs: [], whyThisMatters: [], caveats: [], quoteSourceId: null, sources: [] },
+      article,
+    }
+    const supported = { ...pool, facts: pool.facts.map(f => ({ ...f, verdict: 'supported' as const })) }
+    const { report } = await runUpdateStep(options({ dryRun: true, source: pooled(new Map([['floods-a', { ...story, version: first, pool: supported }]])) }))
+    expect(report).toMatchObject({ stories: 1, cases: { key: 0, 'wrong-number': 1, 'wrong-year': 0, benign: 1 } })
   })
 })

@@ -12,6 +12,8 @@ const report = (over: Partial<UpdateStepReport> = {}): UpdateStepReport => ({
   stories: 4,
   cases: { key: 3, 'wrong-number': 4, 'wrong-year': 2, benign: 4 },
   unplaced: 1,
+  source: { kind: 'legacy' },
+  ceiling: false,
   deskUsd: null,
   skipped: [],
   judge: { estimate: { calls: 12, uncached: 12, usd: 0.3 }, stopped: null },

@@ -8,10 +8,12 @@
  * as members' facts, each with an id of its own (a fact a pass found in memory has none); the members
  * not researched offer none. The same pools, as context reads them (`cardFacts`), are what
  * `--facts pool` samples for the fact check, and with the figures each pass's figure check removed
- * (`record.context.removedFigures`) for the figure check. Run 1 only: the pools are the steps' input, not a
- * measure. Stories start only while the budget covers one more first pass.
+ * (`record.context.removedFigures`) for the figure check. The `update` step takes each pass's version 1
+ * and pool too (`poolUpdateStory`), its fact check's verdicts as they are; a pass that kept no draft
+ * gives it none. Run 1 only: the pools are the steps' input, not a measure. Stories start only while
+ * the budget covers one more first pass.
  */
-import type { PassInput } from '../../../services/researchPass.js'
+import type { PassInput, PassResult } from '../../../services/researchPass.js'
 import type { MemberFact } from '../../../services/overviewStands.js'
 import { cardFacts } from '../../../services/researchPool.js'
 import type { SearchClient } from '../research/pipeline.js'
@@ -24,6 +26,7 @@ import { inDevelopmentHalf } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
 import { mustEntriesOn, type AnswerKey } from './keySchema.js'
 import { checkpointsOf } from './replayScore.js'
+import type { UpdateStory } from './updateFixtures.js'
 
 /**
  * Must entries researched for each stands checkpoint: the newest this many published on or before
@@ -78,6 +81,12 @@ export function poolMemberFacts(storyId: string, pool: { sources: MemberFact['so
   })
 }
 
+/** A first pass as the `update` step reads a story: its version 1 and its pool, the pass's verdicts as they are; null when it kept no draft. Pure. */
+export function poolUpdateStory(slug: string, storyDay: string, pass: Pick<PassResult, 'version' | 'pool'>): UpdateStory | null {
+  if (!pass.version) return null
+  return { slug, storyDay, version: pass.version, pool: { sources: pass.pool.sources, facts: pass.pool.facts } }
+}
+
 /** The stories the step researches: every development's `checkpointStories` in the half, each once, the first `limit` of them; and the half's must entries, for scale. Pure. */
 export function passPoolStories(files: readonly KeyFile[], half: PassPoolOptions['half'], limit?: number): { slugs: string[]; mustEntries: number } {
   const keys = files.flatMap(f => (f.key && f.errors.length === 0 && inDevelopmentHalf(f.key.id, half) ? [f.key] : []))
@@ -89,11 +98,13 @@ export function passPoolStories(files: readonly KeyFile[], half: PassPoolOptions
 }
 
 /**
- * The step's run: the report, each researched story's members' facts by story id, and each story's
+ * The step's run: the report, each researched story's members' facts by story id, each story's
  * facts as context reads them by slug, with the figures its pass removed, in the order researched
- * (`--facts pool`).
+ * (`--facts pool`), and each researched story as the `update` step reads it, by slug.
  */
-export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoolReport; facts: Map<string, MemberFact[]>; stories: StoryFacts[] }> {
+export async function runPassPool(
+  o: PassPoolOptions,
+): Promise<{ report: PassPoolReport; facts: Map<string, MemberFact[]>; stories: StoryFacts[]; updates: Map<string, UpdateStory | null> }> {
   const { slugs, mustEntries } = passPoolStories(o.files, o.half, o.limit)
   const inputs = await o.inputs(slugs)
   const left = slugs.filter(s => !inputs.get(s)).map(s => ({ what: s, reason: 'no first-pass input: not published here, or no text' }))
@@ -113,6 +124,7 @@ export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoo
         storyId: input.story.id,
         facts: poolMemberFacts(input.story.id, pass.pool),
         story: { slug: id, title: input.current.title, facts: cardFacts(pass.pool), removed: pass.record.context.removedFigures },
+        update: poolUpdateStory(id, input.storyDay, pass),
       }
     },
   })
@@ -120,6 +132,7 @@ export async function runPassPool(o: PassPoolOptions): Promise<{ report: PassPoo
   return {
     facts,
     stories: done.results.map(r => r.story),
+    updates: new Map(done.results.map(r => [r.story.slug, r.update])),
     report: {
       mustEntries,
       stories: queued.length,

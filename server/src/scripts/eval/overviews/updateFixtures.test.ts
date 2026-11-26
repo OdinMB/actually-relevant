@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildResearchedStory } from '../../../services/researchedStory.js'
 import { researchView, type Article, type ArticleVersionData, type PoolFact, type PoolSource } from '../../../services/researchPool.js'
 import type { AnswerKey } from './keySchema.js'
-import { updateFixtures, updateSlugs, type UpdateStory } from './updateFixtures.js'
+import { updateCaseCeiling, updateFixtures, updateSlugs, type UpdateStory } from './updateFixtures.js'
 
 const source = (ref: string): PoolSource => ({
   id: `src-${ref}`,
@@ -172,6 +172,12 @@ describe('updateFixtures', () => {
     expect([facts.get('S1F1'), facts.get('S1F2'), facts.get('S1F3')]).toEqual(['supported', 'supported', 'unjudged'])
   })
 
+  it("keeps the verdicts a pass's own check gave: a rejected cited fact gives no correction case", () => {
+    const judged: UpdateStory = { ...story, pool: { ...pool, facts: pool.facts.map(f => (f.ref === 'S1F1' ? { ...f, verdict: 'rejected' as const } : f)) } }
+    const kinds = updateFixtures([key], new Map([['floods-a', judged]]), { half: 'all' }).fixtures.map(f => f.kind)
+    expect(kinds).toEqual(['key', 'benign'])
+  })
+
   it('plants a correction of a cited fact for the same measure, expecting every section citing it flagged and it demoted', () => {
     const n = of('wrong-number')
     const planted = n.input.pool.facts.find(f => n.input.fresh.has(f.ref))!
@@ -212,5 +218,41 @@ describe('updateFixtures', () => {
     const k = updateFixtures([routine], stories, { half: 'all' }).fixtures.find(f => f.kind === 'key')!
     expect(k.expected).toEqual({ sections: [], facts: [], demote: [], strict: true })
     expect(k.unplaced).toEqual(['displaced: 4000 as of 2026-10-01 → 5000 as of 2026-10-06'])
+  })
+
+  it('skips a must entry outside the stories its source covers: no case, not left out, not counted toward the limit', () => {
+    const both = new Map<string, UpdateStory | null>([
+      ['floods-a', story],
+      ['floods-c', { ...story, slug: 'floods-c' }],
+    ])
+    const scoped = updateFixtures([key], both, { half: 'all', only: new Set(['floods-c']), limit: 1 })
+    expect(scoped.fixtures.map(f => f.id)).toEqual(['floods-c:wrong-number', 'floods-c:wrong-year', 'floods-c:benign'])
+    expect(scoped.left).toEqual([])
+  })
+
+  it("names an in-scope story without a version by the source's reason", () => {
+    const { fixtures: none, left: missing } = updateFixtures([key], stories, { half: 'all', only: new Set(['floods-b']), missing: 'the reason given' })
+    expect(none).toEqual([])
+    expect(missing).toEqual([{ slug: 'floods-b', reason: 'the reason given' }])
+  })
+})
+
+describe('updateCaseCeiling', () => {
+  it('counts each story a key case only when later entries give new facts, a correction case of each kind, and a benign case only with a near miss', () => {
+    expect(updateCaseCeiling([key], { half: 'all' })).toEqual({ stories: 4, cases: { key: 1, 'wrong-number': 4, 'wrong-year': 4, benign: 4 } })
+    expect(updateCaseCeiling([{ ...key, nearMisses: [] }], { half: 'all' }).cases.benign).toBe(0)
+  })
+
+  it('counts only the in-scope must entries, each slug once, the first `limit` of them', () => {
+    const scope = new Set(['floods-a', 'floods-c', 'floods-optional'])
+    expect(updateCaseCeiling([key, key], { half: 'all', only: scope })).toEqual({
+      stories: 2,
+      cases: { key: 1, 'wrong-number': 2, 'wrong-year': 2, benign: 2 },
+    })
+    expect(updateCaseCeiling([key], { half: 'all', only: scope, limit: 1 })).toEqual({
+      stories: 1,
+      cases: { key: 1, 'wrong-number': 1, 'wrong-year': 1, benign: 1 },
+    })
+    expect(updateCaseCeiling([key], { half: 'all', limit: 0 })).toEqual({ stories: 0, cases: { key: 0, 'wrong-number': 0, 'wrong-year': 0, benign: 0 } })
   })
 })

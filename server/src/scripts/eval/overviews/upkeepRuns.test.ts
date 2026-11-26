@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { MemberFact } from '../../../services/overviewStands.js'
 import type { LinkStory } from '../../../services/overviewTypes.js'
-import type { PoolFact, PoolSource } from '../../../services/researchPool.js'
+import type { ArticleVersionData, Pool, PoolFact, PoolSource } from '../../../services/researchPool.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
 import { passInput, researchStory } from '../../../test/passFixtures.js'
 import type { KeyFile } from './keyFiles.js'
 import type { AnswerKey } from './keySchema.js'
-import { runPassPool } from './passPool.js'
+import { poolUpdateStory, runPassPool } from './passPool.js'
 import { runReplayStep } from './replay.js'
 import { runReviewStep } from './review.js'
 import { runStandsStep } from './stands.js'
@@ -607,6 +607,27 @@ describe('runPassPool', () => {
     expect(researched.map(s => s.slug)).toEqual(['e2', 'e3'])
   })
 
+  it('gives the update step each researched story under its slug, null where its pass kept no draft, and none for a story with no input', async () => {
+    const { updates } = await runPassPool({
+      ctx: fakeEvalContext(() => null),
+      tavily: { search: async () => ({ results: [] }) } as never,
+      files: FILES,
+      half: 'judge',
+      inputs: async slugs => new Map(slugs.map(s => [s, s === 'e1' ? null : passInput(researchStory({ id: `id-${s}` }))])),
+      relevanceMin: 5,
+      concurrency: 2,
+      budgetUsd: 5,
+      spentUsd: () => 0,
+      limit: 3,
+    })
+    expect(updates).toEqual(
+      new Map([
+        ['e2', null],
+        ['e3', null],
+      ]),
+    )
+  })
+
   it("asks only for the stories the stands' checkpoints read, and says of how many must entries", async () => {
     const many: AnswerKey = { ...KEY, entries: Array.from({ length: 12 }, (_, i) => entry(`m${i + 1}`, `2026-05-${String(i + 1).padStart(2, '0')}`)) }
     let asked: string[] = []
@@ -628,5 +649,47 @@ describe('runPassPool', () => {
     expect(report).toMatchObject({ mustEntries: 12, stories: 0 })
     expect(report.left).toHaveLength(9)
     expect(researched).toEqual([])
+  })
+})
+
+describe('poolUpdateStory', () => {
+  const version: ArticleVersionData = {
+    id: null,
+    number: 1,
+    kind: 'first',
+    status: 'current',
+    passId: 'pass-1',
+    title: 'Cases rise',
+    titleLabel: 'Ebola',
+    summary: 'Cases rose to 120.',
+    marketingBlurb: null,
+    quote: null,
+    quoteAttribution: null,
+    relevanceReasons: null,
+    antifactors: null,
+    emotionTag: null,
+    research: { paragraphs: [], whyThisMatters: [], caveats: [], quoteSourceId: null, sources: [] },
+    article: null,
+    changes: [],
+    note: null,
+  }
+  const pool: Pool = {
+    sources: [source('id-e1', DAYS[0]!)],
+    facts: [fact('id-e1', 1, DAYS[0]!), { ...fact('id-e1', 2, DAYS[0]!), verdict: 'rejected' }],
+    searches: [],
+    dropped: [],
+  }
+
+  it("gives a first pass's version 1 on the story's day with its pool's sources and facts, the pass's verdicts as they are", () => {
+    expect(poolUpdateStory('e1', DAYS[0]!, { version, pool })).toEqual({
+      slug: 'e1',
+      storyDay: DAYS[0],
+      version,
+      pool: { sources: pool.sources, facts: pool.facts },
+    })
+  })
+
+  it('gives none for a pass that kept no draft', () => {
+    expect(poolUpdateStory('e1', DAYS[0]!, { version: null, pool })).toBeNull()
   })
 })

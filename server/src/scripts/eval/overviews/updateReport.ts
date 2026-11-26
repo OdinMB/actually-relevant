@@ -3,6 +3,7 @@ import { num, pct } from '../checks.js'
 import type { CallEstimate } from './callBudget.js'
 import { cell, metText, quoted, spreadText, usd } from './reportText.js'
 import type { UpdateStepReport } from './update.js'
+import { UPDATE_CASE_KINDS } from './updateFixtures.js'
 import {
   DEMOTED_BAR,
   FALSE_DEMOTION_BAR,
@@ -42,6 +43,22 @@ const barRow = (b: UpdateBar) => {
 
 const share = (c: { hit: number; of: number; share: number | null }) => `${c.hit} / ${c.of} (${pct(c.share)})`
 
+/** Where the stories' versions and pools came from. */
+const sourceText = (s: UpdateStepReport['source']) =>
+  s.kind === 'pool'
+    ? `Each story's version is version 1 of the \`pass-pool\` step's first pass in this run, and its pool that pass's, with its fact check's verdicts; pass-pool researches ${s.covered} of the half's ${s.mustEntries} must entries (the stands' checkpoint stories), and the others are not read.`
+    : "Each story's version is the one the legacy import makes; the facts it cites count as supported."
+
+/** The dry run's line: the cases, at most where the passes have yet to run, where the stories come from, and the desk estimate. */
+export function updateEstimateLine(r: UpdateStepReport): string {
+  const total = UPDATE_CASE_KINDS.reduce((n, k) => n + r.cases[k], 0)
+  const from =
+    r.source.kind === 'pool'
+      ? `pass-pool's first passes, which research ${r.source.covered} of the half's ${r.source.mustEntries} must entries (at most: whether a pass keeps a draft and a cited fact can be planted is known only once it ran)`
+      : 'the legacy import of stored research'
+  return `update: ${r.ceiling ? 'at most ' : ''}${total} cases (${UPDATE_CASE_KINDS.map(k => `${r.cases[k]} ${k}`).join(', ')}) from ${r.stories} stories × ${r.repeat} run(s), the stories from ${from}; desk estimate up to ${usd(r.deskUsd ?? 0)} (each case's reserve and the note judge)`
+}
+
 const runRow = (s: UpdateRunScore) =>
   `| ${s.run} | ${s.cases} | ${s.outcomes.updated} / ${s.outcomes.unchanged} / ${s.outcomes.update_failed} / ${s.outcomes.budget + s.outcomes.technical} | ${share(s.flagged)} | ${share(s.falseRewrites)} | ${share(s.identical)} | ${share(s.demoted)} | ${share(s.falseDemotions)} | ${share(s.notes)} | ${share(s.notes.fallback)} | ${s.notes.unsupported} / ${s.notes.written} | ${share(s.copying.notes)} vs ${share(s.copying.paragraphs)} |`
 
@@ -52,7 +69,7 @@ export function updateLines(r: UpdateStepReport): string[] {
     .map(([k, n]) => `${n} ${k}`)
     .join(', ')
   return [
-    `**Cases:** ${cases}, from ${r.stories} researched stories of ${r.keys} answer keys (half ${r.half}${r.limit !== undefined ? `, the first ${r.limit} stories: a smoke run, not evidence` : ''}), each run ${r.repeat} time${r.repeat === 1 ? '' : 's'} through production's later-pass article step (\`updateArticle\`) with the eval's cached calls. Each story's version is the one the legacy import makes; the facts it cites count as supported.`,
+    `**Cases:** ${r.ceiling ? 'at most ' : ''}${cases}, from ${r.stories} researched stories of ${r.keys} answer keys (half ${r.half}${r.limit !== undefined ? `, the first ${r.limit} stories: a smoke run, not evidence` : ''}), each run ${r.repeat} time${r.repeat === 1 ? '' : 's'} through production's later-pass article step (\`updateArticle\`) with the eval's cached calls. ${sourceText(r.source)}`,
     ...(r.unplaced > 0 ? [`- ${r.unplaced} changed figure values have a quote no section holds: left out of the expectations.`] : []),
     ...(r.deskUsd !== null ? [`- Dry run: desk estimate up to ${usd(r.deskUsd)} (each case's reserve and the note judge).`] : []),
     ...r.left.map(x => `- Left out: ${x.what}: ${cell(x.reason)}`),
