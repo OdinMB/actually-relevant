@@ -1,5 +1,45 @@
 import { describe, it, expect } from 'vitest'
-import { buildEndEventJudgePrompt } from './prompts.js'
+import { AS_OF_RULE, CREDIT_RULE } from '../../../prompts/factRules.js'
+import { buildEndEventJudgePrompt, buildFieldsJudgePrompt, fieldsJudgeSchema, type FieldsJudgeFact } from './prompts.js'
+
+describe('buildFieldsJudgePrompt', () => {
+  const fact: FieldsJudgeFact = {
+    evidence: 'Floods have displaced 30,000 people since the dam failed on June 3, the agency said.',
+    statement: 'Floods have displaced 30,000 people since the dam failed on June 3.',
+    outlet: 'Example News',
+    date: '2026-06-10',
+    value: 30000,
+    valueHigh: null,
+    unit: 'people',
+    approx: 'exact',
+    counted: 'people displaced by the floods',
+    place: '',
+    asOf: null,
+    credited: 'the agency',
+  }
+  const prompt = buildFieldsJudgePrompt([fact])
+  const requirements = prompt.slice(prompt.indexOf('<REQUIREMENTS>'), prompt.indexOf('</REQUIREMENTS>'))
+
+  it("judges the as-of and the credit by production's rules of 2026-11-25, so a rightly empty as-of is right", () => {
+    expect(requirements).toContain(AS_OF_RULE)
+    expect(requirements).toContain(CREDIT_RULE)
+    expect(requirements).toContain('An empty AS_OF is right where this rule leaves the field empty')
+    expect(requirements).not.toContain('AS_OF is the date the fact describes')
+  })
+
+  it('describes the two fields in the schema as the rules define them', () => {
+    const fields = fieldsJudgeSchema.shape.facts.element.shape
+    expect(fields.asOf.description).toContain('empty where the as-of rule in <REQUIREMENTS> leaves it empty')
+    expect(fields.asOf.description).not.toContain('the date the fact describes')
+    expect(fields.credited.description).toContain('who the source says the information comes from')
+    expect(fields.credited.description).toContain('False when it names who acts in the fact')
+  })
+
+  it('shows an empty field as empty', () => {
+    expect(prompt).toContain('<AS_OF>(empty)</AS_OF>')
+    expect(prompt).toContain('<CREDITED>the agency</CREDITED>')
+  })
+})
 
 describe('buildEndEventJudgePrompt', () => {
   const prompt = buildEndEventJudgePrompt({

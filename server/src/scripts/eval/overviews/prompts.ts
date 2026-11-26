@@ -12,6 +12,7 @@
  * strings only in the schemas (no length limits), as production's structured outputs use them.
  */
 import { z } from 'zod'
+import { AS_OF_RULE, CREDIT_RULE } from '../../../prompts/factRules.js'
 import { FACT_RECORD, RECORD_GOVERNS, tag, UNTRUSTED } from '../../../prompts/research.js'
 import { escapeXml } from '../../../prompts/shared.js'
 import { SLOT_DEFINITIONS, type StoryText } from '../../../prompts/storyContext.js'
@@ -287,8 +288,14 @@ export const fieldsJudgeSchema = z.object({
         place: z.boolean().describe('True when PLACE is the place the fact is about, or empty when it names none.'),
         asOf: z
           .boolean()
-          .describe('True when AS_OF is the date the fact describes, no more precise than its source, or empty when the source dates it by publication only.'),
-        credited: z.boolean().describe('True when CREDITED is who the source credits the fact to, or empty when the source states it on its own authority.'),
+          .describe(
+            "True when AS_OF is the day the fact's figure or state stood, or its event or statement took place, no more precise than the fact says; or empty where the as-of rule in <REQUIREMENTS> leaves it empty. False when it holds a date that rule excludes.",
+          ),
+        credited: z
+          .boolean()
+          .describe(
+            'True when CREDITED is who the source says the information comes from, or empty when the source tells the fact in its own voice. False when it names who acts in the fact.',
+          ),
         invented: z.boolean().describe('True when VALUE is a number neither EVIDENCE nor STATEMENT states in any form.'),
         problem: z.string().describe('When a field is wrong or the value invented: what is wrong, in one short sentence. Empty string otherwise.'),
       }),
@@ -346,10 +353,11 @@ ${xml}
 </FACTS>
 
 <REQUIREMENTS>
-- A field is right when EVIDENCE or STATEMENT gives it and the field states it faithfully, or when neither gives it and the field is empty.
+- A field is right when EVIDENCE or STATEMENT gives what it holds and the field states it faithfully, or when neither gives it and the field is empty.
 - A figure in other words is the same figure: "half" is 50 with unit %, "2.9 million" is 2900000. APPROX records "about", "at least" or "under" and is not judged.
 - A figure that counts something narrower, wider or of another period than COUNTED says is a wrong COUNTED, not a wrong VALUE.
-- AS_OF is the date the fact describes, never the date its source was published.
+- ${AS_OF_RULE} A weekday or "yesterday" is the calendar day it names, counted from the fact's published date. An empty AS_OF is right where this rule leaves the field empty, even when EVIDENCE gives such a date.
+- ${CREDIT_RULE} An empty CREDITED is right for such a fact, and a CREDITED that names who acts is wrong.
 - Judge each fact on its own evidence only; never on your own knowledge of the subject.
 </REQUIREMENTS>`
 }
