@@ -2,6 +2,64 @@
 
 The measured results a later change is compared against. One section per baseline, newest first; a section is replaced only by a newer run of the same command, and says which commit it was measured on. How the evals work, their flags and bars: `model-eval.md`. The reports and the caches that make reruns free are not in the repository: they live in `DOCS/` on the machine that ran them, so on another machine every run is paid in full.
 
+## Research passes' gate, 2026-11-26
+
+Run on branch `claude/project-thread-egeer5` at commit eb07a5f0 (production code as at 46ab57b2: nothing under `prompts/`, `schemas/`, `services/` or `config.ts` changed since but DB tests) against the local copy of production of 2026-11-19. First runs of the `context` step against gap keys (drafted and checked the same day, a6a73f8d) and of `update` on the eval's own first passes (eb07a5f0). **No bar of the research-pass gate is met yet**: `research_pass` stays disabled.
+
+### `eval:research` (30 newest published stories, 1 run)
+
+No comparison is possible: the 2026-11-13 own-words baseline was never recorded (its commits say "Not run"), so these numbers are the first baseline of the first pass's article path. Kept 13 of 30, the draft used in 20 (research-rating 6, stale 1), fallbacks 10 (failed check 9: Story paragraph 1 six times, five of them copying flags; no usable source 1). Repair round on 27 of 29 drafts. First-draft flags over 305 items: fact/judge 77, close rendering 37 (12%), statement 21 (7%), follows 15, wording 7. Longest shared run at 12+ words: wording 2%, statement 7%. Model cost $0.0160 a story (research steps $0.0109, card steps $0.0052), 3.9 Tavily credits a story; $1.42 in all. Verdict: **for the owner** (no baseline to regress against; a third of stories falling back is the number to judge).
+
+### `context` (13 judged gap keys × 3 runs) and the fact check on its facts
+
+| Measure | Bar | Result | Verdict |
+|---|---|---|---|
+| Must needs not in the story met by kept cards | ≥ 60% | 3.7% | missed |
+| Wasted searches a story | ≤ 1 | 1.67 | missed |
+| Response card where findable | ≥ 70% | 33% (one findable story) | missed (n = 1) |
+| Box items found unsupported | none | 4.3 a run | missed |
+| Notes `model` places that add to the text | ≥ 85% | 97.8% | met |
+| Cost a story, the whole first pass at flex | ≤ $0.20 | $0.043 | met |
+| Figure facts with every structured field right | ≥ 95% | 57.7% (wrong: place 44, asOf 36, value 29, counted 28, credited 28 of 300) | missed |
+| Invented numbers the fact check passed | none | 19 | missed |
+| Planted errors caught / correct facts rejected | ≥ 90% / ≤ 5% | 93.4% / 7.5% | caught met, rejection missed |
+| Faithful to the source, with / without a figure | report only | 82.0% / 72.7% | report only |
+
+- **The main cause is in production:** context searches use Tavily's general topic, whose results carry no date (430 of 430 undated), the structure step gives a definition an empty as-of, so `isCurrent` reads every such fact as expired and the write prompt allows it only as a dated past value. Explainer facts found (NATO's Article 5, Bundibugyo, AMR) never reach a card: every key-term must need and most wasted searches. Next: the gap list marks slots covered that the story only touches, with generic queries; the fact check rejects facts whose structure-step place or credit was invented.
+- **Judge strictness is secondary:** flipping every near-miss verdict lifts needs met to about 10%. About 9 of the 13 unsupported box items are a qualifier the card or story supplies; about 3 are real.
+- The response bar rests on one findable story; the needs judge sees no box headings and is not told cards show their sources.
+
+### `update` (17 judged stories, up to 59 cases × 3 runs)
+
+| Measure | Bar | Result | Verdict |
+|---|---|---|---|
+| Expected changes flagged on the right section | ≥ 90% | 68.8% (58.1–77.4%) | missed |
+| False rewrites | ≤ 10% | 4.5% | met |
+| Unchanged sections byte-identical | 100% | 100% | met |
+| Planted contradictions demoted | ≥ 90% | 48.3% | missed |
+| False demotions | ≤ 5% | 1.0% | met |
+| Notes accurate and complete | ≥ 90% | 61.7% | missed |
+| Notes the fact check found unsupported | none | 2.3 a run | missed |
+| Notes' copying share less the sections' | ≤ 0 | +2.7 points | missed |
+
+- **Mostly the fixtures and the scorer:** `wrong-number` plants on rising counts (cases 3,000 → 4,500) are, by the judge prompt's own rule, a newer value that supersedes, and the planted fact carries no as-of the judge can see, so it flags without demoting (wrong-number demoted 10 of 33, wrong-year 19 of 27); other plants are nonsense ("March 33", "100% → 150%", "2015–16 → 2015–24"). A `key` case requires the turning point's own fact in a rewrite even when newer facts of the same window found it or the story already states it (13 of 29 misses). The note judge is not shown the note's own facts or the contradicting ones, and marks the fixed line incomplete by design; the wire source's only text is the planted statement, so a faithful note copies it.
+- **Real production issues:** rewrites state a publication day as a figure's as-of ("on July 22"), which drives most `update_failed`; one judge decision flips between runs (the Philippines' wrong year, 8 misses). Rough recount without the scorer's turning-point rule and the malformed plants: flagged about 87%.
+
+### Cost
+
+$10.85 in all: `eval:research` $1.42, gap-key drafts $1.24, `context` folder $5.72 (smoke and gate), `update` folder $2.47.
+
+### Commands
+
+From the repository root, each after its `npm run … --prefix server --`.
+
+| What | Command |
+|---|---|
+| Research | `eval:research -- --out ../DOCS/2026-11-26_research-eval --budget 3.5` |
+| Gap-key drafts | `eval:overviews -- --out ../DOCS/2026-11-26_gap-drafts --steps gap-draft --budget 2.3` |
+| Context gate | `eval:overviews -- --out ../DOCS/2026-11-26_story-context-eval --steps context,fact-check --facts context --half judge --repeat 3 --budget 10` |
+| Update gate | `eval:overviews -- --out ../DOCS/2026-11-26_update-eval --steps pass-pool,update --half judge --repeat 3 --budget 10` |
+
 ## Overviews and research facts, 2026-11-24 and 2026-11-25
 
 Run on branch `claude/project-thread-egeer5` against a local copy of production of 2026-11-19, following `.plans/2026-11-19_overviews-eval-runbook.md`. Halves: `judge` is the gate (5 developments, 201 stories, 37 researched), `tune` is what prompts are tuned on (29 stories researched). Models as `config.ts` had them: small tier gpt-6-luna, strong judge gpt-6.1-sol at high effort.
