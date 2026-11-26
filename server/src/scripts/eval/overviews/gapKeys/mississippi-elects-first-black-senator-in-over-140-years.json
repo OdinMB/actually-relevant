@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "slug": "mississippi-elects-first-black-senator-in-over-140-years",
+  "title": "Scott Colom wins Mississippi Senate seat after decades",
+  "date": "2026-11-13",
+  "needs": [
+    {
+      "id": "historical-predecessors",
+      "slot": "build_up",
+      "need": "Who Mississippi's last Black senator and last Democratic senator were, and when they served.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Names Blanche K. Bruce (served 1875 to 1881) as Mississippi's previous Black senator, credited to a named source; naming John Stennis (last elected 1982, served until 1989) as its previous Democratic senator is a plus but not required.",
+      "example": {
+        "value": "Blanche K. Bruce, Mississippi's previous Black senator, served from 1875 to 1881. Colom is the first Democrat to win a Mississippi Senate seat since John Stennis in 1982.",
+        "source": "U.S. Senate Historical Office; Dawn for Stennis"
+      }
+    },
+    {
+      "id": "senate-majority",
+      "slot": "key_term",
+      "need": "What the projected 55 Democratic seats already settle about Senate control, with Alaska still undecided.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited statement that 55 of the Senate's 100 seats is a Democratic majority whatever Alaska's result. Adding that 55 falls short of the 60 votes needed to end a filibuster is a plus but not required.",
+      "example": {
+        "value": "With 55 of 100 seats, Democrats would control the Senate regardless of Alaska, though short of the 60 votes needed to invoke cloture on most legislation.",
+        "source": "U.S. Senate, party division and Rule XXII"
+      }
+    },
+    {
+      "id": "incumbent-response",
+      "slot": "response",
+      "need": "How Hyde-Smith has responded to the projected defeat.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Hyde-Smith, who had served since 2018, called Colom to concede.",
+      "accepts": "Reports Hyde-Smith's concession (a call to Colom or a public concession statement), credited to a named source.",
+      "example": {
+        "value": "Hyde-Smith called Colom to concede and then posted a concession speech online.",
+        "source": "Cindy Hyde-Smith's concession video on X, as reported by Dawn"
+      }
+    },
+    {
+      "id": "term-start",
+      "slot": "next",
+      "need": "When Colom is scheduled to begin his Senate service.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Colom is scheduled to take office on January 3",
+      "accepts": "Gives January 3, 2027, as the start of Colom's term or of the incoming Senate, credited to a named source.",
+      "example": {
+        "value": "The incoming Senate term begins at noon on January 3, 2027.",
+        "source": "U.S. Constitution, Twentieth Amendment, Section 1"
+      }
+    },
+    {
+      "id": "national-gains",
+      "slot": "compared",
+      "need": "Whether Mississippi's flip was isolated or part of a broader set of Democratic Senate gains.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "The number of Republican-held Senate seats Democrats flipped in this election, including Mississippi (eight), credited to a named source; a final seat total alone does not meet it.",
+      "example": {
+        "value": "Democrats flipped eight Senate seats previously held by Republicans, including Mississippi.",
+        "source": "Dawn"
+      }
+    },
+    {
+      "id": "black-electorate",
+      "slot": "who_affected",
+      "need": "How large Mississippi's Black population is, to size what a 140-year gap in representation means.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Mississippi's Black share of population (about 38%, the highest of any U.S. state), credited to a named source such as the U.S. Census Bureau.",
+      "example": {
+        "value": "About 38% of Mississippi residents are Black, the highest share of any state.",
+        "source": "U.S. Census Bureau"
+      }
+    },
+    {
+      "id": "geographic-vote-shift",
+      "slot": "why_now",
+      "need": "What shifts in the vote produced Colom's upset in a state Republicans have held for decades.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A credited count or specific account of counties that switched to Colom (not merely counties he won), with any preliminary status stated.",
+      "example": {
+        "value": "A preliminary analysis found that Colom flipped at least 18 counties.",
+        "source": "Clarion Ledger"
+      }
+    }
+  ],
+  "notNeeded": [],
+  "notes": "The story's \"the full Senate balance remains unresolved\" is loose: on the reported projections 55 seats is a majority whatever Alaska's result; senate-majority asks a card to say so. Bruce was chosen by the state legislature, before popular Senate elections; a card calling Colom the first Black senator elected by popular vote in Mississippi is right. Treat seat totals as projections."
+}

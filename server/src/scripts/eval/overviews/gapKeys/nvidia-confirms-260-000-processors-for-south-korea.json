@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "slug": "nvidia-confirms-260-000-processors-for-south-korea",
+  "title": "Nvidia reaffirms South Korea’s 260,000-GPU supply plan",
+  "date": "2026-11-14",
+  "needs": [
+    {
+      "id": "procurement-versus-target",
+      "slot": "compared",
+      "need": "How much of the government's direct-purchase target has been secured, as distinct from the much larger national pledge.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "For its direct purchases, the government had secured about 21,000 of its 35,000-GPU target by Nov. 13.",
+      "accepts": "A credited figure of about 21,000 GPUs secured toward the government's 35,000-GPU direct-purchase target by Nov. 13, 2026 (about 60%), not presented as progress against all 260,000 GPUs or as chips in operation.",
+      "example": {
+        "value": "About 21,000 of the 35,000 Nvidia B200 GPUs targeted for direct government procurement had been secured by Nov. 13.",
+        "source": "Science and ICT Minister Bae Kyung-hoon, as reported by Korea IT Times"
+      }
+    },
+    {
+      "id": "official-continuity-response",
+      "slot": "response",
+      "need": "What Nvidia and the South Korean government have done about fears that the supply arrangement could be disrupted.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "South Korea’s science minister said on Nov. 13 that Nvidia had reaffirmed a plan to supply up to 260,000 graphics processing units, or GPUs, for AI work in the country.",
+      "accepts": "A credited report of an actual continuity assurance: Nvidia reconfirming the GPU supply commitment, or the Nov. 13 review agreeing to continue cooperation without disruption. A general statement that South Korea wants more AI computing does not meet it.",
+      "example": {
+        "value": "Nvidia Korea confirmed that cooperation plans, including the supply of 260,000 GPUs, would proceed without disruption.",
+        "source": "South Korea's Ministry of Science and ICT, as reported by BigGo Finance"
+      }
+    },
+    {
+      "id": "reassurance-trigger",
+      "slot": "why_now",
+      "need": "What prompted the November reassurance about an already announced supply plan.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The assurance followed concerns about whether cooperation would continue after Nvidia CEO Jensen Huang’s resignation; the minister said the commitment remained in force.",
+      "accepts": "A credited link between the renewed assurance and concerns over continuity after Jensen Huang's resignation, without suggesting the plan was newly negotiated on Nov. 13.",
+      "example": {
+        "value": "Bae said the agreement remained in force despite Jensen Huang's resignation.",
+        "source": "Science and ICT Minister Bae Kyung-hoon, as reported by UA.NEWS"
+      }
+    },
+    {
+      "id": "original-agreement",
+      "slot": "build_up",
+      "need": "When and on what occasion the original GPU arrangement was announced, establishing what is being reaffirmed.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited statement placing the original announcement during Jensen Huang's visit to South Korea for the APEC summit in October 2025 (Gyeongju). \"In October\" without the year does not meet it.",
+      "example": {
+        "value": "The plan was announced during Jensen Huang's October 2025 APEC visit to South Korea.",
+        "source": "MLQ.ai"
+      }
+    },
+    {
+      "id": "delivery-horizon",
+      "slot": "next",
+      "need": "What delivery milestone is expected next, and whether a timetable exists for the full pledge.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "It is also seeking 15,000 through the National AI Computing Center; the rest of the direct-purchase target is expected by early 2027. Public details on private-sector shipment figures and schedules remain too limited to gauge progress independently.",
+      "accepts": "A credited statement that the rest of the government's direct-purchase target is expected by early 2027, kept distinct from the overall 260,000 pledge, for which no delivery period is disclosed.",
+      "example": {
+        "value": "The remaining GPUs in the direct government procurement target were expected by early 2027; no overall delivery period was given for the national pledge.",
+        "source": "Science and ICT Minister Bae Kyung-hoon, as reported by Korea IT Times"
+      }
+    },
+    {
+      "id": "public-allocation-beneficiaries",
+      "slot": "who_affected",
+      "need": "How much computing is intended for public purposes and which research and industry activities it is meant to support.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "More than 50,000 GPUs are intended for government research, industry AI development and national computing infrastructure, potentially widening access to powerful computing beyond a single company.",
+      "accepts": "A credited allocation of more than 50,000 GPUs to the government for AI research, industry AI-model development and national computing infrastructure, described as intended use, not as access already operating.",
+      "example": {
+        "value": "More than 50,000 GPUs are allocated to the government for AI research and development, industry AI-model development and expansion of national AI computing infrastructure.",
+        "source": "South Korea's Ministry of Science and ICT, as reported by BigGo Finance"
+      }
+    },
+    {
+      "id": "gpu-role",
+      "slot": "key_term",
+      "need": "What a GPU does and why these chips matter for AI computing.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": "GPUs handle calculations in parallel, which helps make them useful for training and running AI models.",
+      "accepts": "A credited explanation that GPUs perform many calculations at once and are used to train and run AI models. Expanding the acronym alone does not meet it.",
+      "example": {
+        "value": "GPUs are high-performance chips that handle many calculations simultaneously and are widely used to train and run AI models.",
+        "source": "Korea Herald"
+      }
+    }
+  ],
+  "notNeeded": [],
+  "notes": "The story already states six of the seven needs; only the original agreement's date and occasion is missing. GPU allocations, procurement secured, shipments and operating capacity are not interchangeable. The story's 15,000 via the National AI Computing Center sits beside the 35,000 target; a card must not add them."
+}

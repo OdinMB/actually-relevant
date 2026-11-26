@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "slug": "eu-plans-to-let-users-disable-addictive-app-features",
+  "title": "EU plans to let users disable addictive app features",
+  "date": "2026-11-12",
+  "needs": [
+    {
+      "id": "proposed-response",
+      "slot": "response",
+      "need": "What the EU proposes to do about addictive features and manipulative online design.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The EU is set to unveil Digital Fairness Act rules that could require platforms to let users disable addictive features, ban design tricks that mislead consumers, and crack down on influencer marketing.",
+      "accepts": "Attributes to the European Commission's proposed Digital Fairness Act a right to turn off addictive features and a ban on deceptive design, as proposed measures, not rights already in force.",
+      "example": {
+        "value": "The proposed Digital Fairness Act would require platforms to let consumers turn off addictive features and would ban manipulative online interfaces.",
+        "source": "European Commission's proposed Digital Fairness Act, as reported by The Verge (2026-11-11)"
+      }
+    },
+    {
+      "id": "design-features-explained",
+      "slot": "key_term",
+      "need": "What counts as an addictive feature or a deceptive design trick under the proposal.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Gives at least one concrete example of an addictive feature (such as autoplay, endless scrolling, streaks or engagement prompts) and one of a dark pattern (such as fake scarcity claims, pre-selected options or hard-to-cancel subscriptions), attributed to the proposal or a named source.",
+      "example": {
+        "value": "Addictive features include persistent prompts, endless scrolling and video autoplay; dark patterns include fake claims that a product is nearly sold out.",
+        "source": "The Verge, on the European Commission's proposal (2026-11-11)"
+      }
+    },
+    {
+      "id": "consumer-harm-cost",
+      "slot": "compared",
+      "need": "How much harmful digital practices cost consumers, to size what the rules address.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Gives a named source's yearly figure in euros for EU consumers' losses from problematic digital practices, or the Commission's estimate of yearly consumer savings from the Act, with its scope.",
+      "example": {
+        "value": "Problematic digital practices cost EU consumers up to €10.3 billion a year; the Commission says the Act would save them up to €13.7 billion a year.",
+        "source": "Official EU data cited by The Business Standard (2026-11-11); European Commission, as reported by The Verge (2026-11-11)"
+      }
+    },
+    {
+      "id": "prevalence-of-manipulation",
+      "slot": "compared",
+      "need": "How widespread dark patterns are among popular platforms.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Gives a percentage of popular platforms found to use dark patterns, naming the study or the official citing it.",
+      "example": {
+        "value": "97% of popular platforms use dark patterns, according to data cited by Michael McGrath.",
+        "source": "EU consumer protection chief Michael McGrath, as reported by The Business Standard (2026-11-11)"
+      }
+    },
+    {
+      "id": "consumer-scope",
+      "slot": "who_affected",
+      "need": "Whether the opt-out would cover all EU consumers or only children, and which kinds of services it reaches.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "States, with a named source, that the opt-out covers consumers of all ages rather than minors alone, or that the addictive-design rules also reach AI companions and conversational chatbots.",
+      "example": {
+        "value": "The bill would let all consumers turn off addictive design features; the restrictions would also apply to AI companions and general conversational chatbots.",
+        "source": "WIRED (2026-11-11); The Verge (2026-11-11)"
+      }
+    },
+    {
+      "id": "existing-law-gap",
+      "slot": "why_now",
+      "need": "Why the EU says a new law is needed despite its existing consumer protections.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Gives a named source's account of the gap in existing rules, such as that they predate ecommerce, the attention economy or personal-data marketing. Saying only that online harms exist does not meet it.",
+      "example": {
+        "value": "Michael McGrath said existing consumer rules predated ecommerce, the attention economy and the use of personal data for marketing.",
+        "source": "WIRED (2026-11-11)"
+      }
+    },
+    {
+      "id": "route-to-enforcement",
+      "slot": "next",
+      "need": "What must happen after the Commission proposal before the protections and fines apply.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The EU is only set to unveil the proposal, so protections depend on lawmakers adopting it and authorities enforcing it.",
+      "accepts": "Says the European Parliament and the Council must agree and adopt the legislation before it applies, naming a source, and keeps publication of a proposal apart from entry into force.",
+      "example": {
+        "value": "A Commission proposal is not binding law: the European Parliament and Council must agree and adopt legislation before its provisions take effect.",
+        "source": "European Parliament, explanation of the ordinary legislative procedure"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "build_up",
+      "why": "A legislative history is not needed once the gap in existing rules and the route to adoption are given."
+    }
+  ],
+  "notes": "Story correction: the story (dated 2026-11-12) says the EU is 'set to unveil' the proposal, but the Commission published it on 2026-11-11 (The Verge, TechPolicy.Press); a card saying it was published meets the needs. Do not require a publication date as a future milestone."
+}

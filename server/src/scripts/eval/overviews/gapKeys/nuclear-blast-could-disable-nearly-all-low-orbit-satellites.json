@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "slug": "nuclear-blast-could-disable-nearly-all-low-orbit-satellites",
+  "title": "A modeled nuclear blast could disable most orbiting satellites",
+  "date": "2026-11-13",
+  "needs": [
+    {
+      "id": "affected-orbits-services",
+      "slot": "who_affected",
+      "need": "Which satellites and services the modeled losses cover, and which orbits lie outside the modeled population.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited statement that the 99.4% applies to active low-Earth-orbit satellites (for example Starlink-type broadband and Earth observation), and that GPS (medium Earth orbit, about 20,200 km) or geostationary communications and weather satellites (about 35,800 km) were outside the modeled population, without claiming those orbits would be unharmed.",
+      "example": {
+        "value": "The model covers more than 13,000 active LEO satellites; GPS satellites orbit at about 20,200 km in medium Earth orbit and were not part of the modeled population.",
+        "source": "Heise, for the modeled population; GPS.gov, for GPS orbits"
+      }
+    },
+    {
+      "id": "artificial-radiation-belt",
+      "slot": "key_term",
+      "need": "How a nuclear explosion in space creates a lasting artificial radiation belt that damages satellites far from the blast.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited explanation that a high-altitude nuclear explosion releases energetic electrons (including from fission-product decay) that Earth's magnetic field traps, so satellites passing through are exposed repeatedly over days to years, not only at the moment of the blast.",
+      "example": {
+        "value": "After Starfish Prime, radioactive fission-product decay trapped electrons in Earth's magnetic field, forming an artificial radiation belt that damaged satellites.",
+        "source": "ScienceAlert, reporting the study"
+      }
+    },
+    {
+      "id": "starfish-benchmark",
+      "slot": "compared",
+      "need": "How the modeled explosion compares with the 1962 Starfish Prime test in yield and altitude.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Starfish Prime's yield (1.4 megatons) and altitude (about 400 km), credited to a named source, set beside the modeled one megaton at 500 km and kept distinct from the simulated losses. The seven failed satellites alone, which the story already gives, do not meet it.",
+      "example": {
+        "value": "In the 1962 Starfish Prime test, a 1.4-megaton bomb detonated at 400 km, and seven satellites failed within a few months.",
+        "source": "Heise"
+      }
+    },
+    {
+      "id": "why-model-it-now",
+      "slot": "why_now",
+      "need": "Why a nuclear detonation in orbit is a live concern now rather than a Cold War hypothetical.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A credited account of a current concern, such as the U.S. government's February 2024 statements that Russia was developing a nuclear anti-satellite capability, or the growth of LEO constellations to more than 13,000 active satellites, stated as context rather than as the study's proven motive.",
+      "example": {
+        "value": "In February 2024, U.S. officials said Russia was developing a space-based anti-satellite capability involving a nuclear device; Russia denied it.",
+        "source": "White House National Security Council briefing, February 2024"
+      }
+    },
+    {
+      "id": "protection-and-prohibition",
+      "slot": "response",
+      "need": "What protects satellites against such an event: the treaty bans on nuclear weapons in space, or engineering defenses and how well they would work.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Either a credited account of the legal bar (the 1963 Partial Test Ban Treaty banning nuclear tests in outer space, the 1967 Outer Space Treaty banning nuclear weapons in orbit, or the April 2024 UN Security Council draft reaffirming it, vetoed by Russia), or the study's shielding result (with enhanced shielding, 99.3% still disabled within 30 days) stated as a simulated outcome.",
+      "example": {
+        "value": "With enhanced radiation shielding, the simulations project that 99.3% of satellites would be disabled within 30 days.",
+        "source": "The study, as reported by Inkorr"
+      }
+    },
+    {
+      "id": "south-atlantic-anomaly",
+      "slot": "key_term",
+      "need": "What the South Atlantic Anomaly is and why the location matters to the modeled outcome.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A credited definition of the South Atlantic Anomaly as a region where Earth's magnetic field is weaker and the inner radiation belt dips closest to the surface.",
+      "example": {
+        "value": "The South Atlantic Anomaly is a region where Earth's magnetic field is relatively weak, letting the inner radiation belt come closer to the surface.",
+        "source": "NASA"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "build_up",
+      "why": "Starfish Prime is the historical anchor (under compared); a chronology of nuclear testing or constellation growth is not needed."
+    },
+    {
+      "slot": "next",
+      "why": "A modeling preprint with no scheduled review, decision or follow-up study."
+    }
+  ],
+  "notes": "The title says \"most orbiting satellites\" and the story says navigation could be disrupted; the model covers only LEO satellites, while GPS sits in medium Earth orbit. affected-orbits-services asks a card to draw that line. The response need is met by either the treaty bar or the shielding result; the story reports neither."
+}

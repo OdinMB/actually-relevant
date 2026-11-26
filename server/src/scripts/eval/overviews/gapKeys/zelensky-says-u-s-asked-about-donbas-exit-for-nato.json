@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "slug": "zelensky-says-u-s-asked-about-donbas-exit-for-nato",
+  "title": "Zelensky says U.S. asked about Donbas exit for NATO",
+  "date": "2026-11-15",
+  "needs": [
+    {
+      "id": "nato-guarantees",
+      "slot": "key_term",
+      "need": "What NATO Articles 4 and 5 promise, and how guarantees modeled on them differ from NATO membership.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "An explanation naming an authoritative source that Article 4 provides for consultations when an ally feels threatened and Article 5 treats an armed attack on one ally as an attack on all, each ally taking the action it deems necessary; and that a separate guarantee modeled on them would not itself confer NATO membership.",
+      "example": {
+        "value": "Article 4 provides for consultations when an ally considers its security threatened; under Article 5 an armed attack on one is an attack on all, and each ally assists with the action it deems necessary, including armed force.",
+        "source": "NATO, the North Atlantic Treaty (1949), Articles 4 and 5"
+      }
+    },
+    {
+      "id": "donbas-withdrawal-scope",
+      "slot": "who_affected",
+      "need": "What Donbas is and what a withdrawal would give up: the part of it Ukraine still holds.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A named source identifying Donbas as Ukraine's eastern Donetsk and Luhansk regions and making clear that the withdrawal concerns the Ukrainian-held remainder and the forces there, not only territory Russia already occupies. A precise share of territory or population is not required.",
+      "example": {
+        "value": "U.S. negotiators asked whether Kyiv would withdraw its remaining forces from the Donbas in exchange for NATO membership.",
+        "source": "RFE/RL"
+      }
+    },
+    {
+      "id": "previous-us-position",
+      "slot": "compared",
+      "need": "How the reported question compares with Washington's earlier position on Ukrainian NATO membership.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Zelenskyy attributed the idea to the United States; U.S. officials had previously said Ukraine’s NATO membership was off the table.",
+      "accepts": "A named source stating that U.S. officials had previously ruled out Ukrainian NATO membership, set against the question Zelenskyy attributes to U.S. negotiators, without presenting his account as a confirmed change of U.S. policy.",
+      "example": {
+        "value": "U.S. officials had said Ukrainian NATO membership was off the table but that Ukraine could receive security guarantees comparable to membership; Washington had not commented on Zelenskyy's claim.",
+        "source": "RFE/RL"
+      }
+    },
+    {
+      "id": "conditional-security-package",
+      "slot": "response",
+      "need": "What security package is being explored to meet Ukraine's objections, and on what condition Kyiv would put it to the public.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "would take a possible arrangement to the public if the U.S. and other NATO partners confirmed concrete guarantees. A package could combine NATO and EU assurances with military support and funded recovery.",
+      "accepts": "A named source describing the possible package (NATO and EU guarantees, support for Ukraine's army, a funded recovery plan) and Kyiv's condition that concrete guarantees be confirmed before it goes to Ukrainians, as an option under discussion rather than an agreed settlement.",
+      "example": {
+        "value": "The package would include security guarantees from NATO and the EU, a strong Ukrainian army with weapons and financial support for a set period, and a recovery plan backed by identified funding.",
+        "source": "Kyiv Independent"
+      }
+    },
+    {
+      "id": "longstanding-war-aims",
+      "slot": "build_up",
+      "need": "Why Donbas and Ukraine's NATO ambitions have been central to the war for years.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Sourced dated background linking Russia's pursuit of Donbas (from the 2014 conflict and its 2022 claimed annexation of Donetsk and Luhansk) and its opposition to Ukraine joining NATO to the 2022 full-scale invasion, with any NATO justification attributed to Moscow.",
+      "example": {
+        "value": "Putin has long sought control over Donbas and cited Ukraine's potential NATO accession as a justification for the 2022 full-scale invasion.",
+        "source": "ANI News"
+      }
+    },
+    {
+      "id": "latest-talks-trigger",
+      "slot": "why_now",
+      "need": "Which round of diplomacy prompted the remarks and whether it produced a breakthrough.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": "U.S. negotiators had asked during peace talks in Abu Dhabi whether Ukraine would withdraw from Donbas in return for NATO membership",
+      "accepts": "A named source placing the remarks after the U.S.-mediated Ukraine-Russia talks in Abu Dhabi on Nov. 10-11, which ended without a major breakthrough (apart from an agreed prisoner exchange).",
+      "example": {
+        "value": "The two days of U.S.-brokered talks in Abu Dhabi ended without a major breakthrough, though the sides agreed to a prisoner exchange of more than 1,000 people.",
+        "source": "CNBC"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "next",
+      "why": "No date is set for another round, a public vote or implementation; putting an arrangement to Ukrainians depends on guarantees not yet confirmed."
+    }
+  ],
+  "notes": "Withdrawal is not formal recognition of Russian sovereignty; the reported question is not an agreed U.S. offer, and no referendum is scheduled. Story correction: paragraphs 1 and 3 of the published text end with a leftover '[No fact IDs in text]' marker."
+}

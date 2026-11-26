@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "slug": "166-countries-vaccinate-girls-against-a-cancer-causing-virus",
+  "title": "166 countries vaccinate girls against a cancer-causing virus",
+  "date": "2026-11-17",
+  "needs": [
+    {
+      "id": "coverage-gap",
+      "slot": "compared",
+      "need": "How global HPV vaccination coverage compares with the target, rather than just how many countries offer vaccination.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "Global HPV vaccination coverage is only 33%, well below the 90% target, so most girls are not yet reached by vaccination programs.",
+      "accepts": "Gives global HPV vaccination coverage as 33% and compares it with the WHO strategy's target of 90% of girls vaccinated, naming the source. Distinguishes population coverage from the number of countries offering vaccination.",
+      "example": {
+        "value": "Global HPV vaccination coverage is 33%, compared with the global strategy's target of 90% coverage for girls.",
+        "source": "allAfrica, \"Africa: The End of a Cancer Is in Sight for the First Time in Public Health History\" (2026-11-16)"
+      }
+    },
+    {
+      "id": "prevention-under-way",
+      "slot": "response",
+      "need": "What countries are already doing to prevent cervical cancer and make vaccination easier to deliver.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "HPV vaccination is now part of national programs in 166 countries, and 96 countries use a simpler one-dose schedule.",
+      "accepts": "Names a source reporting HPV vaccination in national programmes of 166 countries and a one-dose schedule in 96 countries, as part of prevention through vaccination, screening and timely treatment.",
+      "example": {
+        "value": "HPV vaccination is included in national immunization programmes in 166 countries, and 96 countries report using a one-dose schedule.",
+        "source": "allAfrica, \"Africa: The End of a Cancer Is in Sight for the First Time in Public Health History\" (2026-11-16)"
+      }
+    },
+    {
+      "id": "hpv-explained",
+      "slot": "key_term",
+      "need": "What HPV is, how it causes cervical cancer, and what vaccination prevents.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Explains that HPV is the human papillomavirus, that persistent infection with high-risk types causes almost all cervical cancers, and that the vaccine prevents infection rather than treating an existing cancer, naming a source.",
+      "example": {
+        "value": "Human papillomavirus is a common virus; persistent infection with high-risk types causes almost all cervical cancers. HPV vaccines prevent new infections and do not treat existing HPV infection or disease.",
+        "source": "World Health Organization, cervical cancer and HPV vaccine guidance"
+      }
+    },
+    {
+      "id": "african-concentration",
+      "slot": "who_affected",
+      "need": "How strongly the cervical-cancer burden is concentrated in Africa.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "Cervical cancer takes a heavy toll on women in poorer communities, with 19 of the 20 countries facing the highest burden in the WHO African Region.",
+      "accepts": "Reports that 19 of the 20 countries with the highest cervical-cancer burden are in the WHO African Region, naming the source; a general statement that Africa is heavily affected is insufficient.",
+      "example": {
+        "value": "Nineteen of the 20 countries with the highest cervical-cancer burden are in the WHO African Region.",
+        "source": "allAfrica, \"Africa: The End of a Cancer Is in Sight for the First Time in Public Health History\" (2026-11-16)"
+      }
+    },
+    {
+      "id": "elimination-definition",
+      "slot": "key_term",
+      "need": "What eliminating cervical cancer as a public-health problem means, and why it does not mean zero cases.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Gives WHO's elimination threshold of fewer than 4 new cervical-cancer cases per 100,000 women per year, naming WHO, and makes clear it is an incidence threshold, not zero cases or eradication.",
+      "example": {
+        "value": "WHO defines elimination of cervical cancer as a public-health problem as an incidence rate below four new cases per 100,000 women per year; cases can still occur below that threshold.",
+        "source": "World Health Organization, global cervical cancer elimination strategy"
+      }
+    },
+    {
+      "id": "scheduled-milestones",
+      "slot": "next",
+      "need": "The date by which countries are meant to reach the vaccination, screening and treatment targets.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "States that the WHO strategy's targets are due by 2030, giving at least the 90%-of-girls-fully-vaccinated-by-15 target with that date, naming WHO. The 70% screening and 90% treatment targets may accompany it. Makes clear 2030 is a milestone, not a date for zero cases.",
+      "example": {
+        "value": "By 2030, WHO calls for 90% of girls to be fully vaccinated by age 15, 70% of women to be screened by ages 35 and 45, and 90% of women identified with precancer or invasive cancer to receive treatment or management.",
+        "source": "World Health Organization, Global strategy to accelerate the elimination of cervical cancer as a public health problem"
+      }
+    },
+    {
+      "id": "one-dose-policy",
+      "slot": "build_up",
+      "need": "What policy change made simpler one-dose HPV vaccination programmes possible.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Names WHO's 2022 recommendation allowing a single-dose HPV schedule for girls and young women, as the change behind the 96 one-dose countries; does not imply one dose is recommended for everyone.",
+      "example": {
+        "value": "WHO's 2022 guidance allowed a one-dose alternative for people aged 9 to 20, simplifying delivery; immunocompromised people need additional doses.",
+        "source": "World Health Organization, Human papillomavirus vaccines: WHO position paper, December 2022"
+      }
+    },
+    {
+      "id": "elimination-day",
+      "slot": "why_now",
+      "need": "Why the progress report appears on November 17.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Identifies November 17 as the World Cervical Cancer Elimination Day (the anniversary of WHO's 2020 launch of the elimination strategy), naming a source.",
+      "example": {
+        "value": "17 November marks World Cervical Cancer Elimination Day, the anniversary of the 2020 launch of WHO's global elimination strategy.",
+        "source": "World Health Organization"
+      }
+    }
+  ],
+  "notNeeded": [],
+  "notes": "The 33% is population coverage; 166 is a count of countries with HPV vaccination in their programmes, not of countries that have reached the target. The source authors are not named in the research facts, so examples credit the outlet."
+}

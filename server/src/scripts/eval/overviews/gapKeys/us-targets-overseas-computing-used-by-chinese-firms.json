@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "slug": "us-targets-overseas-computing-used-by-chinese-firms",
+  "title": "US targets overseas computing used by Chinese firms",
+  "date": "2026-11-17",
+  "needs": [
+    {
+      "id": "geographic-reach",
+      "slot": "who_affected",
+      "need": "Which operators the computing-access licensing reaches: data centers anywhere, not only in the five chip-rule countries.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "It also set licensing requirements for overseas data centers supplying substantial computing capacity to firms headquartered in China or other restricted countries.",
+      "accepts": "A named source distinguishing the five-country chip-export licensing from the computing-access licensing, which applies to large data-center operators anywhere in the world serving China-headquartered or other restricted customers.",
+      "example": {
+        "value": "The chip rule names Indonesia, Malaysia, Singapore, Thailand and Brazil, while the computing-access rule requires a license for large data-center operators anywhere in the world to serve companies headquartered in China.",
+        "source": "Fortune"
+      }
+    },
+    {
+      "id": "before-and-after",
+      "slot": "compared",
+      "need": "What changes for Chinese firms using advanced American chips located abroad.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Until the rule change, overseas facilities could lawfully sell computing capacity to Chinese tech firms.",
+      "accepts": "A named source contrasting the previously lawful supply of overseas computing to Chinese firms with the new license requirement for covered services. Saying export controls have tightened does not meet it.",
+      "example": {
+        "value": "Before November 16 it had not been illegal for overseas data centers to provide computing power to Chinese tech firms.",
+        "source": "CNA"
+      }
+    },
+    {
+      "id": "compliance-tools",
+      "slot": "response",
+      "need": "What obligations the US now imposes to stop overseas data centers from serving restricted users.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Operators serving companies in countries such as China, Russia, Iran and Cuba must identify their end users.",
+      "accepts": "A named source identifying the license requirement for covered computing services and the end-user identification requirement. It must not present their effectiveness at stopping diversion as established.",
+      "example": {
+        "value": "Overseas data centers providing services to companies in countries including China, Russia, Iran and Cuba must identify their end users.",
+        "source": "The Times of India"
+      }
+    },
+    {
+      "id": "effective-date-and-transition",
+      "slot": "next",
+      "need": "The deadline existing providers face.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Data centers already serving companies in restricted countries have 90 days from the rule’s effective date to apply for a license.",
+      "accepts": "A named source stating that data centers already serving restricted-country firms have 90 days from the rule's effective date to obtain a license.",
+      "example": {
+        "value": "Data centers already serving such companies will have 90 days from the rule's effective date to get a license.",
+        "source": "Fortune"
+      }
+    },
+    {
+      "id": "remote-computing",
+      "slot": "key_term",
+      "need": "What remote access to AI computing means when the chips stay outside China.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": "the policy tests whether export controls can reach AI access when the hardware stays outside the restricted country",
+      "accepts": "A named source explaining that a customer can use computing on chips housed in a foreign data center to train or run AI models without importing the chips.",
+      "example": {
+        "value": "The rules seek to close loopholes that allow Chinese companies to rent computing capacity powered by American technology from facilities in third countries.",
+        "source": "The Times of India"
+      }
+    },
+    {
+      "id": "why-now-diversion",
+      "slot": "why_now",
+      "need": "What prompted the rules now: the suspected diversion case and the countries the US judges risky.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A named source tying the rules to the scrutiny of Singapore-based Megaspeed International, suspected of diverting advanced Nvidia chips to China, or to the US designation of the five countries as presenting a higher-than-normal risk of diversion. Megaspeed's conduct must be described as suspected, not proven.",
+      "example": {
+        "value": "The restrictions come amid scrutiny of Singapore-based Megaspeed International, which is suspected of diverting advanced Nvidia chips to China in violation of US export controls.",
+        "source": "The Times of India"
+      }
+    },
+    {
+      "id": "controls-and-rollback",
+      "slot": "build_up",
+      "need": "How the rules follow the 2022 controls and the 2025 reversal of the broader AI Diffusion Rule.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A named source connecting the 2022 advanced-chip controls with the Trump administration's 2025 reversal of the AI Diffusion Rule, which would have required licenses for advanced-chip sales to much of Southeast Asia.",
+      "example": {
+        "value": "In 2025, the Trump administration reversed the AI Diffusion Rule, which would have required licenses for advanced chip sales to much of Southeast Asia.",
+        "source": "Atlantic Council"
+      }
+    }
+  ],
+  "notNeeded": [],
+  "notes": "Story correction: the story says existing providers have 90 days to apply for a license; CNA and Fortune say 90 days to obtain one. A card giving 'obtain' is right, not a contradiction to mark down. Reports differ on whether the rule took effect on November 16 or on Federal Register publication; the date is not required."
+}

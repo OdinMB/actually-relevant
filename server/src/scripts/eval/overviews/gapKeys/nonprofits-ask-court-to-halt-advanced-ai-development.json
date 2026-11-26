@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "slug": "nonprofits-ask-court-to-halt-advanced-ai-development",
+  "title": "Nonprofits ask court to halt advanced AI development",
+  "date": "2026-11-16",
+  "needs": [
+    {
+      "id": "court-pause-request",
+      "slot": "response",
+      "need": "What court intervention the nonprofits are seeking against the alleged AI safety risks, and how the companies have answered.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "They want the court to halt work on models more capable than those available today and bar companies from having AI independently research stronger systems.",
+      "accepts": "A credited account that the plaintiffs ask for a court-ordered halt to developing more capable models and a bar on AI-run research into stronger systems, stated as relief requested, not granted; or a defendant's public answer to the suit.",
+      "example": {
+        "value": "The nonprofits seek a freeze on developing and deploying models more capable than those available today, and a prohibition on autonomous AI research into more capable systems.",
+        "source": "The plaintiffs' complaint, as reported by Heise"
+      }
+    },
+    {
+      "id": "existing-frontier-ai-rules",
+      "slot": "build_up",
+      "need": "What rules already govern frontier AI developers in California, against which the suit asks a court to go further.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited account of California's SB 53 (the Transparency in Frontier Artificial Intelligence Act, signed in September 2025), saying it requires large frontier developers to publish safety frameworks and report critical safety incidents but does not halt development; or another named law or rule binding these developers on catastrophic risk.",
+      "example": {
+        "value": "California's SB 53, signed in September 2025, requires large frontier AI developers to publish safety frameworks and report critical safety incidents to the state.",
+        "source": "California Legislature, SB 53 (2025)"
+      }
+    },
+    {
+      "id": "unfair-competition-law",
+      "slot": "key_term",
+      "need": "What California's unfair competition law covers and how it lets a court stop a business practice.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited explanation that California's Unfair Competition Law (Business and Professions Code section 17200 and following) covers unlawful, unfair or fraudulent business acts or practices and lets courts order injunctions against them, kept distinct from any finding that the companies broke it.",
+      "example": {
+        "value": "California's Unfair Competition Law covers unlawful, unfair or fraudulent business acts or practices and authorizes injunctive relief.",
+        "source": "California Business and Professions Code sections 17200 and 17203"
+      }
+    },
+    {
+      "id": "practical-reach",
+      "slot": "who_affected",
+      "need": "Whether the requested order concerns future model development or would also restrict existing AI services.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Descriptions of the requested pause differ: one account says it covers models more capable than those available today, while another describes a halt to all further AI development. The precise reach of the requested order is therefore unclear.",
+      "accepts": "A credited account of what the requested order would cover, separating future development or deployment from existing services; or a statement that the scope is unclear, naming the conflicting descriptions, without claiming current services would shut down.",
+      "example": null
+    },
+    {
+      "id": "federal-policy-setting",
+      "slot": "why_now",
+      "need": "The federal stance on AI regulation in which the nonprofits are turning to a state court.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A credited account of the Trump administration favoring AI-company self-regulation (or opposing state AI rules) to keep an edge over China, given as backdrop, not as the proven trigger of the November 12 filing.",
+      "example": {
+        "value": "President Donald Trump has encouraged companies to regulate themselves to preserve an advantage over China.",
+        "source": "tippinsights"
+      }
+    },
+    {
+      "id": "earlier-pause-calls",
+      "slot": "compared",
+      "need": "Earlier calls to pause frontier AI development, to place this demand among them.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A credited reference to an earlier call for a pause on frontier AI, such as the Future of Life Institute's March 2023 open letter asking labs to pause training systems more powerful than GPT-4 for six months, noting it was voluntary rather than a court order.",
+      "example": {
+        "value": "In March 2023 a Future of Life Institute open letter called on AI labs to pause training systems more powerful than GPT-4 for at least six months.",
+        "source": "Future of Life Institute"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "next",
+      "why": "No hearing or ruling date is reported; a speculative litigation timetable would not help."
+    }
+  ],
+  "notes": "existing-frontier-ai-rules is a borderline must: the suit asks a court for what lawmakers have not imposed, and a reader places it by what the rules already require. The defendants' reactions are in the story (Meta declined to comment; the others had not commented), so a card quoting a later defendant statement also meets the response need. Reports differ on the order's reach; do not infer that existing services would close."
+}

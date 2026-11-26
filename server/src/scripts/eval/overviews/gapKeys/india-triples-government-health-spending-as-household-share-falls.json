@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "slug": "india-triples-government-health-spending-as-household-share-falls",
+  "title": "India triples government health spending as household share falls",
+  "date": "2026-11-16",
+  "needs": [
+    {
+      "id": "centre-state-scope",
+      "slot": "compared",
+      "need": "Whether the ₹4.14 lakh crore is the Union government's spending alone or the Centre and states together, and how the two split it.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A statement, credited to a named source, that the ₹4.14 lakh crore (2023-24) is government health expenditure by the Centre and the states combined, or a Centre/state split of government health spending (states about 68%, Centre about 32% in 2023-24). A text that repeats the total as Union spending alone does not meet it.",
+      "example": {
+        "value": "State governments accounted for nearly 68% of total government health expenditure in 2023-24, the Centre around 32%.",
+        "source": "The Times of India, citing the National Health Accounts estimates"
+      }
+    },
+    {
+      "id": "remaining-household-burden",
+      "slot": "who_affected",
+      "need": "How much Indian households still pay directly for care despite their declining share of health financing.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "Families still paid about ₹4 lakh crore directly for care in 2023-24.",
+      "accepts": "A rupee total for Indian households' direct (out-of-pocket) health payments in 2023-24, about ₹4 lakh crore, credited to a named source.",
+      "example": {
+        "value": "Indian households paid about ₹4 lakh crore directly for healthcare in 2023-24.",
+        "source": "The Times of India, citing the National Health Accounts estimates"
+      }
+    },
+    {
+      "id": "decade-financing-shift",
+      "slot": "build_up",
+      "need": "The decade-long shift between household and government financing that underlies the headline.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "Over the decade, households’ direct payments shrank from 64.2% to 42.7% of total health spending, while the government’s share rose from 28.6% to 43.5%.",
+      "accepts": "The household and government shares of India's total health expenditure in 2013-14 and 2023-24 (64.2% to 42.7%; 28.6% to 43.5%), credited to a named source.",
+      "example": {
+        "value": "Between 2013-14 and 2023-24, households' direct-payment share fell from 64.2% to 42.7%, while the government share rose from 28.6% to 43.5%.",
+        "source": "The Hindu, citing the National Health Accounts estimates"
+      }
+    },
+    {
+      "id": "real-or-gdp-growth",
+      "slot": "compared",
+      "need": "How large the rise is once inflation is taken out, or as a share of GDP, since the tripling is in current rupees.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Either government health spending as a share of India's GDP at two points in the decade, or the 2013-14 to 2023-24 rise adjusted for inflation, credited to a named source. A statement only that the figures are nominal, with no size of the adjustment, does not meet it.",
+      "example": null
+    },
+    {
+      "id": "public-financing-measures",
+      "slot": "response",
+      "need": "Which publicly financed programs are meant to cut what patients pay at the point of care.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "At least one named public program or measure aimed at reducing households' direct health payments (for example Ayushman Bharat PM-JAY hospital cover, free medicines and diagnostics, Jan Aushadhi generic pharmacies, Ayushman Arogya Mandir primary-care centers), credited to a named source. A general claim of \"progress toward affordable care\" without a named measure does not meet it.",
+      "example": {
+        "value": "The Ministry said government-funded healthcare services and financial-protection programs, and measures improving access to affordable medicines, diagnostics and hospital treatment, had supported the drop in direct household spending.",
+        "source": "Union Health Ministry, via Moneycontrol"
+      }
+    },
+    {
+      "id": "direct-payment-definition",
+      "slot": "key_term",
+      "need": "What counts as household out-of-pocket spending, as distinct from insurance financing.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A definition, credited to a named source, that out-of-pocket spending is households' direct payments for care at the point of use, excluding insurance premiums and amounts reimbursed by insurers.",
+      "example": {
+        "value": "Out-of-pocket expenditure refers to the money individuals and families spend directly on healthcare.",
+        "source": "Moneycontrol"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "why_now",
+      "why": "The news is the release of retrospective National Health Accounts estimates; the release itself is the trigger."
+    },
+    {
+      "slot": "next",
+      "why": "No scheduled decision or milestone follows from an accounts release that a reader needs to follow."
+    }
+  ],
+  "notes": "The story calls ₹4.14 lakh crore \"Union government health spending\" (as The Hindu did); per-capita government spending of ₹2,959 times India's population and Moneycontrol's wording point to total government (Centre plus states) spending, with states about 68%. A card that settles the scope meets centre-state-scope even if it contradicts the story's label. The real-or-GDP need is nice: the story sizes the shift by shares, which are inflation-free."
+}

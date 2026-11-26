@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "slug": "paho-ends-measles-elimination-in-three-countries",
+  "title": "PAHO ends measles elimination in three countries",
+  "date": "2026-11-18",
+  "needs": [
+    {
+      "id": "meaning-of-status",
+      "slot": "key_term",
+      "need": "What measles-elimination status means and what counts as renewed endemic transmission.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": "PAHO accepted a regional commission’s conclusion that the same measles virus lineage had circulated without interruption in each country for at least 12 months, meeting its definition of renewed endemic spread.",
+      "accepts": "A credited explanation that elimination means no sustained in-country transmission, and that uninterrupted circulation of the same virus lineage for at least 12 months re-establishes endemic transmission.",
+      "example": {
+        "value": "Re-established endemic transmission is uninterrupted circulation of the same measles virus genotype and lineage within a country for at least 12 months.",
+        "source": "PAHO"
+      }
+    },
+    {
+      "id": "us-historical-scale",
+      "slot": "compared",
+      "need": "How the 2026 US measles caseload compares with earlier years.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "More than 5,400 US cases were recorded in 2026, over twice the prior year’s count and the highest annual total since 1991.",
+      "accepts": "A credited comparison of 2026 US measles cases (year to date) with 2025 or with the highest annual total since 1991.",
+      "example": {
+        "value": "More than 5,400 US measles cases had been recorded in 2026, more than twice the previous year's count and the highest annual count since 1991.",
+        "source": "CDC data, as reported in news coverage of the decision"
+      }
+    },
+    {
+      "id": "vaccination-gaps",
+      "slot": "why_now",
+      "need": "How gaps in vaccination sustained the outbreaks behind the loss of status.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited finding that most US cases since 2025 were among unvaccinated people, or a vaccination-coverage figure for an affected country set against the roughly 95% two-dose coverage needed to stop measles spreading. Saying only that the commission weighed vaccination levels does not meet it.",
+      "example": {
+        "value": "The United States had recorded about 7,700 measles infections since 2025, most among people who were not vaccinated.",
+        "source": "Daily Maverick"
+      }
+    },
+    {
+      "id": "outbreak-control",
+      "slot": "response",
+      "need": "What authorities are doing to stop transmission, beyond withdrawing the designation.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The CDC says it will equip states and maintain federal backing as it works to restore the designation.",
+      "accepts": "At least one concrete outbreak-control measure under way or announced in an affected country (vaccination campaigns, contact tracing, stronger surveillance, CDC support to states), credited to the responsible authority or a named source.",
+      "example": {
+        "value": "Bolivia, Mexico and the United States are strengthening vaccination, surveillance and outbreak response.",
+        "source": "PAHO"
+      }
+    },
+    {
+      "id": "restoration-steps",
+      "slot": "next",
+      "need": "What the countries must do to regain elimination status.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The US also needs a corrective plan and a full year without the virus; PAHO wants all three countries to outline plans for their outbreaks.",
+      "accepts": "A credited account that the countries must submit outbreak-response plans and that the US must submit a corrective plan and show 12 months without endemic transmission before restoration.",
+      "example": {
+        "value": "The United States must submit a corrective action plan and then demonstrate 12 months without the virus to regain elimination status.",
+        "source": "PAHO officials, as reported by Daily Maverick"
+      }
+    },
+    {
+      "id": "regional-reversal",
+      "slot": "build_up",
+      "need": "How these withdrawals fit the Americas' history of eliminating measles and then losing ground.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": "The Americas became the first World Health Organization region certified as having eliminated endemic measles in 2016, regained that status in 2024 and lost it again in November 2025 after sustained transmission in Canada.",
+      "accepts": "A credited chronology linking the 2016 regional certification, its restoration in 2024 and its loss in November 2025 after sustained transmission in Canada.",
+      "example": {
+        "value": "The Americas achieved regional elimination in 2016, regained it in 2024 and lost it in November 2025 following sustained transmission in Canada.",
+        "source": "PAHO; Health Policy Watch"
+      }
+    },
+    {
+      "id": "mexico-bolivia-burden",
+      "slot": "who_affected",
+      "need": "The size of the outbreaks in Mexico and Bolivia, which the story gives no figures for.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Reported measles case totals for Mexico or Bolivia (both for a full yes), each with its period and whether confirmed, credited to a named source. Vaccine-dose totals alone do not meet it.",
+      "example": null
+    }
+  ],
+  "notNeeded": [],
+  "notes": "Keep 2026 year-to-date counts (5,412 by Nov. 12) apart from counts since January 2025 (about 7,700). US death totals conflict (6 CDC-confirmed in 2026, 10 per states since 2025, 13 in one count since 2025); a card must not reconcile them into one toll without a source."
+}

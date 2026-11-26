@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "slug": "most-indonesian-palm-oil-deforestation-exposure-tied-to-2024-use-was-domestic",
+  "title": "Most Indonesian palm oil deforestation exposure tied to 2024 use was domestic",
+  "date": "2026-11-17",
+  "needs": [
+    {
+      "id": "domestic-share-of-exposure",
+      "slot": "compared",
+      "need": "What share of Indonesia's total attributed palm-oil deforestation exposure belongs to domestic consumption, against all export markets together.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Domestic consumption's share of Indonesia's total palm-oil deforestation exposure attributed to 2024 consumption (67%), or its hectares against all export markets combined, credited to Trase or a named outlet reporting it. A comparison with India alone does not meet it.",
+      "example": {
+        "value": "Domestic consumption was associated with 67 percent of Indonesia's total palm-oil deforestation exposure for 2024, nearly nine times the amount associated with India.",
+        "source": "Trase, via Mongabay"
+      }
+    },
+    {
+      "id": "exposure-not-annual-clearing",
+      "slot": "key_term",
+      "need": "What deforestation exposure measures, and why the 629,000 hectares is not a count of forest cleared during 2024.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": "The 629,000-hectare figure is an attribution based on a 10-year historical period, not a measure of forest cleared in 2024 alone. Trase compares satellite-based clearing records with commodity-production maps to identify forest loss tied to a crop.",
+      "accepts": "A credited explanation that exposure allocates historical crop-linked clearing (a 10-year window) to buyers by their sourcing, rather than measuring new clearing in the consumption year.",
+      "example": {
+        "value": "Trase matches satellite clearing records with commodity-production maps and allocates historical clearing among buyers by sourcing volumes; its 2024 estimate uses a 10-year historical period.",
+        "source": "Trase"
+      }
+    },
+    {
+      "id": "domestic-demand-driver",
+      "slot": "why_now",
+      "need": "Why domestic consumption reached a record share of Indonesian palm-oil production in 2024.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Indonesians consumed more than half of the country’s palm oil production in 2024, a record share partly driven by biodiesel demand.",
+      "accepts": "A credited explanation naming biodiesel blending demand as a driver of the record 2024 domestic share. The B50 rollout of July 2026 alone does not explain the 2024 result.",
+      "example": {
+        "value": "Biodiesel demand helped push domestic consumption above half of Indonesia's palm-oil production in 2024, a record share.",
+        "source": "Trase, via Mongabay"
+      }
+    },
+    {
+      "id": "measures-against-forest-conversion",
+      "slot": "response",
+      "need": "What measures exist against palm-oil-linked forest conversion, in Indonesia or among buyers.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "At least one named measure against palm-oil-linked clearing, credited to a named source: for example Indonesia's moratorium on new clearing permits in primary forest and peatland (made permanent in 2019), its 2018 to 2021 freeze on new oil palm permits, ISPO certification, corporate zero-deforestation commitments, or the EU deforestation regulation. Biodiesel expansion and plantation plans do not count.",
+      "example": {
+        "value": "Corporate zero-deforestation commitments may have helped drive the decline in rainforest conversion, alongside government policies, land constraints and the need to replant ageing plantations.",
+        "source": "A global study involving David Gaveau, via Mongabay"
+      }
+    },
+    {
+      "id": "scale-of-historical-decline",
+      "slot": "build_up",
+      "need": "How large the decade-long decline in palm-oil-linked rainforest conversion has been.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Annual old-growth rainforest conversion linked to oil palm in an earlier and a recent multiyear period, in hectares per year with periods and geographic coverage named, credited to a named source.",
+      "example": {
+        "value": "Annual conversion of old-growth rainforest fell from an average of 343,000 hectares in 2001–2015 to 80,000 hectares in 2016–2024.",
+        "source": "A global study involving David Gaveau"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "who_affected",
+      "why": "A national demand-attribution finding with no specific affected population; the story already names the carbon and biodiversity stakes."
+    },
+    {
+      "slot": "next",
+      "why": "The plantation proposals are under consideration with no decision date or committed step in sight."
+    }
+  ],
+  "notes": "The 343,000-to-80,000-hectare figures come from a study the research describes as global; a card must not present them as Indonesia-only unless its source says so. Keep 2024 consumption distinct from the July 2026 B50 rollout, and historical exposure distinct from annual clearing."
+}

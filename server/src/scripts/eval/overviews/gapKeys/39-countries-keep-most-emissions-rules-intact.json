@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "slug": "39-countries-keep-most-emissions-rules-intact",
+  "title": "Oxford data show climate rules spreading worldwide",
+  "date": "2026-11-14",
+  "needs": [
+    {
+      "id": "policy-balance",
+      "slot": "compared",
+      "need": "How widespread policy reversals are compared with measures that remain unchanged in the monitored countries.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "Among more than 800 measures counted across those countries, 718 remain unchanged; 45 were delayed, 32 weakened and 11 repealed, including eight in the United States.",
+      "accepts": "Attributes to Oxford researchers or the Climate Policy Monitor the count of more than 800 measures across 39 countries, with 718 unchanged, 45 delayed, 32 weakened and 11 repealed, without presenting these undated counts as an annual rate or as emissions effects.",
+      "example": {
+        "value": "Across 39 countries, 718 of more than 800 measures remain unchanged, while 45 were delayed, 32 weakened and 11 repealed.",
+        "source": "Oxford University researchers, as reported by Yale E360 (2026-11-13)"
+      }
+    },
+    {
+      "id": "policies-vs-warming-gap",
+      "slot": "compared",
+      "need": "Whether the policies in force are enough to meet the Paris Agreement's temperature goals.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Gives a named source's projection of global warming by 2100 under current policies, in °C with the year of the estimate, set against the Paris goal of well below 2°C and 1.5°C; or a named source's emissions gap to those goals in gigatonnes of CO2e for a stated year.",
+      "example": {
+        "value": "Current policies put the world on course for about 2.8°C of warming this century, against the Paris goal of well below 2°C.",
+        "source": "UNEP Emissions Gap Report 2025"
+      }
+    },
+    {
+      "id": "global-coverage",
+      "slot": "who_affected",
+      "need": "How much of the world's emissions and economy the monitored countries represent, rather than treating the findings as a census of every country.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "The data cover 39 countries that together account for more than 85% of global greenhouse gas emissions and GDP.",
+      "accepts": "Names the Climate Policy Monitor or Oxford as its source and gives coverage of 39 countries accounting for more than 85% of global greenhouse gas emissions and GDP.",
+      "example": {
+        "value": "The Monitor covers 39 countries representing more than 85% of global greenhouse gas emissions and GDP.",
+        "source": "Oxford Climate Policy Monitor, as reported by Phys.org (2026-11-13)"
+      }
+    },
+    {
+      "id": "policy-advances",
+      "slot": "response",
+      "need": "What governments are doing to sustain climate action despite rollbacks, and where those advances are occurring.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Climate-policy rollbacks in parts of Europe and North America are outweighed by advances across Asia, Africa and Latin America. Rules are covering more sectors and setting more ambitious goals, while requirements and enforcement are advancing more slowly.",
+      "accepts": "A named-source account that governments continue adopting broader or more ambitious climate policies, with advances in Asia, Africa and Latin America outweighing weakening in parts of Europe and North America. It concerns policy action, not demonstrated emissions cuts.",
+      "example": {
+        "value": "Climate policy is advancing across the G20 overall, with progress in Asia, Africa and Latin America more than offsetting retrenchment elsewhere.",
+        "source": "Thomas Hale, Oxford Climate Policy Monitor (Oxford Martin School, 2026-11-13)"
+      }
+    },
+    {
+      "id": "policy-stringency",
+      "slot": "key_term",
+      "need": "What policy stringency means, and why more ambitious or wider-ranging policies are not necessarily more binding or better enforced.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": "Ambitious policies have less force when they are not mandatory or enforced, so the slower growth in policy stringency may limit how much announced ambition changes real-world outcomes.",
+      "accepts": "A named source distinguishing the ambition and coverage of climate policies from how binding they are (mandatory requirements, enforcement), and why broader coverage or stronger goals alone do not establish stronger obligations.",
+      "example": null
+    },
+    {
+      "id": "release-timing",
+      "slot": "why_now",
+      "need": "What makes the findings news now: the release of the Monitor's latest full dataset at COP31.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": "Oxford released the latest full dataset from its Climate Policy Monitor at COP31.",
+      "accepts": "Attributes to Oxford or a named report the release of the Monitor's latest full dataset at COP31, without implying the policies were adopted during the summit.",
+      "example": {
+        "value": "The Monitor's latest full dataset was released at COP31.",
+        "source": "Oxford Martin School (2026-11-13)"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "build_up",
+      "why": "A multi-year history of climate negotiations or regulation is not needed to read this dataset's findings."
+    },
+    {
+      "slot": "next",
+      "why": "No scheduled follow-up release, policy decision or deadline is tied to the dataset; a speculative timetable would not help place the findings."
+    }
+  ],
+  "notes": "The tally has no stated period, so it cannot show the pace of change or a year-on-year trend. The warming projection is general knowledge rather than from the research facts: any named projection of warming under current policies with its year meets it, whichever edition."
+}

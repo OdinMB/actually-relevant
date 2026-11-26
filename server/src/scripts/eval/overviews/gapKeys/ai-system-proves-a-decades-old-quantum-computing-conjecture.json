@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "slug": "ai-system-proves-a-decades-old-quantum-computing-conjecture",
+  "title": "AI system proves a decades-old quantum computing conjecture",
+  "date": "2026-11-10",
+  "needs": [
+    {
+      "id": "conjecture-scope",
+      "slot": "key_term",
+      "need": "Which conjecture was proved, and what it says about the limits of quantum speedups.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Names the Aaronson–Ambainis conjecture and explains that on random or unstructured yes-or-no inputs a quantum computer can save at most polynomially, not exponentially, many looks at the input compared with an ordinary computer, naming a source. It must not present this as a blanket limit on what quantum computers can do.",
+      "example": {
+        "value": "A quantum computer cannot save exponentially many looks on yes-or-no questions unless the input holds a rare pattern; for all but a small fraction of inputs an ordinary computer needs at most polynomially more.",
+        "source": "LavX News, \"A proof of the Aaronson-Ambainis conjecture\" (2026-11-06)"
+      }
+    },
+    {
+      "id": "public-proof-scrutiny",
+      "slot": "response",
+      "need": "Whether anyone outside the company has checked the claim, beyond the machine check.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Reports that outside peer review of the proof was still pending, or gives a named independent mathematician's assessment of it, and that the paper and Lean formalization are public; names the source.",
+      "example": {
+        "value": "PSI published a paper and a public Lean formalization on GitHub, while outside peer review of the proof was still pending.",
+        "source": "shiftdelete.net (2026-11-06); TokenPost (2026-11-09)"
+      }
+    },
+    {
+      "id": "lean-verification",
+      "slot": "key_term",
+      "need": "What Lean checks, and why a machine-checked proof is not a test of quantum hardware.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": "Lean checked each proof step, reducing the chance of unnoticed logical errors.",
+      "accepts": "Explains that Lean is a proof assistant that mechanically checks each step of a formally written mathematical argument, as opposed to testing quantum hardware or establishing applications, naming a source.",
+      "example": {
+        "value": "Lean is a proof assistant that checks each step in a formal mathematical argument.",
+        "source": "TokenPost (2026-11-09)"
+      }
+    },
+    {
+      "id": "earlier-special-case",
+      "slot": "compared",
+      "need": "How the claimed general proof goes beyond the narrower result achieved shortly before it.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Identifies the August 2026 Stanford result as proving the conjecture's prediction only for quantum algorithms that query their input in a fixed number of parallel rounds, and contrasts it with the claimed general proof, naming the source.",
+      "example": {
+        "value": "In August 2026, four Stanford researchers proved there is no exponential speedup on random inputs for algorithms that examine their input in a fixed number of parallel rounds, a special case of the conjecture.",
+        "source": "LavX News (2026-11-06)"
+      }
+    },
+    {
+      "id": "system-behind-result",
+      "slot": "why_now",
+      "need": "What kind of AI system produced the proof, including the model it ran on.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Reports, attributed to PSI, that its research system ran on its own infrastructure using multiple instances of an unreleased or undisclosed Anthropic model, without presenting PSI's account as independently established.",
+      "example": {
+        "value": "PSI said its system ran on its own infrastructure and used multiple instances of an Anthropic model whose name was not disclosed.",
+        "source": "Physical Superintelligence, as reported by TokenPost (2026-11-09) and Business Insider (2026-11-07)"
+      }
+    },
+    {
+      "id": "prior-human-work",
+      "slot": "build_up",
+      "need": "Which earlier human mathematical work the AI-produced proof built on.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Names at least one documented precursor the proof built on, such as Shachar Lovett and Jiapeng Zhang or David Reimer, with a named source.",
+      "example": {
+        "value": "The proof built on ideas from Shachar Lovett and Jiapeng Zhang, David Reimer and others.",
+        "source": "LavX News (2026-11-06)"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "who_affected",
+      "why": "Neither development is a deployed service with an affected population; beneficiary counts would be speculation."
+    },
+    {
+      "slot": "next",
+      "why": "No scheduled review decision or glove rollout is reported; the pending review belongs with the scrutiny need."
+    }
+  ],
+  "notes": "The story pairs two unrelated items; the key covers the quantum proof, the story's headline, and leaves the Meta glove to the story. The result concerns input queries, not a blanket limit on quantum computing. Lean acceptance and outside peer review are different things."
+}

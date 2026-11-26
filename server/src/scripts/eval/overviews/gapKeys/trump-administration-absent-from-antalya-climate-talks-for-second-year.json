@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "slug": "trump-administration-absent-from-antalya-climate-talks-for-second-year",
+  "title": "Trump administration absent from Antalya climate talks for second year",
+  "date": "2026-11-16",
+  "needs": [
+    {
+      "id": "federal-boycott-policy",
+      "slot": "why_now",
+      "need": "Why the administration is choosing to send no delegation: its stated reason and policy.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A named source giving the administration's stated reason for staying away (for example the White House calling the summit one that \"rejects reality\") or its policy of no longer taking part in the UN climate negotiations. Repeating that no delegation attended does not meet it.",
+      "example": {
+        "value": "A White House official confirmed no one would be sent, saying the summit \"rejects reality by failing to acknowledge that extremist climate policies are destroying countries around the world.\"",
+        "source": "The Guardian"
+      }
+    },
+    {
+      "id": "us-emissions-weight",
+      "slot": "compared",
+      "need": "How much the absent United States weighs in global emissions, annually and historically.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "the world’s second-largest emitter and largest historical emitter",
+      "accepts": "A named source giving the U.S. global rank or share for annual and for cumulative historical emissions.",
+      "example": {
+        "value": "The United States is the world's second-largest annual emitter and the largest historical emitter.",
+        "source": "NBC News"
+      }
+    },
+    {
+      "id": "climate-treaty-structure",
+      "slot": "key_term",
+      "need": "What COP31 and the UN climate convention are, and how leaving the convention differs from leaving the Paris Agreement.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "An explanation credited to a named source that COP is the annual conference of the parties to the UN Framework Convention on Climate Change, that the Paris Agreement is a treaty under that convention, and that leaving the convention is a further step beyond leaving Paris.",
+      "example": {
+        "value": "COP31 is the 31st Conference of the Parties to the UN Framework Convention on Climate Change; the Paris Agreement was adopted under that convention, and no country had ever left the convention itself.",
+        "source": "UNFCCC secretariat; The Japan Times"
+      }
+    },
+    {
+      "id": "nonfederal-participation",
+      "slot": "response",
+      "need": "How American actors outside the federal government are keeping a presence at the talks.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "American members of Congress, governors, mayors, other state politicians and businesses attended without representing the federal administration",
+      "accepts": "A named source reporting that U.S. members of Congress, state or local officials or businesses are attending, making clear they are not an official delegation and cannot negotiate for the United States.",
+      "example": {
+        "value": "U.S. members of Congress, governors, mayors and other state politicians are attending despite the administration's absence.",
+        "source": "The Japan Times"
+      }
+    },
+    {
+      "id": "framework-exit-date",
+      "slot": "next",
+      "need": "When the U.S. withdrawal from the wider UN climate treaty takes effect.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The exit from the wider UN climate treaty is not yet effective; it is scheduled to take effect in February.",
+      "accepts": "A named source stating that the U.S. withdrawal from the UN Framework Convention on Climate Change takes effect in February 2027 and is still pending.",
+      "example": {
+        "value": "The U.S. exit from the UN framework convention takes effect in February, a step no other country has taken.",
+        "source": "The Japan Times"
+      }
+    },
+    {
+      "id": "paris-policy-reversals",
+      "slot": "build_up",
+      "need": "How U.S. participation in the Paris Agreement reversed across Trump's first term, Biden's presidency and Trump's return.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A short dated chronology credited to a named source: the first withdrawal (effective 2020), the return under Biden (2021) and the second withdrawal after Trump took office in January 2025 (effective at the start of 2026).",
+      "example": {
+        "value": "The first U.S. withdrawal took effect in 2020, the United States rejoined in 2021 under Biden, and Trump withdrew again after taking office in January 2025, effective at the start of 2026.",
+        "source": "UNFCCC records; Council on Foreign Relations"
+      }
+    },
+    {
+      "id": "summit-closing-date",
+      "slot": "next",
+      "need": "How long the Antalya talks run after publication.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A named source giving November 20, 2026, as COP31's scheduled closing date.",
+      "example": {
+        "value": "COP31 runs from November 9 to 20, 2026.",
+        "source": "NBC News"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "who_affected",
+      "why": "A tally of climate-exposed people is not needed to understand a diplomatic absence; the emissions comparison sizes its weight."
+    }
+  ],
+  "notes": "Attendance by Americans outside the federal government is a response to the federal absence, not a replacement for federal negotiating authority. The withdrawal from the Paris Agreement and the pending withdrawal from the UN convention are separate steps; context must not merge them."
+}

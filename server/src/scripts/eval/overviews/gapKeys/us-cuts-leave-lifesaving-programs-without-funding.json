@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "slug": "us-cuts-leave-lifesaving-programs-without-funding",
+  "title": "Trump's USAID shutdown cut America's aid capacity",
+  "date": "2026-11-13",
+  "needs": [
+    {
+      "id": "aid-cut-baseline",
+      "slot": "compared",
+      "need": "How large the $26 billion annual decline in aid disbursements is relative to what the United States had been disbursing.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Total U.S. foreign aid disbursements for fiscal 2023-24 (or a comparable recent year), or the percentage decline the $26 billion represents, using the same definition of foreign aid and naming the source.",
+      "example": null
+    },
+    {
+      "id": "operating-capacity-lost",
+      "slot": "compared",
+      "need": "How much of USAID's programs and staff were cut, beyond the drop in aid dollars.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "The share or count of USAID programs terminated or staff removed, naming the measure and the source. Program shares from different stages (83% after the 2025 review, about 90% later) are both acceptable if the stage or source is named. Program counts must not be presented as funding amounts.",
+      "example": {
+        "value": "90 percent of USAID's programs were terminated and 90 percent of its staff laid off.",
+        "source": "Foreign Affairs"
+      }
+    },
+    {
+      "id": "shutdown-rationale",
+      "slot": "why_now",
+      "need": "Why the administration said it was dismantling USAID rather than continuing or reforming it.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "The administration's stated rationale, naming the official or document that gave it, and presenting claims of waste or ineffectiveness as the administration's claims rather than established findings.",
+      "example": {
+        "value": "Secretary of State Marco Rubio wrote that the agency had misspent billions and had \"little to show since the end of the Cold War.\"",
+        "source": "Marco Rubio, in a Substack post, as reported by ORF"
+      }
+    },
+    {
+      "id": "estimated-current-mortality",
+      "slot": "who_affected",
+      "need": "How many deaths are estimated to follow from the shutdown, as against the deaths past aid prevented.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A sourced estimate of excess deaths associated with USAID's dismantling, with its time span, identified as a model-based estimate rather than a death count.",
+      "example": {
+        "value": "A mortality model estimated that the 2025 dismantling of USAID contributed to more than 700,000 excess deaths over roughly a year.",
+        "source": "Brooke Nichols, Boston University, as reported by Foreign Affairs"
+      }
+    },
+    {
+      "id": "affected-hiv-communities",
+      "slot": "who_affected",
+      "need": "Where the HIV-service disruption hit and which communities lost access.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A named recipient country and the patients or community organizations that lost USAID-supported HIV testing, prevention, outreach or treatment, naming the reporting source.",
+      "example": {
+        "value": "In Indonesia, the dismantling of USAID cut funding for community-led organizations, and HIV services for people at higher risk suddenly became unavailable.",
+        "source": "Human Rights Watch"
+      }
+    },
+    {
+      "id": "aid-continuity-response",
+      "slot": "response",
+      "need": "What has been done to keep aid flowing or protect HIV/AIDS funding after the shutdown.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "transfers of $3.8 billion to the U.N. Office for the Coordination of Humanitarian Affairs and $15.9 billion directly to foreign governments’ treasuries through memorandums of understanding",
+      "accepts": "A named source describing an implemented response: the State Department's replacement channels with recipients and amounts, or Congress's removal of the proposed $400 million PEPFAR cut in July 2025, keeping HIV/AIDS appropriations around $6 billion. It must distinguish money transferred or appropriated from services shown to be restored.",
+      "example": {
+        "value": "Congress removed the proposed $400 million PEPFAR cut in late July 2025, keeping HIV/AIDS appropriations at around $6 billion.",
+        "source": "Human Rights Watch"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "build_up",
+      "why": "The story gives the sequence (the aid pause, the dismantling, the July 1 closure) and the agency's six-decade role; a longer history would not help size the cut."
+    },
+    {
+      "slot": "next",
+      "why": "Neither the story nor its sources name a coming decision or deadline."
+    },
+    {
+      "slot": "key_term",
+      "why": "The story spells out USAID and its role; no technical term needs explaining."
+    }
+  ],
+  "notes": "The story's 90 million deaths prevented (2001-2021) is a historical benefit, not an estimate of deaths since the shutdown. Preserved appropriations and redirected transfers do not by themselves show that services or patient access were restored."
+}

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "slug": "six-countries-give-environment-ministries-under-1-of-budgets",
+  "title": "Six countries give environment ministries under 1% of budgets",
+  "date": "2026-11-16",
+  "needs": [
+    {
+      "id": "historical-budget-benchmark",
+      "slot": "compared",
+      "need": "How the 2025 shares (Ecuador 0.08%, Argentina 0.04%) compare with the same countries' longer-run environment budget shares.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A multi-year environment-budget share (average, peak or earlier year) as a percentage of the national budget for at least one of the six countries, with its period and a named source, so the 2025 figure can be read as a drop or as the norm. The 2025 figures alone do not meet it.",
+      "example": {
+        "value": "Argentina's environment budget averaged 0.13% of the national budget over the last decade and never exceeded 0.24%; Bolivia's averaged 0.56% over 16 years and never exceeded 1%.",
+        "source": "Mongabay Latam"
+      }
+    },
+    {
+      "id": "erosion-of-agencies",
+      "slot": "build_up",
+      "need": "The history of funding cuts and institutional changes that left environmental agencies with weakened capacity.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The spending declines span many years and governments, showing that environmental agencies have had low priority across political changes.",
+      "accepts": "A named source's country-specific account of prolonged funding cuts and a dated institutional or staffing change (a merger, dismissals, a downgraded ministry) and its effect on environmental protection.",
+      "example": {
+        "value": "In Ecuador, 16 years of declining funding, staff dismissals and institutional changes weakened biodiversity protection; the environment ministry was merged with the Energy Ministry in 2025.",
+        "source": "Mongabay Latam"
+      }
+    },
+    {
+      "id": "protected-area-capacity",
+      "slot": "who_affected",
+      "need": "Where budget shortages are constraining protected-area staffing and conservation work.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Mexico has only 717 people doing surveillance, monitoring, and conservation work in its protected areas, while Bolivia's 23 national protected areas face funding shortages.",
+      "accepts": "A country-specific example naming protected areas or conservation duties hit by shortages of funding or staff, credited to a named source. A regional biodiversity statistic alone does not meet it.",
+      "example": {
+        "value": "Ecuador's protected areas lack resources and personnel, weakening the state's ability to protect biodiversity.",
+        "source": "Mongabay Latam"
+      }
+    },
+    {
+      "id": "funding-capacity-response",
+      "slot": "response",
+      "need": "What governments or conservation bodies are doing to make up for the funding and staffing shortages, or which remedies have worked elsewhere.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A named source's account of a concrete action under way or a remedy already tried to fund or staff environmental protection in one of the six countries or the region, naming the actor and the action and any reported result: for example a budget increase, a conservation trust fund or a debt-for-nature swap. A general call for more funding does not meet it.",
+      "example": {
+        "value": "Ecuador's 2023 debt-for-nature swap refinanced about $1.6 billion of debt and committed the savings to Galápagos marine conservation.",
+        "source": "Reuters"
+      }
+    },
+    {
+      "id": "budget-share-definition",
+      "slot": "key_term",
+      "need": "What the reported environment budget shares count: ministry allocations or environmental spending across government, allocated or spent.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "An explanation credited to the analysis or another named source of what spending enters the environment-budget figure and the national-budget denominator, and whether the figures are allocations or actual expenditure.",
+      "example": null
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "why_now",
+      "why": "This is a retrospective spending analysis with no single trigger; the causes belong in the account of long-term institutional erosion."
+    },
+    {
+      "slot": "next",
+      "why": "Neither the story nor its sources name a scheduled budget decision or deadline."
+    }
+  ],
+  "notes": "Ecuador's ministry merger is evidence of institutional change, not a remedy for underfunding. A debt-for-nature swap or trust fund counts as a response only as money for conservation outside the ministry budget; it does not show that agency budgets rose."
+}

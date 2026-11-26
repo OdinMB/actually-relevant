@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "slug": "who-finds-countries-lack-tests-despite-wider-action-plans",
+  "title": "WHO finds countries lack tests despite wider action plans",
+  "date": "2026-11-17",
+  "needs": [
+    {
+      "id": "testing-gap",
+      "slot": "compared",
+      "need": "How reported national reference-laboratory testing capacity compares with the global 2030 goal.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "The share with the specified testing capacity is also below the global goal of 80% of countries by 2030.",
+      "accepts": "WHO's 36% of countries reporting a national reference laboratory able to test selected bacteria and fungi, set against the target of 80% of countries with comprehensive bacterial and fungal resistance-testing capacity by 2030, naming the source.",
+      "example": {
+        "value": "Only 36% of countries report a national reference laboratory equipped to test the selected bacteria and fungi, against a target of 80% of countries with comprehensive resistance-testing capacity by 2030.",
+        "source": "World Health Organization (TrACSS 2026)"
+      }
+    },
+    {
+      "id": "funded-implementation",
+      "slot": "compared",
+      "need": "How many countries have funded and fully implemented their plans, beyond merely having one.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "Just 22% of countries reported both the funding needed and full implementation of their plans.",
+      "accepts": "The 22% of countries reporting both the necessary funding and full implementation of their national AMR plans, credited to WHO; not described as funding alone.",
+      "example": {
+        "value": "Only 22% of countries report having both the necessary funding and full implementation of national AMR action plans.",
+        "source": "World Health Organization (TrACSS 2026)"
+      }
+    },
+    {
+      "id": "resistance-scale",
+      "slot": "who_affected",
+      "need": "How common antibiotic resistance already is among laboratory-confirmed bacterial infections worldwide.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "In 2023, about one in six laboratory-confirmed bacterial infections worldwide resisted antibiotics.",
+      "accepts": "About one in six laboratory-confirmed bacterial infections worldwide in 2023 resistant to antibiotics, credited to WHO, keeping the laboratory-confirmed scope.",
+      "example": {
+        "value": "In 2023, approximately 1 in 6 laboratory-confirmed bacterial infections worldwide were resistant to antibiotics.",
+        "source": "World Health Organization"
+      }
+    },
+    {
+      "id": "amr-death-toll",
+      "slot": "who_affected",
+      "need": "How many people drug-resistant infections kill each year.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A sourced global estimate of deaths from bacterial antimicrobial resistance with its year, saying whether deaths are attributable to or associated with resistance (about 1.14 million attributable and 4.71 million associated in 2021).",
+      "example": {
+        "value": "In 2021, an estimated 1.14 million deaths were attributable to bacterial antimicrobial resistance and 4.71 million were associated with it.",
+        "source": "GBD 2021 Antimicrobial Resistance Collaborators, The Lancet (2024)"
+      }
+    },
+    {
+      "id": "unequal-testing-access",
+      "slot": "who_affected",
+      "need": "Which patients and settings are most exposed to the testing shortfall.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "For hospital patients, testing is less likely in many countries, particularly those with fewer resources and the highest resistance rates.",
+      "accepts": "Hospital patients in low-resource countries, particularly where resistance rates are highest, identified as less likely to have infections tested, credited to WHO or a named expert.",
+      "example": {
+        "value": "Hospital patients in many countries, particularly low-resource countries where resistance rates are highest, are much less likely to have a bacterial or fungal infection tested.",
+        "source": "Silvia Bertagnolio, WHO, as reported by CIDRAP"
+      }
+    },
+    {
+      "id": "diagnostic-tools",
+      "slot": "response",
+      "need": "What WHO is doing to help countries close the diagnostic gap.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "WHO released two tools to help address the gap: one outlines tests for different levels of care, and the other sets out standard laboratory procedures.",
+      "accepts": "WHO's two AMR Diagnostic Initiative tools (essential tests by level of care; standard laboratory procedures for diagnosing infections and susceptibility testing), without implying that their release has already expanded testing.",
+      "example": {
+        "value": "WHO released two practical tools under its AMR Diagnostic Initiative: one on essential tests at different levels of care, the other on standard procedures for diagnosis and antimicrobial susceptibility testing.",
+        "source": "World Health Organization"
+      }
+    },
+    {
+      "id": "amr-definition",
+      "slot": "key_term",
+      "need": "What antimicrobial resistance means, and how antibiotic resistance fits within it.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "An explanation credited to an authoritative health source that antimicrobial resistance occurs when bacteria, viruses, fungi or parasites no longer respond to the medicines meant to treat them, with antibiotic resistance in bacteria as one part of it.",
+      "example": {
+        "value": "Antimicrobial resistance occurs when bacteria, viruses, fungi and parasites no longer respond to antimicrobial medicines.",
+        "source": "World Health Organization, antimicrobial resistance fact sheet"
+      }
+    },
+    {
+      "id": "plans-over-time",
+      "slot": "build_up",
+      "need": "How far national action-plan adoption has grown since 2017.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": "Of those, 173 reported having national plans, up from 79 in 2017.",
+      "accepts": "The rise from 79 countries with national AMR plans in 2017 to 173 in 2026, credited to WHO, distinguishing adopting plans from funding or implementing them.",
+      "example": {
+        "value": "173 countries report having developed plans to address AMR, more than double the 79 that did so in 2017.",
+        "source": "World Health Organization"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "why_now",
+      "why": "WHO's new survey results are the peg; no separate trigger needs explaining."
+    },
+    {
+      "slot": "next",
+      "why": "The forward milestone, the 2030 testing target, is covered under compared; no further scheduled decision is reported."
+    }
+  ],
+  "notes": "National reference-laboratory capacity is not patient access to testing. The one-in-six figure covers laboratory-confirmed infections only. The 22% is a share of responding countries, not of the 173 with plans. For the death toll, attributable and associated deaths are both acceptable if labeled; an unlabeled 4.7 million presented as deaths caused by resistance does not meet it."
+}

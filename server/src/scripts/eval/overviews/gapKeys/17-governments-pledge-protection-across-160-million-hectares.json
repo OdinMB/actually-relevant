@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "slug": "17-governments-pledge-protection-across-160-million-hectares",
+  "title": "Governments pledge to advance territorial rights across 160 million hectares",
+  "date": "2026-11-13",
+  "needs": [
+    {
+      "id": "recognition-and-protection",
+      "slot": "response",
+      "need": "What governments have promised to do, distinguishing newly recognized territorial rights from stronger protection of rights already recognized.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "Its 2030 goal covers 160 million hectares: at least 80 million hectares would receive formal recognition of land rights, while another 80 million hectares with recognized rights would get stronger governance and protection.",
+      "accepts": "States that the Intergovernmental Land Tenure Commitment targets 160 million hectares by 2030: at least 80 million hectares of formal recognition and a further 80 million hectares of stronger governance and protection for already-recognized rights, naming its source.",
+      "example": {
+        "value": "The commitment covers recognition on at least 80 million hectares and stronger governance and protection on another 80 million hectares by 2030.",
+        "source": "IPS Inter Press Service, \"Protecting the Climate Means Protecting Territorial Rights\" (2026-11-12)"
+      }
+    },
+    {
+      "id": "recognition-gap",
+      "slot": "compared",
+      "need": "How the 80-million-hectare recognition target compares with the amount of Indigenous and community land still lacking legal recognition.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Gives a named source's estimate of Indigenous and community land held under customary rights without legal recognition, in hectares or as a share of land, with its geographic scope, and relates it to the 80-million-hectare recognition target. A comparison must acknowledge any difference between the estimate's scope and the pledge's countries.",
+      "example": {
+        "value": "Indigenous Peoples and local communities hold customary rights to at least half of the world's land but have legally recognized ownership of only about 10%.",
+        "source": "Rights and Resources Initiative"
+      }
+    },
+    {
+      "id": "beneficiaries-and-reach",
+      "slot": "who_affected",
+      "need": "Whose territorial rights the commitment is meant to advance and which countries have joined it.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Names the rights-holders (Indigenous Peoples, Afro-descendant and local communities) and at least several of the 17 participating countries or the regions they lie in, with a named source. The locations studied for concession overlaps do not establish where the pledge applies.",
+      "example": null
+    },
+    {
+      "id": "pledges-versus-delivery",
+      "slot": "response",
+      "need": "Whether the announced commitments have translated into funding reaching the communities they are meant to support.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The land-rights goals and funding are commitments, not evidence that the work has been completed. Reporting after the pledge said funds had been slow to reach affected communities.",
+      "accepts": "Gives a sourced account of whether pledged funds have reached affected communities, distinguishing a funding announcement from delivery. An attributed report that funds have been slow to reach communities meets the need; repeating the pledged total does not.",
+      "example": {
+        "value": "Despite the pledges, funds have been slow to reach affected communities.",
+        "source": "Grist, \"Indigenous leaders at COP31 say it's past time to turn promises into action\" (2026-11-13)"
+      }
+    },
+    {
+      "id": "implementation-horizon",
+      "slot": "next",
+      "need": "When the territorial-rights targets are due and which years the complementary funding covers.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "committed to advance territorial rights across 160 million hectares by 2030, with separate targets for new recognition and stronger protection where rights already exist. A complementary $1.8 billion pledge for 2026–2030",
+      "accepts": "States that the territorial-rights targets are due by 2030 and that the $1.8 billion pledge covers 2026–2030, with a named source, as deadlines and funding periods rather than completed work.",
+      "example": {
+        "value": "The territorial-rights targets run to 2030, while the complementary $1.8 billion pledge covers 2026–2030.",
+        "source": "IPS Inter Press Service, \"Protecting the Climate Means Protecting Territorial Rights\" (2026-11-12)"
+      }
+    },
+    {
+      "id": "earlier-tenure-pledge",
+      "slot": "build_up",
+      "need": "The earlier forest-tenure pledge the $1.8 billion follows, and what it delivered.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Names the $1.7 billion Indigenous Peoples and Local Communities Forest Tenure Pledge made at COP26 in Glasgow for 2021–2025, and relates the new $1.8 billion for 2026–2030 to it; credit for reporting how much of the earlier money reached community organizations directly, with a named source.",
+      "example": {
+        "value": "At COP26 in 2021, donors pledged $1.7 billion for 2021–2025 to support Indigenous Peoples' and local communities' forest tenure.",
+        "source": "UK government COP26 announcement; Forest Tenure Funders Group annual reports"
+      }
+    },
+    {
+      "id": "announcement-occasion",
+      "slot": "why_now",
+      "need": "What summit or announcement brought the commitment forward at this time.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Identifies the occasion, such as the COP31 climate summit under way in November 2026 where Indigenous leaders pressed for delivery, or the commitment's launch at a named earlier summit, credited to a named source. General pressure on forests or demand for transition minerals does not meet it.",
+      "example": {
+        "value": "Indigenous leaders at COP31 urged governments to carry out their land-rights commitments.",
+        "source": "Grist, \"Indigenous leaders at COP31 say it's past time to turn promises into action\" (2026-11-13)"
+      }
+    },
+    {
+      "id": "consent-principle",
+      "slot": "key_term",
+      "need": "What free, prior and informed consent requires when energy projects affect Indigenous territories.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Explains that consent must be sought from Indigenous peoples through their own representative institutions, without coercion, before a project is approved, and on the basis of adequate information; distinguishes consent from merely informing or consulting, naming a source.",
+      "example": {
+        "value": "States should consult and cooperate in good faith through Indigenous peoples' representative institutions to obtain their free and informed consent before approving projects affecting their lands, territories or resources.",
+        "source": "United Nations Declaration on the Rights of Indigenous Peoples, Article 32"
+      }
+    }
+  ],
+  "notNeeded": [],
+  "notes": "Grist's 400 million acres is about 162 million hectares: the same commitment, not a larger one. The countries and the launch occasion must not be inferred from the concession-overlap research."
+}

@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "slug": "ebola-cases-reach-kenya-and-nigeria-as-child-deaths-rise",
+  "title": "Ebola cases reach Kenya and Nigeria as child deaths rise",
+  "date": "2026-11-18",
+  "needs": [
+    {
+      "id": "congo-outbreak-scale",
+      "slot": "who_affected",
+      "need": "The cumulative number of Ebola cases and how much of DR Congo the outbreak covers.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A cumulative case count for the outbreak in DR Congo and the number of affected provinces, tied to a reporting date and credited to a named source.",
+      "example": {
+        "value": "Nearly 11,000 confirmed cases had been reported across eight provinces of DR Congo by 11 November 2026.",
+        "source": "WHO Director-General's remarks at the Member State briefing (2026-11-11)"
+      }
+    },
+    {
+      "id": "child-fatality-baseline",
+      "slot": "compared",
+      "need": "The outbreak's overall death rate, against which to read the seven-in-ten figure for children under five.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A named source's overall share of cases that died in this outbreak, or case and death totals from the same place and date that give it.",
+      "example": {
+        "value": "Nearly 11,000 confirmed cases and more than 5,300 deaths had been reported in DR Congo, roughly half as many deaths as cases.",
+        "source": "WHO Director-General's remarks at the Member State briefing (2026-11-11)"
+      }
+    },
+    {
+      "id": "outbreak-start",
+      "slot": "build_up",
+      "need": "When the outbreak was declared and how long the response has been running.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "States that the outbreak was announced in mid-May 2026 (about six months before the story), naming a source.",
+      "example": {
+        "value": "The outbreak has spread to eight of Congo's 26 provinces since it was announced in mid-May.",
+        "source": "PBS News (2026-11-15)"
+      }
+    },
+    {
+      "id": "insecurity-hampers-control",
+      "slot": "why_now",
+      "need": "How insecurity is obstructing efforts to find cases and stop transmission.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A named source saying that attacks or insecurity are limiting health teams' access to communities and disrupting the response, such as contact tracing, surveillance or treatment.",
+      "example": {
+        "value": "Attacks and insecurity were obstructing the Ebola response and limiting access to communities; more than 1,000 contacts were no longer being followed up.",
+        "source": "WHO Director-General Tedros Adhanom Ghebreyesus (2026-11-11)"
+      }
+    },
+    {
+      "id": "testing-response",
+      "slot": "response",
+      "need": "What capacity has been added to detect Ebola infections.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "The rise from two testing labs to more than two dozen gives health teams more ways to identify infections and guide outbreak control.",
+      "accepts": "A named source reporting that laboratories able to test for the virus rose from two to more than two dozen.",
+      "example": {
+        "value": "The number of laboratories able to test for the virus increased from two to more than two dozen.",
+        "source": "WHO Director-General Tedros Adhanom Ghebreyesus, as reported by UN News (2026-11-17)"
+      }
+    },
+    {
+      "id": "vaccine-trial-next-step",
+      "slot": "next",
+      "need": "When the two Bundibugyo-specific vaccine candidates are due to enter testing.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Two vaccine candidates designed for this Ebola virus are due to enter a trial, offering a possible tool against future spread but not yet proven protection.",
+      "accepts": "A named source saying two Bundibugyo-specific candidates are due to join an ongoing vaccine trial in the coming weeks, as a trial, not a rollout.",
+      "example": {
+        "value": "Two candidate vaccines developed specifically for Bundibugyo virus were due to be added to an ongoing vaccine trial in the coming weeks.",
+        "source": "WHO Director-General Tedros Adhanom Ghebreyesus, as reported by UN News (2026-11-17)"
+      }
+    },
+    {
+      "id": "bundibugyo-explained",
+      "slot": "key_term",
+      "need": "What Bundibugyo virus is and why existing Ebola vaccines are not known to protect against it.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Explains, crediting a named medical or public-health source, that Bundibugyo is one of several distinct viruses causing Ebola disease and that the licensed vaccines target Zaire ebolavirus, so protection against Bundibugyo is not established.",
+      "example": {
+        "value": "Bundibugyo and Zaire are distinct viruses that cause Ebola disease; the licensed Ebola vaccines target Zaire ebolavirus and have not been shown to protect against Bundibugyo virus.",
+        "source": "World Health Organization, Ebola disease fact sheet"
+      }
+    },
+    {
+      "id": "weekly-transmission-scale",
+      "slot": "compared",
+      "need": "The scale of ongoing weekly transmission, set against the few cases reported abroad.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": "The available figures show hundreds of new cases weekly, not millions of people affected.",
+      "accepts": "A current count or range of new cases per week, credited to a named source and kept apart from cumulative cases and imported-case totals.",
+      "example": {
+        "value": "Between 400 and 500 new cases were still being reported each week.",
+        "source": "WHO Director-General Tedros Adhanom Ghebreyesus, as reported by UN News (2026-11-17)"
+      }
+    }
+  ],
+  "notNeeded": [],
+  "notes": "The key covers the Ebola item, the story's headline; the story's brief lines on hormone-disrupting chemicals and an EU migration proposal are not developed enough to need context. Deaths over cases is a crude comparison, not a matched-age analysis. Case totals differ slightly between WHO (nearly 11,000 confirmed) and Congo's government data (more than 11,000 recorded); either, dated and credited, meets the scale need."
+}

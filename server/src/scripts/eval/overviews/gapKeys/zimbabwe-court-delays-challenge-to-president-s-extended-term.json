@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "slug": "zimbabwe-court-delays-challenge-to-president-s-extended-term",
+  "title": "Zimbabwe court delays challenge to president’s extended term",
+  "date": "2026-11-17",
+  "needs": [
+    {
+      "id": "mandate-baseline",
+      "slot": "compared",
+      "need": "How much longer presidential and parliamentary terms become, and how far the next election moves.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "Zimbabwe’s next general election is now due in 2030 rather than 2028, after July constitutional changes extended presidential and parliamentary terms from five to seven years.",
+      "accepts": "Terms extended from five to seven years and the next general election moved from 2028 to 2030, credited to a named source describing the July amendment.",
+      "example": {
+        "value": "In July, Mnangagwa signed an amendment extending the terms of the sitting president and parliament from five to seven years and postponing the next general election from 2028 to 2030.",
+        "source": "CIVICUS Lens"
+      }
+    },
+    {
+      "id": "regional-pattern",
+      "slot": "compared",
+      "need": "How Zimbabwe's extension compares with other recent constitutional moves that kept incumbents in office.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A named source giving at least one other recent, dated case of a country extending terms or removing term or age limits for a sitting leader (such as Chad, Djibouti, the Republic of the Congo or El Salvador).",
+      "example": {
+        "value": "In October 2025, Chad's parliament abolished presidential term limits and lengthened terms from five to seven years.",
+        "source": "IPS Inter Press Service"
+      }
+    },
+    {
+      "id": "bench-dispute",
+      "slot": "why_now",
+      "need": "Why a dispute over the court's own composition comes before the term-extension challenges.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The court has prioritized a challenge to the legality of the larger bench.",
+      "accepts": "A named source explaining that the amendments' increase in the number of Constitutional Court judges is itself challenged, so the bench must be settled before the substantive cases proceed.",
+      "example": {
+        "value": "At a case management meeting, the court agreed to prioritize an application challenging the legality of provisions that expanded the number of Constitutional Court judges.",
+        "source": "The Zimbabwe Mail"
+      }
+    },
+    {
+      "id": "scheduled-proceedings",
+      "slot": "next",
+      "need": "What happens on November 18 and what the court must decide before reaching constitutionality.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Before considering the substance, judges must decide whether the cases can come directly before the court and which bench should hear them; November 18 is not a ruling on constitutionality.",
+      "accepts": "A named source giving November 18, 2026 as the resumption, with direct access and the bench as preliminary questions, and making clear it is not a ruling on constitutionality.",
+      "example": {
+        "value": "The court set November 18 for the next stage; it must first decide whether to grant direct access and establish the appropriate bench before it can determine the substantive challenges.",
+        "source": "The Zimbabwe Mail"
+      }
+    },
+    {
+      "id": "legal-response",
+      "slot": "response",
+      "need": "What legal action is under way against the amendments and on what grounds.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The Constitutional Court has postponed two legal challenges to the measures",
+      "accepts": "A named source describing the court challenges: the application alleging that provisions, including the court expansion, were added without appearing in the published proposals, and the separate challenge to extending the terms of officeholders already serving; or the number of petitions filed (five by October). Allegations must be distinguished from court findings.",
+      "example": {
+        "value": "One application alleges that about nine or 10 provisions, including the increase in judges, were added during the legislative process without appearing in the gazetted proposals; a second challenge asks whether the amendments can extend the terms of the president and MPs already in office.",
+        "source": "The Zimbabwe Mail"
+      }
+    },
+    {
+      "id": "incumbent-extension-safeguard",
+      "slot": "key_term",
+      "need": "The constitutional rule against incumbents benefiting from amendments that extend their time in office.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Section 328(7) of Zimbabwe's 2013 Constitution: an amendment to a term-limit provision that extends how long a person may hold office does not apply to anyone who held that office, or an equivalent one, before the amendment. Credited to the constitutional text or a named legal source, without treating its application to these amendments as decided.",
+      "example": {
+        "value": "Section 328(7) provides that an amendment to a term-limit provision extending the length of time a person may occupy public office does not apply to anyone who held that office, or an equivalent office, before the amendment.",
+        "source": "Constitution of Zimbabwe (2013), section 328(7)"
+      }
+    },
+    {
+      "id": "presidential-tenure",
+      "slot": "build_up",
+      "need": "How Mnangagwa came to power and why 2028 was the end of his last term.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A named source stating that Mnangagwa took power after Robert Mugabe's removal in November 2017, won the 2018 and 2023 elections, and that his second elected five-year term was due to end in 2028 under the two-term limit.",
+      "example": {
+        "value": "Mnangagwa became president after the military ousted Robert Mugabe in November 2017, won elections in 2018 and 2023, and his second and final elected term was due to end in 2028.",
+        "source": "Zimbabwe Electoral Commission results; Constitution of Zimbabwe (2013)"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "who_affected",
+      "why": "This is a nationwide constitutional dispute; the groups involved (the president, serving MPs, voters losing the direct presidential vote) are named in the story, and no count would help."
+    }
+  ],
+  "notes": "Section 328(7) is background law, not a finding that either challenge must succeed. The litigants are named in the source but are not needed in a card."
+}

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "slug": "malaysia-urges-indonesia-to-accept-regional-firefighting-team",
+  "title": "Malaysia urges Indonesia to accept regional firefighting team",
+  "date": "2026-11-17",
+  "needs": [
+    {
+      "id": "actual-response-and-proposal",
+      "slot": "response",
+      "need": "What Indonesia has actually done to fight the fires, distinguished from Lim's proposed regional force.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The regional firefighting force is Lim’s proposal, not an agreed measure. Indonesia has reported deploying about 71,000 firefighters, but when they were deployed is unspecified.",
+      "accepts": "A credited account of a response actually taken, such as Indonesia's reported deployment of about 71,000 firefighting personnel or the fires being discussed at the ASEAN summit, that keeps the permanent regional force as Lim's proposal rather than an agreed or deployed force.",
+      "example": {
+        "value": "Prabowo said Indonesia had deployed approximately 71,000 firefighting personnel, without specifying when, and told ASEAN leaders Indonesia had taken substantial measures and would strengthen its response.",
+        "source": "Indonesian President Prabowo Subianto, as reported by Malaysian media"
+      }
+    },
+    {
+      "id": "historical-burned-area",
+      "slot": "compared",
+      "need": "How this season's burned area compares with Indonesia's 2015 fire crisis, the benchmark season.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A hectare figure for Indonesia's 2015 fires (about 2.6 million hectares, June to October 2015), credited to a named source, set beside this season's estimate without claiming the two are like for like when their coverage differs.",
+      "example": {
+        "value": "About 2.6 million hectares burned across Indonesia between June and October 2015.",
+        "source": "World Bank, The Cost of Fire: An Economic Analysis of Indonesia's 2015 Fire Crisis"
+      }
+    },
+    {
+      "id": "seasonal-fire-weather",
+      "slot": "why_now",
+      "need": "Why this year's season was so severe: the El Niño drought and warming behind it.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited statement that El Niño-driven drought made this season's conditions unusually dry (for example cutting seasonal rainfall by roughly half), optionally with climate change's added heat. A statement only that people start the fires does not meet it.",
+      "example": {
+        "value": "For August–October 2026, El Niño cut seasonal precipitation by roughly 50%, while human-caused climate change made the season 1.6°C hotter.",
+        "source": "World Weather Attribution, via Mongabay"
+      }
+    },
+    {
+      "id": "cross-border-health-burden",
+      "slot": "who_affected",
+      "need": "The scale of hazardous-air exposure across Southeast Asia and respiratory illness in Indonesia.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "Their haze brought hazardous air to 12.5 million people across Southeast Asia and led to more than 400,000 respiratory infections in Indonesia.",
+      "accepts": "Figures credited to a named source for people exposed to hazardous air across Southeast Asia (12.5 million) and respiratory infections in Indonesia (more than 400,000) from this fire season.",
+      "example": {
+        "value": "Haze from the August–October 2026 fires exposed 12.5 million people across Southeast Asia to hazardous air and caused more than 400,000 respiratory infections in Indonesia.",
+        "source": "World Weather Attribution, via Mongabay"
+      }
+    },
+    {
+      "id": "asean-haze-agreement",
+      "slot": "key_term",
+      "need": "The regional framework already in place for cross-border haze, which Lim's force would go beyond.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited explanation of the ASEAN Agreement on Transboundary Haze Pollution (signed 2002; Indonesia ratified it in 2014, the last member to do so) or of ASEAN's existing haze cooperation, making clear that it does not give a regional force the right to enter a member's territory to fight fires.",
+      "example": {
+        "value": "The ASEAN Agreement on Transboundary Haze Pollution was signed in 2002; Indonesia ratified it in 2014, the last ASEAN member to do so.",
+        "source": "ASEAN Secretariat"
+      }
+    },
+    {
+      "id": "peat-fire-mechanism",
+      "slot": "key_term",
+      "need": "Why drained peat can sustain underground fires and make the haze hard to stop.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A credited explanation that drained, dried peat ignites easily and that peat fires can smolder underground for weeks, keeping smoke going and making them hard to put out.",
+      "example": {
+        "value": "Drained, dried-out peatlands ignite easily, and fires there can smolder underground for weeks while releasing carbon reserves.",
+        "source": "World Weather Attribution report"
+      }
+    },
+    {
+      "id": "long-term-peat-loss",
+      "slot": "build_up",
+      "need": "How decades of agricultural drainage and logging depleted the region's peat swamp forests before this season.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": "Over 1990–2010, peat swamp forest shrank by 45% in Borneo and 63% in Sumatra, with agricultural drainage and logging driving the losses.",
+      "accepts": "A credited finding that peat swamp forest cover declined by 45% in Borneo and 63% in Sumatra between 1990 and 2010, with agricultural drainage and logging as drivers.",
+      "example": {
+        "value": "Between 1990 and 2010, peat swamp forest cover fell by 45% in Borneo and 63% in Sumatra because of agricultural drainage and logging.",
+        "source": "World Weather Attribution, via Mongabay"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "next",
+      "why": "No decision date or scheduled step on Lim's proposal is established; it is an opposition-party politician's demand, not a tabled plan."
+    }
+  ],
+  "notes": "Burned-area estimates for 2026 differ in period and coverage (1.9 million hectares in the story; 2.88 million in a local estimate the caveats mention); a card must not add them or call a record. Lim Guan Eng chairs the DAP; the story's headline frames his call as Malaysia's."
+}

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "slug": "who-urges-countries-to-fund-action-against-drug-resistance",
+  "title": "WHO urges countries to fund action against drug resistance",
+  "date": "2026-11-16",
+  "needs": [
+    {
+      "id": "funding-gap",
+      "slot": "compared",
+      "need": "How many countries actually have funded AMR plans, against the goal of at least 60% by 2030.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A dated global share or count of countries with funded national AMR plans, credited to a named source and saying which status it counts (for example WHO's 22% with both funding and full implementation), or a clearly labeled regional figure that is not presented as the global position.",
+      "example": {
+        "value": "Only 22% of countries report having both the necessary funding and full implementation of national AMR action plans.",
+        "source": "World Health Organization (TrACSS 2026)"
+      }
+    },
+    {
+      "id": "meaning-of-resistance",
+      "slot": "key_term",
+      "need": "What antimicrobial resistance means and why it makes infections harder to treat.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "An explanation credited to a named source that antimicrobial resistance occurs when microbes no longer respond to the medicines meant to treat them, making infections harder to treat; it is the microbes, not patients, that become resistant.",
+      "example": {
+        "value": "Antimicrobial resistance occurs when bacteria, viruses, fungi and parasites no longer respond to antimicrobial medicines, making infections harder or impossible to treat.",
+        "source": "World Health Organization, antimicrobial resistance fact sheet"
+      }
+    },
+    {
+      "id": "global-death-burden",
+      "slot": "who_affected",
+      "need": "The worldwide scale of deaths associated with bacterial resistance.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "An estimated 4.7 million global deaths were linked to bacterial resistance in 2021.",
+      "accepts": "A worldwide estimate of deaths associated with bacterial AMR, with its year and a named source.",
+      "example": {
+        "value": "An estimated 4.7 million deaths worldwide in 2021 were associated with bacterial antimicrobial resistance.",
+        "source": "Premium Times, reporting WHO"
+      }
+    },
+    {
+      "id": "practical-response",
+      "slot": "response",
+      "need": "What concrete measures the funding is meant to support.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "A revised global plan for 2026–2036 puts prevention, responsible medicine use, stronger laboratories and surveillance, sustainable financing, and cooperation across health sectors at the center.",
+      "accepts": "A named source's account of at least two concrete AMR measures being pursued or recommended, such as infection prevention, early diagnosis, laboratory or surveillance strengthening, responsible antimicrobial use or access to quality-assured medicines. A general call for action or funding does not meet it.",
+      "example": {
+        "value": "WHO calls for stronger primary healthcare, early diagnosis, improved surveillance and access to quality-assured medicines to prevent infections and support appropriate treatment.",
+        "source": "Voice of Nigeria, reporting WHO"
+      }
+    },
+    {
+      "id": "attributable-deaths",
+      "slot": "compared",
+      "need": "How many deaths resistance directly causes, beside the 4.7 million deaths linked to it.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A sourced estimate of deaths attributable to bacterial AMR (about 1.14 million in 2021), set against the associated figure and labeled as attributable.",
+      "example": {
+        "value": "In 2021, 1.14 million deaths were attributable to bacterial antimicrobial resistance and 4.71 million were associated with it.",
+        "source": "GBD 2021 Antimicrobial Resistance Collaborators, The Lancet (2024)"
+      }
+    },
+    {
+      "id": "2030-checkpoints",
+      "slot": "next",
+      "need": "The agreed deadline and targets by which countries' delivery will be judged.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "At the 2024 UN meeting, leaders set a 2030 goal: bacterial resistance deaths should be 10% below the 2019 baseline of 4.95 million.",
+      "accepts": "The 2030 targets of the 2024 UN political declaration (a 10% cut in bacterial AMR-associated deaths against the 2019 baseline of 4.95 million, funded national plans in at least 60% of countries), credited to the declaration or a named source reporting it.",
+      "example": {
+        "value": "The 2024 UN political declaration set 2030 targets to reduce bacterial AMR-associated deaths by 10% from the 2019 baseline of 4.95 million and to have funded national action plans in at least 60% of countries.",
+        "source": "UN General Assembly Political Declaration on Antimicrobial Resistance (2024)"
+      }
+    },
+    {
+      "id": "awareness-week-timing",
+      "slot": "why_now",
+      "need": "Why WHO is renewing its appeal in mid-November.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": "As World Antimicrobial Resistance Awareness Week approaches, Nov. 18–24",
+      "accepts": "A named source tying the appeal to World AMR Awareness Week, November 18-24.",
+      "example": {
+        "value": "The call comes as the world prepares to mark World AMR Awareness Week, from 18 to 24 November.",
+        "source": "Premium Times"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "build_up",
+      "why": "The story gives the relevant policy background in the 2024 commitments and the revised global plan; a longer history of resistance is not needed for this funding appeal."
+    }
+  ],
+  "notes": "WHO's 22% (TrACSS 2026, published November 16) counts countries with both funding and full implementation, a stricter status than the 60% target's funded plans; a card must say what it counts. Regional financing figures illustrate the gap and must not be presented as global progress. The 4.95 million (2019) and 4.7 million (2021) are both associated-death estimates; they do not show the 2030 goal is on track."
+}

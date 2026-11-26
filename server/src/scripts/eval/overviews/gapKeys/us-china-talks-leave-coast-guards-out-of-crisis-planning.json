@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "slug": "us-china-talks-leave-coast-guards-out-of-crisis-planning",
+  "title": "US-China talks leave sea crisis channels incomplete",
+  "date": "2026-11-13",
+  "needs": [
+    {
+      "id": "existing-crisis-measures",
+      "slot": "response",
+      "need": "What Washington, Beijing and the region are already doing to keep sea incidents from escalating.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The stability effort also spans an AI-focused team, emergency communications, anti-drug cooperation and military exchanges.",
+      "accepts": "A named source identifying an existing measure: the US-China crisis communications channel and military-to-military talks, or the ASEAN-China negotiations on a South China Sea code of conduct. It must not imply that the US-China channels already cover coast guards or allies.",
+      "example": {
+        "value": "The US-China strategic-stability framework includes a crisis communications channel and military-to-military talks, alongside an AI working group and counternarcotics cooperation.",
+        "source": "Sarah Beran, via the Keough School of Global Affairs, University of Notre Dame"
+      }
+    },
+    {
+      "id": "confrontation-trend",
+      "slot": "compared",
+      "need": "Whether the China-Philippines sea confrontations have become more frequent or dangerous over time.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A named source stating that confrontations in Philippine-claimed South China Sea areas have grown in frequency or intensity over recent years, or giving a dated recent incident that shows the escalation (such as a Philippine marine injured at Second Thomas Shoal). Calling the encounters regular does not meet it.",
+      "example": {
+        "value": "Over the past few years China has increased the frequency and intensity of its incursions into Philippine-claimed areas, producing increasingly dangerous confrontations; in July a Philippine marine was injured in a clash at Second Thomas Shoal.",
+        "source": "The Diplomat"
+      }
+    },
+    {
+      "id": "defense-treaty-threshold",
+      "slot": "key_term",
+      "need": "What the US-Philippines defense commitment covers, and what makes an incident an armed attack rather than a collision.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": "Washington has repeatedly said an armed attack on Filipino forces would bring its defense commitment into play",
+      "accepts": "An explanation credited to an authoritative source naming the 1951 US-Philippines Mutual Defense Treaty and its armed-attack trigger, including that it covers public vessels such as coast guard ships anywhere in the South China Sea, and that a collision does not automatically oblige a US military response.",
+      "example": {
+        "value": "The 1951 Mutual Defense Treaty commits each side to act against an armed attack on the other; the 2023 bilateral defense guidelines say this covers armed forces, public vessels and aircraft, including the coast guard, anywhere in the South China Sea.",
+        "source": "US-Philippines Mutual Defense Treaty (1951), Articles IV-V; 2023 US-Philippines Bilateral Defense Guidelines"
+      }
+    },
+    {
+      "id": "dialogue-break-and-restoration",
+      "slot": "build_up",
+      "need": "The history of suspended and restored US-China military contacts behind the 'renewed' dialogue.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A sourced, dated account of a suspension of US-China military contacts and the later agreement to restore them.",
+      "example": {
+        "value": "China suspended several military dialogue mechanisms after Nancy Pelosi's August 2022 Taiwan visit; Joe Biden and Xi Jinping agreed in November 2023 to resume high-level military communications.",
+        "source": "White House readout of the Biden-Xi meeting, November 15, 2023"
+      }
+    },
+    {
+      "id": "proposed-maritime-code",
+      "slot": "key_term",
+      "need": "Who is negotiating the proposed South China Sea code of conduct and what it is meant to do.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A named source identifying ASEAN and China as the negotiating parties and describing the code as rules for conduct at sea, not a settlement of the territorial claims.",
+      "example": {
+        "value": "ASEAN members and China committed in 2002 to work toward a code of conduct in the South China Sea; it is a framework for conduct and managing incidents, not a resolution of the competing territorial claims.",
+        "source": "ASEAN-China Declaration on the Conduct of Parties in the South China Sea (2002)"
+      }
+    },
+    {
+      "id": "next-diplomatic-forum",
+      "slot": "next",
+      "need": "The next forum where the sea incidents and the code of conduct come up.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A named source identifying the ASEAN leaders' annual summit in Manila as the next forum where the incidents and code negotiations are on the agenda, or saying that the code negotiations will miss their year-end 2026 deadline. An expected agenda item must not be described as a decision.",
+      "example": {
+        "value": "The code negotiations and continuing incidents were expected to feature prominently at the ASEAN leaders' annual summit in Manila that weekend; the talks will not be finished by the year-end deadline.",
+        "source": "UNB; ABC News (AP)"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "why_now",
+      "why": "The peg is an assessment naming an unresolved gap, not an event that needs its own cause explained."
+    },
+    {
+      "slot": "who_affected",
+      "why": "The parties exposed are institutions and states (coast guards, allied forces, the claimants), which the story names; no population count would help."
+    }
+  ],
+  "notes": "The defense-treaty quote states the armed-attack trigger, so the need stands as stated; a card explaining the treaty adds to it. The ASEAN summit was expected to start the weekend after publication; a card must not present its outcome as known."
+}

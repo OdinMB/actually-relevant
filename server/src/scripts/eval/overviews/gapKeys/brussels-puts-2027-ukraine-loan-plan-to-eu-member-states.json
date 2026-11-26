@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "slug": "brussels-puts-2027-ukraine-loan-plan-to-eu-member-states",
+  "title": "Brussels puts 2027 Ukraine loan plan to EU member states",
+  "date": "2026-11-18",
+  "needs": [
+    {
+      "id": "proposed-response",
+      "slot": "response",
+      "need": "What the EU proposes to do about Ukraine’s 2027 financing shortfall, and whether it is approved.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "On November 18, 2026, the European Union proposed that member states approve an additional €45 billion loan for Ukraine’s 2027 budget needs.",
+      "accepts": "States that the European Commission proposes an additional €45 billion loan for Ukraine’s 2027 needs, still subject to member-state approval, naming its source.",
+      "example": {
+        "value": "The Commission proposes €45 billion in additional loans for Ukraine in 2027, submitted to member states for approval.",
+        "source": "Kyiv Independent, on the European Commission’s draft proposal (2026-11-17)"
+      }
+    },
+    {
+      "id": "share-of-shortfall",
+      "slot": "compared",
+      "need": "How much of Ukraine’s estimated 2027 financing gap the proposed loan would cover.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "The proposed loan would cover about two-thirds of Ukraine’s estimated €70 billion funding gap, with other international partners expected to help cover the rest.",
+      "accepts": "Gives Ukraine’s estimated 2027 financing gap as about €70 billion and says €45 billion covers about two-thirds, leaving about €25 billion to other partners, naming a source.",
+      "example": {
+        "value": "The loan would cover two-thirds of Ukraine’s €70 billion funding gap for 2027.",
+        "source": "CNA (2026-11-18)"
+      }
+    },
+    {
+      "id": "budget-headroom",
+      "slot": "key_term",
+      "need": "What borrowing against EU budget headroom means, as opposed to member states paying Ukraine €45 billion now.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Explains that the Commission borrows the money on capital markets and that the unused margin of the EU’s long-term budget (the headroom between its spending and its resource ceiling) guarantees the debt, so member states do not pay the sum upfront; names a source.",
+      "example": {
+        "value": "The Commission would sell debt in capital markets, guarantee it with the EU budget and send the proceeds to Kyiv.",
+        "source": "Report of 2026-11-17 on the Commission’s plan (Google News result)"
+      }
+    },
+    {
+      "id": "repayment-condition",
+      "slot": "key_term",
+      "need": "On what condition Ukraine would have to repay the loan.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "States that Ukraine would repay the loan only after Russia pays reparations for the damage it caused, naming the source, without implying that reparations are assured.",
+      "example": {
+        "value": "Ukraine would repay only after Russia pays for the damage it caused in Ukraine.",
+        "source": "European Commission President Ursula von der Leyen, as reported by CNA (2026-11-18)"
+      }
+    },
+    {
+      "id": "approval-steps",
+      "slot": "next",
+      "need": "When leaders will discuss the proposal and what agreement it needs before it can proceed.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "EU leaders were scheduled to discuss it on Nov. 26–27, but they must unanimously agree to use budget headroom before it can proceed.",
+      "accepts": "Identifies the Nov. 26–27, 2026 leaders’ summit and the need for unanimity to use EU budget headroom, naming a source, and keeps a scheduled discussion apart from an assured agreement.",
+      "example": {
+        "value": "EU leaders are scheduled to discuss the loan on Nov. 26–27 and must unanimously approve use of the budget’s remaining amounts.",
+        "source": "POLITICO (2026-11-16)"
+      }
+    },
+    {
+      "id": "loan-uses",
+      "slot": "response",
+      "need": "How the €45 billion would be split between defense production and reform-linked support.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Gives the draft’s €25 billion for Ukraine’s defense industrial capacity and €20 billion for two programs paid against EU and IMF reforms, naming a source.",
+      "example": {
+        "value": "The draft assigns €25 billion to defense industrial capacity and the remaining €20 billion to two programs that pay Ukraine in exchange for EU and IMF reforms.",
+        "source": "Kyiv Independent, on the European Commission’s draft proposal (2026-11-17)"
+      }
+    },
+    {
+      "id": "previous-package",
+      "slot": "compared",
+      "need": "How the new €45 billion relates to the existing €90 billion loan.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Identifies the €90 billion loan agreed in December 2025 for 2026 and 2027 as the precedent using the same financing method, and keeps the new €45 billion apart from it, naming a source.",
+      "example": {
+        "value": "The approach resembles the one agreed last December to mobilize €90 billion for this year and next.",
+        "source": "Report of 2026-11-17 on the Commission’s plan (Google News result)"
+      }
+    },
+    {
+      "id": "wartime-urgency",
+      "slot": "why_now",
+      "need": "What makes securing Ukraine’s 2027 financing urgent now.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Connects the loan to keeping Ukraine financially afloat in 2027 as Russian attacks on its infrastructure intensify, or to the IMF disbursement that a delay could hold up, naming a source.",
+      "example": {
+        "value": "The loan is intended to keep Ukraine financially afloat in the coming year as Russian attacks on Ukrainian infrastructure intensify.",
+        "source": "POLITICO, citing EU officials (2026-11-16)"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "build_up",
+      "why": "The €90 billion precedent gives the background needed; a history of the war or of EU aid is not."
+    },
+    {
+      "slot": "who_affected",
+      "why": "Ukraine and its defense industry are named; population counts would not help size a sovereign financing decision."
+    }
+  ],
+  "notes": "The €25 billion/€20 billion split belongs to the new proposal; do not accept the Oct. 30 split of €13.3 billion/€31.7 billion from the existing package. The €90 billion is a two-year total, not a 2027 figure."
+}

@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "slug": "governments-set-to-unveil-over-230-child-protection-pledges",
+  "title": "Governments set to unveil over 230 child protection pledges",
+  "date": "2026-11-18",
+  "needs": [
+    {
+      "id": "annual-scale",
+      "slot": "who_affected",
+      "need": "How many children experience violence worldwide each year.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "The World Health Organization says violence affects more than 1 billion children each year and can cause immediate physical, mental and emotional harm, as well as lasting health problems.",
+      "accepts": "An estimate of the number of children affected by violence worldwide each year, with the yearly and worldwide scope clear and a named source.",
+      "example": {
+        "value": "More than 1 billion children worldwide experience violence each year.",
+        "source": "World Health Organization"
+      }
+    },
+    {
+      "id": "pledge-scale",
+      "slot": "compared",
+      "need": "How the new pledges add to the commitments and countries since the first conference.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "The pledges include first-time commitments from 30 countries, bringing the total since the first conference in Bogotá in 2024 to more than 630 across 140 countries.",
+      "accepts": "A sourced comparison of the more than 230 new commitments with the cumulative total of more than 630 across 140 countries since 2024, keeping commitments apart from countries and new pledges apart from the total.",
+      "example": {
+        "value": "More than 230 new commitments bring the total since the 2024 conference to more than 630 across 140 countries, including first-time commitments from 30 countries.",
+        "source": "World Health Organization news release (2026-11-17)"
+      }
+    },
+    {
+      "id": "total-financing",
+      "slot": "compared",
+      "need": "The total funding promised alongside the commitments, to show their financial scale beyond single-country examples.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "The total funding in the Manila commitments, in dollars, attributed to a named source and described as pledged rather than spent. A single country's allocation does not meet it.",
+      "example": {
+        "value": "The commitments include more than $500 million in funding.",
+        "source": "WHO Director-General Tedros Adhanom Ghebreyesus (2026-11-17)"
+      }
+    },
+    {
+      "id": "concrete-actions",
+      "slot": "response",
+      "need": "What governments actually propose to change or fund to prevent violence against children.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Tanzania plans to put $190 million toward child protection.",
+      "accepts": "At least one concrete, attributed government commitment naming the country and a legal, funding or service measure, such as Tanzania's planned $190 million for child protection or Burundi's planned corporal-punishment ban. A pledge count or a general call to protect children does not meet it.",
+      "example": {
+        "value": "Tanzania plans to invest US$190 million in child protection.",
+        "source": "World Health Organization news release (2026-11-17)"
+      }
+    },
+    {
+      "id": "earlier-follow-through",
+      "slot": "build_up",
+      "need": "Whether commitments made in Bogotá in 2024 have turned into implemented protections, rather than only more promises.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A named-source account of follow-through on the 2024 Bogotá commitments: an enacted law, a funded programme or a delivered service traced to them, or a progress report's count of commitments carried out. Counts of announced pledges do not meet it.",
+      "example": null
+    },
+    {
+      "id": "delivery-deadlines",
+      "slot": "next",
+      "need": "The dates and measurable outcomes governments have set for delivering their promises.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": "Other goals include Burundi banning corporal punishment by 2028 and Côte d’Ivoire reducing violence against children by 30% by 2030.",
+      "accepts": "At least one attributed country commitment pairing a deadline with a concrete outcome, such as Burundi's ban on corporal punishment by 2028 or Côte d'Ivoire's 30% reduction by 2030. A general reference to action through 2030 does not meet it.",
+      "example": {
+        "value": "Burundi pledged to ban corporal punishment by 2028, and Côte d'Ivoire aims to reduce violence against children by 30% by 2030.",
+        "source": "World Health Organization news release (2026-11-17)"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "why_now",
+      "why": "The scheduled Manila ministerial conference, which the story names, explains the timing."
+    },
+    {
+      "slot": "key_term",
+      "why": "No specialist term or mechanism needs explaining; the caveat already separates pledges from delivered protections."
+    }
+  ],
+  "notes": "The absence of follow-through evidence in the research facts does not show that no implementation happened; the build-up need is met only by a sourced account."
+}

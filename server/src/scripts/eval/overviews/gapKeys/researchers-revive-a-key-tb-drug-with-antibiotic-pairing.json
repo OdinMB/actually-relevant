@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "slug": "researchers-revive-a-key-tb-drug-with-antibiotic-pairing",
+  "title": "Researchers revive a key TB drug with antibiotic pairing",
+  "date": "2026-11-17",
+  "needs": [
+    {
+      "id": "single-drug-comparison",
+      "slot": "compared",
+      "need": "How the combination performed against either drug alone in the same mouse experiment.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited statement that neither isoniazid alone nor vancomycin alone significantly reduced bacterial burden in the mice after 10 days, unlike the combination.",
+      "example": {
+        "value": "Neither drug used alone significantly reduced bacterial burden in the mouse model after 10 days of treatment.",
+        "source": "Indian Institute of Science researchers, as reported by The Hindu"
+      }
+    },
+    {
+      "id": "resistant-tb-burden",
+      "slot": "who_affected",
+      "need": "How many people a year develop drug-resistant TB, as distinct from all TB.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited annual global estimate of people developing a named form of drug-resistant TB (for example multidrug- or rifampicin-resistant TB), with its year. An all-TB total does not meet it.",
+      "example": {
+        "value": "An estimated 400,000 people developed multidrug-resistant or rifampicin-resistant TB worldwide in 2023.",
+        "source": "WHO, Global Tuberculosis Report 2024"
+      }
+    },
+    {
+      "id": "existing-resistant-tb-treatment",
+      "slot": "response",
+      "need": "What treatment is already used for drug-resistant TB, so the experimental pairing is placed beside it.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited description of at least one currently recommended regimen for a named drug-resistant TB category, with its length, kept distinct from the experimental pairing.",
+      "example": {
+        "value": "WHO recommends a six-month, all-oral BPaLM regimen (bedaquiline, pretomanid, linezolid and moxifloxacin) for eligible patients with multidrug-resistant or rifampicin-resistant TB.",
+        "source": "WHO consolidated guidelines on tuberculosis, Module 4: Treatment, 2022 update"
+      }
+    },
+    {
+      "id": "resistance-types",
+      "slot": "key_term",
+      "need": "What multidrug-resistant TB is and which resistance types the study tested.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A credited explanation that multidrug-resistant TB resists at least isoniazid and rifampicin, with the study's tested isolates named as isoniazid-resistant and multidrug-resistant, not every form of drug-resistant TB.",
+      "example": {
+        "value": "Multidrug-resistant TB is resistant to at least isoniazid and rifampicin. The IISc study included isoniazid-resistant and multidrug-resistant clinical isolates.",
+        "source": "WHO for the definition; The Hindu for the study's scope"
+      }
+    },
+    {
+      "id": "clinical-development-step",
+      "slot": "next",
+      "need": "The team's stated next development step, without implying a human trial is scheduled.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A credited statement that the team is working to take the combination toward clinical trials, kept distinct from a confirmed trial start.",
+      "example": {
+        "value": "The team is working to advance the combination for clinical trials.",
+        "source": "Indian Institute of Science researchers, as reported by The Hindu"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "why_now",
+      "why": "The study's publication is the trigger; no policy change or outbreak needs explaining."
+    },
+    {
+      "slot": "build_up",
+      "why": "A history of TB drug development is not needed once the comparator, resistance scope and existing treatment are clear."
+    }
+  ],
+  "notes": "The draft's response need (the pairing itself) was cut: it is the story's news, not a response beside it; existing-resistant-tb-treatment is the response need instead, and the story does not state it. MDR/RR-TB burden sizes the wider problem, not the patients this pairing could treat."
+}

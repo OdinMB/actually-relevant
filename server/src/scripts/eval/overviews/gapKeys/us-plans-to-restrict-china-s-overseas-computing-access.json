@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "slug": "us-plans-to-restrict-china-s-overseas-computing-access",
+  "title": "US plan targets Chinese access to computing abroad",
+  "date": "2026-11-14",
+  "needs": [
+    {
+      "id": "remote-access-gap",
+      "slot": "key_term",
+      "need": "How renting computing abroad lets Chinese firms use restricted chips without importing them, and why export controls on chip shipments do not reach it.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": "extend US chip controls beyond direct shipments and into the overseas computing services that can let Chinese firms use restricted processors",
+      "accepts": "An explanation naming its source that a customer can rent processing capacity over a network while the chips stay in an overseas data center, and that controls on physical chip transfers do not cover that remote use.",
+      "example": {
+        "value": "U.S. export controls cover the physical transfer of chips but not remote access to them.",
+        "source": "Cassia King, Institute for AI Policy and Strategy, quoted by Quartz"
+      }
+    },
+    {
+      "id": "proposed-control",
+      "slot": "response",
+      "need": "What the United States proposes to do about overseas access, and whether it is in force.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "the US Commerce Department was reported to be finalizing a rule aimed at stopping Chinese AI companies from remotely using advanced US chips hosted in overseas data centers",
+      "accepts": "A named source describing the reported Commerce rule (licenses for Blackwell-class or newer chip shipments to the seven countries, with an exemption for US-run sites that block arms-embargoed countries) or the Remote Access Security Act, and making clear that neither was in force on the story's day.",
+      "example": {
+        "value": "Commerce is finalizing a rule extending advanced-chip licensing to Singapore, Malaysia, Thailand, Indonesia, Brazil, Norway and South Africa to curb Chinese firms' remote access.",
+        "source": "Asia Times, citing The Information"
+      }
+    },
+    {
+      "id": "unequal-operator-treatment",
+      "slot": "who_affected",
+      "need": "Which operators would need shipment-by-shipment licenses and which could be exempt.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Licensing would apply shipment by shipment to local and Chinese-linked operators.",
+      "accepts": "A named source distinguishing local and Chinese-linked operators, which would need a license per shipment, from US-operated facilities that could be exempt if they block access from arms-embargoed countries and report customers and computing scale.",
+      "example": {
+        "value": "US cloud companies can keep shipping top-end Nvidia chips to their Southeast Asian facilities as long as they keep Chinese users out, while local and Chinese-linked operators will need a license for each shipment.",
+        "source": "Asia Times"
+      }
+    },
+    {
+      "id": "existing-licensing-baseline",
+      "slot": "compared",
+      "need": "Which countries already need US approval for advanced-chip imports, so the seven are read as an extension of an existing list.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A named source naming at least one destination that already required US approval for advanced AI chips before this proposal (such as Saudi Arabia or Vietnam), or saying how many destinations the existing controls cover.",
+      "example": {
+        "value": "The United States already requires Commerce approval for advanced AI chip imports in some countries, including Saudi Arabia and Vietnam.",
+        "source": "CHOSUNBIZ"
+      }
+    },
+    {
+      "id": "documented-overseas-use",
+      "slot": "why_now",
+      "need": "Evidence that Chinese firms already use restricted chips through third-country data centers and are rushing to lock in more capacity.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A named source reporting that named Chinese AI companies have accessed restricted Nvidia chips through data centers in a named country, or that Chinese firms are racing to reserve overseas capacity before a crackdown. A proposed or canceled deal alone does not meet it.",
+      "example": {
+        "value": "Moonshot AI, ByteDance, Alibaba and Tencent have reportedly accessed restricted Nvidia chips through data centers in Thailand, Malaysia, Japan and elsewhere in Asia.",
+        "source": "Quartz"
+      }
+    },
+    {
+      "id": "rule-timing",
+      "slot": "next",
+      "need": "When the rule might be announced, and where the legislative route stands.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": "an announcement was only described as possible as soon as November",
+      "accepts": "A named source saying the rule could be announced as soon as November 2026, or that the Remote Access Security Act passed the House 369-22 in January and awaits the Senate.",
+      "example": {
+        "value": "The rule could be announced as soon as this month; the House passed the Remote Access Security Act 369-22 in January, and the Senate has yet to act.",
+        "source": "Asia Times; Quartz"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "build_up",
+      "why": "The existing licensing list and the shipment-versus-remote-access distinction give enough history; a chronology of US-China chip controls is not needed to place this proposal."
+    }
+  ],
+  "notes": "The Commerce rule was issued on November 16, two days after this story; on the story's day it was a reported proposal, and a card must not present it as in force. The canceled Oracle-Tencent deal shows the stakes, not documented access."
+}

@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "slug": "china-sends-over-100-ships-near-taiwan",
+  "title": "China deploys over 100 vessels in unannounced drills",
+  "date": "2026-11-14",
+  "needs": [
+    {
+      "id": "deployment-benchmark",
+      "slot": "compared",
+      "need": "How the deployment compares in scale and reach with earlier Chinese exercises aimed at Taiwan.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "A senior Taiwanese official said the naval deployment exceeded the scale of China’s last formally named drills aimed at Taiwan, Justice Mission 2025, held nearly a year earlier.",
+      "accepts": "An attributed comparison with a named earlier exercise or deployment, by vessel numbers, area covered or rank among past deployments; a numerical comparison names the dates and what was counted.",
+      "example": {
+        "value": "The deployment exceeded the scale of Justice Mission 2025 and was one of China's largest naval deployments to date.",
+        "source": "A senior Taiwanese security official, as reported by The Japan Times (2026-11-13)"
+      }
+    },
+    {
+      "id": "cross-strait-dispute",
+      "slot": "build_up",
+      "need": "The dispute behind China's military pressure on self-governed Taiwan.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Explains, with a named source, that Taiwan governs itself, that Beijing claims it as Chinese territory, and that Beijing has not ruled out force to take it, presenting China's claim as its position, not as settled fact.",
+      "example": {
+        "value": "Taiwan is self-governed, while Beijing claims the island as its territory and has not renounced using force to bring it under Chinese control.",
+        "source": "Reuters background reporting on cross-strait relations"
+      }
+    },
+    {
+      "id": "diplomatic-response",
+      "slot": "response",
+      "need": "What other governments have done in response to Chinese military activity east of Taiwan.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "The G7 foreign ministers warned that Chinese activity east of Taiwan threatens freedom of navigation and the safety of international shipping, interests that reach beyond the island.",
+      "accepts": "An attributed account of the G7 foreign ministers' warning about Chinese activity east of Taiwan (regional stability, freedom of navigation or shipping safety), described as a diplomatic response, not a military countermeasure.",
+      "example": {
+        "value": "G7 foreign ministers warned that China's increasingly assertive activities east of Taiwan threaten regional stability, freedom of navigation and the safety of international shipping.",
+        "source": "G7 foreign ministers, as reported by Yahoo News (2026-11-13)"
+      }
+    },
+    {
+      "id": "diplomatic-timing",
+      "slot": "why_now",
+      "need": "Which meetings the deployment preceded, the basis of Taipei's claim that it was timed to exert pressure.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Names at least one specific meeting the deployment preceded, such as Donald Trump's trip to China for a summit with Xi Jinping, and attributes the reading of political pressure to Taiwanese officials rather than stating Beijing's motive as fact.",
+      "example": {
+        "value": "Taiwanese officials said the deployment took place before Donald Trump arrived in China for an economic summit.",
+        "source": "Yahoo News, citing Taiwanese officials (2026-11-13)"
+      }
+    },
+    {
+      "id": "taiwan-supply-exposure",
+      "slot": "who_affected",
+      "need": "Why Taiwan's dependence on outside supplies makes an isolation operation consequential for civilian life and the economy.",
+      "kind": "figure",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A named-source figure for Taiwan's dependence on imported energy or another essential supply, with the category and year, without implying this deployment interrupted supplies.",
+      "example": {
+        "value": "Imports supply about 97% of Taiwan's energy.",
+        "source": "Taiwan Ministry of Economic Affairs, Energy Administration, energy statistics"
+      }
+    },
+    {
+      "id": "isolation-mechanism",
+      "slot": "key_term",
+      "need": "What surrounding or isolating Taiwan would mean operationally, and how that differs from an invasion.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Explains, with a named source, that an isolation or blockade would restrict sea and air access to cut supplies or reinforcements without landing forces, and keeps open whether these maneuvers rehearsed one.",
+      "example": {
+        "value": "An air and maritime blockade would seek to cut Taiwan's external connections and pressure it into capitulation; it is a different military option from an amphibious invasion.",
+        "source": "U.S. Department of Defense, Military and Security Developments Involving the People's Republic of China (2024)"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "next",
+      "why": "No end date, scheduled countermeasure or decision is reported; the meetings belong to why-now, not to what comes next."
+    }
+  ],
+  "notes": "The more-than-100-vessel count covers the western Pacific, not only waters around Taiwan. Do not turn Taiwanese officials' or analysts' readings into established Chinese intent; The Diplomat judged routine long-distance training more likely than a blockade rehearsal."
+}

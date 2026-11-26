@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "slug": "nvidia-posts-record-sales-rules-out-huang-s-return",
+  "title": "Nvidia posts record sales, rules out Huang's return",
+  "date": "2026-11-18",
+  "needs": [
+    {
+      "id": "revenue-scale",
+      "slot": "compared",
+      "need": "How Nvidia's record quarterly revenue compares with its sales a year earlier.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "On Nov. 17, Nvidia, the US chipmaker, reported record third-quarter revenue of $115.8 billion, about double its level a year earlier.",
+      "accepts": "Third-quarter revenue of about $115.8 billion with its year-on-year growth (about double), credited to Nvidia or a named outlet.",
+      "example": {
+        "value": "Nvidia reported record third-quarter revenue of $115.8 billion, about double a year earlier.",
+        "source": "Nvidia's quarterly results, Nov. 17, 2026"
+      }
+    },
+    {
+      "id": "huang-departure",
+      "slot": "build_up",
+      "need": "When Huang resigned as CEO and in what circumstances, and when he offered to return.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited account giving the date (at least the month) of Huang's resignation and its stated circumstances, saying whose account it is; repeating that the board rejected his return does not meet it.",
+      "example": null
+    },
+    {
+      "id": "board-response",
+      "slot": "response",
+      "need": "What Nvidia's board has decided in response to Huang's attempted return.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Board chair Harvey Jones said directors had unanimously accepted Huang’s resignation and would not reinstate him.",
+      "accepts": "A statement that the board unanimously accepted Huang's resignation and does not intend to reinstate him, credited to the board or chair Harvey Jones.",
+      "example": {
+        "value": "Nvidia's board unanimously accepted Jensen Huang's resignation and did not intend to reinstate him as CEO.",
+        "source": "Nvidia board chair Harvey Jones, as reported by the Korea Herald"
+      }
+    },
+    {
+      "id": "sales-growth-driver",
+      "slot": "why_now",
+      "need": "What drove the doubling of Nvidia's data-center sales this quarter.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A concrete driver of this quarter's data-center growth (for example cloud providers' AI infrastructure spending or demand for a named chip generation such as Blackwell), credited to Nvidia, a customer or a named analyst. Repeating that data-center sales doubled does not meet it.",
+      "example": null
+    },
+    {
+      "id": "quarterly-outlook",
+      "slot": "next",
+      "need": "What Nvidia forecasts for the current quarter, distinguished from completed results.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "The $130 billion figure is a company projection for the current quarter, not a completed result; actual revenue could differ.",
+      "accepts": "Nvidia's guidance of about $130 billion revenue for its current (fourth fiscal) quarter, labeled as a forecast and credited to Nvidia.",
+      "example": {
+        "value": "Nvidia projected revenue of $130 billion for its fourth fiscal quarter.",
+        "source": "Nvidia"
+      }
+    },
+    {
+      "id": "licensing-reach",
+      "slot": "who_affected",
+      "need": "Which destinations and customers the new US licensing rules cover.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "A credited account naming the countries whose advanced-chip shipments now need a US license (Singapore, Malaysia, Thailand, Indonesia and Brazil) and the data-center services to China-headquartered companies the rules also cover, stated as a licensing requirement rather than a ban.",
+      "example": {
+        "value": "The new US rules require licenses for shipments of advanced chips to Singapore, Malaysia, Thailand, Indonesia and Brazil, which the Commerce Department says present a higher-than-normal risk of diversion.",
+        "source": "US Commerce Department, as reported by the Korea Herald"
+      }
+    },
+    {
+      "id": "data-center-business",
+      "slot": "key_term",
+      "need": "What Nvidia's data-center segment sells and how it relates to AI computing.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "A credited explanation that the segment sells accelerated-computing chips (GPUs), systems and networking used to train and run AI models, not data-center buildings.",
+      "example": {
+        "value": "Nvidia's Data Center segment supplies accelerated-computing and networking products used by cloud providers and others for workloads including AI training and inference.",
+        "source": "Nvidia's descriptions of its Data Center business"
+      }
+    }
+  ],
+  "notNeeded": [],
+  "notes": "The story never says when or why Huang resigned; nothing in the research does either, so huang-departure has no example. The story mentions the licensing rules only for data-center services to China-headquartered firms (W2); the country list is missing."
+}

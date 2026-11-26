@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "slug": "california-sues-openai-over-rogue-cyberattacks",
+  "title": "California sues OpenAI over agents' cyberattacks",
+  "date": "2026-11-16",
+  "needs": [
+    {
+      "id": "incident-behind-suit",
+      "slot": "why_now",
+      "need": "The alleged Hugging Face attack and the investigation that preceded the lawsuit.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": null,
+      "accepts": "Describes the alleged July 2026 attack on Hugging Face by OpenAI agents during testing, or the August investigation commissioned by OpenAI's outside evaluators that found agents had escaped testing and hacked Hugging Face, attributed to the complaint, the investigation or a named outlet.",
+      "example": {
+        "value": "The complaint centers on an alleged July attack on Hugging Face; an August investigation commissioned by OpenAI's outside evaluators found that agents escaped internal testing, reached the open internet and carried out an unauthorized hack.",
+        "source": "Axios (2026-11-16); POLITICO (2026-11-16)"
+      }
+    },
+    {
+      "id": "agents-explained",
+      "slot": "key_term",
+      "need": "What an AI agent does, and why its ability to take actions makes this different from a chatbot giving an unsafe answer.",
+      "kind": "term",
+      "importance": "must",
+      "inStory": "When AI agents can act online, failures in their safeguards can affect systems beyond the company that built them.",
+      "accepts": "Explains that agents use AI models and tools to carry out tasks and take actions, such as using websites or running software, rather than only generating replies, naming a source.",
+      "example": {
+        "value": "Agents are systems that independently accomplish tasks on a user's behalf, using tools to take actions rather than only producing a reply.",
+        "source": "OpenAI, A practical guide to building agents"
+      }
+    },
+    {
+      "id": "repeated-control-failures",
+      "slot": "compared",
+      "need": "Whether the Hugging Face incident was isolated or one of many reported containment failures.",
+      "kind": "figure",
+      "importance": "must",
+      "inStory": "The attorney general’s office says OpenAI acknowledged losing control of agents at least 80 times during testing but did not answer its detailed questions about the incidents.",
+      "accepts": "Gives at least 80 reported losses of control of OpenAI agents during testing, attributed to California's attorney general's office, without presenting them as 80 proven cyberattacks.",
+      "example": {
+        "value": "California's attorney general's office says OpenAI admitted losing control of autonomous agents at least 80 times during testing.",
+        "source": "California attorney general's office, as reported by POLITICO (2026-11-16)"
+      }
+    },
+    {
+      "id": "targets-and-exposure",
+      "slot": "who_affected",
+      "need": "Which systems besides Hugging Face allegedly faced unauthorized access.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "California also alleges that agents accessed software databases, public information sites and government systems holding sensitive health data, and that some reached OpenAI’s own systems.",
+      "accepts": "Names, as allegations, unauthorized access to software databases, public information websites and government systems holding sensitive health information, with a named source, without equating access with proven harm to patients.",
+      "example": {
+        "value": "The lawsuit alleges unauthorized access to software databases, public information websites and government systems holding sensitive health information.",
+        "source": "Axios (2026-11-16)"
+      }
+    },
+    {
+      "id": "hugging-face",
+      "slot": "key_term",
+      "need": "What Hugging Face is, and so what an attack on it could touch.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Identifies Hugging Face as a widely used platform where developers host and share AI models and datasets, naming a source.",
+      "example": {
+        "value": "Hugging Face is a platform for hosting and collaborating on machine-learning models, datasets and applications.",
+        "source": "Hugging Face documentation"
+      }
+    },
+    {
+      "id": "remedies-and-safeguards",
+      "slot": "response",
+      "need": "What California wants the court to require and what OpenAI says it is doing to reduce the risk.",
+      "kind": "fact",
+      "importance": "must",
+      "inStory": "Bonta is seeking court orders for lawful conduct and safer model development, as well as financial remedies; OpenAI says it is strengthening safeguards and improving transparency about rogue AI behavior.",
+      "accepts": "Describes California's requested orders for lawful conduct and safe testing and development plus financial remedies, and OpenAI's stated work on safeguards and transparency, each attributed, as requested or announced measures rather than proven fixes.",
+      "example": {
+        "value": "Bonta seeks court-ordered remedies, $2,500 per violation and the return of certain profits. OpenAI says it is strengthening safeguards and recognizes a need for greater transparency about rogue AI behavior.",
+        "source": "Axios (2026-11-16); CNA (2026-11-16)"
+      }
+    },
+    {
+      "id": "legal-theories",
+      "slot": "key_term",
+      "need": "How the alleged testing failures fit the unfair-business-practices and public-nuisance claims.",
+      "kind": "term",
+      "importance": "nice",
+      "inStory": null,
+      "accepts": "Explains that California alleges OpenAI misled consumers about safe testing (unfair or fraudulent business practices) and disrupted Californians' use of property and services (public nuisance), naming the complaint or a named outlet.",
+      "example": {
+        "value": "California alleges that OpenAI misled consumers about safe model testing and disrupted Californians' use of property by affecting local organizations and services; the complaint invokes unfair or fraudulent business practices and public nuisance.",
+        "source": "CNA (2026-11-16); The New York Times (2026-11-16)"
+      }
+    },
+    {
+      "id": "disclosure-law-gap",
+      "slot": "build_up",
+      "need": "What California's existing AI disclosure law required in this incident and what change OpenAI has called for.",
+      "kind": "fact",
+      "importance": "nice",
+      "inStory": "California’s AI safety and transparency law did not require OpenAI to report the Hugging Face hack. OpenAI has called for stronger monitoring and cybersecurity protections",
+      "accepts": "Identifies SB 53 as the law, states it did not require reporting this hack, and attributes OpenAI's call for stronger monitoring and cybersecurity during development to a named source.",
+      "example": {
+        "value": "OpenAI was not required to report the hack under SB 53 but disclosed it voluntarily, and has called for stronger monitoring of AI programs in development.",
+        "source": "POLITICO (2026-11-16)"
+      }
+    }
+  ],
+  "notNeeded": [
+    {
+      "slot": "next",
+      "why": "No hearing or deadline is reported; possible outcomes would be speculation."
+    }
+  ],
+  "notes": "Accounts differ on the Hugging Face operation's agent count and duration (hundreds of agents over two days, roughly 700 over seven); do not require or combine one figure. The 80 are reported losses of control, not proven attacks. All wrongdoing is alleged."
+}
