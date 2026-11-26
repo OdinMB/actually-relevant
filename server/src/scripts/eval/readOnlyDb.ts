@@ -9,7 +9,7 @@
  * reconnect). Either way `SHOW transaction_read_only = on` is asserted before
  * any fixture query. The URL and host are never printed.
  */
-import { PrismaClient, type Prisma } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 
 export type Db = Prisma.TransactionClient
 
@@ -22,6 +22,11 @@ export interface ReadOnlyDb {
   mode: 'session' | 'transaction'
   dbClass: 'local' | 'remote'
   read<T>(fn: (db: Db) => Promise<T>): Promise<T>
+  /**
+   * `fn` inside one `REPEATABLE READ, READ ONLY` transaction of at most `timeoutMs`: every query sees
+   * the database as it was at the first, so tables read one after another agree (the eval copy's export).
+   */
+  snapshot<T>(fn: (db: Db) => Promise<T>, timeoutMs: number): Promise<T>
   close(): Promise<void>
 }
 
@@ -72,6 +77,27 @@ async function trySessionMode(url: string): Promise<PrismaClient | null> {
   return null
 }
 
+/** A transaction's first statement: read-only from here on, which is asserted before any query of the caller's. */
+async function readOnlyFirst(tx: Db): Promise<void> {
+  await tx.$executeRaw`SET TRANSACTION READ ONLY`
+  const rows = await tx.$queryRaw<ShowRow[]>`SHOW transaction_read_only`
+  assertReadOnly(rows[0]?.transaction_read_only)
+}
+
+/** `ReadOnlyDb.snapshot` on a client: Prisma opens the transaction at `REPEATABLE READ`, which is asserted with read-only before `fn`. */
+const snapshotOn =
+  (client: PrismaClient) =>
+  <T>(fn: (db: Db) => Promise<T>, timeoutMs: number): Promise<T> =>
+    client.$transaction(
+      async tx => {
+        await readOnlyFirst(tx)
+        const rows = await tx.$queryRaw<{ transaction_isolation: string }[]>`SHOW transaction_isolation`
+        if (rows[0]?.transaction_isolation !== 'repeatable read') throw new Error('the snapshot is not at REPEATABLE READ; aborting before any query')
+        return fn(tx)
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: timeoutMs, maxWait: 30_000 },
+    )
+
 export async function openReadOnlyDb(): Promise<ReadOnlyDb> {
   const url = process.env.DATABASE_URL
   if (!url) throw new Error('DATABASE_URL is not set')
@@ -79,7 +105,7 @@ export async function openReadOnlyDb(): Promise<ReadOnlyDb> {
 
   const session = await trySessionMode(url).catch(() => null)
   if (session) {
-    return { mode: 'session', dbClass, read: fn => fn(session), close: () => session.$disconnect() }
+    return { mode: 'session', dbClass, read: fn => fn(session), snapshot: snapshotOn(session), close: () => session.$disconnect() }
   }
 
   const client = new PrismaClient({ datasourceUrl: readOnlyUrl(url, false) })
@@ -94,13 +120,12 @@ export async function openReadOnlyDb(): Promise<ReadOnlyDb> {
     read: fn =>
       client.$transaction(
         async tx => {
-          await tx.$executeRaw`SET TRANSACTION READ ONLY`
-          const rows = await tx.$queryRaw<ShowRow[]>`SHOW transaction_read_only`
-          assertReadOnly(rows[0]?.transaction_read_only)
+          await readOnlyFirst(tx)
           return fn(tx)
         },
         { timeout: 300_000, maxWait: 30_000 },
       ),
+    snapshot: snapshotOn(client),
     close: () => client.$disconnect(),
   }
 }

@@ -30,6 +30,8 @@ The run needs `DATABASE_URL` reachable (the local Postgres service must be runni
 
 **Every command in this file that makes a live call needs a task spend cap** (since 2026-11-26): the examples leave `--cap` out, so set `EVAL_SPEND_CAP=<name>` for the session or add `--cap <name>`. Without one, every live OpenAI or Tavily request is refused while cached answers still come back ("Spend: the task cap and the folder budget", below).
 
+**In a cloud session,** which has no copy of the owner's database, import the stories-only eval copy into a local `*_eval` database first and run every eval with `DATABASE_URL` set to it (`database-migrations.md`, "A Stories-Only Copy for Cloud Evals"). The copy holds no newsletters and no social posts, so the newsletter suite reports a shortfall and the social pick scans synthetic windows.
+
 ### Large tier: gpt-6-sol vs gpt-6.1-sol (2026-10-27)
 
 The large tier's default moved to gpt-6.1-sol on 2026-10-27 (`.context/llm-analysis.md`), to be merged only after this comparison and the owner's podcast listening check. The large-tier suite reruns gpt-6-sol@medium, production's model until then, against gpt-6.1-sol@medium on its three call sites. Run it from the repository root, in a new folder: the rating deliverable is written only into a folder that has none, so the 2026-09-24 folder cannot take the new sets.
@@ -481,7 +483,7 @@ The runs of the 30 days up to the newest run: counts by trigger and by verdict; 
 |------|------|
 | `server/src/scripts/eval/run.ts` | CLI orchestration |
 | `server/src/scripts/eval/options.ts` | Flag parsing, suite names, the $20 cap (`MAX_BUDGET_USD`) |
-| `server/src/scripts/eval/readOnlyDb.ts` | The read-only database session |
+| `server/src/scripts/eval/readOnlyDb.ts` | The read-only database session; `snapshot`, one `REPEATABLE READ` read-only transaction, for the eval copy's export |
 | `server/src/scripts/eval/fixtures.ts` | Sampling queries and fixture shapes; inputs built with production's builders |
 | `server/src/services/promptInputs.ts` | Production's prompt-input builders, shared by the services and the eval (pure; pinned by `promptInputs.test.ts`) |
 | `server/src/scripts/eval/sampling.ts` | Deterministic stratified picking and selection groups |

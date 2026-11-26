@@ -27,7 +27,7 @@ Run it on its own with `npm run db:prepare --prefix server`. Skip it entirely wi
 | A migration failed | The SQL errored (P3018) or an earlier failure is recorded (P3009) | See "Migration Marked as Failed" below |
 | Cannot replace the Prisma client | Another process (usually a server still running in another terminal) holds the query-engine DLL (`EPERM`/`EBUSY`) | Stop that process and retry |
 
-Code: `server/src/scripts/db-prepare/` (`index.ts` orchestrates; `gate.ts` and `localDatabase.ts` hold the local-only guard; `schemaStamp.ts` the regenerate check; `prismaOutput.ts` reads Prisma's output).
+Code: `server/src/scripts/db-prepare/` (`index.ts` orchestrates; `gate.ts` and `localDatabase.ts` hold the local-only guard; `schemaStamp.ts` the regenerate check; `prismaCli.ts` runs the project's own CLI, also for the eval copy's import; `prismaOutput.ts` reads Prisma's output; `scratchDatabase.ts` holds the rule for the scratch databases a command empties, `*_synthetic` and `*_eval`).
 
 ## Run Locally with Synthetic Data
 
@@ -70,6 +70,41 @@ DATABASE_URL=postgresql://ardev:ardev_local@localhost:5433/actually_relevant_syn
 A credential added to `env.example` later belongs on this line too.
 
 The server still sends its model calls to OpenAI, which refuses the placeholder key: what needs a model (assessing, search's semantic leg, newsletter and podcast generation, the embedding made on publish) fails or falls back instead. Without a migrated schema the seed stops with Prisma's missing-table error and the `db:prepare` line to run. `seed.db.test.ts` runs the seed against the test database (`npm run test:db`).
+
+## A Stories-Only Copy for Cloud Evals
+
+The evals (`model-eval.md`) read stored stories, and a cloud session has only an empty local PostgreSQL. So the owner exports a copy of his local database that holds only what the evals read, with every value that could name a person replaced, and the cloud session imports it into a local `*_eval` database. Code: `server/src/scripts/eval-db/` (`tables.ts` the classification, `scrub.ts` the scrub, `copyFile.ts` the file format, `exportCopy.ts` and `importCopy.ts` the two directions, `guard.ts` the database rule, `export.ts` and `import.ts` the commands).
+
+**What it holds.** An allowlist, `EXPORTED_TABLES` in `tables.ts`, in load order: `issues`, `feeds`, `stories`, `story_embeddings`, `story_clusters`; the research and context runs (`story_research_runs`, `story_context_runs`, `context_facts`, `context_boxes`, `context_search_cache`); research passes and their evidence pool (`research_passes`, `article_versions`, `evidence_searches`, `evidence_sources`, `pool_facts`, `pass_boxes`); and the overviews (`overviews`, `overview_decisions`, `overview_entries`, `overview_stands`). Every column of each is classified there as kept or scrubbed.
+
+**What it never holds.** Every other table, each listed in `EXCLUDED_TABLES` with its reason: `users`, `refresh_tokens`, `pending_subscriptions`, `edition_switches`, `feedback`, `admin_notices`, `newsletters`, `newsletter_sends`, the four podcast tables, `job_runs`, `job_month_spend`, `spend_warnings`, `bluesky_posts`, `mastodon_posts`, and the favicons and `story_archive_counts`, which no eval reads. No exported table has a foreign key into one of them. Two parts of `eval:models` read an excluded table and see less: the newsletter suite finds no newsletters and reports the shortfall (`newsletters: 0 of 4`), and the social pick, finding no stored posts, scans synthetic 11:30 UTC windows instead. No other query in `scripts/eval/` reads an excluded table.
+
+**The scrub.** An editor's action stores his user id where automation stores a marker: `overviews.frozen_by` and `recentered_by`, `overview_entries.joined_by` and `detached_by`, `overview_decisions.actor` and `undone_by`, and the change set the action keeps in `overview_decisions.inputs` (`detachedBy` and the like). These columns keep null and the system markers (`pipeline`, `review`, `recenter`, `burst`, `editor`), because code branches on them, and carry anything else as `editor`, the marker an editor's action already writes where it names no one. In `inputs` the same rule applies to the value of every actor key at any depth. Every other column is carried as it is. The export prints how many values each scrubbed column replaced.
+
+**The fence.** `tables.test.ts` holds the classification against `prisma/schema.prisma` (read by `src/test/prismaSchema.ts`). A table the schema gains fails it until it is exported or left out with a reason, and a column an exported table gains fails it until it is kept or scrubbed. A column whose name reads like a person's (`*_by`, `actor`, `email`, `user_id`) cannot be kept without a reviewed entry in the test (`pool_facts.contradicted_by` holds fact refs). The never list above cannot be exported, and the load order must follow the foreign keys. The export runs the same check against the database itself: a column the classification does not name refuses the export before anything is written, so a database migrated ahead of the code cannot leak a new column either.
+
+**Export, on the owner's machine.** From the repository root, with the Docker database running:
+
+```bash
+npm run db:export:eval --prefix server -- --out ../DOCS/2026-11-26_eval-db.jsonl.gz
+```
+
+It reads `DATABASE_URL` as the evals do (`server/.env`, a value in the shell winning) and prints only `local` or `remote` for it. It reads through the eval's read-only session (`model-eval.md`, "How it stays safe"), inside one `REPEATABLE READ, READ ONLY` transaction (`readOnlyDb.ts`'s `snapshot`, two hours at most), so tables read one after another agree. The path is relative to `server/`, so the file lands in the gitignored `DOCS/`; it is written as `<file>.partial` and renamed once complete. The command prints the rows per table, the values scrubbed, the tables left out, the database's newest migration and the size. The file is gzip JSONL: a header line (format, version, export time, migration), one line per row in load order, and an end line with the counts. **Never commit it**: it lives outside the repository wherever it goes.
+
+**Size.** Measured on the synthetic data set (45 stories) with a random 1,536-dimension embedding per story: about 7.8 MB per 1,000 stories, nearly all of it the embeddings (about 7.3 KB each, compressed; 0.44 MB per 1,000 stories without them). Real stories carry longer source text and research, so a production copy is somewhat larger per story.
+
+**Import, in the cloud session.** The owner adds the file to the cloud project's files, where a session finds it at `/mnt/project-files/eval-db/`, outside the repository. Create the database once, then import:
+
+```bash
+psql -h localhost -U postgres -c "CREATE DATABASE actually_relevant_eval"
+EVAL_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/actually_relevant_eval npm run db:import:eval --prefix server -- --in /mnt/project-files/eval-db/2026-11-26_eval-db.jsonl.gz
+```
+
+- **Guarded.** `EVAL_DATABASE_URL` comes from the shell, never from `server/.env`, and must name a local database (the `db:prepare` host rule) whose name ends in `_eval` (`guard.ts`, which shares `db-prepare/scratchDatabase.ts` with the synthetic seed's guard); anything else is refused before a connection.
+- **Migrates, then replaces everything.** It applies the repository's migrations to that database (`prisma migrate deploy` with the project's own CLI). Then, in one transaction, it empties every table but the migration history and loads the copy in load order. The three foreign keys that close a cycle (`issues.parent_id`, `stories.cluster_id`, `research_passes.version_id`) are set once every table is in. It checks the counts against the end line and runs `ANALYZE`. Vectors round-trip exactly.
+- **Refuses** a file that is not a copy, is of another version, is cut short or disagrees with its counts, holds a table off the allowlist, or has a column the database lacks (a copy made at a newer migration than the checkout: update the checkout). A refusal leaves the rows as they were; migrations it applied stay. A copy older than the checkout loads, and a column added since holds its default in every row; the command says when the two migrations differ.
+
+Then run an eval with `DATABASE_URL` set to the same URL, e.g. `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/actually_relevant_eval npm run eval:models --prefix server -- --out ../DOCS/<folder> --dry-run`. `evalCopy.db.test.ts` (`npm run test:db`) exports a filled test database and imports it back: the file holds no excluded table and none of the editor's ids, emails or secrets, every scrubbed value is `editor`, every other row and vector comes back unchanged, and a refused copy leaves the database as it was.
 
 ## Authoring a Migration
 
@@ -120,7 +155,7 @@ The marker covers the whole file. Before adding it, check the two-phase rule und
 
 ## Integration Tests (PostgreSQL)
 
-Most server tests mock Prisma. Logic whose guarantee lives in SQL (story status moves and cluster edits, retention keep rules and cluster repair, the job lease, pgvector queries (`lib/vectors.ts`), the issue filter, the signup send limits and the queued-signup job, the closed-editions guard's latest known edition per subscriber, slug assignment, the admin-notice dedupe and reopen, the podcast TTS spend cap, the podcast's per-show week key, standalone CHECK and per-show missed-week claim, the development seed) has `*.db.test.ts` files that run against a real database, as does the check of real public story responses against the documented schema (`ci.md`, "Public API contract"). They are the `db` project in `server/vitest.config.ts`; every other test is the `unit` project.
+Most server tests mock Prisma. Logic whose guarantee lives in SQL (story status moves and cluster edits, retention keep rules and cluster repair, the job lease, pgvector queries (`lib/vectors.ts`), the issue filter, the signup send limits and the queued-signup job, the closed-editions guard's latest known edition per subscriber, slug assignment, the admin-notice dedupe and reopen, the podcast TTS spend cap, the podcast's per-show week key, standalone CHECK and per-show missed-week claim, the development seed, the eval copy's export and import) has `*.db.test.ts` files that run against a real database, as does the check of real public story responses against the documented schema (`ci.md`, "Public API contract"). They are the `db` project in `server/vitest.config.ts`; every other test is the `unit` project.
 
 - **Three commands.** `npm run test --prefix server` runs the `unit` project only and needs no database. `npm run test:db --prefix server` runs the `db` project and **fails** when `TEST_DATABASE_URL` is unset (it used to skip). `npm run test:coverage --prefix server` runs both projects in one run with the coverage floor, which counts the db tests (`ci.md`, "Coverage floor"), and fails the same way without the variable; it is what CI runs. Run it, or `test` and `test:db`, before committing a change to anything a db test covers.
 - **Replace, don't layer.** A module whose guarantee lives in SQL (raw queries, `ON CONFLICT`, advisory locks, row locks) is tested in a `*.db.test.ts`, and a mock test that only replays its SQL against a fake is deleted, not kept beside it. Keep a unit test for logic that does not need the database (input shaping, error mapping, decisions made in TypeScript).
@@ -170,6 +205,8 @@ Keep `--include=dev`: the service runs with `NODE_ENV=production`, and the Prism
 | `docker compose up -d` | Start the local database |
 | `npm run db:prepare --prefix server` | Apply pending migrations and regenerate the client if the schema changed (local DB only; runs automatically before `dev`) |
 | `SYNTHETIC_DATABASE_URL=… npm run db:seed:synthetic --prefix server [-- --reset]` | Fill a local `*_synthetic` database with the synthetic data set ("Run Locally with Synthetic Data") |
+| `npm run db:export:eval --prefix server -- --out <file>` | Write the stories-only, scrubbed copy of `DATABASE_URL` for cloud evals, through the read-only session ("A Stories-Only Copy for Cloud Evals") |
+| `EVAL_DATABASE_URL=… npm run db:import:eval --prefix server -- --in <file>` | Migrate a local `*_eval` database and replace everything in it with that copy |
 | `npm run db:migrate:create --prefix server -- --name <name>` | Generate migration SQL without applying |
 | `npm run db:migrate:status --prefix server` | Check which migrations are pending/applied |
 | `npm run db:migrate:diff --prefix server` | Print the SQL from the database to the schema, read-only (expected: only the `story_embeddings_embedding_idx` drop) |
