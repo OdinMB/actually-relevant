@@ -2,8 +2,9 @@
  * Model-comparison eval (GPT-6 migration). Orchestrates one run from CLI flags:
  *
  *   npm run eval:models --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --dry-run
- *   npm run eval:models --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --suites related --limit 2
+ *   npm run eval:models --prefix server -- --out ../DOCS/2026-09-24_gpt6-eval --suites related --limit 2 --cap <name>
  *
+ * A live call needs a task spend cap (`--cap`, `taskCap.ts`); a cached or dry run needs none.
  * Reads the database through a Postgres-enforced read-only session, calls
  * prompt builders and the production client factory directly, and writes
  * results.md into --out, plus rating-sets.json and rating-key.json when that
@@ -22,6 +23,7 @@ import { STEP_ARMS } from './research/pipeline.js'
 import { parseOptions, type EvalOptions } from './options.js'
 import { writeRatingDeliverable } from './ratingFiles.js'
 import { renderResults, type ReportInput } from './resultsReport.js'
+import { installEvalCap } from './taskCap.js'
 import type { Suite, SuiteResult } from './types.js'
 import { preassessSuite } from './suites/preassess.js'
 import { assessSuite } from './suites/assess.js'
@@ -104,10 +106,12 @@ function markIncomplete(result: SuiteResult): SuiteResult {
 
 async function main(): Promise<void> {
   const opts = parseOptions(process.argv.slice(2))
+  const cap = installEvalCap(opts.cap)
   const out = resolve(opts.out)
   const cacheDir = join(out, '.cache')
   mkdirSync(cacheDir, { recursive: true })
   console.log(`OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? 'present' : 'missing'}`)
+  console.log(cap.line())
   const suites = SUITES.filter(s => opts.suites.includes(s.name))
   const ctx = createEvalContext({
     cacheFile: join(cacheDir, 'calls.jsonl'),
@@ -122,6 +126,7 @@ async function main(): Promise<void> {
     console.log('api check:')
     const ok = await apiCheck([...suites.flatMap(s => s.arms), ...Object.values(STEP_ARMS)], ctx)
     console.log(`api check ${ok ? 'passed' : 'FAILED'}; this run ${usd(ctx.spentThisRunUsd())}, ledger ${usd(ctx.spentUsd())}`)
+    console.log(cap.line())
     if (!ok) process.exitCode = 1
     return
   }
@@ -170,7 +175,8 @@ async function main(): Promise<void> {
     thisRunUsd: ctx.spentThisRunUsd(),
     rating,
   })
-  writeFileSync(join(out, 'results.md'), report)
+  writeFileSync(join(out, 'results.md'), report + cap.section())
+  console.log(cap.line())
   console.log(
     `wrote ${join(out, 'results.md')}${rating.written ? ', rating-sets.json, rating-key.json' : '; the existing rating deliverable was left as it was'}`,
   )

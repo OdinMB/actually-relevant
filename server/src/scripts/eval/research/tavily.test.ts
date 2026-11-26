@@ -6,6 +6,8 @@ import { join } from 'node:path'
 const { post } = vi.hoisted(() => ({ post: vi.fn() }))
 vi.mock('axios', () => ({ default: { post } }))
 
+import { _resetSpendGuard, installSpendGuard, NO_CAP } from '../../../lib/spendCap.js'
+import { BudgetExhaustedError } from '../../../services/researchPipeline.js'
 import { createTavilyClient, type TavilySearch } from './tavily.js'
 
 // The HTTP request itself (body, header, credits, retries, sanitized errors) is lib/tavily.test.ts's.
@@ -62,5 +64,19 @@ describe('eval tavily client', () => {
     const client = createTavilyClient({ cacheFile: cacheFile(), apiKey: KEY, offline: false, retry: { baseDelayMs: 1 } })
     await expect(client.search(search)).rejects.toThrow(/HTTP 401/)
     expect(client.creditsRecorded()).toBe(0)
+  })
+
+  it("turns a search the spend guard refuses into the pipeline's budget stop, sending nothing, while a cached one still answers", async () => {
+    post.mockResolvedValueOnce(okResponse(2))
+    const client = createTavilyClient({ cacheFile: cacheFile(), apiKey: KEY, offline: false })
+    await client.search(search)
+    installSpendGuard(NO_CAP)
+    try {
+      await expect(client.search({ ...search, query: 'not cached' })).rejects.toBeInstanceOf(BudgetExhaustedError)
+      expect((await client.search(search)).cached).toBe(true)
+      expect(post).toHaveBeenCalledTimes(1)
+    } finally {
+      _resetSpendGuard()
+    }
   })
 })

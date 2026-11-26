@@ -11,7 +11,8 @@
  * Reads the database through the read-only session and writes nothing to any database; its only
  * HTTP besides OpenAI is Tavily. Writes research-report.md and research-drafts.md into --out
  * (`-limit-N` for a --limit run) and its caches into --out/.cache. Prints only present/missing for
- * the keys and local/remote for the database. See .context/model-eval.md.
+ * the keys and local/remote for the database. A live call or search needs a task spend cap
+ * (`--cap <name>`, `taskCap.ts`); a cached or dry run needs none. See .context/model-eval.md.
  */
 import 'dotenv/config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -26,6 +27,7 @@ import { researchStoryInEval, STEP_ESTIMATES, STEPS } from './research/pipeline.
 import { renderDrafts, renderResearchReport, researchFileNames } from './research/report.js'
 import { runStories } from './research/storyQueue.js'
 import { createTavilyClient, TAVILY_USD_PER_CREDIT } from './research/tavily.js'
+import { installEvalCap } from './taskCap.js'
 
 const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`
 const presence = (value: string | undefined) => (value ? 'present' : 'missing')
@@ -77,10 +79,12 @@ function printPlan(fx: ResearchFixtures, stories: ResearchStory[], spentUsd: num
 
 async function main(): Promise<void> {
   const opts = parseResearchOptions(process.argv.slice(2))
+  const cap = installEvalCap(opts.cap)
   const out = resolve(opts.out)
   const cacheDir = join(out, '.cache')
   mkdirSync(cacheDir, { recursive: true })
   console.log(`OPENAI_API_KEY: ${presence(process.env.OPENAI_API_KEY)}; TAVILY_API_KEY: ${presence(process.env.TAVILY_API_KEY)}`)
+  console.log(cap.line())
 
   const fx = await getFixtures(opts, cacheDir)
   const stories = opts.limit === undefined ? fx.stories : fx.stories.slice(0, opts.limit)
@@ -129,9 +133,10 @@ async function main(): Promise<void> {
       thisRunUsd: ctx.spentThisRunUsd(),
       creditsRecorded: tavily.creditsRecorded(),
       relevanceMin,
-    }),
+    }) + cap.section(),
   )
   writeFileSync(join(out, names.drafts), renderDrafts({ stories, results: run.results, siteUrl: config.siteUrl }))
+  console.log(cap.line())
   console.log(`wrote ${join(out, names.report)} and ${names.drafts}; Tavily requests this run: ${tavily.liveRequests()}, model calls: ${ctx.liveCalls()}`)
 }
 

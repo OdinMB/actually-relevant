@@ -15,52 +15,18 @@ import type { AIMessage } from '@langchain/core/messages'
 import { toJsonSchema } from '@langchain/core/utils/json_schema'
 import type { z } from 'zod'
 import type { ReasoningEffort } from '../../config.js'
+import { costOf, MODELS, priceOf } from '../../lib/apiPrices.js'
 import { classifyOutcome, contentText, finishReasonOf, usageFrom, ZERO_USAGE } from '../../lib/llmUsage.js'
 import { promptKey, promptMessage, promptText, takesCacheControls, type Prompt } from '../../lib/promptCache.js'
 import { Semaphore } from '../../lib/semaphore.js'
+import { spendRefusalOf } from '../../lib/spendCap.js'
 import { createChatModel } from '../../services/llm.js'
-import type { Arm, CallRecord, ModelId, PlannedCall, SuiteContext, TokenUsage } from './types.js'
+import type { Arm, CallRecord, ModelId, PlannedCall, SuiteContext } from './types.js'
 
 /** Re-exported for the eval's own tests and callers; it lives with production's usage helpers. */
 export { classifyOutcome }
-
-interface ModelPrice {
-  /** USD per 1M tokens. */
-  input: number
-  cached: number
-  output: number
-  /** What a token written to the cache costs, as a multiple of `input` (GPT-5.6+ bill writes at 1.25×). */
-  cacheWrite: number
-  /** Output-token multiplier used for dry-run estimates (Luna writes ~25% more). */
-  outputFactor: number
-  source: string
-  verified: boolean
-}
-
-/**
- * Price table. Baseline and candidate IDs are constants here, never read from
- * `config`, so an env override on the machine running the eval cannot
- * silently change what is being compared.
- */
-export const MODELS: Record<ModelId, ModelPrice> = {
-  'gpt-5-nano': { input: 0.05, cached: 0.005, output: 0.4, cacheWrite: 1, outputFactor: 1, source: 'research brief', verified: true },
-  'gpt-5-mini': { input: 0.25, cached: 0.025, output: 2.0, cacheWrite: 1, outputFactor: 1, source: 'research brief', verified: true },
-  'gpt-5.2': { input: 1.75, cached: 0.175, output: 14.0, cacheWrite: 1, outputFactor: 1, source: 'from memory, not in the research brief', verified: false },
-  'gpt-6-luna': { input: 0.1, cached: 0.01, output: 0.5, cacheWrite: 1.25, outputFactor: 1.25, source: 'research brief', verified: true },
-  'gpt-6-sol': { input: 2.0, cached: 0.2, output: 10.0, cacheWrite: 1.25, outputFactor: 1, source: 'research brief', verified: true },
-  // Input and output from search snippets of OpenAI pages (2026-10-27). Secondary sources report
-  // cached input at 0.1; gpt-6-sol's 0.2 is kept as the upper bound so the budget guard never
-  // undercounts. Cache writes assumed at 1.25× like the rest of GPT-6.
-  'gpt-6.1-sol': {
-    input: 2.0,
-    cached: 0.2,
-    output: 10.0,
-    cacheWrite: 1.25,
-    outputFactor: 1,
-    source: 'OpenAI pages via search snippets, 2026-10-27; cached rate and cache write assumed as gpt-6-sol',
-    verified: false,
-  },
-}
+/** The price table lives in `lib/`, where the task spend cap reads it too; re-exported for the eval's callers. */
+export { costOf, MODELS }
 
 const EFFORT_OUTPUT_FACTOR: Partial<Record<ReasoningEffort, number>> = { low: 0.4, medium: 1, high: 1.5 }
 
@@ -75,31 +41,6 @@ export function armKey(a: Arm): string {
 /** The model part of an arm key, for report text. */
 export function modelOf(key: string): string {
   return key.split('@')[0] ?? key
-}
-
-function priceOf(model: string): ModelPrice {
-  const price = (MODELS as Record<string, ModelPrice | undefined>)[model]
-  if (!price) throw new Error(`No price for model ${model}`)
-  return price
-}
-
-/**
- * USD for one call. `output` already includes reasoning tokens (that is how
- * the API reports and bills them). A model with the cache controls is priced
- * as billed: it caches only at a prompt's breakpoint, and its answer reports
- * the tokens written. Any other model's uncached input carries the cache-write
- * surcharge, a conservative upper bound (OpenAI's default may write unasked).
- */
-export function costOf(model: ModelId, usage: TokenUsage): number {
-  const p = priceOf(model)
-  const reads = usage.cached * p.cached + usage.output * p.output
-  if (!takesCacheControls(model)) {
-    const uncached = Math.max(0, usage.input - usage.cached)
-    return (uncached * p.input * p.cacheWrite + reads) / 1_000_000
-  }
-  const written = usage.cacheWrite ?? 0
-  const uncached = Math.max(0, usage.input - usage.cached - written)
-  return (uncached * p.input + written * p.input * p.cacheWrite + reads) / 1_000_000
 }
 
 const HAN = /\p{Script=Han}/gu
@@ -153,6 +94,14 @@ export function versionedSchemaName(name: string, schema: z.ZodType): string {
 export const HOLD_OUTPUT_TOKENS = 4_000
 /** Why a call past the budget is answered `skipped`; a step that stops at the budget reads it. */
 export const BUDGET_EXHAUSTED = 'budget exhausted'
+/** Why a call the task spend cap had no room for is answered `skipped` (`lib/spendCap.ts`). */
+export const SPEND_CAP_REACHED = 'stopped at the spend cap'
+/** The start of why a call the spend guard refused is answered `skipped`: no cap, or a request the cap cannot bound. */
+export const SPEND_REFUSED_PREFIX = 'refused by the spend guard: '
+
+/** Whether a call was left unmade for want of money: the folder budget, the task cap, or no cap at all. */
+export const stoppedBySpend = (error: string | undefined): boolean =>
+  error === BUDGET_EXHAUSTED || error === SPEND_CAP_REACHED || (error?.startsWith(SPEND_REFUSED_PREFIX) ?? false)
 
 export interface EvalContext extends SuiteContext {
   /** Total USD recorded in the ledger (all runs against this output dir), plus `externalSpendUsd`. */
@@ -222,21 +171,20 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
    */
   async function invoke<T>(a: Arm, schemaName: string, schema: z.ZodType<T>, prompt: Prompt, key: string): Promise<CallRecord<T>> {
     const base = { key, arm: armKey(a), schema: schemaName, at: new Date().toISOString() }
+    const unmadeBecause = (error: string): CallRecord<T> => ({
+      ...base,
+      outcome: 'skipped',
+      parsed: null,
+      content: '',
+      finishReason: null,
+      usage: ZERO_USAGE,
+      costUsd: 0,
+      latencyMs: 0,
+      error,
+    })
     const hold = options.cacheOnly ? 0 : estimateCallUsd({ arm: a, schemaName, prompt, baseOutputTokens: HOLD_OUTPUT_TOKENS })
     const unmade = options.cacheOnly ? 'not in the cache (--cache-only)' : spent + external() + held + hold > options.budgetUsd ? BUDGET_EXHAUSTED : null
-    if (unmade) {
-      return {
-        ...base,
-        outcome: 'skipped',
-        parsed: null,
-        content: '',
-        finishReason: null,
-        usage: ZERO_USAGE,
-        costUsd: 0,
-        latencyMs: 0,
-        error: unmade,
-      }
-    }
+    if (unmade) return unmadeBecause(unmade)
     const model = createChatModel({ name: a.model, reasoningEffort: a.effort })
     const structured = model.withStructuredOutput(schema, { includeRaw: true })
     const started = Date.now()
@@ -261,6 +209,12 @@ export function createEvalContext(options: EvalContextOptions): EvalContext {
         latencyMs,
       })
     } catch (err) {
+      // The spend guard sent nothing: no answer, no cost and no live call, as a call past the budget
+      const refusal = spendRefusalOf(err)
+      if (refusal) {
+        live--
+        return unmadeBecause(refusal.kind === 'cap-reached' ? SPEND_CAP_REACHED : `${SPEND_REFUSED_PREFIX}${refusal.message}`)
+      }
       return {
         ...base,
         outcome: classifyOutcome({ error: err }),

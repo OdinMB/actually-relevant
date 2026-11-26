@@ -6,12 +6,16 @@
  * Authorization header only, never in the body. Credits come from the response's usage field, else
  * from the search depth. Tavily is plain external HTTP, so it goes through `withRetry`. An axios
  * error carries the request headers, so a failure is rethrown as a `TavilyError` holding its status
- * or error code alone.
+ * or error code alone. Under a task spend cap (an eval command, `lib/spendCap.ts`) each attempt is
+ * reserved at its depth's credits before it is sent and settled once it ends; with none, as in
+ * production, nothing changes.
  */
 import axios from 'axios'
 import { z } from 'zod'
+import { TAVILY_USD_PER_CREDIT } from './apiPrices.js'
 import { responseStatus, withRetry } from './retry.js'
 import { recordOtherCost } from './runUsage.js'
+import { settledUsd, spendGuard, SpendRefused, type Reservation } from './spendCap.js'
 import { config } from '../config.js'
 
 export const TAVILY_URL = 'https://api.tavily.com/search'
@@ -101,6 +105,30 @@ export class TavilyError extends Error {
   }
 }
 
+/**
+ * The most a search can cost, in credits: its depth's (Tavily's pricing: basic 1, advanced 2), read
+ * from the request alone, for the task spend cap (`lib/spendCap.ts`). A depth with no price is refused.
+ */
+export function searchCreditsBound(body: ReturnType<typeof tavilyRequestBody>): number {
+  const credits = (CREDITS_PER_SEARCH as Record<string, number | undefined>)[body.search_depth]
+  if (credits === undefined)
+    throw new SpendRefused(`a Tavily search at depth "${body.search_depth}", which has no price recorded: the spend cap cannot bound it`)
+  return credits
+}
+
+/** The search's worst case held under the installed spend cap; null without one, as in production. */
+function reserveSearch(body: ReturnType<typeof tavilyRequestBody>): Promise<Reservation> | null {
+  const guard = spendGuard()
+  if (!guard) return null
+  return guard.reserve(searchCreditsBound(body) * TAVILY_USD_PER_CREDIT, `tavily ${body.search_depth} search`)
+}
+
+/** What an answer says it cost, at the cap's credit price; null when it reports no usage. */
+function reportedUsd(data: unknown): number | null {
+  const credits = (data as { usage?: { credits?: unknown } } | null)?.usage?.credits
+  return typeof credits === 'number' && Number.isFinite(credits) ? credits * TAVILY_USD_PER_CREDIT : null
+}
+
 function sanitized(err: unknown): TavilyError {
   const status = responseStatus(err)
   const rawCode = (err as { code?: unknown } | null)?.code
@@ -110,13 +138,17 @@ function sanitized(err: unknown): TavilyError {
 }
 
 async function post(body: ReturnType<typeof tavilyRequestBody>, apiKey: string): Promise<unknown> {
+  // Reserved before the try: a refusal is thrown as it is, neither sanitized nor retried
+  const held = await reserveSearch(body)
   try {
     const res = await axios.post(TAVILY_URL, body, {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       timeout: TIMEOUT_MS,
     })
+    held?.settle(settledUsd(held.usd, res.status, reportedUsd(res.data)))
     return res.data
   } catch (err) {
+    held?.settle(settledUsd(held.usd, responseStatus(err) ?? null, null))
     throw sanitized(err)
   }
 }

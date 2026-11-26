@@ -6,7 +6,10 @@ import type { ReasoningEffort } from '../../config.js'
 import type { Prompt } from '../../lib/promptCache.js'
 import type { Fixtures } from './fixtures.js'
 
-export type ModelId = 'gpt-5-nano' | 'gpt-5-mini' | 'gpt-5.2' | 'gpt-6-luna' | 'gpt-6-sol' | 'gpt-6.1-sol'
+import type { ModelId } from '../../lib/apiPrices.js'
+
+/** The ids of the price table (`lib/apiPrices.ts`), the models an arm may name. */
+export type { ModelId }
 
 /** One model at one reasoning effort. Its key is `model@effort`. */
 export interface Arm {

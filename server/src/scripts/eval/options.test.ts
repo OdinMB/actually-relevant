@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import {
+  parseCapCommand,
   parseOptions,
   parseOverviewOptions,
   parseRecalibrationOptions,
@@ -335,5 +336,38 @@ describe('parseOverviewOptions', () => {
       refreshFixtures: true,
     })
     expect(() => parseOverviewOptions(['--out', 'x', '--limit', '0'])).toThrow(/--limit/)
+  })
+})
+
+describe('--cap, the task spend cap', () => {
+  const parsers = { parseOptions, parseRecalibrationOptions, parseResearchOptions, parseOverviewOptions }
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it.each(Object.entries(parsers))('%s takes the cap by name, else from EVAL_SPEND_CAP, else runs with none', (_, parse) => {
+    vi.stubEnv('EVAL_SPEND_CAP', '')
+    expect(parse(['--out', 'x']).cap).toBeUndefined()
+    expect(parse(['--out', 'x', '--cap', 'cloud-1']).cap).toBe('cloud-1')
+    vi.stubEnv('EVAL_SPEND_CAP', 'from-env')
+    expect(parse(['--out', 'x']).cap).toBe('from-env')
+    expect(parse(['--out', 'x', '--cap', 'flag-wins']).cap).toBe('flag-wins')
+    expect(() => parse(['--out', 'x', '--cap', '../elsewhere'])).toThrow(/name/)
+  })
+})
+
+describe('parseCapCommand', () => {
+  it('creates a cap of a positive amount, at most the project cap', () => {
+    expect(parseCapCommand(['new', 'cloud-1', '--usd', '5'])).toEqual({ command: 'new', name: 'cloud-1', usd: 5 })
+    expect(() => parseCapCommand(['new', 'cloud-1'])).toThrow(/--usd/)
+    expect(() => parseCapCommand(['new', 'cloud-1', '--usd', '0'])).toThrow(/--usd/)
+    expect(() => parseCapCommand(['new', 'cloud-1', '--usd', ABOVE_CAP])).toThrow(/--usd/)
+  })
+
+  it('shows a cap by name, and refuses anything else', () => {
+    expect(parseCapCommand(['show', 'cloud-1'])).toEqual({ command: 'show', name: 'cloud-1' })
+    expect(() => parseCapCommand(['show'])).toThrow(/name/)
+    expect(() => parseCapCommand(['raise', 'cloud-1', '--usd', '9'])).toThrow(/new|show/)
+    expect(() => parseCapCommand(['show', 'a/b'])).toThrow(/name/)
   })
 })

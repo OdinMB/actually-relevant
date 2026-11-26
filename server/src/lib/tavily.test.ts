@@ -1,10 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const { post } = vi.hoisted(() => ({ post: vi.fn() }))
 vi.mock('axios', () => ({ default: { post } }))
 
-import { searchTavily, tavilyRequestBody, TAVILY_URL, type TavilySearch } from './tavily.js'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { searchCreditsBound, searchTavily, tavilyRequestBody, TAVILY_URL, type TavilySearch } from './tavily.js'
 import { createRunScope, runInScope } from './runUsage.js'
+import { TAVILY_USD_PER_CREDIT } from './apiPrices.js'
+import { _resetSpendGuard, createCap, installSpendGuard, NO_CAP, openCap, SpendCapReached, SpendRefused, type TaskCap } from './spendCap.js'
 import { config } from '../config.js'
 
 const KEY = 'tvly-test-secret-123'
@@ -12,6 +17,7 @@ const search: TavilySearch = { query: 'Pakistan rooftop solar 22 GW', startDate:
 const fast = { retry: { baseDelayMs: 1 } }
 
 const okResponse = (usage?: { credits: number }) => ({
+  status: 200,
   data: {
     query: search.query,
     results: [
@@ -139,5 +145,64 @@ describe('searchTavily', () => {
     post.mockRejectedValueOnce(unavailable).mockResolvedValueOnce(okResponse({ credits: 2 }))
     expect((await searchTavily(search, KEY, fast)).results).toHaveLength(2)
     expect(post).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('searchTavily under a task spend cap', () => {
+  const dirs: string[] = []
+  const caps: TaskCap[] = []
+  const withCap = (usd: number) => {
+    const dir = mkdtempSync(join(tmpdir(), 'tavily-cap-'))
+    dirs.push(dir)
+    createCap(dir, 'task', usd)
+    const cap = openCap(dir, 'task')
+    caps.push(cap)
+    installSpendGuard(cap)
+    return cap
+  }
+  afterEach(() => {
+    _resetSpendGuard()
+    for (const c of caps.splice(0)) c.close()
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+  })
+
+  it('bounds a search by its depth: one credit at basic, two at advanced, and refuses a depth it has no price for', () => {
+    expect(searchCreditsBound(tavilyRequestBody({ ...search, depth: 'basic' }))).toBe(1)
+    expect(searchCreditsBound(tavilyRequestBody(search))).toBe(2)
+    expect(() => searchCreditsBound({ ...tavilyRequestBody(search), search_depth: 'ultra' as never })).toThrow(SpendRefused)
+  })
+
+  it('reserves the credits before the search leaves, and settles at the credits the answer reports', async () => {
+    const cap = withCap(1)
+    post.mockImplementation(async () => {
+      expect(cap.state()).toMatchObject({ openCount: 1, openUsd: 2 * TAVILY_USD_PER_CREDIT })
+      return okResponse({ credits: 1 })
+    })
+    await searchTavily(search, KEY)
+    expect(cap.state()).toMatchObject({ openCount: 0, settledUsd: TAVILY_USD_PER_CREDIT })
+  })
+
+  it('settles an answer without usage and a failed attempt at the reservation, and a rejected one at nothing', async () => {
+    const cap = withCap(1)
+    post.mockResolvedValueOnce(okResponse())
+    await searchTavily(search, KEY)
+    expect(cap.state().settledUsd).toBeCloseTo(2 * TAVILY_USD_PER_CREDIT, 12)
+    const unavailable = Object.assign(new Error('Request failed with status code 503'), { response: { status: 503 } })
+    post.mockRejectedValueOnce(unavailable).mockResolvedValueOnce(okResponse({ credits: 2 }))
+    await searchTavily(search, KEY, fast)
+    expect(cap.state().settledUsd).toBeCloseTo(6 * TAVILY_USD_PER_CREDIT, 12)
+    post.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 400'), { response: { status: 400 } }))
+    await expect(searchTavily(search, KEY, fast)).rejects.toThrow(/HTTP 400/)
+    expect(cap.state()).toMatchObject({ openCount: 0, settledUsd: expect.closeTo(6 * TAVILY_USD_PER_CREDIT, 12) })
+  })
+
+  it('never sends a search that does not fit, nor one without a cap, and throws the refusal itself, unretried', async () => {
+    withCap(TAVILY_USD_PER_CREDIT)
+    await expect(searchTavily(search, KEY, fast)).rejects.toBeInstanceOf(SpendCapReached)
+    expect(post).not.toHaveBeenCalled()
+    _resetSpendGuard()
+    installSpendGuard(NO_CAP)
+    await expect(searchTavily(search, KEY, fast)).rejects.toBeInstanceOf(SpendRefused)
+    expect(post).not.toHaveBeenCalled()
   })
 })

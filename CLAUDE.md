@@ -55,6 +55,8 @@ npm run lint --prefix <client|server>          # ESLint, warnings fail (CI)
 npm run format --prefix <client|server>        # Prettier write; CI runs format:check
 npm run test:coverage --prefix <client|server> # Tests + coverage floor (server: unit + DB tests, needs TEST_DATABASE_URL); raise thresholds, never lower (CI)
 npm run audit:prod --prefix <client|server>    # npm audit --omit=dev at high, minus audit-allowlist.json (CI)
+npm run eval:cap --prefix server -- new <name> --usd <n> # A task spend cap (fixed, at most $20); an eval's live calls need --cap <name> or EVAL_SPEND_CAP
+npm run eval:cap --prefix server -- show <name>          # What is left of it (.context/model-eval.md, "Spend")
 ```
 
 **Type-checking:** use `npm run typecheck --prefix <client|server>`. It's the canonical TS check and runs without a permission prompt. Do **not** invoke `tsc` via `node .../node_modules/typescript/bin/tsc` or bare `tsc` -- those are not allowlisted and force a confirmation.
@@ -142,7 +144,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `story-retention.md` | Monthly cleanup: which old stories are deleted or kept, the `story_archive_counts` roll-up, lifetime totals, cleared embeddings and how publishing restores them |
 | `feed-management.md` | Feed CRUD and soft delete, crawl due rule, crawl-health counters, quality metrics, favicons |
 | `llm-analysis.md` | Model tiers (GPT-6 defaults; prompts and models change together), prompt directory, schema-driven format, analysis stages |
-| `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration and the phase-2 ship checks; `eval:overviews` (answer keys of past developments, the fact check under planted errors, the figure check against a strong judge, a later research pass's updates against their bars, overview linking and upkeep replayed in a sandbox) |
+| `model-eval.md` | Model-comparison eval harness: read-only fixtures, budget, the task spend cap every live eval call needs (worst case reserved before a request leaves), rating sets (run before changing a model tier); `eval:recalibrate` for prompt recalibration and the phase-2 ship checks; `eval:overviews` (answer keys of past developments, the fact check under planted errors, the figure check against a strong judge, a later research pass's updates against their bars, overview linking and upkeep replayed in a sandbox) |
 | `eval-baselines.md` | The measured eval results a later change is compared against (overview bars, research facts against their sources, the figure check, costs), each with its commit and command; update it when a paid run replaces a number |
 | `prompting.md` | Prompt conventions for the GPT-5/GPT-6 reasoning models and calibration lessons (read before modifying prompts) |
 | `scheduler.md` | Job registry, overlap prevention (job lease), catch-up, `SCHEDULER_ENABLED`, chains, run costs, the spending overview and warning levels (no caps), concurrency, admin API |

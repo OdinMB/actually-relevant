@@ -42,7 +42,9 @@
  * linking replay into --out/linking-replay[-tags].json (which `--rescore` scores again with no call and no
  * database), the gap-key drafts into --out/gap-drafts and its caches into --out/.cache; `key-draft`, run on its
  * own, writes its drafts into the committed answer keys for the owner's review. Prints only
- * present/missing for the keys and local/remote for the database. See .context/model-eval.md.
+ * present/missing for the keys and local/remote for the database. A live call or search needs a task
+ * spend cap (`--cap <name>`, `taskCap.ts`); a cached, dry, cache-only or rescore run needs none. See
+ * .context/model-eval.md.
  */
 import 'dotenv/config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -86,6 +88,7 @@ import { runRecenterStep } from './overviews/recenter.js'
 import { runReviewStep } from './overviews/review.js'
 import { runSamplingSteps } from './overviews/samplingSteps.js'
 import { runStandsStep, type StandsStepReport } from './overviews/stands.js'
+import { installEvalCap } from './taskCap.js'
 import { nearestPublished } from '../../services/overviewCandidates.js'
 import { linkStories } from '../../services/overviewInput.js'
 import type { MemberFact } from '../../services/overviewStands.js'
@@ -167,10 +170,12 @@ async function getFactFixtures(opts: OverviewOptions, cacheDir: string, session:
 
 async function main(): Promise<void> {
   const opts = parseOverviewOptions(process.argv.slice(2))
+  const cap = installEvalCap(opts.cap)
   const out = resolve(opts.out)
   const cacheDir = join(out, '.cache')
   mkdirSync(cacheDir, { recursive: true })
   console.log(`OPENAI_API_KEY: ${presence(process.env.OPENAI_API_KEY)}; TAVILY_API_KEY: ${presence(process.env.TAVILY_API_KEY)}`)
+  console.log(cap.line())
   const runs = (step: OverviewStep) => opts.steps.includes(step)
   // A cache-only rerun and a rescore answer every call from the cache, so they need no key
   const canCall = Boolean(process.env.OPENAI_API_KEY) || opts.cacheOnly || opts.rescore
@@ -636,8 +641,9 @@ async function main(): Promise<void> {
     }
 
     const file = join(out, overviewReportName(opts))
-    writeFileSync(file, renderOverviewReport({ ...report, thisRunUsd: ctx.spentThisRunUsd(), folderUsd: ctx.spentUsd() }))
+    writeFileSync(file, renderOverviewReport({ ...report, thisRunUsd: ctx.spentThisRunUsd(), folderUsd: ctx.spentUsd() }) + cap.section())
     for (const s of skipped) console.log(`${s.step}: ${s.reason}`)
+    console.log(cap.line())
     console.log(`wrote ${file}; model calls this run: ${ctx.liveCalls()}; Tavily searches this run: ${tavily.liveRequests()}`)
   } finally {
     await session.close()

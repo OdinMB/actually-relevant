@@ -4,11 +4,16 @@
  *
  * Responses are cached in `.cache/tavily.jsonl`, keyed by the request body, so a resumed run pays
  * nothing twice and later prompts stay stable; the key travels in the Authorization header, so it
- * is in neither the cache key nor the file. A dry run never reaches Tavily.
+ * is in neither the cache key nor the file. A dry run never reaches Tavily. A search the task spend
+ * cap refuses (`lib/spendCap.ts`) throws the pipeline's `BudgetExhaustedError`, so a pass stops at
+ * the cap as it stops at the folder's budget.
  */
 import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { TAVILY_USD_PER_CREDIT } from '../../../lib/apiPrices.js'
+import { spendRefusalOf } from '../../../lib/spendCap.js'
+import { BudgetExhaustedError } from '../../../services/researchPipeline.js'
 import {
   CREDITS_PER_SEARCH,
   searchTavily,
@@ -19,14 +24,9 @@ import {
   type TavilySearch,
 } from '../../../lib/tavily.js'
 
-export { CREDITS_PER_SEARCH, TAVILY_DEPTH }
+export { CREDITS_PER_SEARCH, TAVILY_DEPTH, TAVILY_USD_PER_CREDIT }
 export type { TavilySearch }
 
-/**
- * Pay-as-you-go price per credit (design, "Price"); free credits are counted as paid by the budget
- * guard. The eval keeps its own constant beside `config.research.tavilyUsdPerCredit` on purpose.
- */
-export const TAVILY_USD_PER_CREDIT = 0.008
 export const TAVILY_FREE_CREDITS_PER_MONTH = 1000
 
 export interface TavilyResponse {
@@ -95,7 +95,12 @@ export function createTavilyClient(options: TavilyClientOptions): TavilyClient {
       const apiKey = options.apiKey
       if (!apiKey) throw new Error('TAVILY_API_KEY is missing')
       live++
-      const response = await searchTavily(request, apiKey, options.retry ? { retry: options.retry } : {})
+      const response = await searchTavily(request, apiKey, options.retry ? { retry: options.retry } : {}).catch((err: unknown) => {
+        if (!spendRefusalOf(err)) throw err
+        // The spend guard sent nothing: no request, and the pipeline stops at the budget, as at the folder's own
+        live--
+        throw new BudgetExhaustedError()
+      })
       const line: CacheLine = { key, request: body, response, at: new Date().toISOString() }
       appendFileSync(options.cacheFile, JSON.stringify(line) + '\n')
       cache.set(key, line)

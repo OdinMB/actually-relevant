@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { config } from '../config.js'
+import { tokensOf } from '../lib/llmUsage.js'
 import { createRunScope, runInScope, settleRun } from '../lib/runUsage.js'
-import { openAiFetch, requestKind, tokensOf } from './openaiFetch.js'
+import { _resetSpendGuard, installSpendGuard, type SpendGuard } from '../lib/spendCap.js'
+import { openAiFetch, requestKind } from './openaiFetch.js'
 
 const CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 const EMBED_URL = 'https://api.openai.com/v1/embeddings'
@@ -110,6 +112,22 @@ describe('openAiFetch', () => {
     expect(sentBodies()[0]).toMatchObject({ model: 'gpt-6-luna', service_tier: 'flex' })
     expect(usage).toMatchObject({ calls: 1, flexCalls: 1, inputTokens: 50, outputTokens: 5 })
     vi.unstubAllEnvs()
+  })
+
+  it('sends every attempt through the installed spend guard: each flex try and the standard one are reserved, the refused tries settled at nothing', async () => {
+    const settled: number[] = []
+    const reserve = vi.fn<SpendGuard['reserve']>(async usd => ({ usd, settle: (real: number) => void settled.push(real) }))
+    installSpendGuard({ reserve })
+    try {
+      mockFetch.mockResolvedValueOnce(busy()).mockResolvedValueOnce(busy()).mockResolvedValueOnce(busy()).mockResolvedValueOnce(answer('default'))
+      await inRun(true, () => openAiFetch(CHAT_URL, chatInit))
+      expect(reserve).toHaveBeenCalledTimes(4)
+      await vi.waitFor(() => expect(settled).toHaveLength(4))
+      expect(settled.slice(0, 3)).toEqual([0, 0, 0])
+      expect(settled[3]).toBeGreaterThan(0)
+    } finally {
+      _resetSpendGuard()
+    }
   })
 
   it('tells model calls and embeddings from other requests', () => {

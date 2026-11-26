@@ -27,7 +27,7 @@ import { overviewCalls, type OverviewCalls, type OverviewStep } from '../../../s
 import type { LinkStory, Role } from '../../../services/overviewTypes.js'
 import type { Prompt } from '../../../lib/promptCache.js'
 import type { z } from 'zod'
-import { arm, BUDGET_EXHAUSTED, versionedSchemaName } from '../models.js'
+import { arm, stoppedBySpend, versionedSchemaName } from '../models.js'
 import { runNumbers, runSchemaName } from '../repeats.js'
 import type { Arm, SuiteContext } from '../types.js'
 import { JUDGE_ARM } from './contextJudge.js'
@@ -256,7 +256,7 @@ function metered(inner: SuiteContext) {
       const rec = await inner.call(a, schemaName, schema, prompt)
       if (rec.outcome === 'skipped') {
         meter.unanswered++
-        if (rec.error === BUDGET_EXHAUSTED) meter.budgetRefused = true
+        if (stoppedBySpend(rec.error)) meter.budgetRefused = true
       }
       if (rec.outcome === 'error') meter.errored++
       meter.costUsd += rec.costUsd

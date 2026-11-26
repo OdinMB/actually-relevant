@@ -18,6 +18,7 @@
  * `--repeat N` runs each rating prompt N times under distinct cache keys.
  * Writes recalibration-<half>[-tags].md into --out; the
  * rating-set step also swaps the full-assessment set in rating-sets.json.
+ * A live call needs a task spend cap (`--cap <name>`, `taskCap.ts`); a cached or dry run needs none.
  * Never prints env values. See .context/model-eval.md.
  */
 import 'dotenv/config'
@@ -32,6 +33,7 @@ import { RECALIBRATION_STEP_DEFS, type RecalibrationStepDef, type StepSection } 
 import { recalibrationReportName, renderRecalibration, verdict } from './recalibrationReport.js'
 import { SHIP_STEP_DEFS } from './shipChecks.js'
 import { LAYOUT_STEP_DEFS } from './layoutChecks.js'
+import { installEvalCap } from './taskCap.js'
 
 const STEP_DEFS: Record<RecalibrationStep, RecalibrationStepDef> = { ...RECALIBRATION_STEP_DEFS, ...SHIP_STEP_DEFS, ...LAYOUT_STEP_DEFS }
 
@@ -50,10 +52,12 @@ function readCachedFixtures(cacheDir: string, floor?: string): Fixtures {
 
 async function main(): Promise<void> {
   const opts = parseRecalibrationOptions(process.argv.slice(2))
+  const cap = installEvalCap(opts.cap)
   const out = resolve(opts.out)
   const cacheDir = join(out, '.cache')
   const cacheFile = join(cacheDir, 'calls.jsonl')
   console.log(`OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? 'present' : 'missing'}`)
+  console.log(cap.line())
   const fx = readCachedFixtures(cacheDir, opts.floor)
   const phase1Sample = isPhase1Sample(fx)
   const input = { fx, sample: sampleFor(fx, opts.half), opts: { ...opts, out }, phase1Sample }
@@ -126,9 +130,10 @@ async function main(): Promise<void> {
       thisRunUsd: ctx.spentThisRunUsd(),
       ledgerUsd: ctx.spentUsd(),
       budgetUsd: opts.budget,
-    }),
+    }) + cap.section(),
   )
   for (const s of skipped) console.log(`${s.step}: ${s.reason}`)
+  console.log(cap.line())
   console.log(`wrote ${file}`)
 }
 

@@ -83,3 +83,4 @@ its file, `.context/decisions/NNNN-<short-slug>.md`; and add its line at the bot
 - [ADR-0079 · A founding whose partner comes later in the run's order waits for that partner's own result](decisions/0079-linking-founding-waits-for-later-partner.md)
 - [ADR-0080 · A research fact is its statement, and its figure stays only when a model finds it in the source](decisions/0080-fact-statement-governs-model-judges-figures.md)
 - [ADR-0081 · The whole-step replay replays the linking step's story set, background included, and skips no review](decisions/0081-replay-replays-linking-story-set.md)
+- [ADR-0082 · Eval spend is held by a strict per-task cap, enforced at the HTTP layer by worst-case reservation](decisions/0082-strict-per-task-eval-spend-cap.md)

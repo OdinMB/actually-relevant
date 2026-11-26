@@ -5,6 +5,7 @@
  */
 import { parseArgs } from 'node:util'
 import { parseEffort, REASONING_EFFORTS, type ReasoningEffort } from '../../config.js'
+import { capName } from '../../lib/spendCap.js'
 import { MODELS } from './models.js'
 import { MAX_REPEAT } from './repeats.js'
 import type { Half } from './sampling.js'
@@ -40,6 +41,8 @@ export interface EvalOptions {
   assessSize: number
   /** Eval folders whose pre-assessment and full-assessment stories leave the pools (spent samples). */
   exclude: string[]
+  /** The task spend cap's name (`--cap`, `EVAL_SPEND_CAP`); undefined refuses every live paid request. */
+  cap?: string
 }
 
 function positiveInt(flag: string, value: string | undefined, fallback?: number): number | undefined {
@@ -57,6 +60,18 @@ function budgetOf(value: string | undefined, fallback: number = DEFAULT_BUDGET_U
   }
   return budget
 }
+
+/**
+ * `--cap <name>`, else `EVAL_SPEND_CAP`: the task spend cap the command spends under (`taskCap.ts`).
+ * Undefined runs with none, which refuses every live paid request.
+ */
+function capOf(value: string | undefined): string | undefined {
+  const name = value ?? process.env.EVAL_SPEND_CAP
+  return name === undefined || name === '' ? undefined : capName(name)
+}
+
+/** The flag every eval command takes. */
+const CAP_OPTION = { cap: { type: 'string' } } as const
 
 function floorOf(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
@@ -88,6 +103,7 @@ export function parseOptions(argv: string[]): EvalOptions {
       floor: { type: 'string' },
       'assess-size': { type: 'string' },
       exclude: { type: 'string' },
+      ...CAP_OPTION,
     },
   })
   if (!values.out) throw new Error('--out is required')
@@ -108,6 +124,7 @@ export function parseOptions(argv: string[]): EvalOptions {
     concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
     refreshFixtures: values['refresh-fixtures'] ?? false,
     floor: floorOf(values.floor ?? DEFAULT_FLOOR),
+    cap: capOf(values.cap),
   }
 }
 
@@ -156,6 +173,8 @@ export interface RecalibrationOptions {
   floor?: string
   /** Runs of each rating prompt (pre-assessment and full assessment); run k ≥ 2 has its own cache key. */
   repeat: number
+  /** As in `EvalOptions`. */
+  cap?: string
 }
 
 export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions {
@@ -174,6 +193,7 @@ export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions 
       concurrency: { type: 'string' },
       floor: { type: 'string' },
       repeat: { type: 'string' },
+      ...CAP_OPTION,
     },
   })
   if (!values.out) throw new Error('--out is required')
@@ -198,6 +218,7 @@ export function parseRecalibrationOptions(argv: string[]): RecalibrationOptions 
     concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
     ...(values.floor !== undefined ? { floor: floorOf(values.floor) } : {}),
     repeat,
+    cap: capOf(values.cap),
   }
 }
 
@@ -222,6 +243,8 @@ export interface ResearchOptions {
   budget: number
   concurrency: number
   refreshFixtures: boolean
+  /** As in `EvalOptions`. */
+  cap?: string
 }
 
 export function parseResearchOptions(argv: string[]): ResearchOptions {
@@ -236,6 +259,7 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
       budget: { type: 'string' },
       concurrency: { type: 'string' },
       'refresh-fixtures': { type: 'boolean', default: false },
+      ...CAP_OPTION,
     },
   })
   if (!values.out) throw new Error('--out is required')
@@ -250,6 +274,7 @@ export function parseResearchOptions(argv: string[]): ResearchOptions {
     budget: budgetOf(values.budget, RESEARCH_DEFAULT_BUDGET_USD),
     concurrency: positiveInt('--concurrency', values.concurrency, 4) ?? 4,
     refreshFixtures: values['refresh-fixtures'] ?? false,
+    cap: capOf(values.cap),
   }
 }
 
@@ -365,6 +390,8 @@ export interface OverviewOptions {
   facts: OverviewFactSource
   /** The gap keys the `context` step runs on, and the answer keys' stories the `update` and linking steps run on: prompts are tuned on `tune`, the gate is read on `judge`. */
   half: OverviewHalf
+  /** As in `EvalOptions`. */
+  cap?: string
 }
 
 /** `model@effort,…`, each model one with a price in `MODELS`; duplicates once. */
@@ -399,6 +426,7 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
       'refresh-fixtures': { type: 'boolean', default: false },
       facts: { type: 'string' },
       half: { type: 'string' },
+      ...CAP_OPTION,
     },
   })
   if (!values.out) throw new Error('--out is required')
@@ -448,5 +476,28 @@ export function parseOverviewOptions(argv: string[]): OverviewOptions {
     refreshFixtures: values['refresh-fixtures'] ?? false,
     facts,
     half,
+    cap: capOf(values.cap),
   }
+}
+
+// ---------------------------------------------------------------------------
+// eval:cap
+// ---------------------------------------------------------------------------
+
+export type CapCommand = { command: 'new'; name: string; usd: number } | { command: 'show'; name: string }
+
+/** `new <name> --usd <n>` (at most `MAX_BUDGET_USD`, the eval's project cap) or `show <name>`. */
+export function parseCapCommand(argv: string[]): CapCommand {
+  const { values, positionals } = parseArgs({ args: argv, strict: true, allowPositionals: true, options: { usd: { type: 'string' } } })
+  const [command, name] = positionals
+  if (positionals.length !== 2 || (command !== 'new' && command !== 'show')) {
+    throw new Error('usage: eval:cap new <name> --usd <n> | eval:cap show <name>; a cap is named once and its amount never changes')
+  }
+  const checked = capName(name ?? '')
+  if (command === 'show') return { command, name: checked }
+  const usd = Number(values.usd)
+  if (values.usd === undefined || !Number.isFinite(usd) || usd <= 0 || usd > MAX_BUDGET_USD) {
+    throw new Error(`--usd must be between 0 and ${MAX_BUDGET_USD} (USD)`)
+  }
+  return { command, name: checked, usd }
 }

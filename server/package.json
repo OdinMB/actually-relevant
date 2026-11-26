@@ -59,7 +59,8 @@
     "eval:models": "tsx src/scripts/eval/run.ts",
     "eval:recalibrate": "tsx src/scripts/eval/recalibrate.ts",
     "eval:research": "tsx src/scripts/eval/research.ts",
-    "eval:overviews": "tsx src/scripts/eval/overviews.ts"
+    "eval:overviews": "tsx src/scripts/eval/overviews.ts",
+    "eval:cap": "tsx src/scripts/eval/cap.ts"
   },
   "dependencies": {
     "@atproto/api": "^0.29.4",
