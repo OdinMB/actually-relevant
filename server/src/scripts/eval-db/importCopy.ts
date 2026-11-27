@@ -15,12 +15,15 @@ import { CopyFileError, CopyReader, splitLines } from './copyFile.js'
 import { ident, newestMigration, tableColumns } from './database.js'
 import type { Row } from './scrub.js'
 import { EXPORTED_TABLES, type ExportedTable } from './tables.js'
+import type { CopyWindow } from './window.js'
 
 type Tx = Prisma.TransactionClient
 
 export interface ImportSummary {
   counts: Record<string, number>
   exportedAt: string
+  /** Which stories the copy holds, as its header records it. */
+  window: CopyWindow
   /** The newest migration of the database the copy was made from, and of this one. */
   copyMigration: string | null
   databaseMigration: string | null
@@ -132,7 +135,13 @@ export async function importEvalCopy(db: PrismaClient, file: string, options: { 
       await loader.flush()
       const counts = reader.finish()
       await loader.setDeferred()
-      return { counts, exportedAt: reader.header!.exportedAt, copyMigration: reader.header!.migration, databaseMigration: await newestMigration(tx) }
+      return {
+        counts,
+        exportedAt: reader.header!.exportedAt,
+        window: reader.header!.window,
+        copyMigration: reader.header!.migration,
+        databaseMigration: await newestMigration(tx),
+      }
     },
     { timeout: options.timeoutMs ?? IMPORT_TIMEOUT_MS, maxWait: 30_000 },
   )

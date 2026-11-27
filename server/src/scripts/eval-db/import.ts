@@ -18,6 +18,7 @@ import { runPrisma } from '../db-prepare/prismaCli.js'
 import { classifyMigrateFailure, summarizeMigrateSuccess } from '../db-prepare/prismaOutput.js'
 import { evalDatabaseRefusal } from './guard.js'
 import { importEvalCopy } from './importCopy.js'
+import { describeWindow } from './window.js'
 
 const say = (message: string) => console.log(`[eval-copy] ${message}`)
 const fail = (message: string, output?: string) => {
@@ -51,6 +52,7 @@ async function main(): Promise<void> {
   const db = new PrismaClient({ datasourceUrl: url })
   try {
     const s = await importEvalCopy(db, resolve(file))
+    say(`the copy holds ${describeWindow(s.window)}`)
     for (const [table, n] of Object.entries(s.counts)) say(`${table}: ${n} rows`)
     say(`the copy was made ${s.exportedAt} from a database at migration ${s.copyMigration ?? 'none'}; ${database} is at ${s.databaseMigration ?? 'none'}`)
     if (s.copyMigration !== s.databaseMigration) say('the two differ: a column added between them holds its default in every row')

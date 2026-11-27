@@ -85,6 +85,36 @@ describe('the eval copy against the schema', () => {
     })
   })
 
+  it("selects each windowed table's rows by its owner: a story, cluster or overview, through a foreign key to it", () => {
+    const ruleOf = (table: string) => EXPORTED_TABLES.find(t => t.table === table)?.rows
+    for (const t of EXPORTED_TABLES) {
+      const s = schemaTable(t.table)
+      const { rows } = t
+      if (rows === 'all') continue
+      if ('since' in rows) {
+        expect(s.columns.find(c => c.name === rows.since)?.type, t.table).toBe('DateTime')
+        continue
+      }
+      // The owner table holds the ids the copy selects, and selects itself by its key
+      const owner = EXPORTED_TABLES.find(o => o.table === rows.in)
+      expect(owner, t.table).toBeDefined()
+      expect(ruleOf(rows.in), t.table).toEqual({ in: rows.in, column: owner!.key })
+      if (t.table !== rows.in) expect(s.foreignKeys, t.table).toContainEqual({ columns: [rows.column], table: rows.in })
+      if (rows.orStory) expect(s.foreignKeys, t.table).toContainEqual({ columns: [rows.orStory], table: 'stories' })
+    }
+  })
+
+  it('holds every row only of tables that point at no story, cluster or overview', () => {
+    const owners = ['stories', 'story_clusters', 'overviews']
+    for (const t of EXPORTED_TABLES) {
+      if (t.rows !== 'all') continue
+      expect(
+        schemaTable(t.table).foreignKeys.filter(fk => owners.includes(fk.table)),
+        t.table,
+      ).toEqual([])
+    }
+  })
+
   it('reads each exported table by one text key', () => {
     for (const t of EXPORTED_TABLES) {
       const key = schemaTable(t.table).columns.find(c => c.name === t.key)

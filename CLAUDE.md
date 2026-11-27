@@ -68,7 +68,7 @@ npm run db:migrate:create --prefix server -- --name <name>  # Write migration SQ
 npm run db:prepare --prefix server    # Apply migrations + regenerate client if schema changed (local DB only)
 npm run db:studio --prefix server     # Open Prisma Studio
 npm run db:seed:synthetic --prefix server  # Fill a local *_synthetic DB with made-up data (SYNTHETIC_DATABASE_URL; .context/database-migrations.md)
-npm run db:export:eval --prefix server -- --out ../DOCS/<date>_eval-db.jsonl.gz  # Stories-only, scrubbed copy of DATABASE_URL for cloud evals (read-only; never commit it)
+npm run db:export:eval --prefix server -- --out ../DOCS/<date>_eval-db.jsonl.gz  # Stories-only, scrubbed copy of DATABASE_URL for cloud evals: six months of stories unless --months <n> or --all (read-only; never commit it)
 npm run db:import:eval --prefix server -- --in <file>  # Load that copy into a local *_eval DB (EVAL_DATABASE_URL): migrates, then replaces everything
 ```
 
@@ -167,7 +167,7 @@ Subsystem docs: behavioral rules and implementation reference. **Read the releva
 | `images.md` | WebP optimization, size presets, CLI commands |
 | `logging.md` | Pino config, error serialization, structured data, log levels |
 | `server-conventions.md` | Route errors (typed `ServiceError`s, `failsWith()`, the one global handler), test-only `_` exports |
-| `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands, the PostgreSQL integration tests (`*.db.test.ts`, `TEST_DATABASE_URL`, guard rules) and CI; the stories-only eval copy for cloud evals (allowlisted tables, scrubbed actor columns, the schema fence, export through the read-only session, import into a local `*_eval` DB) |
+| `database-migrations.md` | Docker dev DB, automatic `db:prepare` on dev start (local-only guard, skip var, failure modes), authoring migrations, allowed/banned commands, the PostgreSQL integration tests (`*.db.test.ts`, `TEST_DATABASE_URL`, guard rules) and CI; the stories-only eval copy for cloud evals (allowlisted tables, scrubbed actor columns, the schema fence, the six-month window closed over every foreign key, export through the read-only session, import into a local `*_eval` DB) |
 | `ci.md` | The CI checks that gate deploys and the `deploy` job that triggers them (lint, format, types with `noUncheckedIndexedAccess`, coverage ratchet, audit allowlist, builds): commands, rules turned off and why, what to do when `main` is red; triggers, cancelling, caches; measuring CI minutes and the levers if they ever matter |
 | `deployment.md` | Render services and the `render.yaml` blueprint (service settings change there, not in the dashboard); why builds install devDependencies and pin `tsc` (read before touching build scripts or `render.yaml`, or adding an env var: `server/src/blueprint.test.ts` fails until it is in the code, `env.example` and `render.yaml`) |
 | `bluesky.md` | AT Protocol auth, post format, auto-post, metrics |

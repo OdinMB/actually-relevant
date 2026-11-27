@@ -1,12 +1,13 @@
 /**
  * The eval copy's file: gzip-compressed JSON lines, a header first (`format`, `version`, when it was
- * made and the newest migration its database had), then one line per row (`{"table":…,"row":…}`,
- * every table's rows together, in load order), then an end line with each table's count. A reader
- * refuses anything else: a table off the list it is given, a table out of order, a line after the
- * end, a copy cut short, counts that differ from the rows.
+ * made, the newest migration its database had and its window), then one line per row
+ * (`{"table":…,"row":…}`, every table's rows together, in load order), then an end line with each
+ * table's count. A reader refuses anything else: a table off the list it is given, a table out of
+ * order, a line after the end, a copy cut short, counts that differ from the rows.
  */
 import { StringDecoder } from 'node:string_decoder'
 import type { Row } from './scrub.js'
+import type { CopyWindow } from './window.js'
 
 export const COPY_FORMAT = 'actually-relevant-eval-copy'
 export const COPY_VERSION = 1
@@ -16,19 +17,30 @@ export interface CopyHeader {
   version: typeof COPY_VERSION
   exportedAt: string
   migration: string | null
+  /** A header without one is a copy made before the window existed, which held every story. */
+  window: CopyWindow
 }
 
 /** A copy the reader refuses. */
 export class CopyFileError extends Error {}
 
-export const headerLine = (h: Pick<CopyHeader, 'exportedAt' | 'migration'>): string =>
-  JSON.stringify({ format: COPY_FORMAT, version: COPY_VERSION, exportedAt: h.exportedAt, migration: h.migration })
+export const headerLine = (h: Pick<CopyHeader, 'exportedAt' | 'migration' | 'window'>): string =>
+  JSON.stringify({ format: COPY_FORMAT, version: COPY_VERSION, exportedAt: h.exportedAt, migration: h.migration, window: h.window })
 
 export const rowLine = (table: string, row: Row): string => JSON.stringify({ table, row })
 
 export const trailerLine = (counts: Record<string, number>): string => JSON.stringify({ end: true, counts })
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
+
+/** The header's window; refuses one this code cannot read. */
+function readWindow(value: unknown): CopyWindow {
+  if (value === undefined || value === 'all') return 'all'
+  if (isObject(value) && Number.isInteger(value.months) && typeof value.since === 'string' && !Number.isNaN(Date.parse(value.since))) {
+    return { months: value.months as number, since: value.since }
+  }
+  throw new CopyFileError(`the copy's header has a window this code cannot read: ${JSON.stringify(value)}`)
+}
 
 /** Reads a copy line by line, in order, against the tables it may hold (in their load order). */
 export class CopyReader {
@@ -64,6 +76,7 @@ export class CopyReader {
         version: COPY_VERSION,
         exportedAt: String(value.exportedAt),
         migration: typeof value.migration === 'string' ? value.migration : null,
+        window: readWindow(value.window),
       }
       return null
     }

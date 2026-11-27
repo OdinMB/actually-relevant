@@ -3,8 +3,9 @@
  * Evals"): the owner runs it against his local database, through the eval's read-only session, and
  * takes the file to the cloud session's project files.
  *
- *   npm run db:export:eval --prefix server -- --out ../DOCS/2026-11-26_eval-db.jsonl.gz
+ *   npm run db:export:eval --prefix server -- --out ../DOCS/2026-11-26_eval-db.jsonl.gz [--months <n> | --all]
  *
+ * Six months of stories unless `--months` names another number or `--all` asks for every story.
  * Reads DATABASE_URL as the evals do (server/.env, a value in the shell winning) and prints only
  * local or remote for it; writes nothing to any database.
  */
@@ -15,6 +16,7 @@ import { pathToFileURL } from 'node:url'
 import { classifyDb, openReadOnlyDb, readOnlyStatus } from '../eval/readOnlyDb.js'
 import { exportEvalCopy, type ExportSummary } from './exportCopy.js'
 import { EXCLUDED_TABLES } from './tables.js'
+import { describeWindow, parseWindowArgs, type WindowChoice } from './window.js'
 
 const say = (message: string) => console.log(`[eval-copy] ${message}`)
 const fail = (message: string) => console.error(`[eval-copy] ${message}`)
@@ -25,9 +27,13 @@ const size = (bytes: number) => (bytes < 1_000_000 ? `${Math.round(bytes / 1000)
 function describeExport(s: ExportSummary, out: string): string[] {
   const stories = s.counts.stories ?? 0
   const scrubbed = Object.entries(s.scrubbed).map(([column, n]) => `${column} (${n})`)
+  const nulled = Object.entries(s.nulled).map(([column, n]) => `${column} (${n})`)
   return [
+    `window: ${describeWindow(s.window)}`,
+    ...(s.inWindow !== null ? [`stories: ${s.inWindow} first seen in the window, ${stories - s.inWindow} older ones the copy's rows point at`] : []),
     ...Object.entries(s.counts).map(([table, n]) => `${table}: ${n} rows`),
     `scrubbed values: ${scrubbed.length > 0 ? scrubbed.join(', ') : 'none'}`,
+    ...(nulled.length > 0 ? [`references to rows outside the copy, written as null: ${nulled.join(', ')}`] : []),
     ...(s.absentTables.length > 0 ? [`not in this database: ${s.absentTables.join(', ')}`] : []),
     ...(s.absentColumns.length > 0 ? [`columns not in this database: ${s.absentColumns.join(', ')}`] : []),
     `left out: ${Object.keys(EXCLUDED_TABLES).join(', ')}`,
@@ -45,6 +51,14 @@ async function main(): Promise<void> {
     process.exitCode = 1
     return
   }
+  let window: WindowChoice
+  try {
+    window = parseWindowArgs(argv)
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err))
+    process.exitCode = 1
+    return
+  }
   console.log(`database: ${classifyDb(process.env.DATABASE_URL ?? '')}`)
   const db = await openReadOnlyDb().catch((err: unknown) => {
     fail(err instanceof Error ? err.message : String(err))
@@ -58,7 +72,7 @@ async function main(): Promise<void> {
     say(`read-only session: ${await readOnlyStatus(db)} (${db.mode} mode)`)
     // The folder named (the gitignored DOCS/, usually) may not exist yet
     mkdirSync(dirname(resolve(out)), { recursive: true })
-    for (const line of describeExport(await exportEvalCopy(db, resolve(out)), resolve(out))) say(line)
+    for (const line of describeExport(await exportEvalCopy(db, resolve(out), { window }), resolve(out))) say(line)
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err))
     process.exitCode = 1

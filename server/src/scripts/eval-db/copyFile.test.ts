@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { CopyFileError, CopyReader, headerLine, rowLine, splitLines, trailerLine } from './copyFile.js'
 
 const TABLES = ['issues', 'feeds', 'stories']
-const HEADER = headerLine({ exportedAt: '2026-11-26T12:00:00.000Z', migration: '20261120000620_overview_recenter' })
+const WINDOW = { months: 6, since: '2026-05-26T12:00:00.000Z' }
+const HEADER = headerLine({ exportedAt: '2026-11-26T12:00:00.000Z', migration: '20261120000620_overview_recenter', window: WINDOW })
 
 const read = (lines: string[]) => {
   const reader = new CopyReader(TABLES)
@@ -30,7 +31,24 @@ describe('the copy file', () => {
       { table: 'stories', row: { id: 's1', title: 'Line\nbreak' } },
     ])
     expect(counts).toEqual({ issues: 2, stories: 1 })
-    expect(header).toMatchObject({ exportedAt: '2026-11-26T12:00:00.000Z', migration: '20261120000620_overview_recenter' })
+    expect(header).toMatchObject({ exportedAt: '2026-11-26T12:00:00.000Z', migration: '20261120000620_overview_recenter', window: WINDOW })
+  })
+
+  it("reads the header's window: the months and their cutoff, every story, or every story for a copy made before the window existed", () => {
+    const all = headerLine({ exportedAt: '2026-11-26T12:00:00.000Z', migration: null, window: 'all' })
+    expect(read([all, trailerLine({})]).header?.window).toBe('all')
+    const older = JSON.stringify({ format: 'actually-relevant-eval-copy', version: 1, exportedAt: '2026-11-26T12:00:00.000Z', migration: null })
+    expect(read([older, trailerLine({})]).header?.window).toBe('all')
+  })
+
+  it.each([
+    ['a word', 'six'],
+    ['months that are not a whole number', { months: 1.5, since: '2026-05-26T12:00:00.000Z' }],
+    ['no cutoff', { months: 6 }],
+    ['a cutoff that is not a date', { months: 6, since: 'soon' }],
+  ])('refuses a window of %s', (_label, window) => {
+    const header = JSON.stringify({ format: 'actually-relevant-eval-copy', version: 1, exportedAt: '2026-11-26T12:00:00.000Z', migration: null, window })
+    expect(() => read([header, trailerLine({})])).toThrow(/window/)
   })
 
   it.each([

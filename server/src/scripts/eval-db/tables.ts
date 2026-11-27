@@ -1,9 +1,10 @@
 /**
  * What the stories-only eval copy holds (`.context/database-migrations.md`, "A Stories-Only Copy for
  * Cloud Evals"), in one place: the tables the evals read, in the order an import loads them, each with
- * every column classified as kept or scrubbed (`scrub.ts`), and every other table of the schema with
- * the reason it stays out. `tables.test.ts` holds this against `prisma/schema.prisma`: a table or a
- * column the schema gains fails there until it is named here.
+ * every column classified as kept or scrubbed (`scrub.ts`) and which of its rows a windowed copy holds
+ * (`selection.ts`), and every other table of the schema with the reason it stays out. `tables.test.ts`
+ * holds this against `prisma/schema.prisma`: a table or a column the schema gains fails there until it
+ * is named here.
  */
 
 /**
@@ -12,17 +13,34 @@
  */
 export type ScrubRule = 'actor' | 'actorsInJson'
 
+/** The tables whose ids a windowed copy selects, closed over its references (`selection.ts`). */
+export type OwnerTable = 'stories' | 'story_clusters' | 'overviews'
+
+/**
+ * Which rows a windowed copy holds (`--all` holds every row of every table): `all`, every row; `in`,
+ * the rows whose `column` names a story, cluster or overview of the copy (an owner table names itself
+ * by its key), and with `orStory` a row whose `column` is null by its story instead; `since`, the rows
+ * that column dates inside the window.
+ */
+export type RowRule = 'all' | { in: OwnerTable; column: string; orStory?: string } | { since: string }
+
 export interface ExportedTable {
   table: string
   /** Its primary key, one text column: the export reads the table in pages ordered by it. */
   key: string
   /** Columns loaded as null and set once every table is in: the foreign keys that close a cycle. */
   deferred: readonly string[]
+  /** Which of its rows a windowed copy holds. */
+  rows: RowRule
   /** Columns carried as they are. */
   keep: readonly string[]
   /** Columns that can name a person, with their rule. */
   scrub: Readonly<Record<string, ScrubRule>>
 }
+
+/** A table a story owns: its rows go with their story. */
+const BY_STORY: RowRule = { in: 'stories', column: 'story_id' }
+const BY_OVERVIEW: RowRule = { in: 'overviews', column: 'overview_id' }
 
 /** The tables the copy holds, in load order: a table comes after every table its foreign keys name, but for its deferred columns. */
 export const EXPORTED_TABLES: readonly ExportedTable[] = [
@@ -30,6 +48,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'issues',
     key: 'id',
     deferred: ['parent_id'],
+    rows: 'all',
     keep: [
       'id',
       'name',
@@ -53,6 +72,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'feeds',
     key: 'id',
     deferred: [],
+    rows: 'all',
     keep: [
       'id',
       'title',
@@ -86,6 +106,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'stories',
     key: 'id',
     deferred: ['cluster_id'],
+    rows: { in: 'stories', column: 'id' },
     keep: [
       'id',
       'source_url',
@@ -123,12 +144,20 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     ],
     scrub: {},
   },
-  { table: 'story_embeddings', key: 'story_id', deferred: [], keep: ['story_id', 'embedding', 'content_hash', 'generated_at'], scrub: {} },
-  { table: 'story_clusters', key: 'id', deferred: [], keep: ['id', 'primary_story_id', 'created_at', 'updated_at'], scrub: {} },
+  { table: 'story_embeddings', key: 'story_id', deferred: [], rows: BY_STORY, keep: ['story_id', 'embedding', 'content_hash', 'generated_at'], scrub: {} },
+  {
+    table: 'story_clusters',
+    key: 'id',
+    deferred: [],
+    rows: { in: 'story_clusters', column: 'id' },
+    keep: ['id', 'primary_story_id', 'created_at', 'updated_at'],
+    scrub: {},
+  },
   {
     table: 'story_research_runs',
     key: 'id',
     deferred: [],
+    rows: BY_STORY,
     keep: ['id', 'story_id', 'status', 'trigger', 'verdict', 'cost_usd', 'tavily_credits', 'result', 'error', 'started_at', 'finished_at'],
     scrub: {},
   },
@@ -136,6 +165,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'story_context_runs',
     key: 'id',
     deferred: [],
+    rows: BY_STORY,
     keep: [
       'id',
       'story_id',
@@ -157,6 +187,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'context_facts',
     key: 'id',
     deferred: [],
+    rows: BY_STORY,
     keep: [
       'id',
       'story_id',
@@ -198,6 +229,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'context_boxes',
     key: 'id',
     deferred: [],
+    rows: BY_STORY,
     keep: [
       'id',
       'story_id',
@@ -220,11 +252,19 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     ],
     scrub: {},
   },
-  { table: 'context_search_cache', key: 'key', deferred: [], keep: ['key', 'query', 'results', 'credits', 'created_at'], scrub: {} },
+  {
+    table: 'context_search_cache',
+    key: 'key',
+    deferred: [],
+    rows: { since: 'created_at' },
+    keep: ['key', 'query', 'results', 'credits', 'created_at'],
+    scrub: {},
+  },
   {
     table: 'research_passes',
     key: 'id',
     deferred: ['version_id'],
+    rows: BY_STORY,
     keep: [
       'id',
       'story_id',
@@ -249,6 +289,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'article_versions',
     key: 'id',
     deferred: [],
+    rows: BY_STORY,
     keep: [
       'id',
       'story_id',
@@ -277,6 +318,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'evidence_searches',
     key: 'id',
     deferred: [],
+    rows: BY_STORY,
     keep: [
       'id',
       'story_id',
@@ -300,6 +342,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'evidence_sources',
     key: 'id',
     deferred: [],
+    rows: BY_STORY,
     keep: [
       'id',
       'story_id',
@@ -329,6 +372,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'pool_facts',
     key: 'id',
     deferred: [],
+    rows: BY_STORY,
     keep: [
       'id',
       'story_id',
@@ -376,6 +420,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'pass_boxes',
     key: 'id',
     deferred: [],
+    rows: BY_STORY,
     keep: [
       'id',
       'story_id',
@@ -401,6 +446,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'overviews',
     key: 'id',
     deferred: [],
+    rows: { in: 'overviews', column: 'id' },
     keep: [
       'id',
       'slug',
@@ -437,6 +483,8 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'overview_decisions',
     key: 'id',
     deferred: [],
+    // A decision that names no overview (a link that found none) is its story's
+    rows: { in: 'overviews', column: 'overview_id', orStory: 'story_id' },
     keep: ['id', 'kind', 'overview_id', 'story_id', 'outcome', 'answer', 'model', 'prompt_version', 'confidence', 'cost_usd', 'created_at', 'undone_at'],
     // An editor's user id in `actor` and `undone_by`, and in the change set an editor's action stores in `inputs` (`detachedBy`)
     scrub: { inputs: 'actorsInJson', actor: 'actor', undone_by: 'actor' },
@@ -445,6 +493,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'overview_entries',
     key: 'id',
     deferred: [],
+    rows: BY_OVERVIEW,
     keep: [
       'id',
       'overview_id',
@@ -471,6 +520,7 @@ export const EXPORTED_TABLES: readonly ExportedTable[] = [
     table: 'overview_stands',
     key: 'id',
     deferred: [],
+    rows: BY_OVERVIEW,
     keep: ['id', 'overview_id', 'number', 'status', 'sentences', 'doing', 'facts_seen', 'as_of', 'model', 'prompt_version', 'record', 'written_at'],
     scrub: {},
   },
