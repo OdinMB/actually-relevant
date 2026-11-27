@@ -7,7 +7,9 @@
  * facts (`--facts context`, `--facts pool`) these text kinds are planted in the fact's statement, and
  * four field-level kinds change one field of its record instead; production's `renderFact` renders
  * the fact again either way (`contextFacts.ts`). For the figure check (`figureCheck.ts`) one rule
- * changes a recorded figure's value (`wrongFigure`). Pure.
+ * changes a recorded figure's value (`wrongFigure`). The `update` step's corrections take every
+ * candidate change of a statement (`wrongNumbers`, `wrongYears`) and keep the first a sanity check
+ * lets through (`updatePlants.ts`). Pure.
  */
 import { readNumbers, significant, type NumberToken } from '../../../lib/numbers.js'
 import { RECORD_LABELS } from '../../../services/storyContextChecks.js'
@@ -114,7 +116,8 @@ function formatNumber(value: number, f: Format): string {
   return dec === undefined ? grouped : `${grouped}.${dec}`
 }
 
-const isYear = (n: PlantableNumber) => !n.token.marked && /^\d{4}$/.test(n.raw) && Number(n.raw) >= 1900 && Number(n.raw) <= 2099
+/** An unmarked four-digit number from 1900 to 2099: read as a year. */
+export const isYear = (n: PlantableNumber) => !n.token.marked && /^\d{4}$/.test(n.raw) && Number(n.raw) >= 1900 && Number(n.raw) <= 2099
 
 /** Unmarked, ungrouped and under 10,000: as often a year, a period's bound (1850-1900) or a name (Resolution 1701) as a count. */
 const mayNotCount = (n: PlantableNumber, f: Format) => !n.token.marked && f.group === null && f.value < 10_000
@@ -191,19 +194,42 @@ export function reworded(text: string): Planted | null {
 // Planted errors
 // ---------------------------------------------------------------------------
 
-/** One significant number (not a year) times 1.5 at its own precision, or times 2 where that leaves it unchanged. */
+/** A number of a text changed on its own: the number, what went in its place, and the text with it. */
+export interface NumberChange extends Planted {
+  at: PlantableNumber
+  insert: string
+}
+
+/** A number multiplied: the factor it was multiplied by besides. */
+export interface ScaledChange extends NumberChange {
+  factor: number
+}
+
+/** A number written as `raw` times `k` at its own precision, in its own format; null where it is unreadable or `k` leaves it unchanged. */
+export function timesNumber(raw: string, k: number): string | null {
+  const p = partsOf(raw)
+  const f = p && formatOf(p.digits)
+  if (!p || !f) return null
+  const changed = Number((f.value * k).toFixed(f.decimals))
+  return changed === f.value ? null : `${p.prefix}${formatNumber(changed, f)}${p.suffix}`
+}
+
+/** Each significant number (not a year) times 1.5 at its own precision, or times 2 where that leaves it unchanged, each on its own, in text order. */
+export function wrongNumbers(text: string): ScaledChange[] {
+  return plantableNumbers(text).flatMap((n): ScaledChange[] => {
+    if (!significant(n.token) || isYear(n)) return []
+    for (const factor of [1.5, 2]) {
+      const insert = timesNumber(n.raw, factor)
+      if (insert !== null) return [{ text: replaced(text, n, insert), change: `${n.raw} → ${insert}`, at: n, insert, factor }]
+    }
+    return []
+  })
+}
+
+/** The first of `wrongNumbers`: one significant number (not a year) times 1.5, or times 2 where that leaves it unchanged. */
 export function wrongNumber(text: string): Planted | null {
-  for (const n of plantableNumbers(text)) {
-    if (!significant(n.token) || isYear(n)) continue
-    const p = partsOf(n.raw)
-    const f = p && formatOf(p.digits)
-    if (!p || !f) continue
-    const changed = [1.5, 2].map(k => Number((f.value * k).toFixed(f.decimals))).find(v => v !== f.value)
-    if (changed === undefined) continue
-    const insert = `${p.prefix}${formatNumber(changed, f)}${p.suffix}`
-    return { text: replaced(text, n, insert), change: `${n.raw} → ${insert}` }
-  }
-  return null
+  const first = wrongNumbers(text)[0]
+  return first ? { text: first.text, change: first.change } : null
 }
 
 const DROPPABLE = /(^|[^\p{L}\p{N}])(more than|at least|up to|nearly|almost|about|around|over|some)\s+$/iu
@@ -225,12 +251,20 @@ export function droppedQualifier(text: string): Planted | null {
   return null
 }
 
-/** The first year from 1900 to 2099, moved back by one. */
+/** Each year from 1900 to 2099 moved back by one, each on its own, in text order. */
+export function wrongYears(text: string): NumberChange[] {
+  return plantableNumbers(text)
+    .filter(isYear)
+    .map(n => {
+      const insert = String(Number(n.raw) - 1)
+      return { text: replaced(text, n, insert), change: `${n.raw} → ${insert}`, at: n, insert }
+    })
+}
+
+/** The first of `wrongYears`: the first year from 1900 to 2099, moved back by one. */
 export function wrongYear(text: string): Planted | null {
-  const n = plantableNumbers(text).find(isYear)
-  if (!n) return null
-  const year = String(Number(n.raw) - 1)
-  return { text: replaced(text, n, year), change: `${n.raw} → ${year}` }
+  const first = wrongYears(text)[0]
+  return first ? { text: first.text, change: first.change } : null
 }
 
 const SCALE_SWAP: Record<string, string> = { thousand: 'million', million: 'billion', billion: 'million' }

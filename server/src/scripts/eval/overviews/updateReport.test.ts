@@ -12,6 +12,8 @@ const report = (over: Partial<UpdateStepReport> = {}): UpdateStepReport => ({
   stories: 4,
   cases: { key: 3, 'wrong-number': 4, 'wrong-year': 2, benign: 4 },
   unplaced: 1,
+  stated: [],
+  refused: [],
   source: { kind: 'legacy' },
   ceiling: false,
   deskUsd: null,
@@ -29,7 +31,7 @@ describe('updateLines', () => {
     expect(text).toContain('- 1 changed figure values have a quote no section holds')
     expect(text).toContain('**Strong judge on the notes:** 12 calls (12 uncached)')
     expect(text).toContain(
-      '| Expected changes flagged on the right section (a turning point: some rewrite rests on it) | at least 90.0% | n/a | n/a | no verdicts |',
+      '| Expected changes flagged on the right section (a turning point: some rewrite rests on it, or on a newer fact of its window) | at least 90.0% | n/a | n/a | no verdicts |',
     )
     expect(text).toContain('| Cases demoting a fact they do not expect | at most 5.0% |')
   })
@@ -41,6 +43,7 @@ describe('updateLines', () => {
       cases: 2,
       outcomes: { updated: 2, unchanged: 0, update_failed: 0, budget: 0, technical: 0 },
       flagged: c(2, 2),
+      turning: { of: 3, own: 1, newer: 1 },
       falseRewrites: c(0, 1),
       identical: c(4, 4),
       demoted: c(1, 1),
@@ -51,6 +54,26 @@ describe('updateLines', () => {
     const text = updateLines(report({ score: { ...scoreUpdates([]), runs: [run] } })).join('\n')
     expect(text).toContain('| Notes good | Fixed lines served | Notes unsupported / written |')
     expect(text).toContain('| 1 / 2 (50.0%) | 1 / 2 (50.0%) | 2 / 3 |')
+    // How each run met its turning points: on their own facts, or on a newer one of the window
+    expect(text).toContain('| Flagged | Turning points: own / newer / of |')
+    expect(text).toContain('| 2 / 2 (100.0%) | 1 / 1 / 3 |')
+  })
+
+  it('lists the turning points left out as already stated and the plants the sanity check refused', () => {
+    const text = updateLines(
+      report({
+        stated: [{ id: 'floods-a:key', what: 'response: Army opens relief camps' }],
+        refused: [
+          { slug: 'floods-a', kind: 'wrong-number', change: '22 → 33', reason: 'day' },
+          { slug: 'floods-a', kind: 'wrong-year', change: '2026 → 2025', reason: 'period' },
+          { slug: 'floods-b', kind: 'wrong-number', change: '100% → 150%', reason: 'share' },
+        ],
+      }),
+    ).join('\n')
+    expect(text).toContain('- 1 turning point the story already states: left out of the expectations.')
+    expect(text).toContain('- 3 planted values refused by the sanity check (day 1, share 1, period 1)')
+    expect(text).toContain('- floods-a:key: response: Army opens relief camps')
+    expect(text).toContain('- floods-a wrong-number: 22 → 33: a day of the month')
   })
 
   it('says when the judge did not run, and gives the report its section', () => {

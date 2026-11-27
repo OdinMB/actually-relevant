@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { buildResearchedStory } from '../../../services/researchedStory.js'
 import { researchView, type Article, type ArticleVersionData, type PoolFact, type PoolSource } from '../../../services/researchPool.js'
+import type { UpdateResult } from '../../../services/researchPassLater.js'
 import { fakeEvalContext } from '../../../test/fakeEvalContext.js'
 import { LABEL_DEVELOPMENTS } from './developmentHalves.js'
 import type { KeyFile } from './keyFiles.js'
-import { runUpdateStep, type UpdateSource, type UpdateStepOptions } from './update.js'
-import type { UpdateStory } from './updateFixtures.js'
+import { noteJudgeInput, runUpdateStep, type UpdateSource, type UpdateStepOptions } from './update.js'
+import type { UpdateFixture, UpdateStory } from './updateFixtures.js'
 
 const source: PoolSource = {
   id: 'src-S1',
@@ -210,10 +211,14 @@ describe('runUpdateStep', () => {
     expect(ctx.calls.filter(c => c.schemaName.startsWith('overview-update-note'))).toHaveLength(1)
     expect(report.score.bars.filter(b => b.met === false)).toEqual([])
     expect(report.judge).toMatchObject({ stopped: null, estimate: { calls: 1 } })
-    // The note judge reads the change, the facts it rests on and the note
+    // The note judge reads the change, the facts it rests on, each with its source words, and the note
     const judged = ctx.calls.find(c => c.schemaName.startsWith('overview-update-note'))!.prompt
     expect(judged).toContain('Floods displaced 4,000 people.')
     expect(judged).toContain('<FACT id="S1F2" outlet="News" date="2026-10-01" contradicted="true">')
+    // The facts the note cites, as its call answered
+    expect(runs[0]!.noteFacts).toEqual(['S2F1'])
+    expect(judged).toContain('<FACT id="S2F1" outlet="Wire report" date="2026-10-03" cited="true">Floods displaced 6,000 people, as of October 1, 2026.')
+    expect(judged).toContain('<SENTENCE>Floods displaced 6,000 people.</SENTENCE>')
   })
 
   it('leaves the notes unjudged when the judge cannot call, and runs k ≥ 2 under their own keys', async () => {
@@ -223,6 +228,78 @@ describe('runUpdateStep', () => {
     expect(runs.every(r => r.note === null)).toBe(true)
     expect(ctx.calls.some(c => c.schemaName.startsWith('pass-judge') && c.schemaName.endsWith('~run2'))).toBe(true)
     expect(report.score.runs).toHaveLength(2)
+  })
+})
+
+describe('noteJudgeInput', () => {
+  const wire: PoolSource = { ...source, id: null, ref: 'S2', outlet: 'Wire report', date: '2026-10-03' }
+  const planted: PoolFact = {
+    ...fact('S2F1', 'Floods displaced 6,000 people, as of October 1, 2026.'),
+    sourceRef: 'S2',
+    supportingSentence: 'Some 6,000 fled.',
+  }
+  const withPlant = { sources: [source, wire], facts: [...pool.facts, planted] }
+  const fixture: UpdateFixture = {
+    id: 'floods-a:wrong-number',
+    slug: 'floods-a',
+    kind: 'wrong-number',
+    input: { storyDay: '2026-10-01', version, pool: withPlant, fresh: new Set(['S2F1']) },
+    expected: { sections: [], facts: [], free: [], demote: ['S1F2'], strict: true },
+    unplaced: [],
+    stated: [],
+  }
+  // The paragraph citing the demoted fact was dropped: nothing after the change cites the fact that contradicted it
+  const next: Article = { ...article, story: [article.story[0]!] }
+  const result = (note: { text: string; fallback: boolean }): UpdateResult => ({
+    outcome: 'updated',
+    demoted: [{ ref: 'S1F2', contradictedBy: ['S2F1'], reason: 'Six thousand, not four.' }],
+    next: {
+      article: next,
+      research: buildResearchedStory({ draft: next, ...researchView(withPlant) }),
+      changes: [{ section: 'Story paragraph 2', from: 'Story paragraph 2', before: { text: 'Floods displaced 4,000 people.', citations: [] }, after: null }],
+      note: { text: note.text, citations: [] },
+    },
+    record: {
+      calls: [],
+      judgments: [{ label: 'Story paragraph 2', verdict: 'wrong', factIds: ['S2F1'], reason: 'r', outcome: 'demoted-fact', founding: ['S1F2'] }],
+      demoted: [{ ref: 'S1F2', contradictedBy: ['S2F1'], reason: 'Six thousand, not four.' }],
+      superseded: [],
+      checks: [],
+      problems: [],
+      failedOn: null,
+      note: { ...note, problems: [], checked: 1, copied: 0, unsupported: 0 },
+      error: null,
+    },
+  })
+
+  it('gives the judge the facts that contradicted a demoted one, each with its source words', () => {
+    const input = noteJudgeInput({
+      fixture,
+      run: 1,
+      result: result({ text: 'Updated: Story paragraph 2 removed after new reporting from Wire report.', fallback: true }),
+      note: null,
+    })!
+    expect(input.facts).toEqual([
+      {
+        id: 'S1F2',
+        statement: 'Floods displaced 4,000 people.',
+        sentence: 'Floods displaced 4,000 people.',
+        outlet: 'News',
+        date: '2026-10-01',
+        contradicted: true,
+        cited: false,
+      },
+      { id: 'S2F1', statement: planted.statement, sentence: 'Some 6,000 fled.', outlet: 'Wire report', date: '2026-10-03', contradicted: false, cited: false },
+    ])
+  })
+
+  it('marks the facts the note cites, as its call answered', () => {
+    const r = { fixture, run: 1, result: result({ text: 'A wire report put the count at 6,000.', fallback: false }), note: null, noteFacts: ['S2F1'] }
+    expect(
+      noteJudgeInput(r)!
+        .facts.filter(f => f.cited)
+        .map(f => f.id),
+    ).toEqual(['S2F1'])
   })
 })
 

@@ -438,8 +438,12 @@ export interface NoteJudgeInput {
   storyDay: string
   /** Each section the update changed: its text before, and after (null when it was removed). */
   changes: { section: string; before: string; after: string | null }[]
-  /** The newer facts the changes rest on, and the facts they showed wrong. */
-  facts: { id: string; statement: string; outlet: string; date: string | null; contradicted: boolean }[]
+  /**
+   * The newer facts the changes rest on, those that contradicted a fact the story relied on, and the
+   * facts they showed wrong; each with its source's words (`sentence`) as the note was shown them,
+   * and whether the note cites it.
+   */
+  facts: { id: string; statement: string; sentence: string; outlet: string; date: string | null; contradicted: boolean; cited: boolean }[]
   note: string
 }
 
@@ -455,7 +459,7 @@ ${c.after === null ? '<AFTER removed="true"></AFTER>' : tag('AFTER', c.after)}
   const facts = input.facts
     .map(
       f =>
-        `<FACT id="${escapeXml(f.id)}" outlet="${escapeXml(f.outlet)}" date="${escapeXml(f.date ?? 'unknown')}"${f.contradicted ? ' contradicted="true"' : ''}>${escapeXml(f.statement)}</FACT>`,
+        `<FACT id="${escapeXml(f.id)}" outlet="${escapeXml(f.outlet)}" date="${escapeXml(f.date ?? 'unknown')}"${f.contradicted ? ' contradicted="true"' : ''}${f.cited ? ' cited="true"' : ''}>${escapeXml(f.statement)}\n${tag('SENTENCE', f.sentence)}</FACT>`,
     )
     .join('\n')
   return `<ROLE>
@@ -474,7 +478,7 @@ ${changes}
 </CHANGES>
 
 <FACTS>
-The newer reporting the changes rest on; a fact marked contradicted is one the story had relied on and newer reporting showed wrong. ${UNTRUSTED}
+The newer reporting the changes rest on, and the reporting that showed an earlier fact wrong; a fact marked contradicted is one the story had relied on and newer reporting showed wrong, and a fact marked cited is one the note cites. Each fact gives its statement, then the SENTENCE of its source that states it. ${UNTRUSTED}
 ${facts}
 </FACTS>
 

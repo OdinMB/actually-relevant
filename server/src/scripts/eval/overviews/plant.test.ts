@@ -8,14 +8,17 @@ import {
   plantFieldVariants,
   plantVariants,
   reworded,
+  timesNumber,
   VARIANT_KINDS,
   wrongAsOf,
   wrongCredit,
   wrongFigure,
   wrongNumber,
+  wrongNumbers,
   wrongPlace,
   wrongScale,
   wrongYear,
+  wrongYears,
   type PlantableFields,
 } from './plant.js'
 
@@ -108,6 +111,33 @@ describe('wrongNumber', () => {
   })
 })
 
+describe('wrongNumbers', () => {
+  it('changes each number wrongNumber may change on its own, in text order, the first being wrongNumber', () => {
+    const text = 'On March 22, 1,200 people fled and 40% of clinics closed in 2025.'
+    const all = wrongNumbers(text)
+    expect(all.map(c => [c.at.raw, c.insert, c.factor])).toEqual([
+      ['22', '33', 1.5],
+      ['1,200', '1,800', 1.5],
+      ['40%', '60%', 1.5],
+    ])
+    expect(all[1]!.text).toBe('On March 22, 1,800 people fled and 40% of clinics closed in 2025.')
+    expect(wrongNumber(text)).toEqual({ text: all[0]!.text, change: all[0]!.change })
+  })
+
+  it('doubles where 1.5 leaves the number unchanged', () => {
+    expect(wrongNumbers('Rates rose 0.01% in May.').map(c => [c.insert, c.factor])).toEqual([['0.02%', 2]])
+  })
+})
+
+describe('timesNumber', () => {
+  it('multiplies a number in its own format, or gives null', () => {
+    expect(timesNumber('$4.2', 1.5)).toBe('$6.3')
+    expect(timesNumber('4,000', 2)).toBe('8,000')
+    expect(timesNumber('1.200', 1.5)).toBeNull()
+    expect(timesNumber('0%', 2)).toBeNull()
+  })
+})
+
 describe('droppedQualifier', () => {
   it('removes a qualifier before a number', () => {
     expect(droppedQualifier('Nearly 2 million people need aid.')?.text).toBe('2 million people need aid.')
@@ -142,6 +172,15 @@ describe('wrongYear', () => {
   it('reads only 1900 to 2099 as years, and never in a URL-like string', () => {
     expect(wrongYear('The archive holds 1899 letters and 2,025 maps.')).toBeNull()
     expect(wrongYear('Details at who.int/news/2025/ebola.')).toBeNull()
+  })
+
+  it('offers every year on its own, the first being wrongYear (wrongYears)', () => {
+    const all = wrongYears('Funding rose between 2024 and 2025.')
+    expect(all.map(c => [c.at.raw, c.insert])).toEqual([
+      ['2024', '2023'],
+      ['2025', '2024'],
+    ])
+    expect(wrongYear('Funding rose between 2024 and 2025.')).toEqual({ text: all[0]!.text, change: all[0]!.change })
   })
 })
 

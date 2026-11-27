@@ -91,7 +91,7 @@ const version: ArticleVersionData = {
   note: null,
 }
 
-const strict = (over: Partial<UpdateExpected> = {}): UpdateExpected => ({ sections: [], facts: [], demote: [], strict: true, ...over })
+const strict = (over: Partial<UpdateExpected> = {}): UpdateExpected => ({ sections: [], facts: [], free: [], demote: [], strict: true, ...over })
 
 const fixture = (kind: UpdateFixture['kind'], expected: UpdateExpected): UpdateFixture => ({
   id: `floods:${kind}`,
@@ -206,7 +206,13 @@ describe('scoreUpdates', () => {
 
   it('counts a missed change, a false rewrite in a strict case only, and a false demotion, and lists each', () => {
     const benign = fixture('benign', strict())
-    const turning = fixture('key', { sections: [], facts: [{ ref: 'S2F1', why: 'response: relief camps' }], demote: [], strict: false })
+    const turning = fixture('key', {
+      sections: [],
+      facts: [{ ref: 'S2F1', why: 'response: relief camps', supersededBy: [] }],
+      free: [],
+      demote: [],
+      strict: false,
+    })
     const s = scoreUpdates([
       run(planted, unchanged([judgment('Story paragraph 1', 'unfounded')])),
       run(
@@ -227,6 +233,58 @@ describe('scoreUpdates', () => {
     expect(s.listed.missed).toEqual([{ id: 'floods:wrong-number', run: 1, what: 'Story paragraph 1', why: 'S1F1 corrected' }])
     expect(s.listed.falseRewrites.map(f => [f.id, f.label])).toEqual([['floods:benign', 'Story paragraph 1']])
     expect(s.listed.falseDemotions.map(f => [f.id, f.ref])).toEqual([['floods:benign', 'S1F2']])
+  })
+
+  it('counts a turning point met by a rewrite resting on it or on a newer fact of its window, and says which', () => {
+    const key = fixture('key', {
+      sections: [],
+      facts: [
+        { ref: 'S2F1', why: 'response: relief camps', supersededBy: ['S3F1'] },
+        { ref: 'S2F2', why: 'decision: evacuation lifted', supersededBy: [] },
+        { ref: 'S2F3', why: 'setback: levee breaks', supersededBy: [] },
+      ],
+      free: [],
+      demote: [],
+      strict: false,
+    })
+    const s = scoreUpdates([run(key, unchanged([judgment('Story paragraph 1', 'rewrite', ['S3F1']), judgment('Story paragraph 2', 'rewrite', ['S2F3'])]))])
+    const r = s.runs[0]!
+    expect(r.flagged).toEqual({ hit: 2, of: 3, share: 2 / 3 })
+    expect(r.turning).toEqual({ of: 3, own: 1, newer: 1 })
+    expect(s.listed.missed.map(m => m.what)).toEqual(['S2F2'])
+  })
+
+  it('never counts a section a planted fact frees as a false rewrite: code rewrites it once the fact is demoted', () => {
+    const freed = fixture(
+      'wrong-number',
+      strict({ sections: [{ label: 'Story paragraph 1', why: 'S1F1 corrected' }], free: ['Story paragraph 2'], demote: ['S1F1'] }),
+    )
+    const result = unchanged(
+      [judgment('Story paragraph 1', 'demoted-fact', ['S1F1']), judgment('Story paragraph 2', 'demoted-fact', ['S1F1'])],
+      [{ ref: 'S1F1', contradictedBy: ['S2F1'], reason: 'r' }],
+    )
+    expect(scoreUpdates([run(freed, result)]).runs[0]!.falseRewrites).toEqual({ hit: 0, of: 0, share: null })
+    expect(scoreUpdates([run({ ...freed, expected: { ...freed.expected, free: [] } }, result)]).runs[0]!.falseRewrites).toEqual({ hit: 1, of: 1, share: 1 })
+  })
+
+  it('judges a fixed line on its accuracy alone: its wording names the sections by design, never what changed in them', () => {
+    const fixed = updated({
+      note: {
+        text: 'Updated: Story paragraph 1 rewritten after new reporting from News.',
+        fallback: true,
+        problems: ['p'],
+        checked: 1,
+        copied: 0,
+        unsupported: 0,
+      },
+    })
+    const s = scoreUpdates([
+      run(planted, fixed, { accurate: true, complete: false, problem: 'Says nothing of what changed.' }),
+      run(planted, fixed, { accurate: false, complete: true, problem: 'No such outlet.' }),
+      run(planted, updated(), { accurate: true, complete: false, problem: 'Says nothing of why.' }),
+    ])
+    expect(s.runs[0]!.notes).toMatchObject({ hit: 1, of: 3 })
+    expect(s.listed.notes.map(n => n.problem)).toEqual(['No such outlet.', 'Says nothing of why.'])
   })
 
   it('reads the notes: the judged share, the fixed lines, every written note the fact check found unsupported, and copying against the paragraphs', () => {

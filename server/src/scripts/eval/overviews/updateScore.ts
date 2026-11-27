@@ -4,15 +4,17 @@
  * runs (ADR-0066):
  *
  * - `flagged`: of the expected changes (a section a changed figure or a planted correction makes
- *   wrong, a turning point some rewrite rests on), the share the judge flagged on the right section;
- *   at least 90%.
- * - `false-rewrites`: of the sections a case expects unchanged (its strict cases only), the share
- *   rewritten; at most 10%.
+ *   wrong, a turning point some rewrite rests on, or rests on a fact of a later entry that supersedes
+ *   it), the share the judge flagged on the right section; at least 90%. Each run says how its
+ *   turning points were met, on their own facts or on newer ones.
+ * - `false-rewrites`: of the sections a case expects unchanged (its strict cases only; a section a
+ *   planted fact frees is neither), the share rewritten; at most 10%.
  * - `identical`: of the sections no change names, in an updated version, the share byte-identical
  *   to the version before; a code assertion, 100%.
  * - `demoted`: of the planted contradictions, the share whose old fact was demoted; at least 90%.
  * - `false-demotions`: of the cases, the share demoting a fact they do not expect; at most 5%.
  * - `notes`: of the served notes the strong judge read, the share accurate and complete; at least 90%.
+ *   A fixed line counts on its accuracy alone: its words name the sections, never what changed in them.
  * - `unsupported`: of the notes written, every round the fact check read counted (one a repair
  *   round replaced, and one the fixed line was served after), how many it found unsupported; none.
  *   The fixed lines' share of the served notes is reported beside it.
@@ -23,9 +25,9 @@
  * bar. Pure.
  */
 import { sectionTexts, versionArticle } from '../../../services/articleVersions.js'
-import type { UpdateOutcome, UpdateResult } from '../../../services/researchPassLater.js'
+import type { UpdateOutcome, UpdateRecord, UpdateResult } from '../../../services/researchPassLater.js'
 import { spread, type Spread } from '../repeats.js'
-import type { UpdateCaseKind, UpdateFixture } from './updateFixtures.js'
+import type { UpdateCaseKind, UpdateExpected, UpdateFixture } from './updateFixtures.js'
 
 export const FLAGGED_BAR = 0.9
 export const FALSE_REWRITE_BAR = 0.1
@@ -49,6 +51,8 @@ export interface UpdateRun {
   result: UpdateResult
   /** Null when the result has no note, or the judge gave no verdict. */
   note: NoteVerdict | null
+  /** The facts the served note cites, as its call answered; absent for a fixed line or when not known. */
+  noteFacts?: string[]
 }
 
 const REWRITTEN = new Set(['rewrite', 'demoted-fact'])
@@ -56,6 +60,15 @@ const MEASURED = (r: UpdateRun) => r.result.outcome !== 'budget' && r.result.out
 const share = (part: number, whole: number) => (whole === 0 ? null : part / whole)
 const partOf = (label: string) => label.replace(/\s+\d+$/, '')
 const isPlanted = (kind: UpdateCaseKind) => kind === 'wrong-number' || kind === 'wrong-year'
+
+/** How a turning point was met: a rewrite rests on its own fact, on a newer fact of its window, or none does. */
+function turningMet(f: UpdateExpected['facts'][number], rewritten: UpdateRecord['judgments']): 'own' | 'newer' | null {
+  if (rewritten.some(j => j.founding.includes(f.ref))) return 'own'
+  return rewritten.some(j => j.founding.some(ref => f.supersededBy.includes(ref))) ? 'newer' : null
+}
+
+/** Whether the judge's verdict makes a served note good: accurate and complete, a fixed line accurate. */
+const goodNote = (r: UpdateRun) => r.note !== null && r.note.accurate && (r.note.complete || r.result.record.note?.fallback === true)
 
 interface Count {
   of: number
@@ -69,6 +82,8 @@ export interface UpdateRunScore {
   cases: number
   outcomes: Record<UpdateOutcome, number>
   flagged: Count
+  /** The turning points expected, and those met on their own fact or on a newer one of their window (both count in `flagged`). */
+  turning: { of: number; own: number; newer: number }
   falseRewrites: Count
   identical: Count
   demoted: Count
@@ -130,15 +145,21 @@ function runScore(run: number, runs: UpdateRun[]): UpdateRunScore {
     tally[k][1] += of
   }
   const notes = { served: 0, fallback: 0, unsupported: 0, judged: 0, good: 0, written: 0, copied: 0 }
+  const turning = { of: 0, own: 0, newer: 0 }
   for (const r of measured) {
     const { expected, kind } = r.fixture
     const judgments = r.result.record.judgments
     const rewritten = judgments.filter(j => REWRITTEN.has(j.outcome))
     const rewrittenLabels = new Set(rewritten.map(j => j.label))
     add('flagged', expected.sections.filter(s => rewrittenLabels.has(s.label)).length, expected.sections.length)
-    add('flagged', expected.facts.filter(f => rewritten.some(j => j.founding.includes(f.ref))).length, expected.facts.length)
+    for (const f of expected.facts) {
+      const met = turningMet(f, rewritten)
+      turning.of++
+      if (met) turning[met]++
+      add('flagged', met ? 1 : 0, 1)
+    }
     if (expected.strict) {
-      const wanted = new Set(expected.sections.map(s => s.label))
+      const wanted = new Set([...expected.sections.map(s => s.label), ...expected.free])
       const others = judgments.filter(j => !wanted.has(j.label) && j.outcome !== 'follows-opening')
       add('falseRewrites', others.filter(j => REWRITTEN.has(j.outcome)).length, others.length)
     }
@@ -155,7 +176,7 @@ function runScore(run: number, runs: UpdateRun[]): UpdateRunScore {
       if (note.fallback) notes.fallback++
       if (r.note) {
         notes.judged++
-        if (r.note.accurate && r.note.complete) notes.good++
+        if (goodNote(r)) notes.good++
       }
       notes.written += note.checked
       notes.copied += note.copied
@@ -168,6 +189,7 @@ function runScore(run: number, runs: UpdateRun[]): UpdateRunScore {
     cases: runs.length,
     outcomes,
     flagged: c('flagged'),
+    turning,
     falseRewrites: c('falseRewrites'),
     identical: c('identical'),
     demoted: c('demoted'),
@@ -232,14 +254,15 @@ function listed(runs: UpdateRun[]): UpdateListed {
     const { id, expected } = r.fixture
     const rewritten = r.result.record.judgments.filter(j => REWRITTEN.has(j.outcome))
     for (const s of expected.sections) if (!rewritten.some(j => j.label === s.label)) out.missed.push({ id, run: r.run, what: s.label, why: s.why })
-    for (const f of expected.facts) if (!rewritten.some(j => j.founding.includes(f.ref))) out.missed.push({ id, run: r.run, what: f.ref, why: f.why })
+    for (const f of expected.facts) if (!turningMet(f, rewritten)) out.missed.push({ id, run: r.run, what: f.ref, why: f.why })
     if (expected.strict) {
       for (const j of rewritten) {
-        if (!expected.sections.some(s => s.label === j.label)) out.falseRewrites.push({ id, run: r.run, label: j.label, reason: j.reason })
+        if (!expected.sections.some(s => s.label === j.label) && !expected.free.includes(j.label))
+          out.falseRewrites.push({ id, run: r.run, label: j.label, reason: j.reason })
       }
     }
     for (const d of r.result.demoted) if (!expected.demote.includes(d.ref)) out.falseDemotions.push({ id, run: r.run, ref: d.ref, reason: d.reason })
-    if (r.note && !(r.note.accurate && r.note.complete)) out.notes.push({ id, run: r.run, note: r.result.record.note?.text ?? '', problem: r.note.problem })
+    if (r.note && !goodNote(r)) out.notes.push({ id, run: r.run, note: r.result.record.note?.text ?? '', problem: r.note.problem })
   }
   return {
     missed: out.missed.slice(0, MAX_LISTED),

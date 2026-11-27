@@ -4,11 +4,13 @@ import type { CallEstimate } from './callBudget.js'
 import { cell, metText, quoted, spreadText, usd } from './reportText.js'
 import type { UpdateStepReport } from './update.js'
 import { UPDATE_CASE_KINDS } from './updateFixtures.js'
+import { REFUSAL_REASONS, type RefusalReason } from './updatePlants.js'
 import {
   DEMOTED_BAR,
   FALSE_DEMOTION_BAR,
   FALSE_REWRITE_BAR,
   FLAGGED_BAR,
+  MAX_LISTED,
   NOTE_BAR,
   type UpdateBar,
   type UpdateBarName,
@@ -19,15 +21,19 @@ const estimateText = (e: CallEstimate) => `${e.calls} calls (${e.uncached} uncac
 
 const BAR_TEXT: Record<UpdateBarName, { measure: string; bar: string; show: (v: number) => string }> = {
   flagged: {
-    measure: 'Expected changes flagged on the right section (a turning point: some rewrite rests on it)',
+    measure: 'Expected changes flagged on the right section (a turning point: some rewrite rests on it, or on a newer fact of its window)',
     bar: `at least ${pct(FLAGGED_BAR)}`,
     show: pct,
   },
-  'false-rewrites': { measure: 'Sections a strict case expects unchanged that were rewritten', bar: `at most ${pct(FALSE_REWRITE_BAR)}`, show: pct },
+  'false-rewrites': {
+    measure: 'Sections a strict case expects unchanged that were rewritten (not those a planted fact frees)',
+    bar: `at most ${pct(FALSE_REWRITE_BAR)}`,
+    show: pct,
+  },
   identical: { measure: 'Sections no change names, byte-identical in the new version (a code assertion)', bar: '100%', show: pct },
   demoted: { measure: 'Planted contradictions whose old fact was demoted', bar: `at least ${pct(DEMOTED_BAR)}`, show: pct },
   'false-demotions': { measure: 'Cases demoting a fact they do not expect', bar: `at most ${pct(FALSE_DEMOTION_BAR)}`, show: pct },
-  notes: { measure: 'Served notes the strong judge finds accurate and complete', bar: `at least ${pct(NOTE_BAR)}`, show: pct },
+  notes: { measure: 'Served notes the strong judge finds accurate and complete (a fixed line: accurate)', bar: `at least ${pct(NOTE_BAR)}`, show: pct },
   unsupported: {
     measure: "Notes written that production's fact check found unsupported (each round, a replaced note and one before a fixed line too)",
     bar: 'none',
@@ -60,7 +66,16 @@ export function updateEstimateLine(r: UpdateStepReport): string {
 }
 
 const runRow = (s: UpdateRunScore) =>
-  `| ${s.run} | ${s.cases} | ${s.outcomes.updated} / ${s.outcomes.unchanged} / ${s.outcomes.update_failed} / ${s.outcomes.budget + s.outcomes.technical} | ${share(s.flagged)} | ${share(s.falseRewrites)} | ${share(s.identical)} | ${share(s.demoted)} | ${share(s.falseDemotions)} | ${share(s.notes)} | ${share(s.notes.fallback)} | ${s.notes.unsupported} / ${s.notes.written} | ${share(s.copying.notes)} vs ${share(s.copying.paragraphs)} |`
+  `| ${s.run} | ${s.cases} | ${s.outcomes.updated} / ${s.outcomes.unchanged} / ${s.outcomes.update_failed} / ${s.outcomes.budget + s.outcomes.technical} | ${share(s.flagged)} | ${s.turning.own} / ${s.turning.newer} / ${s.turning.of} | ${share(s.falseRewrites)} | ${share(s.identical)} | ${share(s.demoted)} | ${share(s.falseDemotions)} | ${share(s.notes)} | ${share(s.notes.fallback)} | ${s.notes.unsupported} / ${s.notes.written} | ${share(s.copying.notes)} vs ${share(s.copying.paragraphs)} |`
+
+/** The refusals counted by reason, in the order the checks run: `day 2, share 1`. */
+const refusalCounts = (refused: UpdateStepReport['refused']) =>
+  (Object.keys(REFUSAL_REASONS) as RefusalReason[])
+    .flatMap(reason => {
+      const n = refused.filter(r => r.reason === reason).length
+      return n > 0 ? [`${reason} ${n}`] : []
+    })
+    .join(', ')
 
 export function updateLines(r: UpdateStepReport): string[] {
   const judge = r.judge
@@ -71,6 +86,14 @@ export function updateLines(r: UpdateStepReport): string[] {
   return [
     `**Cases:** ${r.ceiling ? 'at most ' : ''}${cases}, from ${r.stories} researched stories of ${r.keys} answer keys (half ${r.half}${r.limit !== undefined ? `, the first ${r.limit} stories: a smoke run, not evidence` : ''}), each run ${r.repeat} time${r.repeat === 1 ? '' : 's'} through production's later-pass article step (\`updateArticle\`) with the eval's cached calls. ${sourceText(r.source)}`,
     ...(r.unplaced > 0 ? [`- ${r.unplaced} changed figure values have a quote no section holds: left out of the expectations.`] : []),
+    ...(r.stated.length > 0
+      ? [`- ${r.stated.length} turning point${r.stated.length === 1 ? '' : 's'} the story already states: left out of the expectations.`]
+      : []),
+    ...(r.refused.length > 0
+      ? [
+          `- ${r.refused.length} planted values refused by the sanity check (${refusalCounts(r.refused)}); each correction case planted the next change that made sense, on the first cited fact a section states where one did.`,
+        ]
+      : []),
     ...(r.deskUsd !== null ? [`- Dry run: desk estimate up to ${usd(r.deskUsd)} (each case's reserve and the note judge).`] : []),
     ...r.left.map(x => `- Left out: ${x.what}: ${cell(x.reason)}`),
     ...r.skipped.map(s => `- Not run: ${s.storyId}: ${s.reason}`),
@@ -88,8 +111,8 @@ export function updateLines(r: UpdateStepReport): string[] {
     '',
     '### Per run',
     '',
-    '| Run | Cases | Updated / unchanged / failed / stopped | Flagged | False rewrites | Identical | Demoted | False demotions | Notes good | Fixed lines served | Notes unsupported / written | Copying: notes vs sections |',
-    '|---|---|---|---|---|---|---|---|---|---|---|---|',
+    '| Run | Cases | Updated / unchanged / failed / stopped | Flagged | Turning points: own / newer / of | False rewrites | Identical | Demoted | False demotions | Notes good | Fixed lines served | Notes unsupported / written | Copying: notes vs sections |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...r.score.runs.map(runRow),
     '',
     '### For a read',
@@ -102,5 +125,14 @@ export function updateLines(r: UpdateStepReport): string[] {
       ? ['**False demotions:**', '', ...l.falseDemotions.map(f => `- ${f.id} (run ${f.run}): ${f.ref}: ${quoted(f.reason)}`), '']
       : []),
     ...(l.notes.length > 0 ? ['**Notes judged short:**', '', ...l.notes.map(n => `- ${n.id} (run ${n.run}): ${quoted(n.note)}: ${cell(n.problem)}`), ''] : []),
+    ...(r.stated.length > 0 ? ['**Turning points the story already states (left out):**', '', ...r.stated.map(s => `- ${s.id}: ${cell(s.what)}`), ''] : []),
+    ...(r.refused.length > 0
+      ? [
+          '**Planted values the sanity check refused:**',
+          '',
+          ...r.refused.slice(0, MAX_LISTED).map(x => `- ${x.slug} ${x.kind}: ${x.change}: ${REFUSAL_REASONS[x.reason]}`),
+          '',
+        ]
+      : []),
   ]
 }

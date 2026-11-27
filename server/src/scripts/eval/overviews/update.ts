@@ -11,8 +11,9 @@
  * fixtures'. Cases start only while the budget covers one more (`runStories`); the judge runs only
  * when its planned calls fit what is left (`callBudget.ts`), with plain schema names.
  */
-import { draftItems } from '../../../services/researchChecks.js'
-import { updateArticle } from '../../../services/researchPassLater.js'
+import { noteSchema, type NoteAnswer } from '../../../schemas/researchPass.js'
+import { draftItems, withoutInlineIds } from '../../../services/researchChecks.js'
+import { updateArticle, type LaterCall, type UpdateResult } from '../../../services/researchPassLater.js'
 import { versionedSchemaName } from '../models.js'
 import { runNumbers } from '../repeats.js'
 import { passCall } from '../research/pipeline.js'
@@ -30,6 +31,7 @@ import {
   updateCaseCeiling,
   updateFixtures,
   updateSlugs,
+  type RefusedPlant,
   type UpdateCaseKind,
   type UpdateFixtures,
   type UpdateStory,
@@ -83,6 +85,10 @@ export interface UpdateStepReport {
   cases: Record<UpdateCaseKind, number>
   /** Changed figure values whose quote no section holds, left out of the expectations. */
   unplaced: number
+  /** Turning points a case's story already states, left out of the expectations: the case and the turning point. */
+  stated: { id: string; what: string }[]
+  /** The changes the sanity check refused before each correction case planted one (`updatePlants.ts`). */
+  refused: RefusedPlant[]
   /** Where the stories came from; for pass-pool's first passes, how many of the half's must entries (`updateSlugs`) they researched. */
   source: { kind: 'legacy' } | { kind: 'pool'; covered: number; mustEntries: number }
   /** Whether `stories` and `cases` are upper bounds (`updateCaseCeiling`): a dry run before pass-pool's passes ran. */
@@ -94,14 +100,26 @@ export interface UpdateStepReport {
   score: UpdateScore
 }
 
-/** What the strong judge reads of a case's served note: the changes, the facts they rest on, the note. */
+/**
+ * What the strong judge reads of a case's served note: the changes; the facts they rest on (the
+ * judgments' founding facts and those the changed sections cite now), the facts the note itself cites
+ * and those that contradicted a demoted fact, each with its source words as the note was shown them;
+ * and the note. A fixed line names the outlets of the contradicting facts, which a dropped section's
+ * rewrite no longer cites.
+ */
 export function noteJudgeInput(r: UpdateRun): NoteJudgeInput | null {
   const next = r.result.next
   const note = r.result.record.note
   if (!next || !note) return null
   const { pool, storyDay } = r.fixture.input
   const items = new Map(draftItems(next.article).map(i => [i.label, i]))
-  const refs = new Set([...r.result.record.judgments.flatMap(j => j.founding), ...next.changes.flatMap(c => items.get(c.section)?.factIds ?? [])])
+  const cited = new Set(r.noteFacts ?? [])
+  const refs = new Set([
+    ...r.result.record.judgments.flatMap(j => j.founding),
+    ...next.changes.flatMap(c => (c.after === null ? [] : (items.get(c.section)?.factIds ?? []))),
+    ...cited,
+    ...r.result.demoted.flatMap(d => d.contradictedBy),
+  ])
   const demoted = new Set(r.result.demoted.map(d => d.ref))
   const sources = new Map(pool.sources.map(s => [s.ref, s]))
   return {
@@ -112,12 +130,22 @@ export function noteJudgeInput(r: UpdateRun): NoteJudgeInput | null {
       .map(f => ({
         id: f.ref,
         statement: f.statement,
+        sentence: f.supportingSentence,
         outlet: sources.get(f.sourceRef)?.outlet ?? '',
         date: sources.get(f.sourceRef)?.date ?? null,
         contradicted: demoted.has(f.ref) || f.status === 'demoted',
+        cited: cited.has(f.ref),
       })),
     note: note.text,
   }
+}
+
+/** The fact ids the served note cites, from the note calls' answers; absent for a fixed line, or a note no answer gave. */
+function servedNoteFacts(result: UpdateResult, answers: NoteAnswer[]): string[] | undefined {
+  const note = result.record.note
+  if (!note || note.fallback) return undefined
+  const answer = answers.find(a => withoutInlineIds(a.text).trim() === note.text)
+  return answer ? [...new Set(answer.factIds)] : undefined
 }
 
 /** Why a must entry the pass-pool step researched has no version. */
@@ -142,7 +170,7 @@ async function sourcedFixtures(
   const source = { kind: 'pool' as const, covered: only.size, mustEntries: all.length }
   if (o.source.stories === null) {
     if (!o.dryRun) throw new Error("update: the pass-pool step's first passes are missing: run pass-pool before update")
-    return { fixtures: [], left: [], source, ceiling: updateCaseCeiling(keys, { half: o.half, ...limit, only }) }
+    return { fixtures: [], left: [], refused: [], source, ceiling: updateCaseCeiling(keys, { half: o.half, ...limit, only }) }
   }
   return { ...updateFixtures(keys, o.source.stories, { half: o.half, ...limit, only, missing: POOL_MISSING }), source, ceiling: null }
 }
@@ -174,6 +202,8 @@ export async function runUpdateStep(o: UpdateStepOptions): Promise<{ report: Upd
     stories: fx.ceiling?.stories ?? new Set(fx.fixtures.map(f => f.slug)).size,
     cases,
     unplaced: fx.fixtures.reduce((n, f) => n + f.unplaced.length, 0),
+    stated: fx.fixtures.flatMap(f => f.stated.map(what => ({ id: f.id, what }))),
+    refused: fx.refused,
     source: fx.source,
     ceiling: fx.ceiling !== null,
   }
@@ -195,7 +225,17 @@ export async function runUpdateStep(o: UpdateStepOptions): Promise<{ report: Upd
         storyUsd: () => UPDATE_RESERVE_USD,
         run: async ({ fixture }): Promise<UpdateRun> => {
           const call = passCall(o.ctx, run)
-          return { fixture, run, result: await updateArticle(fixture.input, { call, research: call }), note: null }
+          // The note's own answers, so the judge knows which facts the served note cites (the record keeps its text only)
+          const answers: NoteAnswer[] = []
+          const later: LaterCall = async (step, schema, prompt) => {
+            const res = await call(step, schema, prompt)
+            const answer = step === 'note' ? noteSchema.safeParse(res.parsed) : null
+            if (answer?.success) answers.push(answer.data)
+            return res
+          }
+          const result = await updateArticle(fixture.input, { call: later, research: call })
+          const noteFacts = servedNoteFacts(result, answers)
+          return { fixture, run, result, note: null, ...(noteFacts ? { noteFacts } : {}) }
         },
         onDone: (_item, r) => o.onDone?.(r),
       },
