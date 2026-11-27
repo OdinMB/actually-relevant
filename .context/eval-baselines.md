@@ -2,6 +2,25 @@
 
 The measured results a later change is compared against. One section per baseline, newest first; a section is replaced only by a newer run of the same command, and says which commit it was measured on. How the evals work, their flags and bars: `model-eval.md`. The reports and the caches that make reruns free are not in the repository: they live in `DOCS/` on the machine that ran them, so on another machine every run is paid in full.
 
+## Research passes' `update` gate, 2026-11-27
+
+Run in a cloud session on branch `claude/project-thread-egeer5` at commit 15289bf2 (the update eval's fixture, scorer and note-judge fixes; production code unchanged since 2026-11-26) against the 11-month stories-only eval copy exported 2026-11-27 (`database-migrations.md`, "A Stories-Only Copy for Cloud Evals"), under the task cap `gate-update-2026-11-27` ($5). Command: `eval:overviews -- --out ../DOCS/2026-11-27_update-gate --steps pass-pool,update --half judge --repeat 3 --budget 5 --cap gate-update-2026-11-27`. Cases: 6 key, 13 wrong-number, 3 wrong-year, 13 benign from 13 stories (4 of 17 had no first-pass version; 49 planted values refused by the sanity check). Replaces the `update` table of 2026-11-26 below.
+
+| Measure | Bar | 2026-11-26 | 2026-11-27 | Verdict |
+|---|---|---|---|---|
+| Expected changes flagged on the right section | ≥ 90% | 68.8% | 85.1% (82.8–86.2%) | missed |
+| False rewrites | ≤ 10% | 4.5% | 2.9% | met |
+| Unchanged sections byte-identical | 100% | 100% | 100% | met |
+| Planted contradictions demoted | ≥ 90% | 48.3% | 91.7% (87.5–93.8%) | met |
+| False demotions | ≤ 5% | 1.0% | 1.0% | met |
+| Notes accurate and complete | ≥ 90% | 61.7% | 63.2% | missed |
+| Notes the fact check found unsupported | none | 2.3 a run | 2.7 a run | missed |
+| Notes' copying share less the sections' | ≤ 0 | +2.7 points | −3.0 points | met |
+
+- **Flagged:** every miss is a `key` case, the same four in every run (a later development the pass does not write into the story: DRC cases top 4,000; UN warns on fossil fuels; Iran facility struck; UN on strikes in southern Lebanon). Production's later-pass judgment, or a turning point another story's key names that this story need not carry; not yet told apart.
+- **Notes:** production. Most short notes call a correction a rise ("rose to 6,080 from 4,053") although the planted fact holds the same as-of as the one it corrects; the rest omit a removed or added paragraph, or credit a claim to the wrong source.
+- **Cost:** $2.43 (1,375 model calls, 110 Tavily searches), the whole run paid since no cache was here.
+
 ## Research passes' gate, 2026-11-26
 
 Run on branch `claude/project-thread-egeer5` at commit eb07a5f0 (production code as at 46ab57b2: nothing under `prompts/`, `schemas/`, `services/` or `config.ts` changed since but DB tests) against the local copy of production of 2026-11-19. First runs of the `context` step against gap keys (drafted and checked the same day, a6a73f8d) and of `update` on the eval's own first passes (eb07a5f0). **No bar of the research-pass gate is met yet**: `research_pass` stays disabled.
