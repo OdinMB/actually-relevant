@@ -28,30 +28,57 @@ const fact = (over: Partial<VisualFact> & { ref: string }): VisualFact => ({
   creditedKind: null,
   sourceKind: 'news-report',
   shown: true,
+  slot: null,
+  ...over,
+})
+
+/** What `isCurrent` reads of a fact: a figureless research fact with no date unless `over` says otherwise. */
+const timing = (over: Partial<Pick<VisualFact, 'validity' | 'asOf' | 'sourceDate' | 'value' | 'slot'>>) => ({
+  validity: 'slow' as const,
+  asOf: null,
+  sourceDate: null,
+  value: null,
+  slot: null,
   ...over,
 })
 
 describe('isCurrent', () => {
   it('keeps a fixed fact current whatever its date', () => {
-    expect(isCurrent({ validity: 'fixed', asOf: '2015', sourceDate: null }, DAY, WINDOWS)).toBe(true)
-    expect(isCurrent({ validity: 'fixed', asOf: null, sourceDate: null }, DAY, WINDOWS)).toBe(true)
+    expect(isCurrent(timing({ validity: 'fixed', asOf: '2015' }), DAY, WINDOWS)).toBe(true)
+    expect(isCurrent(timing({ validity: 'fixed' }), DAY, WINDOWS)).toBe(true)
   })
 
   it('keeps a fast fact current for 14 days from its as-of date, judged on the story day', () => {
-    expect(isCurrent({ validity: 'fast', asOf: '2026-10-31', sourceDate: null }, DAY, WINDOWS)).toBe(true)
-    expect(isCurrent({ validity: 'fast', asOf: '2026-10-30', sourceDate: null }, DAY, WINDOWS)).toBe(false)
+    expect(isCurrent(timing({ validity: 'fast', asOf: '2026-10-31' }), DAY, WINDOWS)).toBe(true)
+    expect(isCurrent(timing({ validity: 'fast', asOf: '2026-10-30' }), DAY, WINDOWS)).toBe(false)
   })
 
   it('keeps a slow fact current for a year, counting a coarse as-of from its first day', () => {
-    expect(isCurrent({ validity: 'slow', asOf: '2026', sourceDate: null }, DAY, WINDOWS)).toBe(true)
-    expect(isCurrent({ validity: 'slow', asOf: '2025-11', sourceDate: null }, DAY, WINDOWS)).toBe(false)
-    expect(isCurrent({ validity: 'slow', asOf: '2025-11-15', sourceDate: null }, DAY, WINDOWS)).toBe(true)
+    expect(isCurrent(timing({ validity: 'slow', asOf: '2026' }), DAY, WINDOWS)).toBe(true)
+    expect(isCurrent(timing({ validity: 'slow', asOf: '2025-11' }), DAY, WINDOWS)).toBe(false)
+    expect(isCurrent(timing({ validity: 'slow', asOf: '2025-11-15' }), DAY, WINDOWS)).toBe(true)
   })
 
   it("falls back to the source's day without an as-of date, and is not current without either", () => {
-    expect(isCurrent({ validity: 'fast', asOf: null, sourceDate: '2026-11-12' }, DAY, WINDOWS)).toBe(true)
-    expect(isCurrent({ validity: 'fast', asOf: null, sourceDate: '2026-10-01' }, DAY, WINDOWS)).toBe(false)
-    expect(isCurrent({ validity: 'slow', asOf: null, sourceDate: null }, DAY, WINDOWS)).toBe(false)
+    expect(isCurrent(timing({ validity: 'fast', sourceDate: '2026-11-12' }), DAY, WINDOWS)).toBe(true)
+    expect(isCurrent(timing({ validity: 'fast', sourceDate: '2026-10-01' }), DAY, WINDOWS)).toBe(false)
+    expect(isCurrent(timing({ validity: 'slow' }), DAY, WINDOWS)).toBe(false)
+  })
+
+  it('keeps an undated explainer current: a key term with no figure that is not fast', () => {
+    expect(isCurrent(timing({ validity: 'slow', slot: 'key_term' }), DAY, WINDOWS)).toBe(true)
+  })
+
+  it('never passes off an undated figure, status or decision, or another slot, as current', () => {
+    expect(isCurrent(timing({ validity: 'slow', slot: 'key_term', value: 32 }), DAY, WINDOWS)).toBe(false)
+    expect(isCurrent(timing({ validity: 'fast', slot: 'key_term' }), DAY, WINDOWS)).toBe(false)
+    expect(isCurrent(timing({ validity: 'slow', slot: 'response' }), DAY, WINDOWS)).toBe(false)
+    expect(isCurrent(timing({ validity: 'slow', slot: null }), DAY, WINDOWS)).toBe(false)
+  })
+
+  it('holds a dated explainer to its window', () => {
+    expect(isCurrent(timing({ validity: 'slow', slot: 'key_term', sourceDate: '2025-11-13' }), DAY, WINDOWS)).toBe(false)
+    expect(isCurrent(timing({ validity: 'slow', slot: 'key_term', sourceDate: '2025-11-14' }), DAY, WINDOWS)).toBe(true)
   })
 })
 

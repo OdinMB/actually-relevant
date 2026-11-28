@@ -5,7 +5,7 @@
  * rules, ADR-0064). Every date is a `YYYY-MM-DD` day, or an as-of of `YYYY-MM` or `YYYY`.
  */
 import { fieldText } from '../schemas/factFields.js'
-import type { Approx, CreditedKind, StoredChart, StoredPoint, Validity } from '../schemas/storyContext.js'
+import type { Approx, ContextSlot, CreditedKind, StoredChart, StoredPoint, Validity } from '../schemas/storyContext.js'
 
 /** What the rules read of a fact. */
 export interface VisualFact {
@@ -26,6 +26,11 @@ export interface VisualFact {
   sourceKind: string
   /** Supported by its check and not demoted: only such a fact is ever offered or shown. */
   shown: boolean
+  /**
+   * The slot a gap search's fact was extracted for (a pool keeps it); null for a research fact and
+   * for a fact read back from `context_facts`, which does not store it.
+   */
+  slot: ContextSlot | null
 }
 
 export interface ValidityWindows {
@@ -91,18 +96,31 @@ export const factDate = (f: Pick<VisualFact, 'asOf' | 'sourceDate'>): string | n
 const daysBetween = (from: string, to: string) => (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS
 
 /**
+ * A fact that explains a term, body or mechanism, which does not go stale: extracted for the
+ * `key_term` slot, with no figure, and not `fast` (a status or a decision changes within weeks,
+ * whatever it explains). A figure or an event never is one.
+ */
+const explainsATerm = (f: Pick<VisualFact, 'slot' | 'value' | 'validity'>): boolean => f.slot === 'key_term' && f.value === null && f.validity !== 'fast'
+
+/**
  * Whether a fact is current on `onDay`, the story's own day (never today): a `fixed` fact always is;
  * a `slow` or `fast` one for its window from the start of its as-of period (the source's day when it
- * has none), so a coarse as-of counts from its earliest day. Without any date it is not.
+ * has none), so a coarse as-of counts from its earliest day. Without any date only an explainer is
+ * (`explainsATerm`): a search page is often undated (Tavily's general topic dates none), and a
+ * definition there needs no date to hold, while an undated figure or event is never passed off as
+ * current. A dated explainer keeps its window.
  */
-export function isCurrent(f: Pick<VisualFact, 'validity' | 'asOf' | 'sourceDate'>, onDay: string, windows: ValidityWindows): boolean {
+export function isCurrent(f: Pick<VisualFact, 'validity' | 'asOf' | 'sourceDate' | 'slot' | 'value'>, onDay: string, windows: ValidityWindows): boolean {
   if (f.validity === 'fixed') return true
   const date = factDate(f)
-  if (date === null) return false
+  if (date === null) return explainsATerm(f)
   return daysBetween(periodStart(date), onDay) <= (f.validity === 'fast' ? windows.fastDays : windows.slowDays)
 }
 
-/** The first day a fact current today is no longer (`isCurrent`); null for a `fixed` one, which always is, or one with no date, which never is. */
+/**
+ * The first day a fact current today is no longer (`isCurrent`); null for a `fixed` one and an
+ * undated explainer, which always are, and for any other undated fact, which never is.
+ */
 export function currentUntil(f: Pick<VisualFact, 'validity' | 'asOf' | 'sourceDate'>, windows: ValidityWindows): string | null {
   const date = factDate(f)
   if (f.validity === 'fixed' || date === null) return null

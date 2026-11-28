@@ -418,6 +418,46 @@ describe('buildStoryContext', () => {
     ])
   })
 
+  it('shows the write an undated key-term explainer as current, and an undated figure from the same page as expired', async () => {
+    const explains = 'Peat is soil made of partly decayed plants, and it can smoulder underground for months.'
+    const counts = 'Indonesia holds about 13 million hectares of peat.'
+    const keyTerm = gap('yes', { searches: [search('key_term', 'what is peat')] })
+    const { deps, prompts } = fakeDeps({
+      gap: { ...keyTerm, slots: [...keyTerm.slots, { slot: 'key_term', needed: true, covered: 'no' }] },
+      // An undated page, as Tavily's general topic gives every result
+      answers: {
+        'what is peat': { results: [{ ...result('https://explainer.example/peat', `${explains} ${counts}`), date: null }], credits: 1, cached: false },
+      },
+      extract: () => ({
+        usable: true,
+        kind: 'analysis',
+        outlet: 'Explainer',
+        facts: [
+          {
+            statement: 'Peat is partly decayed plant soil that can burn underground for months.',
+            supportingSentence: explains,
+            slot: 'key_term',
+            ...fields,
+            validity: 'slow',
+          },
+          {
+            statement: 'Indonesia has about 13 million hectares of peat.',
+            supportingSentence: counts,
+            slot: 'key_term',
+            ...fields,
+            value: 13_000_000,
+            unit: 'hectares',
+            counted: 'peat in Indonesia',
+            validity: 'slow',
+          },
+        ],
+      }),
+    })
+    await buildStoryContext(input(), deps)
+    expect(prompts.write![0]).toMatch(/<FACT id="S1F1"[^>]* current="true">Peat is partly decayed/)
+    expect(prompts.write![0]).toMatch(/<FACT id="S1F2"[^>]* expired="true">Indonesia has about 13 million/)
+  })
+
   it('ends a story as a technical failure on a Tavily error, with what it spent', async () => {
     const { deps } = fakeDeps({ gap: responseGap(), searchError: new TavilyError('Tavily search failed: HTTP 502', 502) })
     const out = await buildStoryContext(input(), deps)

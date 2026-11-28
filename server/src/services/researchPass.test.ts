@@ -476,6 +476,49 @@ describe('runResearchPass, a first pass', () => {
     expect(result.boxes[0]?.sentences[0]?.factIds).toEqual(['S2F1'])
     expect(result.boxFacts.get('S2F1')?.reusedFromId).toBe('fact-a')
   })
+
+  it('shows the cards an undated key-term explainer a gap search found as current, and an undated figure from the same page as expired', async () => {
+    const explains = 'Net metering credits a household for the power its panels send to the grid.'
+    const counts = 'Net metering serves about 300,000 households in Pakistan.'
+    const fake = fakeDeps({
+      'gap-list': () => ({
+        ...gap(),
+        slots: [...gap().slots, { slot: 'key_term', needed: true, covered: 'no' }],
+        searches: [{ slot: 'key_term', wanted: 'What net metering is', query: 'what is net metering', recent: false }],
+      }),
+      'gap-extract': () => ({
+        usable: true,
+        kind: 'analysis',
+        outlet: 'Explainer',
+        facts: [
+          {
+            statement: 'Net metering pays households for the solar power they export.',
+            supportingSentence: explains,
+            slot: 'key_term',
+            ...fields,
+            validity: 'slow',
+          },
+          {
+            statement: 'About 300,000 Pakistani households use net metering.',
+            supportingSentence: counts,
+            slot: 'key_term',
+            ...fields,
+            value: 300_000,
+            unit: 'households',
+            counted: 'households on net metering in Pakistan',
+            validity: 'slow',
+          },
+        ],
+      }),
+    })
+    // An undated page, as Tavily's general topic gives every result
+    const page = { url: 'https://explainer.example/net-metering', title: 'What is net metering', date: null, text: `${explains} ${counts}` }
+    await runResearchPass(input(), { ...fake.deps, search: async () => ({ results: [page], credits: 1, cached: false }) })
+
+    const write = fake.calls.find(c => c.step === 'cards-write')!.prompt
+    expect(write).toMatch(/ current="true">Net metering pays households/)
+    expect(write).toMatch(/ expired="true">About 300,000 Pakistani households/)
+  })
 })
 
 describe('runResearchPass: the figure check before the fact check', () => {

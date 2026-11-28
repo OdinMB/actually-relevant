@@ -210,6 +210,7 @@ export const visualFact = (f: ContextFactData, shown = f.verdict === 'supported'
   creditedKind: f.creditedKind,
   sourceKind: f.source.kind,
   shown,
+  slot: f.slot,
 })
 
 export type BoxDropCause = 'structure' | 'expired' | 'undrawn' | 'check' | 'unjudged' | 'copying' | 'empty'
