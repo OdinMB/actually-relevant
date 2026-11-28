@@ -1,12 +1,16 @@
 /**
- * Where a story's cards come from (`.context/research-passes.md`, "Cards"): the newest research pass
- * that wrote any, its boxes citing the story's pool (a fact a pass or an editor demoted marked so,
- * as a demoted context fact is), else the newest context run's boxes and facts (`contextRecords`).
- * One answer for the page, the admin and its edits. Until a pass runs no story has pass boxes, so
- * every story's cards are its context run's, as before passes. Reads only.
+ * Where a story's cards come from (`.context/research-passes.md`, "The cards a pass writes"): the
+ * newest research pass that wrote any, its boxes citing the story's pool (a fact a pass or an editor
+ * demoted marked so, as a demoted context fact is), else the newest context run's boxes and facts
+ * (`contextRecords`). One answer for the page, the admin and its edits; what readers get of it is
+ * `readerCardRecords`, which serves none of a pass's cards while the card gate is closed
+ * (`CARD_EVAL_GATE`), and every reader path takes it (a fence test holds it,
+ * `test/passCardReaders.test.ts`). Until a pass runs no story has pass boxes, so every story's cards
+ * are its context run's, as before passes. Reads only.
  */
 import type { ContextBox, PrismaClient } from '@prisma/client'
 import { isContextSlot, type ContextSlot } from '../schemas/storyContext.js'
+import { CARD_EVAL_GATE } from './cardGate.js'
 import { loadCitedFacts, newestPassBoxes } from './passRecords.js'
 import type { ResearchDb } from './researchInput.js'
 import { cardFacts } from './researchPool.js'
@@ -67,4 +71,23 @@ export async function cardRecords(db: CardsDb, storyId: string): Promise<CardRec
     }),
   )
   return { boxes, facts, pass: pass && { ...pass, writtenAt: newest.writtenAt } }
+}
+
+/**
+ * Why readers see none of these cards, whatever each one's status, or null: a research pass's while
+ * the card gate is closed. A context run's cards are never held back here: their step has its own
+ * switch (`build_story_context`, off), and an editor's "Gather context" shows them as before.
+ */
+export function readersRefusal(records: Pick<CardRecords, 'pass'>, gate: string | null = CARD_EVAL_GATE): string | null {
+  return records.pass && gate ? `Research passes' cards stay off the story page: ${gate}` : null
+}
+
+/**
+ * The cards readers get: `cardRecords`, with no box while `readersRefusal` holds them back. A story
+ * whose newest cards are a pass's then serves none, never its older context run's in their place: the
+ * cards an editor sees and edits are the ones readers would get.
+ */
+export async function readerCardRecords(db: CardsDb, storyId: string): Promise<CardRecords> {
+  const records = await cardRecords(db, storyId)
+  return readersRefusal(records) ? { ...records, boxes: [] } : records
 }

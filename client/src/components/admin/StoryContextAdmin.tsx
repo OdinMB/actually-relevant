@@ -16,8 +16,10 @@ import { EDITOR_HEADING, EDITOR_SECTION } from './storyEditorClasses'
  * place select and Hide/Show, "Hide all context" (asked first), a link to the story page, and "What
  * the run did". "Gather context" (an editor's run, which builds on the earlier ones) is in the page's
  * action bar (`StoryActionBar`). Hiding and moving are the one way a person changes the cards
- * (ADR-0062); nothing is deleted. Hidden while the story has no context run and cannot have one
- * gathered, and against a backend without context (`contextShown`).
+ * (ADR-0062); nothing is deleted. A research pass's cards the card gate keeps from readers are
+ * marked "Hidden from readers" with the server's reason, in place of where readers see them. Hidden
+ * while the story has no context run and cannot have one gathered, and against a backend without
+ * context (`contextShown`).
  */
 
 type StoryRef = Pick<Story, 'id' | 'slug' | 'status'>
@@ -200,13 +202,21 @@ export function StoryContextAdmin({ story }: { story: StoryRef }) {
   if (!data || !contextShown(query)) return null
 
   const published = story.status === 'published'
-  const counts = countsLine(data.boxes, published)
+  const gated = data.hiddenFromReaders ?? null
+  // While the card gate holds them back, readers see none, whatever each card's status
+  const counts = gated ? null : countsLine(data.boxes, published)
   return (
     <section aria-labelledby={`context-${story.id}`} className={`${EDITOR_SECTION} space-y-3`}>
       <div>
         <h2 id={`context-${story.id}`} className={`${EDITOR_HEADING} mb-1`}>
           Context
         </h2>
+        {gated && (
+          <p className="mb-1 text-sm text-amber-800">
+            <span className="mr-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium">Hidden from readers</span>
+            {gated}
+          </p>
+        )}
         <p className="text-sm text-neutral-600">
           {data.pass
             ? `Research pass ${data.pass.number} wrote these cards on ${formatDateWithTime(data.pass.writtenAt)}.`

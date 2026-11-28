@@ -72,7 +72,7 @@ describe('runResearchPassJob', () => {
     expect(mockRuns.markInterruptedPasses).toHaveBeenCalled()
     expect(mockQueue.nextForPass).not.toHaveBeenCalled()
     expect(mockRuns.runPipelinePass).not.toHaveBeenCalled()
-    expect(scope.summary).toMatch(/^Research passes are switched off: their evals have not yet met the plan's bars.*; nothing researched$/)
+    expect(scope.summary).toMatch(/^Research passes are switched off: their research and update evals have not yet met their bars.*; nothing researched$/)
   })
 
   it('runs no pass while its job is disabled, so a run by hand of the disabled job does nothing', async () => {

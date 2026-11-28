@@ -1669,6 +1669,11 @@ export interface StoryContextAdmin {
   run: ContextAdminRun | null
   /** The research pass that wrote the boxes; null (or absent, from an older server) while they are a context run's. */
   pass?: { id: string; number: number; writtenAt: string } | null
+  /**
+   * Why readers see none of these boxes, whatever each one's status: a research pass's while the card
+   * gate is closed. Null (or absent, from an older server) when readers see every box not hidden.
+   */
+  hiddenFromReaders?: string | null
   /** The boxes the page reads, hidden ones included, in order: the newest pass's, else the newest run's that wrote any. */
   boxes: ContextAdminBox[]
   places: ContextAdminPlace[]

@@ -7,6 +7,7 @@
  */
 import { config } from '../config.js'
 import type { RunUsage } from '../lib/runUsage.js'
+import { CARD_EVAL_GATE } from '../services/cardGate.js'
 import { OVERVIEW_EVAL_GATE } from '../services/overviewGate.js'
 import { PASS_EVAL_GATE } from '../services/researchPassGate.js'
 import { researchSwitchOff } from '../services/researchSwitch.js'
@@ -53,9 +54,10 @@ function researchPassNote(): string {
   const switchOn = PASS_EVAL_GATE
     ? 'It cannot be enabled until its quality checks meet their bars and the owner switches it on.'
     : 'It can be enabled only once web search is set up.'
+  const cards = CARD_EVAL_GATE ? 'Readers do not see its context cards until their own quality checks meet their bars; the admin shows them. ' : ''
   return (
     'Researches each selected story in one pass: it searches the web, checks every fact against its source, rewrites the story from what holds up and builds its context cards, ' +
-    'taking the place of Research Stories and Build Story Context. A story is rejected only when the pass finds it is old news or its main claim is contradicted, ' +
+    `taking the place of Research Stories and Build Story Context. ${cards}A story is rejected only when the pass finds it is old news or its main claim is contradicted, ` +
     'and when the pass cannot produce a usable version, the story publishes as it was. ' +
     `While this job is enabled, Publish Stories waits for a story's pass, in the daily edition too, but only up to ${count(config.research.pipeline.maxWaitMinutes, 'minute')} after the story was selected. ` +
     `It takes up to ${count(perRun, 'story', 'stories')} a run, ${concurrency} at once, and its passes share the month's research budget of $${config.research.monthlyCapUsd}; once that is spent, stories publish without a pass. ` +

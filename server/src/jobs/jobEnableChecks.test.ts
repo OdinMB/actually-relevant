@@ -122,7 +122,7 @@ describe('jobEnableRefusal', () => {
     const saved = process.env.TAVILY_API_KEY
     try {
       process.env.TAVILY_API_KEY = 'tvly-test'
-      expect(jobEnableRefusal('research_pass')).toMatch(/switched off: their evals have not yet met the plan's bars/)
+      expect(jobEnableRefusal('research_pass')).toMatch(/switched off: their research and update evals have not yet met their bars/)
       expect(passSwitchRefusal(null)).toBeNull()
       delete process.env.TAVILY_API_KEY
       expect(passSwitchRefusal(null)).toMatch(/TAVILY_API_KEY/)

@@ -7,7 +7,7 @@
  * what the card already says (`tileLabel`), and its as-of date; plus the
  * `aiGenerated` marker. Not in the OpenAPI contract, so the shape can still change. A story without
  * context, or one not published, gets no boxes. The boxes are the newest research pass's, else the
- * newest context run's (`cardRecords`).
+ * newest context run's, and none of a pass's while the card gate is closed (`readerCardRecords`).
  */
 import { config } from '../config.js'
 import { contextAiMarker, type AiGeneratedContextMarker } from '../lib/aiProvenance.js'
@@ -20,7 +20,7 @@ import { hostOf, type CitedText, type ResearchedSource } from './researchedStory
 import { normalizedUrl } from './researchFilter.js'
 import { tileLabel } from './storyContextLabels.js'
 import { storyLayout } from './storyContextLayout.js'
-import { cardRecords } from './storyCards.js'
+import { readerCardRecords } from './storyCards.js'
 import { CONTEXT_STEP_TIERS } from './storyContextPipeline.js'
 import { oneOf, type StoredContextFact } from './storyContextRecords.js'
 import { placeServed, servableRow, servedBoxes } from './storyContextServed.js'
@@ -125,7 +125,7 @@ const pointView = (p: ChartPoint, idOf: (ref: string) => string): ContextChartPo
 export async function getStoryContext(slug: string): Promise<StoryContextView> {
   const story = await prisma.story.findFirst({ where: { slug, status: 'published' }, select: { id: true, sourceUrl: true, datePublished: true } })
   if (!story?.datePublished) return emptyView()
-  const { boxes: rows, facts } = await cardRecords(prisma, story.id)
+  const { boxes: rows, facts } = await readerCardRecords(prisma, story.id)
   const served = servedBoxes(rows.map(servableRow), facts, utcDay(story.datePublished))
   if (served.length === 0) return emptyView()
   // The story's text, research's paragraphs included, is read only now: most stories serve no box

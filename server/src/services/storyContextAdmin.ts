@@ -1,7 +1,8 @@
 /**
  * The admin's view and edits of a story's context (`.context/story-context.md`, "Admin"): every box
  * the page reads (`cardRecords`: the newest research pass's, else the newest context run's) with its
- * status and where it sits now, the pass that wrote them, the places the story has, the newest
+ * status and where it sits now, the pass that wrote them and whether the card gate keeps them from
+ * readers (`readersRefusal`), the places the story has, the newest
  * context run's summary for "What the run did", and whether an editor can gather context now
  * (`storyContextOnDemand.ts`); hiding and showing one box or all (a hidden box
  * is `demoted`, shown again `unreviewed`; nothing is deleted), and moving a box to a paragraph or point
@@ -13,7 +14,7 @@ import { config } from '../config.js'
 import { utcDay } from '../lib/days.js'
 import prisma from '../lib/prisma.js'
 import { BadRequestError, NotFoundError } from '../utils/errors.js'
-import { cardRecords } from './storyCards.js'
+import { cardRecords, readersRefusal } from './storyCards.js'
 import { layoutSpots, storyLayout, type LayoutStory, type StoryLayout } from './storyContextLayout.js'
 import { gatherState } from './storyContextOnDemand.js'
 import { SECTION } from './storyContextPlacement.js'
@@ -71,6 +72,11 @@ export interface ContextAdmin {
   run: ContextAdminRun | null
   /** The research pass that wrote the boxes; null while they are a context run's (no pass has written cards). */
   pass: { id: string; number: number; writtenAt: Date } | null
+  /**
+   * Why readers see none of these boxes, whatever each one's status: a research pass's while the
+   * card gate is closed (`readersRefusal`); null when readers see every box not hidden.
+   */
+  hiddenFromReaders: string | null
   boxes: ContextAdminBox[]
   places: ContextAdminPlace[]
   placement: typeof config.storyContext.placement
@@ -127,6 +133,7 @@ export async function getContextAdmin(storyId: string): Promise<ContextAdmin> {
       result: run.result,
     },
     pass,
+    hiddenFromReaders: readersRefusal({ pass }),
     boxes: boxes.map(b => {
       const sources = new Map<string, string>()
       for (const ref of boxRefs(boxContent(b))) {

@@ -388,9 +388,9 @@ describeDb('research passes (PostgreSQL)', () => {
   it("refuses an editor's pass while the eval gate is closed or the job disabled, writing nothing", async () => {
     const story = await researchable('published')
     gate.closed = realGate
-    await expect(startEditorPass(story.id)).rejects.toThrow(/switched off: their evals have not yet met/)
+    await expect(startEditorPass(story.id)).rejects.toThrow(/switched off: their research and update evals have not yet met/)
     // The admin shows nothing of the step while the gate is closed, though the job row is enabled
-    expect(await passUsage()).toMatchObject({ refusal: expect.stringMatching(/switched off: their evals/), on: false })
+    expect(await passUsage()).toMatchObject({ refusal: expect.stringMatching(/switched off: their research and update evals/), on: false })
 
     gate.closed = null
     await setJob(false)

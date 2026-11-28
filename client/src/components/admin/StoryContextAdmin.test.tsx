@@ -285,6 +285,18 @@ describe('StoryContextAdmin', () => {
     expect(await section()).toHaveTextContent('The story is not published now, so readers see none of them.')
   })
 
+  it('marks a pass’s cards hidden from readers while the card gate holds them back, and claims none shows on the site', async () => {
+    const why = "Research passes' cards stay off the story page: their evals are pending"
+    mockContext.get.mockResolvedValue(view({ pass: { id: 'pass-2', number: 2, writtenAt: '2026-11-16T09:03:00Z' }, hiddenFromReaders: why }))
+    renderSection()
+    const region = await section()
+    expect(within(region).getByText('Hidden from readers', { selector: 'span' })).toBeInTheDocument()
+    expect(region).toHaveTextContent(why)
+    expect(region).not.toHaveTextContent(/shows? on the site/)
+    // Still listed, for the editor to hide or move before readers see them
+    expect(within(region).getByText('Heading a')).toBeInTheDocument()
+  })
+
   it('shows what the run did: each slot, the searches, the dropped facts with their reasons and the cost', async () => {
     const user = userEvent.setup()
     renderSection()

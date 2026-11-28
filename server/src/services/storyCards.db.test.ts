@@ -1,4 +1,4 @@
-import { it, expect } from 'vitest'
+import { it, expect, vi, beforeEach } from 'vitest'
 import prisma from '../lib/prisma.js'
 import { createFeed, createIssue, createStory, describeDb, useTestDatabase } from '../test/db/harness.js'
 import { createPass, createPassBox, createPoolFact, createPoolSource } from '../test/db/passes.js'
@@ -9,8 +9,19 @@ import { cardRecords } from './storyCards.js'
 import { getContextAdmin, setContextHidden, updateContextBox } from './storyContextAdmin.js'
 import { getStoryContext } from './storyContextView.js'
 
+// The card gate (`cardGate.ts`) open in these tests unless one closes it
+const cardGate = vi.hoisted(() => ({ closed: null as string | null }))
+vi.mock('./cardGate.js', () => ({
+  get CARD_EVAL_GATE() {
+    return cardGate.closed
+  },
+}))
+
 describeDb('story cards: the newest pass’s, else the legacy run’s', () => {
   useTestDatabase()
+  beforeEach(() => {
+    cardGate.closed = null
+  })
 
   const published = async (slug: string) => {
     const issue = await createIssue()
@@ -83,7 +94,7 @@ describeDb('story cards: the newest pass’s, else the legacy run’s', () => {
     for (const [ref, f] of records.facts) expect(f).toEqual({ ...whole.get(ref), id: expect.any(String), demoted: ref === 'S1F2' })
   })
 
-  it('serves readers the newest pass’s cards, leaving out what cites a demoted or rejected fact', async () => {
+  it('serves readers the newest pass’s cards once the card gate is open, leaving out what cites a demoted or rejected fact', async () => {
     await setup()
     const view = await getStoryContext('story-with-passes')
     expect(view.boxes.map(b => [b.heading, b.place, b.sentences.map(s => s.text)])).toEqual([['Second pass card', 'W2', ['Kept.']]])
@@ -92,7 +103,18 @@ describeDb('story cards: the newest pass’s, else the legacy run’s', () => {
     expect(view.aiGenerated.fields).not.toHaveLength(0)
   })
 
-  it('serves the legacy run’s cards while the story has no pass cards', async () => {
+  it('serves readers none of a pass’s cards while the card gate is closed, nor the legacy run’s beneath them', async () => {
+    const { story } = await setup()
+    cardGate.closed = 'their evals are pending'
+    const view = await getStoryContext('story-with-passes')
+    expect(view.boxes).toEqual([])
+    expect(view.sources).toEqual([])
+    expect(view.aiGenerated.fields).toEqual([])
+    // The records are as before: only what readers get is held back
+    expect((await cardRecords(prisma, story.id)).boxes).toHaveLength(2)
+  })
+
+  it('serves the legacy run’s cards while the story has no pass cards, whatever the card gate', async () => {
     const story = await published('story-without-passes')
     const run = await createContextRun(story.id)
     await createContextFact(story.id, run.id, { ref: 'S2F1' })
@@ -101,16 +123,29 @@ describeDb('story cards: the newest pass’s, else the legacy run’s', () => {
     await createPass(story.id, 1)
     expect((await cardRecords(prisma, story.id)).pass).toBeNull()
     expect((await getStoryContext('story-without-passes')).boxes.map(b => b.heading)).toEqual(['Legacy card'])
-    expect((await getContextAdmin(story.id)).pass).toBeNull()
+    expect(await getContextAdmin(story.id)).toMatchObject({ pass: null, hiddenFromReaders: null })
+
+    cardGate.closed = 'their evals are pending'
+    expect((await getStoryContext('story-without-passes')).boxes.map(b => b.heading)).toEqual(['Legacy card'])
+    expect((await getContextAdmin(story.id)).hiddenFromReaders).toBeNull()
   })
 
-  it('lists the pass’s cards for the admin, with the pass that wrote them', async () => {
+  it('lists the pass’s cards for the admin, with the pass that wrote them, marked hidden from readers while the card gate is closed', async () => {
     const { story, second, compared, whyNow, writtenAt } = await setup()
     const admin = await getContextAdmin(story.id)
     expect(admin.pass).toEqual({ id: second.id, number: 2, writtenAt })
+    expect(admin.hiddenFromReaders).toBeNull()
     expect(admin.boxes.map(b => [b.id, b.place, b.sources])).toEqual([
       [compared.id, 'W2', [{ outlet: 'One', url: 'https://s1.example/story' }]],
       [whyNow.id, 'P1', [{ outlet: 'One', url: 'https://s1.example/story' }]],
+    ])
+
+    cardGate.closed = 'their evals are pending'
+    const gated = await getContextAdmin(story.id)
+    expect(gated.hiddenFromReaders).toMatch(/stay off the story page: their evals are pending/)
+    expect(gated.boxes.map(b => [b.id, b.place, b.hidden])).toEqual([
+      [compared.id, 'W2', false],
+      [whyNow.id, 'P1', false],
     ])
   })
 
