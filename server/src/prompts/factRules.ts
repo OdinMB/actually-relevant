@@ -1,7 +1,8 @@
 /**
  * What the prompts that extract or structure a fact share about it (2026-11-25): how far its
- * statement may go, what its as-of date and its credit are, that a figure keeps its scope, and how
- * the source's date is shown to a prompt that asks for an as-of. One wording each, for research's
+ * statement may go, what its as-of date and its credit are, that a figure keeps its scope, where an
+ * extraction reads the fields from (2026-11-28), and how the source's date is shown to a prompt that
+ * asks for an as-of. One wording each, for research's
  * extraction (`prompts/research.ts`) and story context's structure call and extraction
  * (`prompts/storyContext.ts`); the fields' own descriptions are in `schemas/factFields.ts`.
  *
@@ -19,6 +20,17 @@ export const STATEMENT_LIMITS = `- A statement goes exactly as far as the source
 
 /** A figure's scope: for a pass's extraction and the structure call. */
 export const FIGURE_SCOPE_RULE = 'A figure keeps exactly what it counts: its scope, its place and its period, as the source gives them.'
+
+/**
+ * Where an extraction reads a fact's structured fields from (2026-11-28): the fact's support and its
+ * statement, never the rest of the page. The fact check reads the support and the source's date and
+ * nothing else, and judges every field of the record as a claim, so a place, date or credit taken from
+ * elsewhere on the page rejected the whole fact (`.context/eval-baselines.md`, "Research facts' figure
+ * fields, 2026-11-28"). For a pass's extraction and story context's extraction; the structure call,
+ * which is shown only the support and the statement, says the same in its own words.
+ */
+export const FIELDS_FROM_FACT =
+  "Every structured field comes from the fact's supporting sentence and its statement alone: a place, date or credit that neither of them states is never a field, even where the rest of the source gives it, and that field stays empty. Never add knowledge of your own."
 
 /**
  * What a fact's as-of date is and when it stays empty: for a pass's extraction, the structure call

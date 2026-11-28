@@ -6,7 +6,7 @@
  * Every fetched or stored text sits in escaped XML behind the line the podcast prompts use.
  */
 import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
-import { AS_OF_RULE, CREDIT_RULE, FIGURE_SCOPE_RULE, publishedWithWeekday, STATEMENT_LIMITS } from './factRules.js'
+import { AS_OF_RULE, CREDIT_RULE, FIELDS_FROM_FACT, FIGURE_SCOPE_RULE, publishedWithWeekday, STATEMENT_LIMITS } from './factRules.js'
 import { buildGuidelinesXml, EMOTION_TAGS_PROMPT_BLOCK, escapeXml } from './shared.js'
 import type { AssessPromptInput } from '../services/promptInputs.js'
 import { factsOfItems, publishedDay, type PoolFact, type QuoteCheck } from '../services/researchChecks.js'
@@ -124,10 +124,11 @@ ${STATEMENT_LIMITS}
 
 /**
  * The structure step's rules for a fact's structured fields (`buildStructurePrompt`), for a research
- * pass's extraction, which returns the fields itself (`coverageExtractionSchema`); the three they
- * share word for word are `prompts/factRules.ts`'s.
+ * pass's extraction, which returns the fields itself (`coverageExtractionSchema`); all four are
+ * `prompts/factRules.ts`'s. The first holds the fields to the fact's support and statement, as the
+ * structure step's own first rule does: until 2026-11-28 it read them from the whole <SOURCE>.
  */
-const STRUCTURED_RULES = `- Every structured field comes from <SOURCE> alone. Never add knowledge of your own: a field the fact does not give is empty, null or the schema's default.
+const STRUCTURED_RULES = `- ${FIELDS_FROM_FACT}
 - ${FIGURE_SCOPE_RULE}
 - ${AS_OF_RULE}
 - ${CREDIT_RULE}`

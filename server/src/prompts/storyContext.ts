@@ -8,7 +8,7 @@
  */
 import { promptParts, promptText, type PromptParts } from '../lib/promptCache.js'
 import { CONTEXT_SLOTS, type ContextSlot } from '../schemas/storyContext.js'
-import { AS_OF_RULE, CREDIT_RULE, FIGURE_SCOPE_RULE, publishedWithWeekday, STATEMENT_LIMITS } from './factRules.js'
+import { AS_OF_RULE, CREDIT_RULE, FIELDS_FROM_FACT, FIGURE_SCOPE_RULE, publishedWithWeekday, STATEMENT_LIMITS } from './factRules.js'
 import { escapeXml } from './shared.js'
 import { FACT_RECORD, RECORD_GOVERNS, tag, UNTRUSTED } from './research.js'
 
@@ -222,6 +222,7 @@ Judge whether <SOURCE> is usable, classify it, and extract the facts it states t
 - A fact's statement restates the fact in plain English in your own order and phrasing, never a translation of the supporting sentence; names, figures and scope stay exact.
 ${STATEMENT_LIMITS}
 - The supporting sentence is copied character for character from <TEXT>, so that code can find it there.
+- ${FIELDS_FROM_FACT}
 - ${AS_OF_RULE}
 </REQUIREMENTS>`
 
