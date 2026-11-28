@@ -2,6 +2,29 @@
 
 The measured results a later change is compared against. One section per baseline, newest first; a section is replaced only by a newer run of the same command, and says which commit it was measured on. How the evals work, their flags and bars: `model-eval.md`. The reports and the caches that make reruns free are not in the repository: they live in `DOCS/` on the machine that ran them, so on another machine every run is paid in full.
 
+## Research passes' `context` gate, 2026-11-28
+
+Run in a cloud session on branch `claude/project-thread-egeer5` at commit 4cd22364 (an undated key-term explainer stands as current, `isCurrent`, `.context/story-context.md`, "Validity"; no prompt, schema or prompt version changed since 2026-11-26) against the 11-month stories-only eval copy exported 2026-11-27, under the task cap `gate-context-2026-11-28` ($5). Command: `eval:overviews -- --out ../DOCS/2026-11-28_context-gate --steps context,fact-check --facts context --half judge --repeat 3 --budget 5 --cap gate-context-2026-11-28`. 13 judged gap keys × 3 runs, every run completed; 7 of 39 runs kept no card. The fields judge holds the as-of and the credit to production's rules since 2026-11-26 (`model-eval.md`, "`context`"), so its row is not comparable. Replaces the `context` table of 2026-11-26 below.
+
+| Measure | Bar | 2026-11-26 | 2026-11-28 | Verdict |
+|---|---|---|---|---|
+| Must needs not in the story met by kept cards | ≥ 60% | 3.7% | 2.5% (0.0–7.4%) | missed |
+| Wasted searches a story | ≤ 1 | 1.67 | 1.69 (1.46–2.08) | missed |
+| Response card where findable | ≥ 70% | 33% (n = 1) | 0% (n = 1) | missed (n = 1) |
+| Box items found unsupported | none | 4.3 a run | 3.7 a run | missed |
+| Notes `model` places that add to the text | ≥ 85% | 97.8% | 92.2% (88.2–95.0%) | met |
+| Cost a story, the whole first pass at flex | ≤ $0.20 | $0.043 | $0.042 | met |
+| Figure facts with every structured field right | ≥ 95% | 57.7% of 300 | 61.3% of 80 (wrong: place 13, asOf 11, counted 10, credited 4, value 2) | missed |
+| Invented numbers the fact check passed | none | 19 | 0 of 80 | met |
+| Planted errors caught / correct facts rejected | ≥ 90% / ≤ 5% | 93.4% / 7.5% | not measured | not measured |
+| Faithful to the source, with / without a figure | report only | 82.0% / 72.7% | not measured | not measured |
+
+- **The fix works and moves no bar.** Of the 55 key-term facts the write was offered, 31 were current only by the new rule (they read as expired before), 11 were `fixed` and 13 stayed expired with a figure. But no key-term must need was met (13 judged), and the 2 needs met are `compared` ones.
+- **Production, the main cause now: search pages carry no date** (420 of 420 results undated). A gap fact that is neither `fixed` nor a key-term explainer is expired, and the write may state an expired fact only with a date it does not have: 137 of the 245 gap facts the write was offered were expired, and 41 of the 54 kept cards with sentences cite only research's own dated facts. Of the 68 must-need instances judged, 55 are figures and facts for `compared`, `why_now`, `who_affected`, `build_up` and `response`, which an undated gap fact can meet only when it is `fixed`; dating the results (Tavily's `news` topic dates them, or the page's own date) is a production change beyond this one.
+- **Production: the write seldom writes the explainer card.** Of the 12 writes offered a current explainer with `key_term` needed, 2 kept a key-term card; none was written for NATO's Articles 4 and 5 (three runs), Bundibugyo's missing vaccine or what an AI agent is. Across all 39 writes, 7 key-term cards were written and 5 kept, 3 of them from facts that carry no key-term slot. Where it wrote one, it explained another term or left out the point the key needs (cervical dysplasia for HPV, how Bundibugyo spreads, "elimination" without WHO's threshold), and the gap list picks the term and its query (the drug-resistance story searched "catalytic funding", not what resistance means). The extraction also gives a definition a figure ("Article 5" as 5 of "Article number", "1 species", "0 vaccines"), which keeps it expired unless the figure check removes it.
+- **Eval:** the fact-check step measured nothing. Its first strong-judge label call failed and settled at its full $1.31 reservation, which left $1.07, under one more call's reservation, so all 300 labels and every planted-error and faithfulness number are missing. The 7 runs with no card leave their 13 must-need instances unjudged, counted as unmet. The needs judge holds a card to the key's `accepts`, written with hindsight and specific (a threshold, a vaccine distinction); the box items it found unsupported are mostly a dropped qualifier, as on 2026-11-26. The response bar still rests on one findable story.
+- **Cost:** $3.93 against the cap (1,000 model calls, 117 Tavily searches): $2.62 for the calls and searches, and $1.31 for the one failed label call, settled at its reservation whether or not it was billed. No cache was here.
+
 ## Research passes' `update` gate, 2026-11-27
 
 Run in a cloud session on branch `claude/project-thread-egeer5` at commit 15289bf2 (the update eval's fixture, scorer and note-judge fixes; production code unchanged since 2026-11-26) against the 11-month stories-only eval copy exported 2026-11-27 (`database-migrations.md`, "A Stories-Only Copy for Cloud Evals"), under the task cap `gate-update-2026-11-27` ($5). Command: `eval:overviews -- --out ../DOCS/2026-11-27_update-gate --steps pass-pool,update --half judge --repeat 3 --budget 5 --cap gate-update-2026-11-27`. Cases: 6 key, 13 wrong-number, 3 wrong-year, 13 benign from 13 stories (4 of 17 had no first-pass version; 49 planted values refused by the sanity check). Replaces the `update` table of 2026-11-26 below.
