@@ -943,8 +943,9 @@ export const config = {
     // once, so a large assess run can't queue a cluster-locking transaction per story at once
     dedup: 2,
     // Heavy: each concurrent crawl runs a JSDOM parse, which both saturates the
-    // 0.5 vCPU AND allocates native/CSSOM memory counted against Render's ~512 MiB
-    // RSS limit (NOT the V8 heap that --max-old-space-size bounds). Peak concurrent
+    // 0.5 vCPU AND makes ~100 MB of short-lived heap garbage per news page, which
+    // pushes RSS toward Render's ~512 MiB limit (.context/content-extraction.md,
+    // "CPU & Memory Budget"). Peak concurrent
     // parses = crawlFeeds * crawlArticles; keep it <= 2. Production runs 2 x 1 and
     // the defaults mirror that. The extractor's maxParseBytes guard bounds each
     // parse's peak so a single oversized page can't blow RSS on its own.
@@ -1140,8 +1141,9 @@ export const config = {
   },
   /**
    * Process memory log (lib/memoryMonitor.ts, .context/logging.md "Memory"). Render's starter
-   * instance is killed at about 512 MiB of RSS, which counts native memory (JSDOM, canvas, the
-   * Prisma engine, the pino worker) on top of the V8 heap that --max-old-space-size caps.
+   * instance is killed at about 512 MiB of RSS, which counts native memory (canvas, the Prisma
+   * engine, the pino worker) on top of the V8 heap that --max-old-space-size caps (JSDOM's parses
+   * are heap, collected early by the start script's --max-semi-space-size).
    */
   memory: {
     logIntervalMs: 5 * 60 * 1000,

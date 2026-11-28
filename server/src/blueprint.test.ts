@@ -32,6 +32,9 @@ const READ_BY_LIBRARIES: Record<string, string> = {
 /** Read by Render to choose the runtime; may appear on both services though no code reads it. */
 const READ_BY_RENDER = ['NODE_VERSION']
 
+/** Read by the C library under Node on the backend, not by our code (.context/content-extraction.md, "CPU & Memory Budget"). */
+const READ_BY_ALLOCATOR = ['MALLOC_ARENA_MAX']
+
 /** Read by the server, but must never be named in the blueprint. */
 const NOT_IN_BLUEPRINT: Record<string, string> = {
   PORT: 'Render sets it',
@@ -435,7 +438,8 @@ describe('render.yaml', () => {
       [staticSite, clientReads],
     ] as const) {
       const keys = keysOf(service)
-      expect(keys.filter(key => !reads.has(key) && !READ_BY_RENDER.includes(key))).toEqual([])
+      const runtime = service === backend ? [...READ_BY_RENDER, ...READ_BY_ALLOCATOR] : READ_BY_RENDER
+      expect(keys.filter(key => !reads.has(key) && !runtime.includes(key))).toEqual([])
       expect(keys.filter((key, i) => keys.indexOf(key) !== i)).toEqual([])
     }
   })

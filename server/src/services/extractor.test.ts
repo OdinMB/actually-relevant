@@ -4,6 +4,8 @@ const mockAxiosGet = vi.hoisted(() => vi.fn())
 const mockAxiosPost = vi.hoisted(() => vi.fn())
 const mockReadabilityParse = vi.hoisted(() => vi.fn())
 const mockWindowClose = vi.hoisted(() => vi.fn())
+const mockJsdomOptions = vi.hoisted(() => vi.fn())
+const mockJsdomHtml = vi.hoisted(() => vi.fn())
 
 vi.mock('axios', () => ({
   default: {
@@ -15,6 +17,15 @@ vi.mock('axios', () => ({
 vi.mock('jsdom', () => ({
   JSDOM: class MockJSDOM {
     window = { document: {}, close: mockWindowClose }
+    constructor(html: string, options: unknown) {
+      mockJsdomHtml(html)
+      mockJsdomOptions(options)
+    }
+  },
+  VirtualConsole: class MockVirtualConsole {
+    on() {
+      return this
+    }
   },
 }))
 
@@ -341,6 +352,14 @@ describe('JSDOM cleanup', () => {
     expect(mockWindowClose).toHaveBeenCalled()
   })
 
+  it("parses the page with the crawl console, which keeps jsdom's CSS noise out of the logs", async () => {
+    mockAxiosGet.mockResolvedValue({ data: '<html><body><p>Content</p></body></html>' })
+    mockReadabilityParse.mockReturnValue(null)
+
+    await extractContent('https://example.com/article')
+    expect(mockJsdomOptions).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://example.com/article', virtualConsole: expect.anything() }))
+  })
+
   it('calls window.close() when readability returns null', async () => {
     const html = `<html><body><p>Short</p></body></html>`
     mockAxiosGet.mockResolvedValue({ data: html })
@@ -359,6 +378,15 @@ describe('JSDOM cleanup', () => {
 
     await extractContent('https://example.com/article')
     expect(mockWindowClose).toHaveBeenCalled()
+  })
+
+  it('builds the DOM without the scripts and styles Readability would remove', async () => {
+    const html = `<html><head><style>p{}</style><script>track()</script></head><body><p>Content</p></body></html>`
+    mockAxiosGet.mockResolvedValue({ data: html })
+    mockReadabilityParse.mockReturnValue({ title: 'Title', textContent: LONG_TEXT })
+
+    await extractContent('https://example.com/article')
+    expect(mockJsdomHtml).toHaveBeenCalledWith('<html><head></head><body><p>Content</p></body></html>')
   })
 })
 

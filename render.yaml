@@ -12,7 +12,7 @@
 #
 # Every variable is in exactly one of two modes:
 # - a fixed `value:` for settings that are not secret and are the same on every host
-#   (NODE_ENV, the measured TRUST_PROXY hop count, NODE_VERSION). A sync rewrites the
+#   (NODE_ENV, the measured TRUST_PROXY hop count, NODE_VERSION, MALLOC_ARENA_MAX). A sync rewrites the
 #   dashboard with it, so it must equal what production runs. One switch is fixed here
 #   too, SIMPLE_ANALYTICS_EVENTS_ENABLED, so that it goes live with the deploy.
 # - `sync: false` for secrets, canonical addresses (FRONTEND_URL, API_URL, VITE_API_URL),
@@ -75,6 +75,11 @@ services:
       # Runtime: equal to .node-version (both services)
       - key: NODE_VERSION
         value: "22.23.4"
+      # Memory: glibc keeps at most two malloc arenas, so memory freed after a crawl's parses is
+      # reused instead of each thread's arena holding on to its own (RSS drifted from ~200 to
+      # ~360 MB over a day of crawls; .context/content-extraction.md, "CPU & Memory Budget")
+      - key: MALLOC_ARENA_MAX
+        value: "2"
       # URLs
       - key: API_URL
         sync: false

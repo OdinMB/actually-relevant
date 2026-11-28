@@ -8,6 +8,7 @@ import { type Story, Prisma, StoryStatus } from '@prisma/client'
 import { generateEmbeddingForContent } from './embedding.js'
 import { fetchStoryForEmbedding, saveEmbeddingTx } from '../lib/vectors.js'
 import { createLogger } from '../lib/logger.js'
+import { parsePublishedDate } from '../lib/publishedDate.js'
 import type { CrawlMethod } from './extractor.js'
 import type { AccessTier } from '../lib/paywall.js'
 import type { z } from 'zod'
@@ -33,13 +34,18 @@ export async function createStory(data: {
   if (!feed) {
     throw new BadRequestError('Feed not found')
   }
+  // A date the source wrote in a form we can't read is dropped, never an Invalid Date that fails the save
+  const sourceDatePublished = parsePublishedDate(data.sourceDatePublished)
+  if (data.sourceDatePublished?.trim() && !sourceDatePublished) {
+    log.warn({ url: data.sourceUrl, datePublished: data.sourceDatePublished }, 'unreadable source publish date; story saved without it')
+  }
   return prisma.story.create({
     data: {
       sourceUrl: data.sourceUrl,
       sourceTitle: data.sourceTitle,
       sourceContent: data.sourceContent,
       feedId: data.feedId,
-      sourceDatePublished: data.sourceDatePublished ? new Date(data.sourceDatePublished) : null,
+      sourceDatePublished: sourceDatePublished ? new Date(sourceDatePublished) : null,
       crawlMethod: data.crawlMethod || null,
       accessTier: data.accessTier ?? null,
       // A paywall-locked story is rejected at crawl, before any model call (ADR-0031); an editor's

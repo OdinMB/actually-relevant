@@ -193,7 +193,8 @@ describeDb('story research runs', () => {
     const run = await runOf(runId)
     expect(run).toMatchObject({ status: 'failed', costUsd: RESERVATION, verdict: null })
     expect(run.error).not.toContain('fetched text')
-    expect(taskRegistry.get(taskId)).toMatchObject({ status: 'failed', failed: 1 })
+    // The task is marked after the run row settles, so under load it can lag the row by a tick
+    await vi.waitFor(() => expect(taskRegistry.get(taskId)).toMatchObject({ status: 'failed', failed: 1 }))
   })
 
   it('leaves the story row as it was', async () => {

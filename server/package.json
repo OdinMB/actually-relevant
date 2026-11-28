@@ -13,7 +13,7 @@
     "audit:prod": "node ../scripts/audit-check.mjs --audit-level high",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "start": "node --max-old-space-size=320 dist/index.js",
+    "start": "node --max-old-space-size=320 --max-semi-space-size=4 dist/index.js",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:db": "vitest run --project db",
@@ -126,7 +126,7 @@
   "overrides": {
     "@prisma/config": {
       "deepmerge-ts": "^8.0.2",
-      "effect": "3.22.4"
+      "effect": "^3.22.1"
     },
     "node-cron": {
       "uuid": "^11.1.1"
