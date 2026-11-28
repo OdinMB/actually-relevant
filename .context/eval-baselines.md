@@ -2,7 +2,7 @@
 
 The measured results a later change is compared against. One section per baseline, newest first; a section is replaced only by a newer run of the same command, and says which commit it was measured on. How the evals work, their flags and bars: `model-eval.md`. The reports and the caches that make reruns free are not in the repository: they live in `DOCS/` on the machine that ran them, so on another machine every run is paid in full.
 
-**Which gate a bar belongs to** (the owner, 2026-11-28; ADR-0083): research passes' gate (`PASS_EVAL_GATE`) waits for `eval:research`'s and the `update` step's bars only. The `context` step's bars, figure fields and cost included, are the card gate's (`CARD_EVAL_GATE`), which keeps a pass's cards from readers and holds no switch. The sections below keep the names they were measured under, so "the research-pass gate" in one written before that day counts the `context` bars too.
+**Which gate a bar belongs to** (the owner, 2026-11-28; ADR-0083): research passes' gate (`PASS_EVAL_GATE`) waits for `eval:research`'s and the `update` step's bars only. The `context` step's bars, figure fields and cost included, are the card gate's (`CARD_EVAL_GATE`), which keeps a pass's cards from readers and holds no switch. The sections below keep the names they were measured under, so "the research-pass gate" in one written before that day counts the `context` bars too. **Overviews** (the owner, 2026-11-28; ADR-0084): their gate (`OVERVIEW_EVAL_GATE`) is open, on the linking, review, re-center and replay bars of "Overviews and research facts" below; the stands' bars (steps 4 and 5 there: `pass-pool`'s evidence, `stands`, `fact-check --facts stands`) belong to the stands gate (`OVERVIEW_STANDS_GATE`), which keeps "Where this stands" off and needs research passes' facts as well.
 
 ## Research facts' figure fields, 2026-11-28
 
@@ -147,11 +147,11 @@ Run on branch `claude/project-thread-egeer5` against a local copy of production 
 | 3 Reviews (3 runs) | planted errors caught | ≥ 90% | 95.0% | met |
 | | correct items taken out | ≤ 3% | 0.0% | met |
 | | correct roles kept | ≥ 90% | 92.3% | met |
-| 3b Re-centers | re-centered where expected | ≥ 90% | 15 of 15 | for the owner (under 20 judgments) |
+| 3b Re-centers | re-centered where expected | ≥ 90% | 15 of 15 | **met: the owner signed it off, 2026-11-28** (under 20 judgments: "re-centering seems robust enough for now") |
 | | false re-centers | ≤ 10% | 0 of 10 | met |
 | | look-alikes joined, anchor breaks | ≤ 10% | 0 | met |
-| 4 Research for the stands | stories giving usable facts | every checkpoint ≥ 3 facts | 36 of 37; every checkpoint ≥ 23 | met |
-| 5 Stands (3 runs) | unsupported sentences | ≤ 5% | 1.9% | met |
+| 4 Research for the stands (the stands gate's since 2026-11-28) | stories giving usable facts | every checkpoint ≥ 3 facts | 36 of 37; every checkpoint ≥ 23 | met |
+| 5 Stands (3 runs; the stands gate's since 2026-11-28) | unsupported sentences | ≤ 5% | 1.9% | met |
 | | "What's being done" unsupported | ≤ 5% | 3.6% | met |
 | | "What's being done" present | ≥ 70% | 53.3% | **accepted by the owner for now, 2026-11-25** (investigation in `BACKLOG.md`) |
 | | latest value stated | report only | 24.4% | report only |
@@ -165,7 +165,8 @@ Run on branch `claude/project-thread-egeer5` against a local copy of production 
 
 - **Step 5** is the run after ADR-0080 (a fact shown as its statement with a record; the figure check). Before it, on the same stories: unsupported sentences 0.9%, "What's being done" unsupported 2.7%, present 66.7%, latest value 28.2%, caught 100%, correct lines rejected 16.0%. The strong judge reads each line against its facts as the write was shown them (the owner, 2026-11-24). Read against the source sentences instead, it accepted 22 of 46 lines before ADR-0080 and 38 of 49 after.
 - **Step 6** first ran without step 2's background stories (2026-11-24: joins right 89.8%, wrong foundings 14.3%, both missed). Replayed with them (2026-11-26, 473 stories: 201 judged, 272 of the Iran war and Hormuz keys; $2.15), the foundings share fell to 0 and joins right rose to 97.0%, a fraction under the bar. The three wrong joins: a Lebanon entry ("Iran facility struck amid mass civilian casualties in Lebanon") filed in the Iran war's overview, and two El Niño near misses about record sea warmth filed in El Niño's. Misses are mostly Colorado (no candidate before its overview formed on 2026-08-18) and four Ebola stories the link call answered no. One re-center was applied, to a background overview (the Iran war's), unscored. Background developments split into several overviews (the Iran war three times), unscored.
-- **Every overview bar is met or accepted by the owner** (2026-11-25): joins right in step 6 at 97.0% and "What's being done present" at 53.3% both accepted. The gate (`OVERVIEW_EVAL_GATE`) stays closed until the owner's switch (runbook step 7).
+- **Every overview bar is met or accepted by the owner** (2026-11-25): joins right in step 6 at 97.0% and "What's being done present" at 53.3% both accepted; the re-center bar of step 3b, which rests on 15 judgments, signed off on 2026-11-28. **The gate (`OVERVIEW_EVAL_GATE`) is open since 2026-11-28** (ADR-0084): overviews ship as a timeline, and the stands' steps 4 and 5 hold only the stands gate, which stays closed until research passes run (their bars above stay its evidence).
+- **Step 6's cost per story includes the stands' calls** (about $0.30 a run at the 2026-11-24 replay's figures, `REPLAY_DESK`; background stories, offered no facts, cost none): production makes none while the stands gate is closed, so the replay's cost is an upper bound for overviews as they ship.
 
 ### Research facts against their sources
 

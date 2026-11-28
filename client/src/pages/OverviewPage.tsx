@@ -65,7 +65,7 @@ function NotFound() {
   )
 }
 
-/** "Summary and timeline by [AI], from our stories and their sources." then "How it works", leading to the methodology's section on ongoing stories. */
+/** "Timeline by [AI], from our stories." then "How it works", leading to the methodology's section on ongoing stories. */
 function OverviewLabel() {
   return (
     <p className="text-sm text-neutral-600">
@@ -83,8 +83,9 @@ function OverviewLabel() {
 /**
  * An ongoing story's page, `/ongoing/:slug` (`.context/public-website.md`, "Ongoing stories"): the
  * header (where it stands in time, the area, the AI title, the count and last change, the AI
- * label), "Where this stands" and "What's being done" while the API serves them, the timeline, the
- * sources the summary cites, and "Report an error". Not prerendered; a 404 while overviews are
+ * label), "Where this stands" and "What's being done" while the API serves them (never while their
+ * gate is closed), the timeline with its stories' summaries, the sources the stands cite, and
+ * "Report an error". Not prerendered; a 404 while overviews are
  * switched off, or for one that is not public, shows "not found" with its `noindex`.
  */
 export default function OverviewPage() {

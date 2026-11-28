@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { PublicOverviewEntry } from '@shared/types'
 import { FOCUS_RING, TEXT_LINK } from '../../lib/control-classes'
+import { markdownToPlainText } from '../../lib/plainText'
 import { getHeadline } from '../../lib/title-label'
 import StoryTitleLabel from '../StoryTitleLabel'
 import { OverviewHeading } from './OverviewStands'
@@ -19,10 +20,12 @@ const asStory = (e: PublicOverviewEntry) => ({ title: e.title, titleLabel: e.tit
 
 /**
  * One story: its day, its role when it is a turning point ("Turning point · setback"), its AI title
- * label and headline linking the story, and its research Updates as dated lines under it.
+ * label and headline linking the story, its summary as plain text under the link when `withSummary`
+ * (outside it, so the link's name stays the headline), and its research Updates as dated lines.
  */
-function TimelineEntry({ entry, accent }: { entry: PublicOverviewEntry; accent: string }) {
+function TimelineEntry({ entry, accent, withSummary }: { entry: PublicOverviewEntry; accent: string; withSummary: boolean }) {
   const role = roleLine(entry)
+  const summary = withSummary && entry.summary ? markdownToPlainText(entry.summary) : ''
   return (
     <li className="relative grid grid-cols-[3.5rem_1fr] gap-3 py-3">
       <time dateTime={entry.datePublished} className="pt-0.5 text-sm text-neutral-500">
@@ -40,6 +43,7 @@ function TimelineEntry({ entry, accent }: { entry: PublicOverviewEntry; accent: 
           <StoryTitleLabel story={asStory(entry)} className="mb-0.5" />
           <span className="font-semibold leading-snug text-neutral-900 group-hover:text-brand-800">{getHeadline(asStory(entry))}</span>
         </Link>
+        {summary && <p className="mt-1 text-sm leading-relaxed text-neutral-600">{summary}</p>}
         {/* A story may have two Updates on one day; the list never reorders, so its place keys it */}
         {entry.updates.map((update, i) => (
           <p key={`${update.date}-${i}`} className="mt-1 text-sm text-neutral-600">
@@ -51,17 +55,21 @@ function TimelineEntry({ entry, accent }: { entry: PublicOverviewEntry; accent: 
   )
 }
 
-/** One month: its heading, its stories, and its fold of routine stories, opened in place. */
+/**
+ * One month: its heading, its stories, and its fold of routine stories, opened in place. The stories
+ * the month shows carry their summaries; those its fold opens stay compact, headlines only.
+ */
 function Month({ month, accent }: { month: TimelineMonth; accent: string }) {
   const [open, setOpen] = useState(false)
   const listId = `timeline-${month.key}`
   const entries = open ? month.all : month.shown
+  const folded = new Set(month.folded)
   return (
     <li>
       <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">{month.label}</h3>
       <ul id={listId}>
         {entries.map(entry => (
-          <TimelineEntry key={entry.slug} entry={entry} accent={accent} />
+          <TimelineEntry key={entry.slug} entry={entry} accent={accent} withSummary={!folded.has(entry)} />
         ))}
       </ul>
       {month.folded.length > 0 && (
@@ -81,8 +89,8 @@ function Month({ month, accent }: { month: TimelineMonth; accent: string }) {
 
 /**
  * The timeline (`.context/public-website.md`, "Ongoing stories"): every story readers see, newest
- * first, by month, the routine ones folded (`timelineMonths`). "All" and "Turning points" choose
- * the view while the timeline has both kinds.
+ * first, by month, the routine ones folded (`timelineMonths`), each shown story with its summary.
+ * "All" and "Turning points" choose the view while the timeline has both kinds.
  */
 export function OverviewTimeline({ entries, accent }: { entries: PublicOverviewEntry[]; accent: string }) {
   const [filter, setFilter] = useState<TimelineFilter>('all')

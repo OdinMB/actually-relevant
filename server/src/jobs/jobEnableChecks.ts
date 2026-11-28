@@ -4,9 +4,9 @@
  * research pass replaces research and story context (`.context/research-passes.md`, "The job and the
  * gate"): it is refused while its eval gate is closed, then without the key; enabling it switches the
  * two old steps off (`SWITCHED_OFF_BY`, `services/job.ts`), and enabling either of them is refused
- * while it is on (`jobEnableConflict`), so one switch is on at a time. Overview linking comes after
- * research passes (`.context/overviews.md`, "Switching on"): refused while its own gate or
- * theirs is closed, and while `research_pass` is disabled.
+ * while it is on (`jobEnableConflict`), so one switch is on at a time. Overview linking is refused
+ * only while its own eval gate is closed (`.context/overviews.md`, "Switching on"); it waits for
+ * nothing of research passes' (ADR-0084).
  */
 import prisma from '../lib/prisma.js'
 import {
@@ -20,7 +20,7 @@ import { podcastConfigProblem } from './podcastBootCheck.js'
 import { STORY_CONTEXT_JOB } from '../services/storyContextQueue.js'
 import { GENERATE_UPLIFTING_NEWSLETTER_JOB } from './generateNewsletter.js'
 import { passSwitchRefusal, REPLACED_JOBS, RESEARCH_PASS_JOB } from '../services/researchPassQueue.js'
-import { LINK_OVERVIEWS_JOB, overviewPassConflict, overviewSwitchRefusal } from '../services/overviewQueue.js'
+import { LINK_OVERVIEWS_JOB, overviewSwitchRefusal } from '../services/overviewQueue.js'
 import { PUBLISH_NEWSLETTER_JOB, PUBLISH_UPLIFTING_NEWSLETTER_JOB, newsletterSendProblem, upliftingEditionProblem } from './publishNewsletter.js'
 import { config } from '../config.js'
 
@@ -43,7 +43,7 @@ export const ENABLE_CHECKS: Readonly<Record<string, () => string | null>> = {
   [STORY_CONTEXT_JOB]: storyContextProblem,
   // Until its evals meet their bars, whatever the settings (plan phase 6 opens the gate); then the key and priced models
   [RESEARCH_PASS_JOB]: () => passSwitchRefusal(),
-  // Until its own evals meet their bars, and while research passes' gate is closed (overviews switch on after them)
+  // Until its own evals meet their bars (the owner opens the gate); it needs no setting and waits for no other job
   [LINK_OVERVIEWS_JOB]: () => overviewSwitchRefusal(),
 }
 
@@ -57,12 +57,8 @@ export const SWITCHED_OFF_BY: Readonly<Record<string, readonly string[]>> = {
   [RESEARCH_PASS_JOB]: REPLACED_JOBS,
 }
 
-/**
- * Why enabling the job conflicts with another's switch, or null: an old research step while the
- * research pass is enabled, or overview linking while it is not.
- */
+/** Why enabling the job conflicts with another's switch, or null: an old research step while the research pass is enabled. */
 export async function jobEnableConflict(jobName: string): Promise<string | null> {
-  if (jobName === LINK_OVERVIEWS_JOB) return overviewPassConflict()
   if (!REPLACED_JOBS.includes(jobName)) return null
   const pass = await prisma.jobRun.findUnique({ where: { jobName: RESEARCH_PASS_JOB }, select: { enabled: true } })
   return pass?.enabled ? `${RESEARCH_PASS_JOB} is on and does this step's work: disable it first (.context/research-passes.md)` : null

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinkStory, OverviewState } from '../services/overviewTypes.js'
 
-const gates = vi.hoisted(() => ({ overview: 'closed' as string | null, pass: 'closed' as string | null }))
+const gates = vi.hoisted(() => ({ overview: 'closed' as string | null, stands: 'closed' as string | null }))
 const mockJobRun = vi.hoisted(() => ({ findUnique: vi.fn() }))
 const mocks = vi.hoisted(() => ({
   owedStories: vi.fn(),
@@ -26,9 +26,9 @@ vi.mock('../services/overviewGate.js', () => ({
     return gates.overview
   },
 }))
-vi.mock('../services/researchPassGate.js', () => ({
-  get PASS_EVAL_GATE() {
-    return gates.pass
+vi.mock('../services/overviewStandsGate.js', () => ({
+  get OVERVIEW_STANDS_GATE() {
+    return gates.stands
   },
 }))
 vi.mock('../lib/prisma.js', () => ({ default: { jobRun: mockJobRun } }))
@@ -88,7 +88,7 @@ describe('runLinkOverviewsJob', () => {
     vi.clearAllMocks()
     forgetOverviewStep()
     gates.overview = 'closed'
-    gates.pass = 'closed'
+    gates.stands = 'closed'
     mockJobRun.findUnique.mockResolvedValue({ enabled: true })
     mocks.nearestPublished.mockResolvedValue([])
     mocks.applyLink.mockImplementation(async (result: { outcome: string }) => ({ kind: 'written', outcome: result.outcome }))
@@ -97,23 +97,42 @@ describe('runLinkOverviewsJob', () => {
     mocks.recenterCases.mockResolvedValue([])
   })
 
-  it('does nothing while its gate is closed, or research passes’ gate is, or its job is disabled', async () => {
+  it('does nothing while its gate is closed or its job is disabled, and runs with research passes’ gate closed', async () => {
     await runLinkOverviewsJob()
     expect(mocks.reportRunResult).toHaveBeenLastCalledWith(expect.stringMatching(/^Overviews are switched off: closed; nothing linked$/))
     gates.overview = null
-    await runLinkOverviewsJob()
-    expect(mocks.reportRunResult).toHaveBeenLastCalledWith(expect.stringMatching(/until research passes are on.*nothing linked$/))
-    gates.pass = null
     mockJobRun.findUnique.mockResolvedValue({ enabled: false })
     await runLinkOverviewsJob()
     expect(mocks.reportRunResult).toHaveBeenLastCalledWith(expect.stringMatching(/link_overviews job is disabled.*nothing linked$/))
     expect(mocks.owedStories).not.toHaveBeenCalled()
     expect(mockJobRun.findUnique).toHaveBeenCalledWith({ where: { jobName: 'link_overviews' }, select: { enabled: true } })
+
+    // Research passes' gate is the real one, closed, and research_pass is never asked about: enabled, the step runs
+    forgetOverviewStep()
+    mockJobRun.findUnique.mockResolvedValue({ enabled: true })
+    mocks.owedStories.mockResolvedValue(owed)
+    mocks.linkStories.mockResolvedValue([])
+    await runLinkOverviewsJob()
+    expect(mocks.owedStories).toHaveBeenCalled()
+    expect(mockJobRun.findUnique).not.toHaveBeenCalledWith(expect.objectContaining({ where: { jobName: 'research_pass' } }))
+  })
+
+  it('writes no "Where this stands" while the stands gate is closed: the upkeep reads no stands case and writes none', async () => {
+    gates.overview = null
+    mocks.owedStories.mockResolvedValue(owed)
+    mocks.linkStories.mockResolvedValue([])
+    await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
+    expect(mocks.standsCases).not.toHaveBeenCalled()
+    expect(mocks.applyStands).not.toHaveBeenCalled()
+
+    // Open, the same run reads the cases due
+    gates.stands = null
+    await runLinkOverviewsJob(new Date('2026-06-10T02:00:00Z'))
+    expect(mocks.standsCases).toHaveBeenCalledWith(expect.anything(), '2026-06-10')
   })
 
   it('links the backlog slice first, then the night, and records the tally and the summary', async () => {
     gates.overview = null
-    gates.pass = null
     const [b1, b2, n1, partner] = [story('b1', 1), story('b2', 2), story('n1', 9), story('p', 1)]
     mocks.owedStories.mockResolvedValue({ ...owed, backlog: ['b1', 'b2'], night: ['n1'], backlogTotal: 2 })
     mocks.linkStories.mockImplementation(async (_db: unknown, ids: string[]) => [b1, b2, n1, partner].filter(s => ids.includes(s.id)))
@@ -154,7 +173,6 @@ describe('runLinkOverviewsJob', () => {
 
   it('links the retries due after the backlog, and tells the owner of one given up on its last try', async () => {
     gates.overview = null
-    gates.pass = null
     const [b1, r1, r2, partner] = [story('b1', 1), story('r1', 2), story('r2', 3), story('p', 1)]
     mocks.owedStories.mockResolvedValue({ ...owed, backlog: ['b1'], retries: ['r1', 'r2'], lastTries: ['r1', 'r2'], frozenWaiting: 2, backlogTotal: 1 })
     mocks.linkStories.mockImplementation(async (_db: unknown, ids: string[]) => [b1, r1, r2, partner].filter(s => ids.includes(s.id)))
@@ -179,7 +197,6 @@ describe('runLinkOverviewsJob', () => {
 
   it('gives up no last try whose write threw: nothing was stored, so it is owed again, and the owner hears of it as not written', async () => {
     gates.overview = null
-    gates.pass = null
     const retries = [2, 3, 4, 5, 6].map(day => story(`r${day}`, day))
     mocks.owedStories.mockResolvedValue({ ...owed, retries: retries.map(s => s.id), lastTries: ['r2'] })
     mocks.linkStories.mockImplementation(async (_db: unknown, ids: string[]) => retries.filter(s => ids.includes(s.id)))
@@ -200,7 +217,6 @@ describe('runLinkOverviewsJob', () => {
 
   it('runs the upkeep when nothing is owed, its status moves in development time and its stands checks in the tally', async () => {
     gates.overview = null
-    gates.pass = null
     mocks.owedStories.mockResolvedValue(owed)
     mocks.linkStories.mockResolvedValue([])
     const quiet: OverviewState = {
@@ -233,7 +249,6 @@ describe('runLinkOverviewsJob', () => {
 
   it('tells the owner of each overview a burst froze, and of upkeep items failing past the share', async () => {
     gates.overview = null
-    gates.pass = null
     mocks.owedStories.mockResolvedValue(owed)
     mocks.linkStories.mockResolvedValue([])
     const base = {

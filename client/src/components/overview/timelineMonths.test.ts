@@ -6,6 +6,7 @@ const entry = (slug: string, date: string, role: PublicOverviewEntry['role'] = '
   slug,
   title: `Headline ${slug}`,
   titleLabel: null,
+  summary: null,
   datePublished: `${date}T08:00:00.000Z`,
   role,
   roleKind: role === 'turning_point' ? 'setback' : null,

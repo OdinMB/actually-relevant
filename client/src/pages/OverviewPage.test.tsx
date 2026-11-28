@@ -27,6 +27,7 @@ const entry = (slug: string, date: string, overrides: Partial<PublicOverviewEntr
   slug,
   title: `Headline ${slug}`,
   titleLabel: 'Ebola',
+  summary: null,
   datePublished: `${date}T08:00:00.000Z`,
   role: 'routine',
   roleKind: null,
@@ -83,8 +84,8 @@ const OVERVIEW: PublicOverview = {
     },
   ],
   entries: [
-    entry('e', '2026-11-10', { updates: [{ date: '2026-11-12', note: 'A newer count.' }] }),
-    entry('d', '2026-11-03', { role: 'turning_point', roleKind: 'response' }),
+    entry('e', '2026-11-10', { summary: 'Cases fell for a third week.', updates: [{ date: '2026-11-12', note: 'A newer count.' }] }),
+    entry('d', '2026-11-03', { role: 'turning_point', roleKind: 'response', summary: 'Teams began vaccinating the contacts of every case.' }),
     entry('c', '2026-10-20'),
     entry('b', '2026-10-12'),
     entry('a', '2026-10-02'),
@@ -121,8 +122,8 @@ describe('OverviewPage', () => {
     expect(screen.getByRole('link', { name: 'Human Development' })).toHaveAttribute('href', '/issues/human-development')
     expect(screen.getByText('5 stories · last change Nov 12, 2026')).toBeInTheDocument()
     // The owner's label, its "AI" badge between "by" and the comma, announced as the word
-    const label = screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent?.startsWith('Summary and timeline by') === true)
-    expect(announcedText(label)).toBe('Summary and timeline by AI, from our stories and their sources.')
+    const label = screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent?.startsWith('Timeline by') === true)
+    expect(announcedText(label)).toBe('Timeline by AI, from our stories.')
     // To the methodology's section on ongoing stories, which shows whenever this page can (both only while the module is on)
     expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/methodology#ongoing-stories')
   })
@@ -188,6 +189,20 @@ describe('OverviewPage', () => {
     expect(within(timeline).getByRole('link', { name: /Headline a/ })).toBeInTheDocument()
   })
 
+  it("gives each row its month shows the story's summary as plain text, and keeps the folded routine rows to their headlines", async () => {
+    const user = userEvent.setup()
+    const withSummary = (e: PublicOverviewEntry): PublicOverviewEntry => ({ ...e, summary: `Summary of **${e.slug}**.` })
+    mockApi.overviews.get.mockResolvedValue({ ...OVERVIEW, entries: OVERVIEW.entries.map(withSummary) })
+    renderPage()
+    const timeline = (await screen.findByRole('heading', { level: 2, name: 'Timeline' })).closest('section')!
+    // November shows both its stories (a fold of one story shows), October its newest; the Markdown reads as text
+    for (const slug of ['e', 'd', 'c']) expect(within(timeline).getByText(`Summary of ${slug}.`)).toBeInTheDocument()
+    await user.click(within(timeline).getByRole('button', { name: '+ 2 stories' }))
+    expect(within(timeline).getByRole('link', { name: /Headline b/ })).toBeInTheDocument()
+    expect(within(timeline).queryByText('Summary of b.')).toBeNull()
+    expect(within(timeline).queryByText('Summary of a.')).toBeNull()
+  })
+
   it('shows two Updates of one story on the same day as two lines, each with its own key', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
     const updates = [
@@ -233,9 +248,7 @@ describe('OverviewPage', () => {
   it("sets the head tags the server's link preview writes, with the ongoing-story image and its JSON-LD", async () => {
     renderPage()
     await waitFor(() =>
-      expect(metaContent('meta[name="description"]')).toBe(
-        '5 stories since October 2026, followed as one ongoing story. Summary and timeline by AI, from our stories and their sources.',
-      ),
+      expect(metaContent('meta[name="description"]')).toBe('5 stories since October 2026, followed as one ongoing story. Timeline by AI, from our stories.'),
     )
     expect(document.title).toBe('Ebola in Ituri: ongoing story - Actually Relevant')
     expect(document.head.querySelector('link[rel="canonical"]')).toHaveAttribute('href', 'https://actuallyrelevant.news/ongoing/ebola-in-ituri')

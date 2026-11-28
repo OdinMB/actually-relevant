@@ -1,12 +1,15 @@
 /**
  * What readers get of ongoing-story overviews (`.context/overviews.md`, "Public"), SELECT only. An
- * overview is public while the step is switched on (`overviewStepOn`: both gates open, the job
+ * overview is public while the step is switched on (`overviewStepOn`: its gate open, the job
  * enabled), its scope is `ongoing`, it is not hidden, and a published story is among its active
- * entries; nothing is read while either gate is closed. Here: the `overview` field every public story
- * carries (`withOverview`, one query for a list), the overview page (its header, "Where this stands"
- * and "What's being done" as served now with their citations, the timeline with each story's
- * Updates; kept in memory for its route, `servedOverview`), the `/ongoing` index (`servedOverviewList`),
- * and the lists the sitemap and link previews read. What counts as public is `overviewPublicRule.ts`'s.
+ * entries; nothing is read while the gate is closed. Here: the `overview` field every public story
+ * carries (`withOverview`, one query for a list), the overview page (its header, the timeline with
+ * each story's summary and Updates, and, only while the stands gate is open, "Where this stands" and
+ * "What's being done" as served now with their citations; kept in memory for its route,
+ * `servedOverview`), the `/ongoing` index (`servedOverviewList`), and the lists the sitemap and link
+ * previews read. What counts as public is `overviewPublicRule.ts`'s. While the stands gate is closed
+ * (`overviewStandsGate.ts`) no stands row is read: no line, source, marker field or last change of
+ * theirs reaches a reader.
  */
 import type { Prisma } from '@prisma/client'
 import { config } from '../config.js'
@@ -19,6 +22,7 @@ import { SOURCE_KINDS } from '../schemas/research.js'
 import { PUBLIC_OVERVIEW as PUBLIC, SHOWN_ENTRY } from './overviewPublicRule.js'
 import { overviewStepOn } from './overviewQueue.js'
 import { servedStands, type ServedFact } from './overviewStands.js'
+import { OVERVIEW_STANDS_GATE } from './overviewStandsGate.js'
 import type { OverviewStatus, StandsLine } from './overviewTypes.js'
 import { loadMemberFacts, publicVersionsOf } from './passRecords.js'
 import { publicUpdates } from './publicUpdates.js'
@@ -83,7 +87,7 @@ export interface PublicOverviewHead {
   since: Date
   /** The newest story's publication date. */
   lastEntryAt: Date | null
-  /** The newest of its last story, its current "Where this stands" and an editor's Close (`lastChangeOf`). */
+  /** The newest of its last story, its current "Where this stands" (while the stands are served) and an editor's Close (`lastChangeOf`). */
   lastChange: Date
   /** Its stories readers see. */
   stories: number
@@ -114,12 +118,17 @@ function head(o: HeadRow, stories: number, standsAt: Date | null): PublicOvervie
   }
 }
 
-/** Shown stories per overview, and when each one's current stands was written. */
+/** Whether readers get the stands at all: only while their gate is open. */
+const standsServed = () => OVERVIEW_STANDS_GATE === null
+
+/** Shown stories per overview, and when each one's current stands was written (none read while the stands are not served). */
 async function countsAndStands(ids: string[]) {
   if (ids.length === 0) return { counts: new Map<string, number>(), standsAt: new Map<string, Date>() }
   const [groups, stands] = await Promise.all([
     prisma.overviewEntry.groupBy({ by: ['overviewId'], where: { overviewId: { in: ids }, ...SHOWN_ENTRY }, _count: { _all: true } }),
-    prisma.overviewStands.findMany({ where: { overviewId: { in: ids }, status: 'current' }, select: { overviewId: true, writtenAt: true } }),
+    standsServed()
+      ? prisma.overviewStands.findMany({ where: { overviewId: { in: ids }, status: 'current' }, select: { overviewId: true, writtenAt: true } })
+      : [],
   ])
   return { counts: new Map(groups.map(g => [g.overviewId, g._count._all])), standsAt: new Map(stands.map(s => [s.overviewId, s.writtenAt])) }
 }
@@ -178,6 +187,8 @@ export interface PublicOverviewEntry {
   /** Its AI headline (the source's headline before it was analyzed). */
   title: string
   titleLabel: string | null
+  /** Its published AI summary, as its own page shows it (Markdown); null for a story without one. */
+  summary: string | null
   datePublished: Date
   role: 'turning_point' | 'routine'
   /** A turning point's kind (`setback`, `response`, `spread` …); null for a routine entry. */
@@ -189,7 +200,7 @@ export interface PublicOverviewEntry {
 export interface PublicOverview extends PublicOverviewHead {
   /** What a reader's "Report an error" names (`overviewId`, as a story's report names the story's id). */
   id: string
-  /** "Where this stands" and "What's being done" as served now; null when none is written or none of it stands. */
+  /** "Where this stands" and "What's being done" as served now; null while their gate is closed, when none is written or none of it stands. */
   stands: { asOf: string; writtenAt: Date; sentences: CitedText[]; doing: CitedText[] } | null
   /** The sources the stands cite, in first-cited order (`S1` …). */
   sources: OverviewSource[]
@@ -258,9 +269,11 @@ function sourceBook(members: ReadonlyMap<string, StoryOverviewLink>) {
 /**
  * The current stands as served now, its lines cited as a researched story's are, and the sources they
  * cite; and when the current version was written (`writtenAt`), served or not, which the page's
- * `lastChange` counts as the index's does (`countsAndStands`).
+ * `lastChange` counts as the index's does (`countsAndStands`). Nothing at all while the stands gate is
+ * closed: no row is read.
  */
 async function standsForReaders(overviewId: string, members: ReadonlyMap<string, StoryOverviewLink>, today: string) {
+  if (!standsServed()) return { stands: null, sources: [], model: null, writtenAt: null }
   const row = await prisma.overviewStands.findFirst({
     where: { overviewId, status: 'current' },
     select: { sentences: true, doing: true, asOf: true, writtenAt: true, model: true },
@@ -315,7 +328,7 @@ export async function publicOverview(slug: string, now = new Date()): Promise<Pu
     select: {
       role: true,
       roleKind: true,
-      story: { select: { id: true, slug: true, title: true, sourceTitle: true, titleLabel: true, datePublished: true } },
+      story: { select: { id: true, slug: true, title: true, sourceTitle: true, titleLabel: true, summary: true, datePublished: true } },
     },
   })
   const shown = entries.flatMap(e =>
@@ -339,6 +352,7 @@ export async function publicOverview(slug: string, now = new Date()): Promise<Pu
       slug: e.story.slug,
       title: e.story.title ?? e.story.sourceTitle,
       titleLabel: e.story.titleLabel,
+      summary: e.story.summary,
       datePublished: e.story.datePublished,
       role: e.role,
       roleKind: e.role === 'turning_point' ? e.roleKind : null,

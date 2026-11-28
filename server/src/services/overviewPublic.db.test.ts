@@ -4,16 +4,17 @@ import { createFeed, createIssue, createStory, describeDb, setEmbedding, useTest
 import type { PassWrite } from './passWrites.js'
 import type { Pool, PoolFact, PoolSource } from './researchPool.js'
 
-// Both gates open or closed together: the module is on only while both are open and its job enabled
-const gate = vi.hoisted(() => ({ closed: 'closed for the test' as string | null }))
+// The module is on while its gate is open and its job enabled; research passes' gate is the real one, closed (overviews do not wait for it).
+// The stands have a gate of their own, closed unless a test opens it.
+const gate = vi.hoisted(() => ({ closed: 'closed for the test' as string | null, stands: 'closed for the test' as string | null }))
 vi.mock('./overviewGate.js', () => ({
   get OVERVIEW_EVAL_GATE() {
     return gate.closed
   },
 }))
-vi.mock('./researchPassGate.js', () => ({
-  get PASS_EVAL_GATE() {
-    return gate.closed
+vi.mock('./overviewStandsGate.js', () => ({
+  get OVERVIEW_STANDS_GATE() {
+    return gate.stands
   },
 }))
 vi.mock('./embedding.js', () => ({
@@ -46,8 +47,9 @@ const { storePassResult } = await import('./researchPassLifecycle.js')
 const DAY = 86_400_000
 const charter = { in: 'The Ebola outbreak in Ituri.', out: ['Ebola in Uganda'], endEvent: 'The ministry declares it over' }
 
-async function switchOn(on: boolean) {
+async function switchOn(on: boolean, stands = false) {
   gate.closed = on ? null : 'closed for the test'
+  gate.stands = stands ? null : 'closed for the test'
   // Written past `updateJob`, so the step's flag kept in memory is forgotten here
   forgetOverviewStep()
   await prisma.jobRun.upsert({
@@ -69,6 +71,7 @@ async function stories(n: number, issueSlug?: string) {
         status: 'published',
         slug: `story-${++seq}`,
         title: `Story ${seq}`,
+        summary: `What story ${seq} reports.`,
         emotionTag: 'calm',
         datePublished: new Date(Date.now() - (n - i) * DAY),
       }),
@@ -218,8 +221,8 @@ describeDb('public overviews (PostgreSQL)', () => {
     expect((await getRelatedStories(d!.slug!)).find(s => s.id === a!.id)?.overview).toEqual(link)
   })
 
-  it('serves the page: header, timeline newest first with roles and Updates, and the stands as served now with their sources', async () => {
-    await switchOn(true)
+  it('serves the page: header, timeline newest first with summaries, roles and Updates, and the stands as served now with their sources', async () => {
+    await switchOn(true, true)
     const [a, b, c] = await stories(3)
     const o = await overview([a!.id, b!.id, c!.id])
     const facts = await pool(c!.id)
@@ -252,6 +255,7 @@ describeDb('public overviews (PostgreSQL)', () => {
     const page = await publicOverview(o.slug!)
     expect(page).toMatchObject({ id: o.id, slug: o.slug, title: 'Ebola in Ituri', status: 'open', stories: 3, closedReason: null })
     expect(page!.entries.map(e => e.slug)).toEqual([c!.slug, b!.slug, a!.slug])
+    expect(page!.entries.map(e => e.summary)).toEqual([c!.summary, b!.summary, a!.summary])
     expect(page!.entries[2]).toMatchObject({ role: 'turning_point', roleKind: 'response' })
     expect(page!.entries[0]!.updates).toEqual([{ date: expect.any(String), note: 'Officials revised the count.' }])
     expect(page!.stands!.sentences).toEqual([
@@ -279,6 +283,42 @@ describeDb('public overviews (PostgreSQL)', () => {
     // Its current stands still counts toward the last change, served or not, on the page as in the list
     const listed = (await publicOverviewList()).overviews.find(x => x.slug === o.slug)
     expect(after!.lastChange).toEqual(listed!.lastChange)
+  })
+
+  it('serves no stands while their gate is closed: no lines, no sources, no stands marker, and their writing no change on the page, the list or the preview', async () => {
+    await switchOn(true)
+    const [a, b, c] = await stories(3)
+    const o = await overview([a!.id, b!.id, c!.id])
+    const facts = await pool(c!.id)
+    // A current version written after the last story, which would be served and would be the last change
+    await prisma.overviewStands.create({
+      data: {
+        overviewId: o.id,
+        number: 1,
+        sentences: [{ text: 'Deaths reached 212.', facts: [facts.get('S1F1')] }],
+        doing: [{ text: 'Vaccination goes on.', facts: [facts.get('S2F1')] }],
+        asOf: new Date(),
+        writtenAt: new Date(),
+        model: 'gpt-6-luna',
+        promptVersion: 'v',
+      },
+    })
+    const lastStory = o.lastEntryAt!
+
+    const page = await publicOverview(o.slug!)
+    expect(page).toMatchObject({ stands: null, sources: [], lastChange: lastStory })
+    expect(page!.aiGenerated).toMatchObject({ fields: ['title', 'entries'], models: ['gpt-6.1-sol'] })
+    expect((await publicOverviewHead(o.slug!))!.lastChange).toEqual(lastStory)
+    expect((await publicOverviewList()).overviews.find(x => x.slug === o.slug)!.lastChange).toEqual(lastStory)
+
+    // The same rows with the gate open: served, marked and counted
+    gate.stands = null
+    const open = await publicOverview(o.slug!)
+    expect(open!.stands!.sentences.map(s => s.text)).toEqual(['Deaths reached 212.'])
+    expect(open!.aiGenerated.fields).toEqual(['title', 'stands', 'entries'])
+    expect(open!.lastChange.getTime()).toBeGreaterThan(lastStory.getTime())
+    expect((await publicOverviewHead(o.slug!))!.lastChange).toEqual(open!.lastChange)
+    expect((await publicOverviewList()).overviews.find(x => x.slug === o.slug)!.lastChange).toEqual(open!.lastChange)
   })
 
   it('answers no page for an overview that is not public, and lists the public ones most recently changed first', async () => {

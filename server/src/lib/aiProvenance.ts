@@ -110,8 +110,9 @@ export function contextAiMarker(hasBoxes: boolean, model: string): AiGeneratedCo
 /**
  * Fields of an ongoing-story overview (`GET /api/overviews/:slug`, services/overviewPublic.ts) with
  * AI-generated content: its title (written when it was founded, a review or an editor may change it),
- * `stands` ("Where this stands" and "What's being done", written from its stories' checked facts) and
- * `entries`, its timeline: our stories' AI headlines and labels, the roles an AI model gave them, and
+ * `stands` ("Where this stands" and "What's being done", written from its stories' checked facts;
+ * served only while the stands gate is open, `services/overviewStandsGate.ts`) and `entries`, its
+ * timeline: our stories' AI headlines, labels and summaries, the roles an AI model gave them, and
  * their Updates' notes.
  */
 export const AI_GENERATED_OVERVIEW_FIELDS = ['title', 'stands', 'entries'] as const

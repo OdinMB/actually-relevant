@@ -35,7 +35,7 @@ export const JOB_HANDLERS: Record<string, () => Promise<void>> = {
   build_story_context: () => runBuildStoryContext('all'),
   // Seeded disabled, its enabling refused until its evals meet their bars (services/researchPassGate.ts)
   research_pass: runResearchPassJob,
-  // Seeded disabled, its enabling refused until its evals meet their bars and research passes are on (services/overviewGate.ts)
+  // Seeded disabled; its enabling is refused only while its eval gate is closed (services/overviewGate.ts)
   link_overviews: () => runLinkOverviewsJob(),
   social_auto_post: runSocialAutoPost,
   bluesky_update_metrics: runBlueskyUpdateMetrics,

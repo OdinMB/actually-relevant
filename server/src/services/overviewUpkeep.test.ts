@@ -179,6 +179,7 @@ function fakes(over: Partial<UpkeepDeps> = {}): UpkeepDeps & { writes: string[] 
     states: async () => [],
     reviewCase: async id => reviewCase(id),
     auditPicks: async () => [],
+    standsOn: true,
     standsCases: async () => [],
     review: { review: async () => call(keepAll, 0.1) },
     stands: { write: async () => call(stands), check: async items => call(supported(items.length)) },
@@ -284,6 +285,22 @@ describe('the upkeep after linking', () => {
     const failing = fakes({ standsCases: async () => [standsCase()], stands: { write: async () => call(null), check: async () => call(null) } })
     await runUpkeep(failing, AT)
     expect(failing.writes).toEqual(['stands:o1:failed:none'])
+  })
+
+  it('runs no stands part while the stands are switched off: no case is read, and nothing is written or counted', async () => {
+    let read = false
+    const deps = fakes({
+      standsOn: false,
+      states: async () => [state('o1', { lastEntryAt: new Date('2026-10-01T00:00:00Z') })],
+      standsCases: async () => {
+        read = true
+        return [standsCase()]
+      },
+    })
+    const tally = await runUpkeep(deps, AT)
+    expect(read).toBe(false)
+    expect(deps.writes).toEqual(['status:o1:quiet'])
+    expect(tally).toMatchObject({ items: 1, standsRefreshes: 0, standsChecked: 0, stopped: false })
   })
 
   it('starts no stands item for a case whose inputs are unchanged, and counts the items it starts', async () => {

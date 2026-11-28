@@ -3,7 +3,7 @@ import 'express-async-errors'
 import express from 'express'
 import request from 'supertest'
 
-// Any database read fails the test: while either gate is closed, nothing is read
+// Any database read fails the test: while the gate is closed, nothing is read
 const mockPrisma = vi.hoisted(
   () =>
     new Proxy(
@@ -17,16 +17,11 @@ const mockPrisma = vi.hoisted(
 )
 vi.mock('../../lib/prisma.js', () => ({ default: mockPrisma }))
 
-// Both gates held here, so these tests keep their meaning once either constant is opened
-const gates = vi.hoisted(() => ({ overview: 'Closed until the eval passes' as string | null, pass: 'Closed until the eval passes' as string | null }))
+// The gate held here, so these tests keep their meaning whatever the constant says; research passes' gate is the real one, closed
+const gates = vi.hoisted(() => ({ overview: 'Closed until the eval passes' as string | null }))
 vi.mock('../../services/overviewGate.js', () => ({
   get OVERVIEW_EVAL_GATE() {
     return gates.overview
-  },
-}))
-vi.mock('../../services/researchPassGate.js', () => ({
-  get PASS_EVAL_GATE() {
-    return gates.pass
   },
 }))
 
@@ -38,7 +33,6 @@ const app = express().use('/api/overviews', overviewsRouter).use(errorHandler)
 
 beforeEach(() => {
   gates.overview = 'Closed until the eval passes'
-  gates.pass = 'Closed until the eval passes'
   // The list is kept in memory: each test asks afresh
   clearPublicCaches()
 })
@@ -64,16 +58,8 @@ describe('GET /api/overviews while overviews are switched off', () => {
     for (const bad of ['-1', 'two', '1.5']) expect((await request(app).get(`/api/overviews?limit=${bad}`)).status, bad).toBe(400)
   })
 
-  it('reads nothing while only the research passes gate is closed', async () => {
+  it('reads the job row once its gate is open, with research passes’ gate closed', async () => {
     gates.overview = null
-    const [list, page] = await Promise.all([request(app).get('/api/overviews'), request(app).get('/api/overviews/ebola-in-ituri')])
-    expect(list.body).toEqual({ on: false, overviews: [] })
-    expect(page.status).toBe(404)
-  })
-
-  it('reads the job row once both gates are open', async () => {
-    gates.overview = null
-    gates.pass = null
     // The proxy throws on the first read, so the route answers 500: the read was tried
     expect((await request(app).get('/api/overviews')).status).toBe(500)
   })

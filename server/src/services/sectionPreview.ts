@@ -26,7 +26,7 @@ const SECTION_LABELS = {
   newsletter: { text: 'Newsletter' },
   'newsletter-issue': { text: 'Newsletter', badge: PREVIEW_IMAGE_AI_BADGE },
   podcast: { text: 'Podcast', badge: PREVIEW_IMAGE_AI_BADGE },
-  // An ongoing story's summary and timeline are AI-written (`OVERVIEW_AI_LABEL`)
+  // An ongoing story's title and timeline are AI-written (`OVERVIEW_AI_LABEL`)
   ongoing: { text: 'Ongoing story', badge: PREVIEW_IMAGE_AI_BADGE },
 } as const satisfies Record<string, SectionLabel>
 

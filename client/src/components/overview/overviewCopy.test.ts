@@ -35,11 +35,11 @@ describe('roleLine', () => {
 
 describe('overviewHead', () => {
   it("writes the server's link-preview title and description, the owner's AI label last", () => {
-    // The label's owner-approved wording, as server/src/lib/aiLabelCopy.ts holds it (OVERVIEW_AI_LABEL)
-    expect(OVERVIEW_LABEL_TEXT).toBe('Summary and timeline by AI, from our stories and their sources.')
+    // The label's wording, as server/src/lib/aiLabelCopy.ts holds it (OVERVIEW_AI_LABEL)
+    expect(OVERVIEW_LABEL_TEXT).toBe('Timeline by AI, from our stories.')
     expect(overviewHead({ title: 'Ebola in Ituri', stories: 3, since: '2026-10-01T08:00:00.000Z' })).toEqual({
       title: 'Ebola in Ituri: ongoing story - Actually Relevant',
-      description: '3 stories since October 2026, followed as one ongoing story. Summary and timeline by AI, from our stories and their sources.',
+      description: '3 stories since October 2026, followed as one ongoing story. Timeline by AI, from our stories.',
     })
   })
 })

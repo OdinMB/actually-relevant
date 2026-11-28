@@ -12,7 +12,7 @@ vi.mock('../services/podcastEdition.js', async importOriginal => {
   return { ...actual, upliftingShowProblem: vi.fn(actual.upliftingShowProblem) }
 })
 
-// Overviews' gate held closed here, so the switch-on change is that constant alone (.context/overviews.md, "Switching on")
+// Overviews' gate held closed here, so the tests below hold whatever the constant says
 vi.mock('../services/overviewGate.js', () => ({ OVERVIEW_EVAL_GATE: 'their evals are pending' }))
 
 const { jobEnableConflict, jobEnableRefusal, SWITCHED_OFF_BY } = await import('./jobEnableChecks.js')
@@ -142,20 +142,19 @@ describe('jobEnableRefusal', () => {
     expect(SWITCHED_OFF_BY.research_pass).toEqual(['research_stories', 'build_story_context'])
   })
 
-  it('refuses overview linking while its own eval gate is closed, then while research passes’ gate is', () => {
+  it('refuses overview linking only while its own eval gate is closed, whatever research passes’ gate says', () => {
     expect(jobEnableRefusal('link_overviews')).toBe('Overviews are switched off: their evals are pending')
-    expect(overviewSwitchRefusal(null, 'closed')).toMatch(/until research passes are on/)
-    expect(overviewSwitchRefusal(null, null)).toBeNull()
+    // Research passes' gate is the real one here, closed: overviews no longer wait for it (the owner, 2026-11-28)
+    expect(passSwitchRefusal()).not.toBeNull()
+    expect(overviewSwitchRefusal(null)).toBeNull()
   })
 
-  it('refuses overview linking while the research pass is disabled, and allows it once it is enabled', async () => {
-    mockJobRun.findUnique.mockResolvedValue({ enabled: false })
-    expect(await jobEnableConflict('link_overviews')).toMatch(/enable research_pass first/)
-    mockJobRun.findUnique.mockResolvedValue(null)
-    expect(await jobEnableConflict('link_overviews')).toMatch(/enable research_pass first/)
-    mockJobRun.findUnique.mockResolvedValue({ enabled: true })
-    expect(await jobEnableConflict('link_overviews')).toBeNull()
-    expect(mockJobRun.findUnique).toHaveBeenLastCalledWith({ where: { jobName: 'research_pass' }, select: { enabled: true } })
+  it('lets overview linking be enabled whether the research pass is enabled or not, without asking', async () => {
+    for (const row of [{ enabled: false }, null, { enabled: true }]) {
+      mockJobRun.findUnique.mockResolvedValue(row)
+      expect(await jobEnableConflict('link_overviews')).toBeNull()
+    }
+    expect(mockJobRun.findUnique).not.toHaveBeenCalled()
   })
 
   it('lets an unexpected error through rather than reading it as a missing setting', () => {

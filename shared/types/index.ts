@@ -318,7 +318,7 @@ export interface PublicOverviewHead {
   /** The founding story's publication date. */
   since: string
   lastEntryAt: string | null
-  /** The newest of its last story, its current "Where this stands" and an editor's Close (never a fade's day). */
+  /** The newest of its last story, its current "Where this stands" (only while that is served) and an editor's Close (never a fade's day). */
   lastChange: string
   /** Its stories readers see. */
   stories: number
@@ -340,6 +340,8 @@ export interface PublicOverviewEntry {
   slug: string
   title: string
   titleLabel: string | null
+  /** Its published AI summary (Markdown, as its own page shows it); null for a story without one. */
+  summary: string | null
   datePublished: string
   role: 'turning_point' | 'routine'
   /** A turning point's kind (`setback`, `response`, `spread` …); null for a routine story. */
@@ -352,7 +354,7 @@ export interface PublicOverviewEntry {
 export interface PublicOverview extends PublicOverviewHead {
   /** What a reader's report names (`overviewId`). */
   id: string
-  /** Null when none is written or none of it stands today. */
+  /** Null while the stands are switched off (their own gate), when none is written or none of it stands today. */
   stands: { asOf: string; writtenAt: string; sentences: ResearchedCitedText[]; doing: ResearchedCitedText[] } | null
   /** Ids `S1`… in first-cited order. */
   sources: PublicOverviewSource[]

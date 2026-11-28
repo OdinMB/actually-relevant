@@ -16,7 +16,8 @@ import { countLine, statusLine } from '../components/overview/overviewCopy'
 const BACK_LINK = `text-brand-700 hover:text-brand-800 font-normal ${FOCUS_RING} rounded px-1`
 
 const TITLE = `Ongoing stories - ${SEO.siteName}`
-const DESCRIPTION = 'The developments we follow as one story: each with a timeline of our stories and where things stand now.'
+// "…and where things stand now" waits for the stands to switch on (.context/overviews.md, "Where this stands")
+const DESCRIPTION = 'The developments we follow as one story: each with a timeline of our stories.'
 const URL = `${SEO.siteUrl}/ongoing`
 
 function IndexHead() {

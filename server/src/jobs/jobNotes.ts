@@ -9,6 +9,7 @@ import { config } from '../config.js'
 import type { RunUsage } from '../lib/runUsage.js'
 import { CARD_EVAL_GATE } from '../services/cardGate.js'
 import { OVERVIEW_EVAL_GATE } from '../services/overviewGate.js'
+import { OVERVIEW_STANDS_GATE } from '../services/overviewStandsGate.js'
 import { PASS_EVAL_GATE } from '../services/researchPassGate.js'
 import { researchSwitchOff } from '../services/researchSwitch.js'
 import { failureShareExceeded, failureShareLine } from './failureShare.js'
@@ -71,21 +72,24 @@ function researchPassNote(): string {
 function linkOverviewsNote(): string {
   const { perRun, backfillPerRun, backfillDays, concurrency, failedStoriesMin } = config.overviews
   const { share, minItems } = config.jobs.failureShare
-  const switchOn =
-    OVERVIEW_EVAL_GATE || PASS_EVAL_GATE
-      ? 'It cannot be enabled until its quality checks meet their bars and the owner switches it on, after Research Passes.'
-      : 'It can be enabled only while Research Passes is enabled.'
+  const upkeep = OVERVIEW_STANDS_GATE
+    ? 'Then it keeps each development up to date: it reviews them and marks them quiet or closed. ' +
+      'It does not write "Where this stands" yet: that waits until its own quality checks meet their bars and Research Passes has checked facts to write it from. '
+    : 'Then it keeps each development up to date: it reviews them, marks them quiet or closed, and writes "Where this stands" from their stories\' checked research. '
+  const switchOn = OVERVIEW_EVAL_GATE
+    ? 'Readers see nothing of it yet. "Run now" does nothing while the job is disabled. It cannot be enabled until its quality checks meet their bars and the owner switches it on.'
+    : 'Readers see a development once a review keeps at least three stories in it, and none while the job is disabled. "Run now" does nothing while the job is disabled.'
   return (
     'Files each newly published story under the ongoing development it reports on, or starts a new one when two stories report the same development: ' +
     'nearby stories propose a development, the AI confirms it, quoting both sides, and two separate AI calls must agree before a new one starts. ' +
     `It runs after Publish Stories, so it never holds the edition, and takes up to ${count(perRun, 'story', 'stories')} published in the last day, ${concurrency} at once, ` +
     `plus up to ${count(backfillPerRun, 'older story', 'older stories')} from the last ${count(backfillDays, 'day')} that were never linked, oldest first. ` +
     'A story is linked once; one it could not link because of a problem is tried again at the next run. If it fails, the rest of the daily edition is not affected. ' +
-    'Then it keeps each development up to date: it reviews them, marks them quiet or closed, and writes "Where this stands" from their stories\' checked research. ' +
+    upkeep +
     'Every overview, and each decision it made, is on the Overviews page, where an editor can correct one and undo any decision. ' +
     `When more than ${Math.round(share * 100)}% of at least ${minItems} checked items fail in a run, a warning shows here and a notice is recorded; ` +
     `so is a notice when more than ${Math.round(share * 100)}% of at least ${failedStoriesMin} stories fail. Nothing pauses. ` +
-    `Readers see nothing of it yet. "Run now" does nothing while the job is disabled. ${switchOn}`
+    switchOn
   )
 }
 

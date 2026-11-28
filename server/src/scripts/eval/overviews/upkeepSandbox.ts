@@ -105,6 +105,8 @@ export function sandboxUpkeep(
     states: async () => [...sandbox.overviews.values()].filter(o => activeEntries(o).length > 0).map(o => overviewStateOf(o, activeEntries(o), null, now())),
     reviewCase,
     auditPicks: async () => [],
+    // The evals measure the stands, so they write them whatever production's stands gate says
+    standsOn: true,
     standsCases: async today =>
       [...sandbox.overviews.values()].filter(o => o.scope === 'ongoing' && !o.hidden && o.slug !== null && !o.frozen).map(o => standsCase(o, today)),
     recenterCases,

@@ -5,12 +5,13 @@
  * `backfillPerRun`) first, then the stories due again in the room it leaves (a held story once its
  * overview's freeze lifts; a failed or conflicting one after 1, 3 and 7 days, then given up), then the
  * night's (at most `perRun`), each oldest first; link calls `concurrency` at a time, every write
- * one story at a time in that order (`linkInOrder`, `applyLink`). It runs only while its gate and
- * research passes' gate are open and its job is enabled, re-reading that before each write, so a run
- * by hand of the disabled job does nothing. A story is settled by its `link` decision, so a run a
- * restart cut off resumes where it stopped. Then the upkeep (`overviewUpkeep.ts`): the status machine
- * in development time (`upkeepClock`), the automated re-centers and the reviews due and the monthly
- * audit, the stands refreshes due. Stories and overviews that fail go on to the next run; a
+ * one story at a time in that order (`linkInOrder`, `applyLink`). It runs only while its gate is
+ * open and its job is enabled, re-reading that before each write, so a run by hand of the disabled
+ * job does nothing. A story is settled by its `link` decision, so a run a restart cut off resumes
+ * where it stopped. Then the upkeep (`overviewUpkeep.ts`): the status machine in development time
+ * (`upkeepClock`), the automated re-centers and the reviews due and the monthly audit, and the
+ * stands refreshes due only while the stands gate is open (`overviewStandsGate.ts`, closed: overviews
+ * ship as a timeline). Stories and overviews that fail go on to the next run; a
  * failure of the job as a whole never stops its chain (`GOES_ON_PAST_FAILURE`). The item tally (joins
  * proposed and stands lines written; the yeses code refused and the lines dropped) goes into the run's
  * usage (`recordItems`) for the failure-share notice.
@@ -28,6 +29,7 @@ import { applyAudit, applyBurst, applyLink, applyRecenter, applyReview, applySta
 import type { ApplyLink, LinkDeps } from '../services/overviewLink.js'
 import { runNight } from '../services/overviewNight.js'
 import { LINK_OVERVIEWS_JOB, overviewStepOn, overviewSwitchRefusal, owedStories } from '../services/overviewQueue.js'
+import { OVERVIEW_STANDS_GATE } from '../services/overviewStandsGate.js'
 import { overviewCalls, type OverviewCalls } from '../services/overviewSteps.js'
 import type { LinkOutcome } from '../services/overviewTypes.js'
 import { recenterCases } from '../services/overviewRecenterInput.js'
@@ -57,11 +59,15 @@ export const productionLinkDeps = (calls: OverviewCalls = productionCalls(), now
   ...calls.link,
 })
 
-/** The upkeep as production runs it: the tables, the lifecycle's writes, and the step's calls (the audit at high effort). */
+/**
+ * The upkeep as production runs it: the tables, the lifecycle's writes, and the step's calls (the
+ * audit at high effort); the stands only while their gate is open.
+ */
 export const productionUpkeepDeps = (now: Date, calls: OverviewCalls = productionCalls()): UpkeepDeps => ({
   states: () => overviewStates(prisma, now),
   reviewCase: id => reviewCase(prisma, id),
   auditPicks: at => auditPicks(prisma, at),
+  standsOn: OVERVIEW_STANDS_GATE === null,
   standsCases: today => standsCases(prisma, today),
   recenterCases: at => recenterCases(prisma, at),
   review: calls.review,

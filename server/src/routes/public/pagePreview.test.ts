@@ -16,7 +16,8 @@ vi.mock('../../middleware/rateLimit.js', () => ({
   searchLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
 }))
 
-// The real read (null while overviews are switched off, as the gates keep them), wrapped so a test can make one public
+// The real read (null while overviews are switched off, as the gate held closed here keeps them), wrapped so a test can make one public
+vi.mock('../../services/overviewGate.js', () => ({ OVERVIEW_EVAL_GATE: 'off in these tests' }))
 vi.mock('../../services/overviewPublic.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../../services/overviewPublic.js')>()
   return { ...actual, publicOverviewHead: vi.fn(actual.publicOverviewHead) }
@@ -378,7 +379,7 @@ describe('ongoing story pages', () => {
     vi.mocked(publicOverviewHead).mockResolvedValueOnce(HEAD)
     const html = (await request(app).get('/api/page/ongoing/ebola-in-ituri')).text
     const title = 'Ebola in Ituri: ongoing story - Actually Relevant'
-    const description = '41 stories since May 2026, followed as one ongoing story. Summary and timeline by AI, from our stories and their sources.'
+    const description = '41 stories since May 2026, followed as one ongoing story. Timeline by AI, from our stories.'
     expect(html).toContain(`<title>${title}</title>`)
     expect(html).toContain(meta('name', 'description', description))
     expect(html).toContain(`<link data-rh="true" rel="canonical" href="${config.siteUrl}/ongoing/ebola-in-ituri" />`)

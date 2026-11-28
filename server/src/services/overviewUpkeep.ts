@@ -2,9 +2,9 @@
  * The overview step's upkeep after linking (`.context/overviews.md`, "The job", parts 2 to 4), over
  * injected reads, calls and writes, the same in production and in the eval's sandbox: the status
  * machine with the unpublished-member rule and the burst check; the automated re-centers the link
- * signals fired, the reviews due and the monthly audit; and the stands refreshes due. Each overview is
- * its own item: one that fails is logged and the rest go on, and the step stops starting items once it
- * is switched off. Pure: nothing here reads or writes the database.
+ * signals fired, the reviews due and the monthly audit; and, while the stands are on, the stands
+ * refreshes due. Each overview is its own item: one that fails is logged and the rest go on, and the
+ * step stops starting items once it is switched off. Pure: nothing here reads or writes the database.
  */
 import { config } from '../config.js'
 import { auditOverview, reviewOverview, type AuditResult, type ReviewCase, type ReviewDeps, type ReviewOptions, type ReviewResult } from './overviewReview.js'
@@ -64,6 +64,12 @@ export interface UpkeepDeps {
   reviewCase(overviewId: string): Promise<ReviewCase | null>
   /** The public overviews the monthly audit takes now: none when one ran within `auditEveryDays`. */
   auditPicks(now: Date): Promise<string[]>
+  /**
+   * Whether part 4, the stands, runs at all: production's while the stands gate is open
+   * (`overviewStandsGate.ts`), the evals' always, since they measure the stands. Off, no case is read
+   * and nothing of the stands is written.
+   */
+  standsOn: boolean
   /** Public overviews that are not frozen, with what their stands are written from on `today`. */
   standsCases(today: string): Promise<StandsCase[]>
   /** The overviews an automated re-center is due on (`recenterCaseOf`), with their neighbors. */
@@ -255,9 +261,9 @@ const standsOne: PartWork<StandsCase> = async ({ deps, at, options, tally }, c) 
  * Runs parts 2 to 4 in order (`.context/overviews.md`, "The job"): the status machine (each
  * overview's moves, then the burst check that freezes it), then the automated re-centers
  * due, then the reviews due on the states as they stand after them (none for an overview re-centered
- * this run) and the monthly audit, then the stands refreshes whose signature changed. `keepGoing` is
- * asked before each item; once it says no, nothing else starts. An item fails once, whether its call
- * gave nothing, its write threw, or both.
+ * this run) and the monthly audit, then, while `standsOn`, the stands refreshes whose signature
+ * changed. `keepGoing` is asked before each item; once it says no, nothing else starts. An item fails
+ * once, whether its call gave nothing, its write threw, or both.
  */
 export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: () => Promise<boolean> | boolean = () => true): Promise<UpkeepTally> {
   const run: UpkeepRun = { deps, at, options: deps.options ?? config.overviews, tally: emptyTally(), recentered: new Set() }
@@ -292,7 +298,7 @@ export async function runUpkeep(deps: UpkeepDeps, at: UpkeepTimes, keepGoing: ()
   await each('review', due, d => d.id, reviewOne)
   if (tally.stopped) return tally
   await each('audit', await deps.auditPicks(at.now), id => id, auditOne)
-  if (tally.stopped) return tally
+  if (tally.stopped || !deps.standsOn) return tally
   await each(
     'stands',
     (await deps.standsCases(at.today)).filter(c => !c.unchanged),

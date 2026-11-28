@@ -512,7 +512,8 @@ export const config = {
   /**
    * Ongoing-story overviews, the `link_overviews` step after publishing (jobs/linkOverviews.ts;
    * .context/overviews.md). Code constants: the evals tune them (`eval:overviews --steps link`), and
-   * the step stays off until its gate opens (services/overviewGate.ts). Every window counts back from
+   * the step runs only while its gate is open and its job enabled (services/overviewGate.ts; the stands
+   * also wait for their own gate, services/overviewStandsGate.ts). Every window counts back from
    * the story's own publication date.
    */
   overviews: {

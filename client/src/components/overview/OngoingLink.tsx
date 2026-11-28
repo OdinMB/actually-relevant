@@ -35,9 +35,10 @@ export function OngoingChip({ overview, className = '' }: { overview: PublicOver
 
 /**
  * Under a story page's header, a callout card that is one link to the ongoing story: the eyebrow
- * "Part of an ongoing story", the AI title behind its badge, "See the timeline and where things
- * stand" and an arrow that nudges right on hover or keyboard focus (not with reduced motion). Its
- * name is its visible text, the eyebrow first (WCAG 2.5.3); the arrow is decorative. `accent`, the
+ * "Part of an ongoing story", the AI title behind its badge, "See the timeline" (until 2026-11-28 "…
+ * and where things stand", which waits for the stands to switch on) and an arrow that nudges right on
+ * hover or keyboard focus (not with reduced motion). Its name is its visible text, the eyebrow first
+ * (WCAG 2.5.3); the arrow is decorative. `accent`, the
  * story's issue color, draws the bar on its left edge. Hover darkens the border, not the fill: the
  * eyebrow's neutral-500 is 4.5:1 on the neutral-50 fill and would fall below it on neutral-100.
  */
@@ -56,7 +57,7 @@ export function OngoingCallout({ overview, accent, className = '' }: { overview:
         <span className="mt-1 block text-lg font-semibold leading-snug text-neutral-900 group-hover:text-brand-800">
           <AiBadge className="mr-1.5 align-middle" /> {overview.title}
         </span>{' '}
-        <span className="mt-1 block text-sm text-brand-700">See the timeline and where things stand</span>
+        <span className="mt-1 block text-sm text-brand-700">See the timeline</span>
       </span>
       <span
         aria-hidden="true"
