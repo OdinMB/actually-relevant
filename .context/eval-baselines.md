@@ -2,6 +2,33 @@
 
 The measured results a later change is compared against. One section per baseline, newest first; a section is replaced only by a newer run of the same command, and says which commit it was measured on. How the evals work, their flags and bars: `model-eval.md`. The reports and the caches that make reruns free are not in the repository: they live in `DOCS/` on the machine that ran them, so on another machine every run is paid in full.
 
+## Research facts' figure fields, 2026-11-28
+
+Run in a cloud session on branch `claude/project-thread-egeer5` against the 11-month stories-only eval copy exported 2026-11-27, under the task cap `gate-figures-2026-11-28` ($5): before at 9f7db6a8, now at commit 900ef161 (a research pass's extraction and story context's read a fact's structured fields from its support and statement alone, `FIELDS_FROM_FACT`, with the field descriptions to match; `.context/prompting.md`, "A field read from the whole page fills itself from the page"). Measured by the `context` step's fields judge, unchanged (`model-eval.md`, "`context`"), on the figure facts research's first pass gives the step. Tuned on the tune half's first 4 gap keys, then judged once on the 13 judged gap keys, one run before the change and one after. Commands: `eval:overviews -- --out ../DOCS/2026-11-28_figures-tune-<n> --steps context --half tune --limit 4 --budget 3 --cap gate-figures-2026-11-28` (5 rounds) and `eval:overviews -- --out ../DOCS/2026-11-28_figures-judge-<1|2> --steps context --half judge --budget 8 --cap gate-figures-2026-11-28` (`--budget 9` for 2), each judged folder seeded with the caches of `DOCS/2026-11-28_context-gate`, so the before run replays that gate's first run and the after run pays only the calls the changed prompts miss. The `context` gate's own fields row below (61.3% of 80) is a smaller sample labeled across its three runs; the before column here is this replay's.
+
+| Measure | Bar | Before (9f7db6a8) | Now (900ef161) | Verdict |
+|---|---|---|---|---|
+| Figure facts with every structured field right | ≥ 95% | 56.3% of 176 | 65.8% of 158 | missed |
+| Wrong place | report only | 28 | 20 | |
+| Wrong as-of | report only | 24 | 9 | |
+| Wrong credited | report only | 23 | 25 | |
+| Wrong counted | report only | 19 | 12 | |
+| Wrong value | report only | 7 | 4 | |
+| Wrong unit | report only | 3 | 2 | |
+| Invented numbers the fact check passed | none | 3 | 2 | missed |
+| Box items found unsupported | none | 5 | 11 | missed |
+| Wasted searches a story | ≤ 1 | 2.08 | 1.23 | missed |
+| Must needs not in the story met by kept cards | ≥ 60% | 0.0% | 0.0% | missed |
+| Notes `model` places that add to the text | ≥ 85% | 88.2% | 90.5% | met |
+| Cost a story, the whole first pass at flex | ≤ $0.20 | $0.045 | $0.040 | met |
+
+- **Verdict: the change helps and misses the bar.** The share rose 9.5 points, about 1.8 standard errors on one run each, less once facts are counted as clustered by source: suggestive, not established. As-of, place and counted fell; credited did not. Beside it, the fact check rejected 19.6% of the facts it checked against 21.1% before, and the figure check answered "not stated" for 16 of 184 figures against 44 of 238. The gap extraction kept 2.03 facts a page against 2.4 to 2.75 in the runs before, noise or a small loss, not established.
+- **Tune half** (4 gap keys, one run each, 39 to 52 figure facts): before 63.8% of 47; a first wording that also kept the scope from the page 44.4% (counted wrong 1 → 9), taken out; without it 54.3%; the final rules 79.5%; with the as-of example of a claim's date 67.3%, the version judged. Wordings a clause apart swing that far (`.context/prompting.md`, "Four tune stories decide nothing about the fields").
+- **Causes still open, production.** Credited (25): the source's own voice credited, an actor credited, a full name the sentence does not give, a credit the sentence gives left out; the rule and the description already forbid all four, so the next lever is a record check that lets code blank a field (BACKLOG, research facts (3)), not more wording. Place (20): a company or platform given as a place, countries the sentence names left out. Counted (12): a scope the sentence gives left out. As-of (9): a weekday or "today" still missed, where `AS_OF_RULE`'s "never the date its source was published" may pull against "today" being that date. Invented numbers (2): counts in gap facts the fact check passed. A statement that carries a credit or place its support lacks turns an empty, correct field into a judged omission.
+- **Box items 5 → 11:** most leave out an attribution or a scope the evidence gives (the TFFF's $7.8 billion as investment in general, U.S. officials' comparison without "according to Zelensky"), one adds a place the evidence calls "the region"; one run each, so a second judged run would tell it apart from noise.
+- **Eval:** the fields judge's rules were not changed, and none of the labels read scored a field wrongly. Not measured: planted errors, the faithful shares (`--facts pool`) and whether statements copy their sources (`eval:research`).
+- **Cost:** $2.94 of the cap's $5 settled, $2.06 left, no failed call: the five tune rounds $1.36, the judged before run $0.55 (17 of its 48 strong-judge calls new), the judged after run $1.02 (52 strong-judge calls, all new).
+
 ## Research passes' `context` gate, 2026-11-28
 
 Run in a cloud session on branch `claude/project-thread-egeer5` at commit 4cd22364 (an undated key-term explainer stands as current, `isCurrent`, `.context/story-context.md`, "Validity"; no prompt, schema or prompt version changed since 2026-11-26) against the 11-month stories-only eval copy exported 2026-11-27, under the task cap `gate-context-2026-11-28` ($5). Command: `eval:overviews -- --out ../DOCS/2026-11-28_context-gate --steps context,fact-check --facts context --half judge --repeat 3 --budget 5 --cap gate-context-2026-11-28`. 13 judged gap keys × 3 runs, every run completed; 7 of 39 runs kept no card. The fields judge holds the as-of and the credit to production's rules since 2026-11-26 (`model-eval.md`, "`context`"), so its row is not comparable. Replaces the `context` table of 2026-11-26 below.
